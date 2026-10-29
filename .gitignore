@@ -1,0 +1,39 @@
+# Build output
+/bin/
+/dist/
+*.exe
+*.test
+coverage.out
+coverage.html
+
+# Go
+/vendor/
+
+# Node / web
+node_modules/
+web/**/dist/
+web/**/coverage/
+web/**/playwright-report/
+web/**/test-results/
+*.tsbuildinfo
+
+# Generated test media (recreate with scripts/gen-testmedia)
+/testdata/media/
+
+# Local runtime data
+/data/
+/config/
+/transcode/
+*.db
+*.db-wal
+*.db-shm
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
