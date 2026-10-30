@@ -1,4 +1,49 @@
 {
   "heading": "Item details",
-  "placeholder": "The details of item {{itemId}} will be shown here."
+  "loading": "Loading item details",
+  "notFound": {
+    "heading": "Item not found",
+    "message": "This item does not exist. It may have been removed from its library.",
+    "backHome": "Back to home"
+  },
+  "loadError": {
+    "heading": "Item could not be loaded",
+    "network": "The server could not be reached. Check that it is running, then try again.",
+    "server": "Something went wrong while loading this item. Try again in a moment.",
+    "retry": "Try again"
+  },
+  "duration": {
+    "hoursMinutes": "{{hours}} h {{minutes}} min",
+    "minutes": "{{minutes}} min",
+    "seconds": "{{seconds}} s"
+  },
+  "chips": "Technical details",
+  "play": {
+    "label": "Play",
+    "unavailable": {
+      "noFile": "This item has no file to play.",
+      "probeFailed": "This file cannot be played because the server could not read it.",
+      "probeTimedOut": "This file cannot be played because reading it took too long.",
+      "generic": "This file cannot be played."
+    }
+  },
+  "file": {
+    "heading": "File",
+    "name": "File name",
+    "size": "Size"
+  },
+  "tracks": {
+    "audio": {
+      "heading": "Audio",
+      "empty": "No audio tracks"
+    },
+    "subtitles": {
+      "heading": "Subtitles",
+      "empty": "No subtitles",
+      "notPlayedYet": "Subtitles are listed here, but the player does not show them yet."
+    },
+    "unknownLanguage": "Unknown language",
+    "default": "Default",
+    "forced": "Forced"
+  }
 }

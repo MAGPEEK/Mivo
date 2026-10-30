@@ -1,4 +1,49 @@
 {
   "heading": "Eintragsdetails",
-  "placeholder": "Hier erscheinen die Details zum Eintrag {{itemId}}."
+  "loading": "Eintragsdetails werden geladen",
+  "notFound": {
+    "heading": "Eintrag nicht gefunden",
+    "message": "Diesen Eintrag gibt es nicht. Vielleicht wurde er aus seiner Bibliothek entfernt.",
+    "backHome": "Zurück zur Startseite"
+  },
+  "loadError": {
+    "heading": "Eintrag konnte nicht geladen werden",
+    "network": "Der Server ist nicht erreichbar. Prüfe, ob er läuft, und versuche es dann erneut.",
+    "server": "Beim Laden dieses Eintrags ist etwas schiefgelaufen. Versuche es gleich noch einmal.",
+    "retry": "Erneut versuchen"
+  },
+  "duration": {
+    "hoursMinutes": "{{hours}} Std. {{minutes}} Min.",
+    "minutes": "{{minutes}} Min.",
+    "seconds": "{{seconds}} Sek."
+  },
+  "chips": "Technische Details",
+  "play": {
+    "label": "Abspielen",
+    "unavailable": {
+      "noFile": "Zu diesem Eintrag gibt es keine Datei zum Abspielen.",
+      "probeFailed": "Diese Datei kann nicht abgespielt werden, weil der Server sie nicht lesen konnte.",
+      "probeTimedOut": "Diese Datei kann nicht abgespielt werden, weil das Lesen zu lange gedauert hat.",
+      "generic": "Diese Datei kann nicht abgespielt werden."
+    }
+  },
+  "file": {
+    "heading": "Datei",
+    "name": "Dateiname",
+    "size": "Größe"
+  },
+  "tracks": {
+    "audio": {
+      "heading": "Audio",
+      "empty": "Keine Tonspuren"
+    },
+    "subtitles": {
+      "heading": "Untertitel",
+      "empty": "Keine Untertitel",
+      "notPlayedYet": "Untertitel werden hier aufgelistet, der Player zeigt sie aber noch nicht an."
+    },
+    "unknownLanguage": "Unbekannte Sprache",
+    "default": "Standard",
+    "forced": "Erzwungen"
+  }
 }
