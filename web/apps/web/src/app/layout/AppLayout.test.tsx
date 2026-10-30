@@ -1,6 +1,6 @@
 import type { Problem } from "@mivo/api-client";
 import { productName } from "@mivo/ui-tokens";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { fakeSystemInfo, respondNever, respondWithProblem } from "../../test/fakeApi";
@@ -21,6 +21,29 @@ async function findSidebar(): Promise<HTMLElement> {
 
 function sidebarToggle(): HTMLElement {
   return screen.getByRole("button", { name: "Toggle sidebar" });
+}
+
+interface CollapsedUnreachable {
+  readonly sidebar: HTMLElement;
+  readonly indicator: HTMLElement;
+}
+
+async function renderCollapsedUnreachable(): Promise<CollapsedUnreachable> {
+  window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
+  renderApp("/", { fetch: respondWithProblem(internalError) });
+  const sidebar = await findSidebar();
+  const status = within(sidebar).getByRole("status");
+  const indicator = await within(status).findByRole("button", { name: "Server unreachable" });
+  return { sidebar, indicator };
+}
+
+function tooltipOf(indicator: HTMLElement): HTMLElement {
+  return within(indicator).getByText("Server unreachable");
+}
+
+// jsdom applies no Tailwind CSS; the state attribute is what the styles key on.
+function tooltipState(indicator: HTMLElement): string | undefined {
+  return tooltipOf(indicator).dataset["state"];
 }
 
 function searchField(): HTMLElement {
@@ -123,22 +146,25 @@ describe("Sidebar collapse toggle", () => {
   });
 
   it("keeps a visible, focusable unreachable indicator while collapsed", async () => {
-    window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
+    const { indicator } = await renderCollapsedUnreachable();
 
-    renderApp("/", { fetch: respondWithProblem(internalError) });
-    const status = within(await findSidebar()).getByRole("status");
-
-    const indicator = await within(status).findByRole("button", { name: "Server unreachable" });
     expect(isVisuallyHidden(indicator)).toBe(false);
-    indicator.focus();
+    act(() => {
+      indicator.focus();
+    });
     expect(document.activeElement).toBe(indicator);
   });
 
+  it("announces that the unreachable indicator expands the sidebar", async () => {
+    const { sidebar, indicator } = await renderCollapsedUnreachable();
+
+    expect(indicator.getAttribute("aria-expanded")).toBe("false");
+    expect(indicator.getAttribute("aria-controls")).toBe(sidebar.id);
+  });
+
   it("expands the sidebar from the unreachable indicator and keeps keyboard focus", async () => {
-    window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
-    renderApp("/", { fetch: respondWithProblem(internalError) });
-    const status = within(await findSidebar()).getByRole("status");
-    const indicator = await within(status).findByRole("button", { name: "Server unreachable" });
+    const { sidebar, indicator } = await renderCollapsedUnreachable();
+    const status = within(sidebar).getByRole("status");
 
     fireEvent.click(indicator);
 
@@ -157,7 +183,49 @@ describe("Sidebar collapse toggle", () => {
     const status = within(await findSidebar()).getByRole("status");
 
     expect(status.textContent).toBe("Loading server version");
-    expect(within(status).queryByTitle("Server unreachable")).toBeNull();
+    expect(within(status).queryByRole("button")).toBeNull();
+  });
+});
+
+describe("Unreachable indicator tooltip", () => {
+  it("is closed until the indicator is hovered or focused", async () => {
+    const { indicator } = await renderCollapsedUnreachable();
+
+    expect(tooltipState(indicator)).toBe("closed");
+  });
+
+  it("opens on focus and closes on Escape without moving focus", async () => {
+    const { indicator } = await renderCollapsedUnreachable();
+
+    act(() => {
+      indicator.focus();
+    });
+    expect(tooltipState(indicator)).toBe("open");
+    fireEvent.keyDown(indicator, { key: "Escape" });
+
+    expect(tooltipState(indicator)).toBe("closed");
+    expect(document.activeElement).toBe(indicator);
+    expect(sidebarToggle().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("stays open while the pointer rests on the tooltip text", async () => {
+    const { indicator } = await renderCollapsedUnreachable();
+
+    fireEvent.mouseEnter(tooltipOf(indicator));
+
+    expect(tooltipState(indicator)).toBe("open");
+  });
+
+  it("closes on Escape while hovered, even when focus is elsewhere", async () => {
+    const { indicator } = await renderCollapsedUnreachable();
+    fireEvent.mouseEnter(indicator);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    expect(tooltipState(indicator)).toBe("closed");
+    fireEvent.mouseLeave(indicator);
+    fireEvent.mouseEnter(indicator);
+    expect(tooltipState(indicator)).toBe("open");
   });
 });
 

@@ -48,6 +48,8 @@ const temporaryRootPrefix = `${productId}-e2e-`;
 const buildTimeoutMs = 5 * 60_000;
 // Room for a few large Go compiler messages before execFile gives up on the output.
 const buildOutputLimitBytes = 16 * 1024 * 1024;
+// Node's error code when a child process writes more than maxBuffer.
+const outputLimitErrorCode = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 const healthPath = "/api/v1/health";
 const startupTimeoutMs = 30_000;
 const healthPollIntervalMs = 100;
@@ -186,15 +188,29 @@ async function buildServer(root: string): Promise<string> {
       timeout: buildTimeoutMs,
     });
   } catch (error) {
-    if (error instanceof Error && "killed" in error && error.killed === true) {
-      throw new Error(`${command} did not finish within ${String(buildTimeoutMs)} ms.`, {
-        cause: error,
-      });
-    }
-    const output = error instanceof Error && "stderr" in error ? String(error.stderr) : "";
-    throw new Error(`${command} failed:\n${output}`, { cause: error });
+    throw buildError(command, error);
   }
   return binary;
+}
+
+// An exceeded maxBuffer is only recognisable by its error code; `killed` marks the timeout.
+function buildError(command: string, error: unknown): Error {
+  if (!(error instanceof Error)) {
+    return new Error(`${command} failed.`, { cause: error });
+  }
+  if ("code" in error && error.code === outputLimitErrorCode) {
+    return new Error(
+      `${command} wrote more than ${String(buildOutputLimitBytes)} bytes of output.`,
+      { cause: error },
+    );
+  }
+  if ("killed" in error && error.killed === true) {
+    return new Error(`${command} did not finish within ${String(buildTimeoutMs)} ms.`, {
+      cause: error,
+    });
+  }
+  const output = "stderr" in error ? String(error.stderr) : "";
+  return new Error(`${command} failed:\n${output}`, { cause: error });
 }
 
 // The OS picks the port; closing the probe frees it for the server a moment later. Another
@@ -275,7 +291,15 @@ async function launch(
   logFile: string,
 ): Promise<LaunchedProcess> {
   const log = await open(logFile, "w");
-  const child = spawn(binary, [], { env: environment, stdio: ["ignore", log.fd, log.fd] });
+  let child: ChildProcess;
+  try {
+    child = spawn(binary, [], { env: environment, stdio: ["ignore", log.fd, log.fd] });
+  } catch (error) {
+    // Invalid arguments throw here instead of emitting "error", and without a launched
+    // process no stop() would ever close the log.
+    await log.close();
+    throw error;
+  }
   const exited = new Promise<string>((resolve) => {
     child.once("error", (error) => {
       resolve(`could not start: ${error.message}`);
@@ -296,6 +320,9 @@ async function launch(
   return { exited, stop: () => stopProcess(child, exited, log) };
 }
 
+// Windows has no POSIX signals: Node kills the process forcefully for SIGTERM just as for
+// SIGKILL, so the first step is already a hard kill there and the server gets no chance to
+// shut down gracefully. The SIGKILL step only matters on POSIX.
 async function stopProcess(child: ChildProcess, exited: Promise<string>, log: FileHandle) {
   try {
     const stopped =

@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 
 import { abortSystemInfo, openApp } from "./support/shell";
 
+// Enough intermediate pointer positions to land several times in the gap beside the icon.
+const pointerSteps = 20;
+
 test("renders the shell with navigation, search, home heading and empty state", async ({
   page,
 }) => {
@@ -80,9 +83,35 @@ test("keeps an unreachable server visible and reachable in the collapsed sidebar
   await page.keyboard.press("Tab");
   await expect(indicator).toBeFocused();
   await expect(tooltip).toHaveCSS("opacity", "1");
+  // WCAG 1.4.13: Escape hides the tooltip without moving focus.
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCSS("opacity", "0");
+  await expect(indicator).toBeFocused();
   await page.keyboard.press("Enter");
 
   await expect(sidebarToggle).toHaveAttribute("aria-expanded", "true");
   await expect(sidebarToggle).toBeFocused();
   await expect(serverStatus).toHaveText("Server unreachable");
+});
+
+test("keeps the unreachable tooltip open while the pointer moves onto it", async ({ page }) => {
+  await abortSystemInfo(page);
+  const { sidebarToggle, serverStatus } = await openApp(page);
+  await sidebarToggle.click();
+  const indicator = serverStatus.getByRole("button", { name: "Server unreachable" });
+  const tooltip = indicator.getByText("Server unreachable");
+
+  // hover() waits until the collapse animation has settled, so the boxes below are final.
+  await indicator.hover();
+  await expect(tooltip).toHaveCSS("opacity", "1");
+  const tooltipBox = await tooltip.boundingBox();
+  expect(tooltipBox).not.toBeNull();
+  const { x, y, width, height } = tooltipBox ?? { x: 0, y: 0, width: 0, height: 0 };
+  // Small steps cross the gap between icon and text the way a real pointer does.
+  await page.mouse.move(x + width / 2, y + height / 2, { steps: pointerSteps });
+  await expect(tooltip).toHaveCSS("opacity", "1");
+
+  // WCAG 1.4.13: Escape hides hovered content as well, without moving the pointer.
+  await page.keyboard.press("Escape");
+  await expect(tooltip).toHaveCSS("opacity", "0");
 });

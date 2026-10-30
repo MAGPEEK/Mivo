@@ -1,7 +1,7 @@
 # M1-17b Close the remaining URL-echo gap and polish the error indicator
 Owner: mivo-frontend
 Depends on: M1-17
-Files/areas: `web/packages/api-client/src/**`, `web/apps/web/src/features/system/**`, `web/apps/web/src/shared/ui/Sidebar.tsx`, `web/apps/web/src/app/layout/**`, `web/apps/web/e2e/support/server.ts`
+Files/areas: `web/packages/api-client/src/**`, `web/apps/web/src/features/system/**`, `web/apps/web/src/shared/ui/Sidebar.tsx`, `web/apps/web/src/app/layout/**`, `web/apps/web/e2e/support/server.ts`, `web/apps/web/e2e/shell.spec.ts`
 
 ## Goal
 Base-URL error messages never contain query, fragment or credential text, and the collapsed

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 
 import { AlertIcon, Skeleton } from "../../../shared/ui";
+import { useDismissibleTooltip } from "../hooks/useDismissibleTooltip";
 import { useSystemInfo } from "../hooks/useSystemInfo";
 
 /** Props of {@link ServerVersion}. */
@@ -14,6 +15,8 @@ export type ServerVersionProps =
       readonly compact: true;
       /** Called when the compact error indicator is activated, to show the full text. */
       readonly onExpand: () => void;
+      /** Id of the collapsed sidebar the indicator expands, for `aria-controls`. */
+      readonly sidebarId: string;
     };
 
 /**
@@ -33,7 +36,7 @@ function ServerVersionContent(props: ServerVersionProps) {
   const systemInfo = useSystemInfo();
   if (systemInfo.isError) {
     return props.compact === true ? (
-      <CompactUnreachableIndicator onExpand={props.onExpand} />
+      <CompactUnreachableIndicator onExpand={props.onExpand} sidebarId={props.sidebarId} />
     ) : (
       <UnreachableIndicator />
     );
@@ -59,21 +62,33 @@ function UnreachableIndicator() {
 
 interface CompactIndicatorProps {
   readonly onExpand: () => void;
+  readonly sidebarId: string;
 }
 
 // The icon carries the warning for sighted users. Its text, which is also the button's
 // accessible name, appears as a tooltip on hover and on focus, so keyboard users see it too;
 // activating the button (also by touch) expands the sidebar, where the text has room.
-function CompactUnreachableIndicator({ onExpand }: CompactIndicatorProps) {
+// The tooltip stays in the DOM while closed, only transparent, so the name never goes away.
+// An invisible ::before, a bit wider than the margin, bridges the gap to the icon, so the
+// pointer can move onto the text without closing it; while closed the tooltip ignores the
+// pointer.
+function CompactUnreachableIndicator({ onExpand, sidebarId }: CompactIndicatorProps) {
   const { t } = useTranslation();
+  const tooltip = useDismissibleTooltip();
   return (
     <button
       type="button"
+      aria-expanded={false}
+      aria-controls={sidebarId}
       onClick={onExpand}
-      className="group relative mx-auto grid size-10 place-items-center rounded-md text-accent hover:bg-surface-raised"
+      {...tooltip.triggerHandlers}
+      className="relative mx-auto grid size-10 place-items-center rounded-md text-accent hover:bg-surface-raised"
     >
       <AlertIcon className="size-5" />
-      <span className="pointer-events-none absolute top-1/2 left-full z-10 ml-3 -translate-y-1/2 rounded-sm border border-divider bg-surface-raised px-2 py-1 text-xs whitespace-nowrap text-text opacity-0 shadow-overlay transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">
+      <span
+        data-state={tooltip.open ? "open" : "closed"}
+        className="pointer-events-none absolute top-1/2 left-full z-10 ml-3 -translate-y-1/2 rounded-sm border border-divider bg-surface-raised px-2 py-1 text-xs whitespace-nowrap text-text opacity-0 shadow-overlay transition-opacity before:absolute before:inset-y-0 before:right-full before:w-4 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 motion-reduce:transition-none"
+      >
         {t("system.unreachable")}
       </span>
     </button>

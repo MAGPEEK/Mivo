@@ -27,8 +27,12 @@ export function AppLayout() {
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
         toggleRef={toggleRef}
-        footer={
-          collapsed ? <ServerVersion compact onExpand={expandAndFocusToggle} /> : <ServerVersion />
+        footer={(navigationId) =>
+          collapsed ? (
+            <ServerVersion compact onExpand={expandAndFocusToggle} sidebarId={navigationId} />
+          ) : (
+            <ServerVersion />
+          )
         }
       />
       <div className="flex min-w-0 flex-1 flex-col">

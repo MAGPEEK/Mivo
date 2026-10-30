@@ -13,10 +13,11 @@ export interface SidebarProps {
   /** Receives the toggle button, e.g. to move focus to it. */
   readonly toggleRef?: Ref<HTMLButtonElement>;
   /**
-   * Bottom area, e.g. the server version. Unlike the labels it stays visible while collapsed,
-   * so it can show a warning there; the caller adapts it to the narrow width.
+   * Renders the bottom area, e.g. the server version. Unlike the labels it stays visible while
+   * collapsed, so it can show a warning there; the caller adapts it to the narrow width. Gets
+   * the id of the navigation, so a control in it can name the sidebar in `aria-controls`.
    */
-  readonly footer?: ReactNode;
+  readonly footer?: (navigationId: string) => ReactNode;
 }
 
 // Collapsing hides labels visually but keeps them in the accessibility tree, so the
@@ -55,7 +56,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, toggleRef, footer }: Sid
       <LibrariesSection collapsed={collapsed} />
       {footer !== undefined && (
         <div className={`mt-auto border-t border-divider py-3 ${collapsed ? "px-2" : "px-4"}`}>
-          {footer}
+          {footer(navigationId)}
         </div>
       )}
     </nav>
