@@ -49,3 +49,11 @@ segment is ready, can be stopped at any time, and surfaces failures with a usefu
 - (from M2-17 review) StartPosition for copied video must be passed UNCHANGED from
   `KeyframeAtOrBefore` (with `-copypriorss 0` a start even slightly after the keyframe drops it and
   the video starts a GOP later); HLSArguments already adds -copypriorss 0 and aac_adtstoasc.
+
+## Orchestrator note (after implementation)
+- Before committing M2-24 (after M2-25 has landed its ADR 0024 notes), add ADR notes (corrected by the M2-24 review: the Linux descriptor closes the path-check window for the producer only – Windows and the ffprobe keyframe lookup keep the accepted window; the service logs the state change at info, not a second warn): ADR 0022 –
+  on Linux the producer opens the input through the library's `os.Root` and passes it to FFmpeg as
+  an inherited descriptor (`file:/proc/self/fd/3`), so format detection is content-only; ADR 0024 –
+  every production failure is logged once at warn with the tail of FFmpeg's stderr (may contain an
+  absolute media path), and the playlist is read through `os.Root` so FFmpeg's rename of
+  `index.m3u8.tmp` works on Windows.

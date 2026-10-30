@@ -17,8 +17,6 @@ const (
 	// under a second, but on a NAS the executable may first have to be read from a sleeping
 	// disk; the bound keeps a hanging FFmpeg from blocking the server start.
 	capabilityDetectionTimeout = 30 * time.Second
-	// capabilityToolName names the ffmpeg executable in errors.
-	capabilityToolName = "ffmpeg"
 
 	hideBannerFlag = "-hide_banner"
 	versionQuery   = "-version"
@@ -73,7 +71,7 @@ type commandOutput func(ctx context.Context, arguments []string) ([]byte, error)
 //
 // The caller logs the error and continues; ErrorOutput returns FFmpeg's error output.
 func DetectCapabilities(ctx context.Context, ffmpegPath string) (playback.ServerCapabilities, error) {
-	ffmpeg := tool{name: capabilityToolName, executable: ffmpegPath}
+	ffmpeg := tool{name: ffmpegToolName, executable: ffmpegPath}
 
 	return detectCapabilities(ctx, ffmpeg.output, capabilityDetectionTimeout)
 }

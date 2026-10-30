@@ -45,6 +45,10 @@ func TestMain(m *testing.M) {
 }
 
 func runFakeTool(mode string, arguments []string) int {
+	if isFakeHLSMode(mode) {
+		return fakeHLS(mode, arguments)
+	}
+
 	switch mode {
 	case fakeModeRespond:
 		return fakeRespond(arguments)

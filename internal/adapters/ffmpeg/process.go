@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -93,7 +94,7 @@ func (t tool) output(ctx context.Context, arguments []string) ([]byte, error) {
 
 	stdout := &limitedBuffer{limit: maxOutputBytes, exceeded: cancel}
 
-	started, err := t.start(runContext, arguments, stdout)
+	started, err := t.start(runContext, arguments, processFiles{stdout: stdout})
 	if err != nil {
 		return nil, err
 	}
@@ -114,9 +115,18 @@ func (t tool) output(ctx context.Context, arguments []string) ([]byte, error) {
 	return stdout.data.Bytes(), nil
 }
 
+// processFiles are the files a started tool gets besides its error output.
+type processFiles struct {
+	// stdout receives the standard output; nil discards it.
+	stdout io.Writer
+	// inherited become the descriptors 3, 4, … of the process (unix only). The caller keeps
+	// them and may close them once start returned: the process has its own copies.
+	inherited []*os.File
+}
+
 // start starts the tool without waiting for it; long-running jobs (the HLS producer) use it
-// directly. stdout may be nil to discard the output. The process is killed when ctx ends.
-func (t tool) start(ctx context.Context, arguments []string, stdout io.Writer) (*process, error) {
+// directly. The process is killed when ctx ends.
+func (t tool) start(ctx context.Context, arguments []string, files processFiles) (*process, error) {
 	// The executable is the configured tool path and the arguments are a slice: no shell
 	// is involved, so no argument can inject a command.
 	command := exec.CommandContext(ctx, t.executable, arguments...) //nolint:gosec // see above
@@ -124,8 +134,9 @@ func (t tool) start(ctx context.Context, arguments []string, stdout io.Writer) (
 	stderr := newTailBuffer(maxStderrTailBytes)
 	// A nil Stdin reads from the null device, so a tool never waits for console input.
 	command.Stdin = nil
-	command.Stdout = stdout
+	command.Stdout = files.stdout
 	command.Stderr = stderr
+	command.ExtraFiles = files.inherited
 	command.WaitDelay = processWaitDelay
 
 	if err := command.Start(); err != nil {

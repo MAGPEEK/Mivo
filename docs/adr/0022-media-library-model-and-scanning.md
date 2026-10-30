@@ -216,3 +216,15 @@ Additions from the scan use case (`internal/app/scan`, M2-19); they refine "Scan
   a cause without absolute paths.
 - `finishedAt` is empty while a scan runs; counts, error code and times always describe the
   same scan.
+
+## Notes (M2-24)
+
+- On Linux the HLS producer opens the input through the library's `os.Root` and hands it to
+  FFmpeg as an inherited descriptor (`-i file:/proc/self/fd/3`). This closes the window between
+  the path check and its use for the producer only; on Windows the producer still passes the
+  resolved path, and the ffprobe keyframe lookup still opens the resolved path on every system,
+  so the accepted window of the Decision remains there.
+- Through the descriptor FFmpeg sees no file extension and detects the container from the content
+  alone, while the scan probe also sees the extension; for files with weak signatures the two can
+  disagree. `-protocol_whitelist file` keeps FFmpeg off the network but still lets playlist-like
+  demuxers (hls, concat) open other local files; pinning the input demuxer is task M2-24b.

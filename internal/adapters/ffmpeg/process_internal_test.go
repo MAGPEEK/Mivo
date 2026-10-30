@@ -192,7 +192,7 @@ func TestStartedProcessStopsWithItsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
-	process, err := fake.start(ctx, nil, nil)
+	process, err := fake.start(ctx, nil, processFiles{})
 	if err != nil {
 		t.Fatalf("start: %v", err)
 	}
