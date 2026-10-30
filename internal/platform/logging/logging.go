@@ -7,12 +7,17 @@
 // # Redaction
 //
 // Every logger it returns replaces the value of sensitive attributes with RedactedValue.
-// A key is normalised first (lower-cased, the separators '_', '-' and '.' removed) and is
-// sensitive when the result ends with one of the words password, passphrase, secret, token,
-// apikey, authorization, cookie, privatekey or sessionid. So "x-api-key", "Set-Cookie",
-// "access_token" and "dbPassword" are redacted, while "tokenCount" and "passwordHint" stay
-// visible. Every leaf below a group with a sensitive key is redacted as well, whether the
-// group comes from slog.Group, Logger.WithGroup or a slog.LogValuer.
+// A key is normalised first (everything except ASCII letters and digits removed, the rest
+// lower-cased) and is sensitive when it contains a sensitive word, unless the text after
+// that word is exactly one safe qualifier such as "count" or "hint". The word lists live in
+// sensitiveWords and safeQualifiers, the rule in isSensitiveKey (redact.go). So "x-api-key",
+// "aws_secret_access_key", "passwordHash" and "tokens" are redacted, while "tokenCount" and
+// "passwordHint" stay visible. Every leaf below a group with a sensitive key is redacted as
+// well, whether the group comes from slog.Group, Logger.WithGroup or a slog.LogValuer.
+//
+// The rule fails closed and over-redacts on purpose: an unknown qualifier hides the value, so
+// harmless keys such as "nextPageToken" or "secretary" are redacted too. Rename such a key
+// rather than weakening the rule.
 //
 // Limits: redaction works on attribute keys only. A value logged as a whole under a
 // harmless key, for example a struct, a map or an http.Header passed through slog.Any, is

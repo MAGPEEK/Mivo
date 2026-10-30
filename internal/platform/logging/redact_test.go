@@ -31,17 +31,28 @@ func TestNewRedactsSensitiveKeys(t *testing.T) {
 	t.Parallel()
 
 	keys := []string{
-		// The words from sensitiveKeySuffixes in their plain form.
-		"password", "passphrase", "secret", "token", "apikey", "authorization",
-		"cookie", "privatekey", "sessionid",
+		// The words from sensitiveWords in their plain form.
+		"password", "passwd", "passphrase", "secret", "token", "apikey", "authorization",
+		"cookie", "credential", "privatekey", "signingkey", "encryptionkey", "sessionid", "pin",
 		// Matching is case-insensitive.
 		"PASSWORD", "ApiKey", "Authorization",
-		// The separators '_', '-' and '.' are ignored.
-		"api_key", "x-api-key", "API.KEY", "Set-Cookie", "Proxy-Authorization",
-		"access_token", "refresh_token", "client_secret", "jwt.secret", "private_key", "session_id",
-		// Prefixed names end with a sensitive word.
+		// Every character that is not an ASCII letter or digit is ignored.
+		"api_key", "x-api-key", "API.KEY", "api key", "auth:token", "auth/token", "Set-Cookie",
+		"Proxy-Authorization", "access_token", "refresh_token", "client_secret", "jwt.secret",
+		"private_key", "session_id", "signing-key", "[token]",
+		// Prefixed names contain a sensitive word.
 		"dbPassword", "githubToken", "accessToken", "refreshToken", "clientSecret", "jwtSecret",
 		"setCookie", "proxyAuthorization", "privateKey", "X-Auth-Token",
+		// Fail closed: anything after the word that is not a safe qualifier keeps it sensitive.
+		"secretKey", "aws_secret_access_key", "signingKey", "authorizationHeader", "cookieHeader",
+		"passwordHash", "cookies", "tokens", "credentials", "tokenId", "credentialId",
+		"passwordHintText", "tokensCount", "token2",
+		// Intentional over-redaction of keys that start with or merely contain a sensitive word.
+		"secretary", "tokenizer", "nextPageToken", "tokenCountTotal",
+		// "pin" only as a whole word or at the end of the key; TestNewKeepsNonSensitiveAttributes
+		// shows the other side of the boundary (spinner, pinned, mapping).
+		"profilePin", "profile.pin", "PIN", "pins", "pinHash", "pinCode", "PINCode", "pin2",
+		"userpin", "spin",
 	}
 
 	for _, key := range keys {
@@ -145,11 +156,24 @@ func TestNewKeepsNonSensitiveAttributes(t *testing.T) {
 		key  string
 	}{
 		{name: "plain key", key: "user"},
+		{name: "empty key", key: ""},
 		{name: "sensitive word followed by a qualifier", key: "tokenCount"},
 		{name: "qualifier after a separator", key: "token_count"},
 		{name: "password hint", key: "passwordHint"},
-		{name: "sensitive word inside a longer word", key: "secretary"},
 		{name: "public key", key: "publicKey"},
+		{name: "qualifier type", key: "cookieType"},
+		{name: "qualifier length", key: "passwordLength"},
+		{name: "qualifier expiry", key: "tokenExpiry"},
+		{name: "qualifier expiresAt", key: "token_expires_at"},
+		{name: "qualifier ttl", key: "sessionIdTTL"},
+		{name: "whole word with a qualifier", key: "pinCount"},
+		{name: "pin inside spinner", key: "spinner"},
+		{name: "pin at the start of pinned", key: "pinned"},
+		{name: "pin inside mapping", key: "mapping"},
+		{name: "pin inside shipping", key: "shippingAddress"},
+		{name: "pin inside a camel-case word", key: "isSpinning"},
+		{name: "pin starting a longer upper-case word", key: "PINNED"},
+		{name: "non-ASCII bytes are removed", key: "größe"},
 	}
 
 	for _, test := range tests {

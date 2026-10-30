@@ -27,3 +27,12 @@ secret-bearing config key (TMDB key, stream signing key, profile PIN) lands.
 
 ## Notes
 - Source: M1-05b reviewer findings (minor 1–2, nits 1–3).
+
+## Deferred (from tester + reviewer, both PASS/APPROVE) – do before M6 (TMDB key) / M7 (profile PINs)
+- `pin` gaps: add `pincode` as ordinary word; allow plural `s` in the key-end alternative
+  (`userpins`); tests for `pincode`, `PINCODE`, `userpins`, `profilepinhash`.
+- Add words: `passcode`, `bearer`, `jwt`, `otp`, `pwd`, `hmackey`, `accesskey` (check false positives).
+- Config naming rule: secret-bearing keys must contain a sensitive word (e.g. `tmdb.api_key`,
+  never a bare `tmdbKey`); add a redaction test when such a key is introduced.
+- Nits: rename `startsWord` in `matchesAt`; document non-ASCII removal under "Limits";
+  optional lazy `wordBoundaries`.

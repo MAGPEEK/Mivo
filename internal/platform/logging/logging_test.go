@@ -117,12 +117,12 @@ func TestNewJSONWritesOneValidObjectPerLine(t *testing.T) {
 func TestNewRejectsInvalidOptions(t *testing.T) {
 	t.Parallel()
 
-	// Each case builds its own writer so that parallel subtests never share a buffer.
+	// Each case builds its own writer so that parallel subtests never share a buffer. Every
+	// case quotes a value, so the message check can never pass on an empty expectation.
 	tests := []struct {
 		name      string
 		level     string
 		format    string
-		noWriter  bool
 		wantErr   error
 		wantQuote string
 	}{
@@ -131,19 +131,15 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 		{name: "slog offset level", level: "info+2", format: logging.FormatText, wantErr: logging.ErrUnknownLevel, wantQuote: `"info+2"`},
 		{name: "unknown format", level: logging.LevelInfo, format: "xml", wantErr: logging.ErrUnknownFormat, wantQuote: `"xml"`},
 		{name: "empty format", level: logging.LevelInfo, format: "", wantErr: logging.ErrUnknownFormat, wantQuote: `""`},
-		{name: "missing writer", level: logging.LevelInfo, format: logging.FormatJSON, noWriter: true, wantErr: logging.ErrNoWriter},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			options := logging.Options{Level: test.level, Format: test.format}
-			if !test.noWriter {
-				options.Writer = &bytes.Buffer{}
-			}
-
-			logger, err := logging.New(options)
+			logger, err := logging.New(logging.Options{
+				Level: test.level, Format: test.format, Writer: &bytes.Buffer{},
+			})
 			if !errors.Is(err, test.wantErr) {
 				t.Fatalf("New() error = %v, want %v", err, test.wantErr)
 			}
@@ -156,6 +152,21 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				t.Errorf("New() logger = %v, want nil on error", logger)
 			}
 		})
+	}
+}
+
+// TestNewRejectsMissingWriter is separate from the table above because there is no invalid
+// value to quote. Level and format are valid, so only the missing writer can cause the error.
+func TestNewRejectsMissingWriter(t *testing.T) {
+	t.Parallel()
+
+	logger, err := logging.New(logging.Options{Level: logging.LevelInfo, Format: logging.FormatJSON})
+	if !errors.Is(err, logging.ErrNoWriter) {
+		t.Fatalf("New() error = %v, want %v", err, logging.ErrNoWriter)
+	}
+
+	if logger != nil {
+		t.Errorf("New() logger = %v, want nil on error", logger)
 	}
 }
 
