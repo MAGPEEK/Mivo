@@ -116,6 +116,11 @@ func TestRoutesSplitAPIAndFallback(t *testing.T) {
 		// ServeMux redirects a subtree root without its slash; the API then answers 404.
 		{name: "api without slash redirects into api", options: withFallback, target: "/api", wantStatus: http.StatusTemporaryRedirect},
 		{name: "prefix lookalike is not api", options: withFallback, target: "/apix", wantStatus: http.StatusOK, wantBody: "web"},
+		// ServeMux matches the escaped path, so these miss the /api/ pattern; the guard in
+		// front of the fallback still sends them to the API.
+		{name: "encoded slashes stay in api", options: withFallback, target: "/api%2Fv1%2Fx", wantStatus: http.StatusOK, wantBody: "api"},
+		{name: "encoded dot segments stay in api", options: withFallback, target: "/%2e%2e/api/v1/x", wantStatus: http.StatusOK, wantBody: "api"},
+		{name: "encoded slash lookalike is not api", options: withFallback, target: "/apix%2Fv1", wantStatus: http.StatusOK, wantBody: "web"},
 		{name: "nil fallback answers 404", options: withoutFallback, target: "/library/7", wantStatus: http.StatusNotFound},
 		{name: "nil fallback keeps api", options: withoutFallback, target: "/api/v1/health", wantStatus: http.StatusOK, wantBody: "api"},
 	}

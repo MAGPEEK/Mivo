@@ -54,3 +54,4 @@ package Mivo by following the docs, and every documented command works as writte
 - `docs/adr/0019`: use the quoted install command `go tool "-modfile=tools/go.mod" lefthook install` (PowerShell).
 - Document install (lefthook v2.2.2), bypass (`--no-verify`, `LEFTHOOK=0`) and that go.mod/go.sum/.golangci.yml-only commits skip Go jobs (or widen the glob).
 - Nits for `scripts/commitmsg`: remove or justify trailer stripping; help text lists squash!/amend!/Reapply; tests for nested Revert and "Merge … into …"; note the `#` commentChar limitation.
+- From M1-16: document `golangci-lint run --build-tags webui` (after `pnpm -C web build`) as part of the full gates – untagged lint never sees `files_embedded*.go`.

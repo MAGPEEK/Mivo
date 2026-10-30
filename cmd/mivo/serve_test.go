@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -22,6 +24,9 @@ import (
 // startTimeout bounds how long a test waits for the server to listen or to exit. Migrating
 // a new database under the race detector takes a few seconds on slow machines.
 const startTimeout = 30 * time.Second
+
+// listeningMessage is the log message of the HTTP server once its listener is bound.
+const listeningMessage = "http server listening"
 
 // Environment variable names of the ADR 0018 settings the tests set.
 const (
@@ -58,6 +63,141 @@ func TestRunServesSystemEndpointsAndKeepsServerIDAcrossRestarts(t *testing.T) {
 	if secondID := runAndQueryServer(t, nil, environment); secondID != firstID {
 		t.Errorf("server id after restart = %q, want %q", secondID, firstID)
 	}
+
+	// Windows refuses to delete open files, so this fails while the database is still open.
+	if err := os.RemoveAll(filepath.Join(configDir, "data")); err != nil {
+		t.Errorf("remove data directory after the run: %v", err)
+	}
+}
+
+func TestRunRoutesAPIAndWebUI(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	env, _, stderr := newTestEnv(isolatedEnvironment(t))
+	addresses := make(chan net.Addr, 1)
+	exitCodes := make(chan int, 1)
+	hooks := runHooks{onListening: func(address net.Addr) { addresses <- address }}
+
+	go func() { exitCodes <- run(ctx, nil, env, hooks) }()
+
+	baseURL := "http://" + awaitAddress(t, addresses, exitCodes, stderr).String()
+
+	tests := []struct {
+		name            string
+		path            string
+		wantStatus      int
+		wantContentType string
+	}{
+		// Both builds answer the same way: the placeholder or the embedded app (ADR 0020).
+		{name: "web root", path: "/", wantStatus: http.StatusOK, wantContentType: "text/html; charset=utf-8"},
+		{name: "client route", path: "/library/x", wantStatus: http.StatusOK, wantContentType: "text/html; charset=utf-8"},
+		{name: "missing web file", path: "/missing.js", wantStatus: http.StatusNotFound, wantContentType: "text/plain; charset=utf-8"},
+		{name: "api route", path: "/api/v1/health", wantStatus: http.StatusOK, wantContentType: "application/json"},
+		{name: "unknown api route", path: "/api/v1/does-not-exist", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
+		{name: "unknown api route without extension", path: "/api/library/x", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
+		{name: "api route with encoded slashes", path: "/api%2Fv1%2Fx", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			status, contentType := fetchStatus(t, baseURL+test.path)
+			if status != test.wantStatus || contentType != test.wantContentType {
+				t.Errorf("GET %s = %d %q, want %d %q", test.path, status, contentType, test.wantStatus, test.wantContentType)
+			}
+		})
+	}
+
+	cancel()
+	assertCleanExit(t, exitCodes, stderr)
+}
+
+func TestWithCloseErrorKeepsCloseFailures(t *testing.T) {
+	t.Parallel()
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	startupErr := errors.New("migration failed")
+	closeErr := errors.New("disk gone")
+	stopped := fmt.Errorf("run http server: %w", context.Canceled)
+
+	tests := []struct {
+		name        string
+		ctx         context.Context
+		result      error
+		closeErr    error
+		wantIs      []error
+		wantNotIs   []error
+		wantNil     bool
+		wantStopped bool
+	}{
+		{name: "nothing failed", ctx: t.Context(), wantNil: true},
+		{name: "only the result failed", ctx: t.Context(), result: startupErr, wantIs: []error{startupErr}},
+		{name: "only close failed", ctx: t.Context(), closeErr: closeErr, wantIs: []error{closeErr}},
+		{name: "both failed", ctx: t.Context(), result: startupErr, closeErr: closeErr, wantIs: []error{startupErr, closeErr}},
+		{name: "stopped while starting is kept", ctx: cancelled, result: stopped, wantIs: []error{context.Canceled}, wantStopped: true},
+		{
+			name: "stopped while starting does not hide a close failure", ctx: cancelled, result: stopped, closeErr: closeErr,
+			wantIs: []error{closeErr}, wantNotIs: []error{context.Canceled},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := withCloseError(test.ctx, test.result, test.closeErr)
+
+			if (got == nil) != test.wantNil {
+				t.Fatalf("withCloseError = %v, want nil: %t", got, test.wantNil)
+			}
+
+			assertErrorChain(t, got, test.wantIs, test.wantNotIs)
+
+			if stoppedWhileStarting(test.ctx, got) != test.wantStopped {
+				t.Errorf("stoppedWhileStarting(%v) = %t, want %t", got, !test.wantStopped, test.wantStopped)
+			}
+		})
+	}
+}
+
+func assertErrorChain(t *testing.T, err error, wantIs, wantNotIs []error) {
+	t.Helper()
+
+	for _, target := range wantIs {
+		if !errors.Is(err, target) {
+			t.Errorf("error %v does not wrap %v", err, target)
+		}
+	}
+
+	for _, target := range wantNotIs {
+		if errors.Is(err, target) {
+			t.Errorf("error %v wraps %v, want it dropped", err, target)
+		}
+	}
+}
+
+// fetchStatus requests url and returns the status and content type, without following
+// redirects.
+func fetchStatus(t *testing.T, url string) (int, string) {
+	t.Helper()
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	response, err := http.DefaultTransport.RoundTrip(request)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+
+	defer func() { _ = response.Body.Close() }()
+
+	return response.StatusCode, response.Header.Get("Content-Type")
 }
 
 func TestRunReportsStartupErrorsOnOneLine(t *testing.T) {
@@ -148,7 +288,10 @@ func runAndQueryServer(t *testing.T, args []string, environment map[string]strin
 
 	go func() { exitCodes <- run(ctx, args, env, hooks) }()
 
-	baseURL := "http://" + awaitAddress(t, addresses, exitCodes, stderr).String()
+	address := awaitAddress(t, addresses, exitCodes, stderr)
+	assertNotDefaultPort(t, address)
+
+	baseURL := "http://" + address.String()
 
 	assertHealthy(t, baseURL)
 	serverID := fetchServerID(t, baseURL)
@@ -157,11 +300,26 @@ func runAndQueryServer(t *testing.T, args []string, environment map[string]strin
 	assertCleanExit(t, exitCodes, stderr)
 	assertNoOutput(t, stdout)
 
-	if count := strings.Count(stderr.String(), "listening"); count != 1 {
-		t.Errorf("log has %d listening lines, want 1:\n%s", count, stderr.String())
+	if count := strings.Count(stderr.String(), listeningMessage); count != 1 {
+		t.Errorf("log has %d %q lines, want 1:\n%s", count, listeningMessage, stderr.String())
 	}
 
 	return serverID
+}
+
+// assertNotDefaultPort proves the environment overrode the port of the config file: the
+// file asks for the default port, the environment for an OS-assigned one.
+func assertNotDefaultPort(t *testing.T, address net.Addr) {
+	t.Helper()
+
+	tcpAddress, ok := address.(*net.TCPAddr)
+	if !ok {
+		t.Fatalf("listener address %v is not TCP", address)
+	}
+
+	if tcpAddress.Port == config.DefaultPort {
+		t.Errorf("bound port = %d, want an OS-assigned port instead of the default", tcpAddress.Port)
+	}
 }
 
 func awaitAddress(t *testing.T, addresses <-chan net.Addr, exitCodes <-chan int, stderr *syncBuffer) net.Addr {

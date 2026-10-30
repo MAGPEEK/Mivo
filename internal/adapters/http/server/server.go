@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
@@ -30,6 +32,9 @@ const (
 	// apiPathPrefix is the subtree served by Options.APIHandler.
 	apiPathPrefix = "/api/"
 
+	// apiRootPath is the API subtree root without its trailing slash.
+	apiRootPath = "/api"
+
 	// listenNetwork is the network of Options.Address.
 	listenNetwork = "tcp"
 )
@@ -44,7 +49,8 @@ type Options struct {
 	Logger *slog.Logger
 	// APIHandler serves every path below /api/. Required.
 	APIHandler http.Handler
-	// Fallback serves every other path. When nil those paths answer 404.
+	// Fallback serves every other path. It never sees a path whose decoded and cleaned form
+	// lies below /api, such as /api%2Fv1%2Fx. When nil those paths answer 404.
 	Fallback http.Handler
 }
 
@@ -111,9 +117,36 @@ func newHandler(options Options) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.Handle(apiPathPrefix, options.APIHandler)
-	mux.Handle("/", fallback)
+	mux.Handle("/", apiPathGuard{api: options.APIHandler, fallback: fallback})
 
 	return withMiddleware(mux, options.Logger)
+}
+
+// apiPathGuard sends a request the mux passed to the fallback to the API instead when its
+// decoded path lies below /api. ServeMux matches the escaped path, so /api%2Fv1%2Fx misses
+// the /api/ pattern although it means /api/v1/x; without the guard an API client would get
+// the web app's index.html instead of the API's 404 problem.
+type apiPathGuard struct {
+	api      http.Handler
+	fallback http.Handler
+}
+
+func (guard apiPathGuard) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if isAPIPath(request.URL.Path) {
+		guard.api.ServeHTTP(writer, request)
+
+		return
+	}
+
+	guard.fallback.ServeHTTP(writer, request)
+}
+
+// isAPIPath reports whether the decoded urlPath names the API root or a path below it.
+// Cleaning resolves encoded dot segments such as /%2e%2e/api/v1, which the mux leaves alone.
+func isAPIPath(urlPath string) bool {
+	cleaned := path.Clean("/" + urlPath)
+
+	return cleaned == apiRootPath || strings.HasPrefix(cleaned, apiPathPrefix)
 }
 
 // Run serves until ctx is done, then shuts down gracefully within ShutdownTimeout. It

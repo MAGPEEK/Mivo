@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -91,12 +92,7 @@ func waitForRun(t *testing.T, result <-chan error) error {
 func TestRunServesAPIAndShutsDownOnCancel(t *testing.T) {
 	t.Parallel()
 
-	var listenConfig net.ListenConfig
-
-	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	listener := openListener(t)
 
 	cancel, result := startServer(t, server.Options{
 		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t),
@@ -112,6 +108,97 @@ func TestRunServesAPIAndShutsDownOnCancel(t *testing.T) {
 	if err := waitForRun(t, result); err != nil {
 		t.Errorf("Run = %v, want nil after cancellation", err)
 	}
+}
+
+// fallbackStatus marks answers of the counting fallback, so a test can tell them apart.
+const fallbackStatus = http.StatusTeapot
+
+func TestRunNeverHandsAPIPathsToTheFallback(t *testing.T) {
+	t.Parallel()
+
+	listener := openListener(t)
+
+	var fallbackCalls atomic.Int32
+
+	fallback := http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		fallbackCalls.Add(1)
+		writer.WriteHeader(fallbackStatus)
+	})
+
+	cancel, result := startServer(t, server.Options{
+		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t), Fallback: fallback,
+	})
+
+	baseURL := "http://" + listener.Addr().String()
+
+	tests := []struct {
+		path       string
+		wantStatus int
+	}{
+		{path: "/api/v1/health", wantStatus: http.StatusOK},
+		{path: "/api/v1/x", wantStatus: http.StatusNotFound},
+		{path: "/api/", wantStatus: http.StatusNotFound},
+		// ServeMux redirects the subtree root without its slash into the API.
+		{path: "/api", wantStatus: http.StatusTemporaryRedirect},
+		// ServeMux matches the escaped path, so these two miss the /api/ pattern.
+		{path: "/api%2Fv1%2Fx", wantStatus: http.StatusNotFound},
+		{path: "/%2e%2e/api/v1/x", wantStatus: http.StatusNotFound},
+	}
+
+	for _, test := range tests {
+		if status := statusOf(t, baseURL+test.path); status != test.wantStatus {
+			t.Errorf("GET %s = %d, want %d", test.path, status, test.wantStatus)
+		}
+	}
+
+	if calls := fallbackCalls.Load(); calls != 0 {
+		t.Errorf("fallback calls for API paths = %d, want 0", calls)
+	}
+
+	// Control: the fallback is wired and counts, so the zero above is meaningful.
+	if status := statusOf(t, baseURL+"/library/x"); status != fallbackStatus || fallbackCalls.Load() != 1 {
+		t.Errorf("GET /library/x = %d with %d fallback calls, want %d with 1", status, fallbackCalls.Load(), fallbackStatus)
+	}
+
+	cancel()
+
+	if err := waitForRun(t, result); err != nil {
+		t.Errorf("Run = %v, want nil after cancellation", err)
+	}
+}
+
+// statusOf requests url without following redirects and returns the status.
+func statusOf(t *testing.T, url string) int {
+	t.Helper()
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+
+	response, err := http.DefaultTransport.RoundTrip(request)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
+	}
+
+	if err := response.Body.Close(); err != nil {
+		t.Errorf("close body: %v", err)
+	}
+
+	return response.StatusCode
+}
+
+func openListener(t *testing.T) net.Listener {
+	t.Helper()
+
+	var listenConfig net.ListenConfig
+
+	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+
+	return listener
 }
 
 func assertGet(t *testing.T, url string, wantStatus int, wantBody string) {
@@ -219,12 +306,7 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 func closedListener(t *testing.T) net.Listener {
 	t.Helper()
 
-	var listenConfig net.ListenConfig
-
-	listener, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
+	listener := openListener(t)
 
 	if err := listener.Close(); err != nil {
 		t.Fatalf("close listener: %v", err)
