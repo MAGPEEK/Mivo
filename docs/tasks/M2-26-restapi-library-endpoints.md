@@ -44,3 +44,6 @@ status, scan trigger, paged items and item detail (ADR 0017, ADR 0022).
   512 characters for very long Windows CJK file names. Raise `maxLength` of the `cursor` query
   parameter and `nextCursor` to 2048 in api/openapi.yaml (regenerate server and client) and test a
   cursor > 512 characters round-trip.
+- (from M2-15/M2-18 test) `LibraryRepository` still wraps `domain.ErrInvalid` for an unknown stored
+  library kind (`sqlite/library.go`); `app/library` neutralises it. Handlers must call the
+  `app/library` service, never the repository directly, or such a row becomes a 400.
