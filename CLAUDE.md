@@ -86,6 +86,8 @@ The main session orchestrates; subagents cannot start other subagents.
 3. `mivo-tester` – runs all gates; FAIL → back to step 2 with the report
 4. `mivo-reviewer` – read-only review; REVISE → back to step 2 with findings
 5. PASS + APPROVE → commit. After 3 failed rounds stop and ask the user.
+6. `mivo-release` – publishes artifacts (Docker image `docker.io/magpeek/mivo-media-server`) only
+   after PASS + APPROVE and with the user's explicit approval for each push.
 
 Every agent ends its answer with a `REPORT` block:
 
