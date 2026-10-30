@@ -43,3 +43,8 @@ graceful shutdown.
 - The fallback handler hook is the only extension point M1-16 needs, so it should not have
   to edit routing logic beyond passing the handler.
 - No CORS yet (same origin; webOS in milestone 10).
+
+## Orchestrator notes (from M1-06 review)
+- `/api/v1/health` is unauthenticated: never expose raw adapter error text. M1-06b makes the
+  service return fixed detail strings; keep it that way in the HTTP mapping.
+- Add a test that ties `system.APIVersion` to the `/api/v<version>` prefix in `api/openapi.yaml`.

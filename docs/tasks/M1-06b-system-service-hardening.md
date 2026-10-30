@@ -1,0 +1,27 @@
+# M1-06b Harden the system service
+Owner: mivo-backend
+Depends on: M1-06
+Files/areas: `internal/domain/system/**`, `internal/app/system/**`
+
+## Goal
+Resolve the M1-06 review findings before the HTTP and SQLite adapters build on the service.
+
+## Acceptance criteria
+- [ ] `EnsureIdentity` loads without holding a lock; only the create path is serialised, with a
+      context-aware wait (1-slot channel semaphore with `select` on `ctx.Done()`), and it loads
+      again after acquiring. Concurrent first calls still save exactly once (test with `-race`);
+      a caller whose `ctx` is cancelled while waiting returns `ctx.Err()` (test).
+- [ ] If `SaveIdentity` returns `domain.ErrConflict`, the service loads once more and returns the
+      stored identity (test with a fake that conflicts).
+- [ ] `ServerID` validation rejects the nil UUID (`00000000-0000-0000-0000-000000000000`) and the
+      max UUID (`ffffffff-…`) with `ErrInvalid` (table test).
+- [ ] Health `Detail` never contains raw adapter error text: fixed messages
+      ("database ping failed", "database ping timed out") – the raw error is returned to the
+      caller separately or left for adapters to log; document the choice in the code comment.
+      Timeout wording does not claim a specific duration when the caller's deadline fired first.
+- [ ] `NewService` rejects an empty `ProductName` with `ErrInvalid`.
+- [ ] No "Mivo" literal in comments or test data (use a neutral name such as `TestProduct`).
+- [ ] Gates: 100 % coverage for both packages stays, golangci-lint 0 issues, `go test -race -count=3` green.
+
+## Notes
+- Source: M1-06 reviewer (minor 1–3, nits 1–4). The APIVersion ↔ `/api/v1` drift test belongs to M1-09.
