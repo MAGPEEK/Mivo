@@ -15,7 +15,8 @@ const (
 	// actionSkip records the case as skipped because the local FFmpeg cannot build it.
 	actionSkip
 	// actionKeepOnly leaves a case excluded by -only untouched: an existing file from an
-	// earlier run is listed as generated, so a filtered run never shrinks the manifest.
+	// earlier run is listed as a kept, generated file, so a filtered run never shrinks the
+	// manifest.
 	actionKeepOnly
 	// actionGap records a known gap (ADR 0021): a format FFmpeg cannot produce at all.
 	actionGap
@@ -29,30 +30,30 @@ type plannedCase struct {
 	Reason string
 }
 
-// planCases decides for every case name what to do. onlyGlob filters by name with
-// path.Match syntax; "" selects every case. Alternatives sharing a name collapse into one
-// plan: the first buildable alternative, or a skip that names what each one lacks.
-func planCases(cases []mediaCase, caps capabilities, onlyGlob string) []plannedCase {
+// planCases decides for every case name what to do; filter selects the cases to build.
+// Alternatives sharing a name collapse into one plan: the first buildable alternative, or a
+// skip that names what each one lacks.
+func planCases(cases []mediaCase, caps capabilities, filter caseFilter) []plannedCase {
 	var plans []plannedCase
 
 	for _, alternatives := range groupByName(cases) {
-		plans = append(plans, planAlternatives(alternatives, caps, onlyGlob))
+		plans = append(plans, planAlternatives(alternatives, caps, filter))
 	}
 
 	return plans
 }
 
-func planAlternatives(alternatives []mediaCase, caps capabilities, onlyGlob string) plannedCase {
+func planAlternatives(alternatives []mediaCase, caps capabilities, filter caseFilter) plannedCase {
 	first := alternatives[0]
 	// Gaps are listed in every run, filtered or not, so the manifest always shows them.
 	if first.isGap() {
 		return plannedCase{Case: first, Action: actionGap, Reason: first.Gap}
 	}
 
-	if !matchesFilter(first.Name, onlyGlob) {
+	if !filter.matches(first.Name) {
 		return plannedCase{
 			Case: first, Action: actionKeepOnly,
-			Reason: fmt.Sprintf("not selected by -only %q", onlyGlob),
+			Reason: fmt.Sprintf("not selected by -only %q", filter),
 		}
 	}
 
@@ -91,23 +92,59 @@ func groupByName(cases []mediaCase) [][]mediaCase {
 	return groups
 }
 
-// matchesFilter reports whether a case name matches the -only glob. The glob was validated
-// when the flags were parsed, so a match error cannot occur here and counts as no match.
-func matchesFilter(name, onlyGlob string) bool {
-	if onlyGlob == "" {
+// filterSeparator separates the globs of one -only value.
+const filterSeparator = ","
+
+// caseFilter is the parsed -only flag: a comma-separated list of path.Match globs. A case is
+// selected when one of them matches its name. The zero value selects every case.
+type caseFilter struct {
+	// text is the flag value as given, for messages.
+	text  string
+	globs []string
+}
+
+// parseCaseFilter splits and validates an -only value, so a typo fails before any work
+// starts instead of silently selecting nothing. Spaces around the globs are ignored.
+func parseCaseFilter(text string) (caseFilter, error) {
+	if text == "" {
+		return caseFilter{}, nil
+	}
+
+	var globs []string
+
+	for glob := range strings.SplitSeq(text, filterSeparator) {
+		glob = strings.TrimSpace(glob)
+		if glob == "" {
+			return caseFilter{}, fmt.Errorf("empty glob in -only %q", text)
+		}
+
+		if _, err := path.Match(glob, ""); err != nil {
+			return caseFilter{}, fmt.Errorf("invalid -only glob %q: %w", glob, err)
+		}
+
+		globs = append(globs, glob)
+	}
+
+	return caseFilter{text: text, globs: globs}, nil
+}
+
+// matches reports whether the filter selects the case name. The globs were validated by
+// parseCaseFilter, so a match error cannot occur here and counts as no match.
+func (f caseFilter) matches(name string) bool {
+	if len(f.globs) == 0 {
 		return true
 	}
 
-	matched, err := path.Match(onlyGlob, name)
-
-	return err == nil && matched
-}
-
-// validateFilter rejects malformed -only globs before any work starts.
-func validateFilter(onlyGlob string) error {
-	if _, err := path.Match(onlyGlob, ""); err != nil {
-		return fmt.Errorf("invalid -only glob %q: %w", onlyGlob, err)
+	for _, glob := range f.globs {
+		if matched, err := path.Match(glob, name); err == nil && matched {
+			return true
+		}
 	}
 
-	return nil
+	return false
+}
+
+// String returns the flag value as given.
+func (f caseFilter) String() string {
+	return f.text
 }

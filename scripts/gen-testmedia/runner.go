@@ -34,6 +34,8 @@ type generator struct {
 	force    bool
 	jobs     int
 	progress io.Writer
+	// previous holds the encoders of files earlier runs built, for the entries of kept files.
+	previous previousEncoders
 
 	progressMutex sync.Mutex
 }
@@ -70,7 +72,7 @@ func (g *generator) generate(ctx context.Context, plan plannedCase) manifestEntr
 
 	switch plan.Action {
 	case actionKeepOnly:
-		return keptOrSkipped(plan.Case, target, skipNotSelected, plan.Reason)
+		return g.keptOrSkipped(plan.Case, target, skipNotSelected, plan.Reason)
 	case actionSkip:
 		return newSkippedEntry(plan.Case, skipMissingCapability, plan.Reason)
 	case actionGap:
@@ -82,13 +84,19 @@ func (g *generator) generate(ctx context.Context, plan plannedCase) manifestEntr
 	return newEntry(plan.Case, statusFailed, fmt.Sprintf("unknown plan action %d", plan.Action))
 }
 
-// keptOrSkipped lists a file left by an earlier run as generated and skips the case otherwise.
-func keptOrSkipped(c mediaCase, target string, kind skipKind, reason string) manifestEntry {
+// keptOrSkipped lists a file left by an earlier run as kept and skips the case otherwise.
+func (g *generator) keptOrSkipped(c mediaCase, target string, kind skipKind, reason string) manifestEntry {
 	if isNonEmptyFile(target) {
-		return newEntry(c, statusGenerated, "")
+		return g.keptEntry(c)
 	}
 
 	return newSkippedEntry(c, kind, reason)
+}
+
+// keptEntry lists the file of an earlier run with the encoders that run recorded, never with
+// the alternative this run would choose.
+func (g *generator) keptEntry(c mediaCase) manifestEntry {
+	return newKeptEntry(c, g.previous.of(c))
 }
 
 // buildOrKeep builds the case unless its file exists and -force is not given. Cases the run
@@ -101,16 +109,16 @@ func (g *generator) buildOrKeep(ctx context.Context, c mediaCase, target string)
 			return newEntry(c, statusFailed, err.Error())
 		}
 
-		return newBuiltEntry(c)
+		return g.keptEntry(c)
 	}
 
 	if ctx.Err() != nil {
-		return keptOrSkipped(c, target, skipInterrupted, interruptedReason)
+		return g.keptOrSkipped(c, target, skipInterrupted, interruptedReason)
 	}
 
 	if err := g.build(ctx, c, target); err != nil {
 		if ctx.Err() != nil {
-			return keptOrSkipped(c, target, skipInterrupted, interruptedReason)
+			return g.keptOrSkipped(c, target, skipInterrupted, interruptedReason)
 		}
 
 		return newEntry(c, statusFailed, err.Error())
@@ -175,7 +183,7 @@ func (g *generator) report(entry manifestEntry) {
 	g.progressMutex.Lock()
 	defer g.progressMutex.Unlock()
 
-	line := fmt.Sprintf("%-9s %s", entry.Status, entry.Name)
+	line := fmt.Sprintf("%-9s %s", entry.progressLabel(), entry.Name)
 	if entry.Reason != "" {
 		line += " (" + firstLine(entry.Reason) + ")"
 	}

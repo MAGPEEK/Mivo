@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -62,12 +63,20 @@ type manifestEntry struct {
 	SkipKind skipKind `json:"skipKind,omitempty"`
 	// Reason explains skipped and failed cases and is empty for generated ones.
 	Reason string `json:"reason"`
-	// Encoders are the FFmpeg encoders of the alternative this run chose for a buildable case.
-	// A file kept from an earlier run may come from another alternative. They are empty when
-	// the run did not choose one, e.g. for skipped cases or cases excluded by -only.
+	// Encoders are the FFmpeg encoders that built the file. A file kept from an earlier run
+	// keeps the encoders of the run that built it, taken from the previous manifest, because
+	// this run might choose another alternative. They are empty for cases without a file and
+	// for kept files the previous manifest does not describe.
 	Encoders []string    `json:"encoders,omitempty"`
 	Expected expectation `json:"expected"`
+
+	// kept marks a generated entry whose file an earlier run built. It only labels progress
+	// and summary; consumers of the manifest see a generated file either way.
+	kept bool
 }
+
+// keptLabel names files kept from an earlier run in progress and summary.
+const keptLabel = "kept"
 
 func newEntry(c mediaCase, status entryStatus, reason string) manifestEntry {
 	return manifestEntry{
@@ -80,12 +89,30 @@ func newEntry(c mediaCase, status entryStatus, reason string) manifestEntry {
 	}
 }
 
-// newBuiltEntry is a generated case whose encoders this run chose.
+// newBuiltEntry is a case this run built with the encoders of the chosen alternative.
 func newBuiltEntry(c mediaCase) manifestEntry {
 	entry := newEntry(c, statusGenerated, "")
-	entry.Encoders = c.Encoders
+	entry.Encoders = slices.Clone(c.Encoders)
 
 	return entry
+}
+
+// newKeptEntry is a case whose file an earlier run built with the given encoders.
+func newKeptEntry(c mediaCase, encoders []string) manifestEntry {
+	entry := newEntry(c, statusGenerated, "")
+	entry.Encoders = slices.Clone(encoders)
+	entry.kept = true
+
+	return entry
+}
+
+// progressLabel is the status shown in progress lines: "kept" for files of earlier runs.
+func (e manifestEntry) progressLabel() string {
+	if e.kept {
+		return keptLabel
+	}
+
+	return string(e.Status)
 }
 
 func newSkippedEntry(c mediaCase, kind skipKind, reason string) manifestEntry {
@@ -126,6 +153,59 @@ func (m manifest) encode() ([]byte, error) {
 	}
 
 	return append(data, '\n'), nil
+}
+
+// previousBuild is what the previous manifest says about a generated file.
+type previousBuild struct {
+	file     string
+	encoders []string
+}
+
+// previousEncoders maps case names to the files earlier runs built.
+type previousEncoders map[string]previousBuild
+
+// of returns the encoders that built the file of c, or nil when the previous manifest did not
+// list that file as generated, e.g. because the case was renamed or wrote another file.
+func (p previousEncoders) of(c mediaCase) []string {
+	build, found := p[c.Name]
+	if !found || build.file != c.Output {
+		return nil
+	}
+
+	return build.encoders
+}
+
+// readPreviousEncoders reads the generated entries of <dir>/manifest.json. A missing manifest
+// is no error; it simply describes nothing.
+func readPreviousEncoders(dir string) (previousEncoders, error) {
+	data, err := fs.ReadFile(os.DirFS(dir), manifestFileName)
+	if errors.Is(err, fs.ErrNotExist) {
+		return previousEncoders{}, nil
+	}
+
+	if err != nil {
+		return previousEncoders{}, fmt.Errorf("read %s: %w", manifestFileName, err)
+	}
+
+	var previous manifest
+	if err := json.Unmarshal(data, &previous); err != nil {
+		return previousEncoders{}, fmt.Errorf("decode %s: %w", manifestFileName, err)
+	}
+
+	if previous.SchemaVersion != manifestSchemaVersion {
+		return previousEncoders{}, fmt.Errorf("%s has schema version %d, want %d",
+			manifestFileName, previous.SchemaVersion, manifestSchemaVersion)
+	}
+
+	builds := previousEncoders{}
+
+	for _, entry := range previous.Cases {
+		if entry.Status == statusGenerated {
+			builds[entry.Name] = previousBuild{file: entry.File, encoders: entry.Encoders}
+		}
+	}
+
+	return builds, nil
 }
 
 // writeManifest replaces <dir>/manifest.json atomically, so readers never see half a file.

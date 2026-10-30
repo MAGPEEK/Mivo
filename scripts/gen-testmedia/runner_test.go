@@ -388,3 +388,89 @@ func TestWriteTextInputsReportsUnwritableFiles(t *testing.T) {
 		t.Errorf("writeTextInputs = %q, %v; want an error", dir, err)
 	}
 }
+
+// keptEncodersTest is one row of TestGenerateListsKeptFilesWithTheirPreviousEncoders.
+type keptEncodersTest struct {
+	name        string
+	action      action
+	force       bool
+	interrupted bool
+	// previousFile is the file of the earlier manifest entry; "" means there is none.
+	previousFile string
+	wantEncoders []string
+	wantLabel    string
+}
+
+// The earlier run built the file with another alternative than this run would choose.
+func earlierEncoders() []string { return []string{"libaom-av1", "libopus"} }
+
+func chosenEncoders() []string { return []string{"libsvtav1", "libopus"} }
+
+func TestGenerateListsKeptFilesWithTheirPreviousEncoders(t *testing.T) {
+	t.Parallel()
+
+	tests := []keptEncodersTest{
+		{name: "kept without force", action: actionBuild, previousFile: "video/a.mkv", wantEncoders: earlierEncoders(), wantLabel: "kept"},
+		{name: "kept by -only", action: actionKeepOnly, previousFile: "video/a.mkv", wantEncoders: earlierEncoders(), wantLabel: "kept"},
+		{
+			name: "kept by an interrupted force run", action: actionBuild, force: true, interrupted: true,
+			previousFile: "video/a.mkv", wantEncoders: earlierEncoders(), wantLabel: "kept",
+		},
+		{name: "kept without an earlier entry", action: actionBuild, wantLabel: "kept"},
+		{name: "earlier entry for another file", action: actionBuild, previousFile: "video/renamed.mkv", wantLabel: "kept"},
+		{
+			name: "rebuilt with force", action: actionBuild, force: true,
+			previousFile: "video/a.mkv", wantEncoders: chosenEncoders(), wantLabel: "generated",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			checkKeptEncoders(t, test)
+		})
+	}
+}
+
+func checkKeptEncoders(t *testing.T, test keptEncodersTest) {
+	t.Helper()
+
+	gen, progress := newTestGenerator(t, newFixtureFFmpeg(t), test.force)
+	writeFile(t, filepath.Join(gen.outDir, "video", "a.mkv"), "old")
+
+	previous := earlierEncoders()
+	if test.previousFile != "" {
+		gen.previous = previousEncoders{"video-a": {file: test.previousFile, encoders: previous}}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if test.interrupted {
+		cancel()
+	}
+
+	c := sampleCase("video-a", "video/a.mkv")
+	c.Encoders = chosenEncoders()
+	entry := gen.generate(ctx, plannedCase{Case: c, Action: test.action, Reason: "why"})
+
+	if entry.Status != statusGenerated || !slices.Equal(entry.Encoders, test.wantEncoders) {
+		t.Errorf("entry = %s %v, want generated %v", entry.Status, entry.Encoders, test.wantEncoders)
+	}
+
+	gen.report(entry)
+
+	if want := fmt.Sprintf("%-9s video-a\n", test.wantLabel); progress.String() != want {
+		t.Errorf("progress = %q, want %q", progress.String(), want)
+	}
+
+	// The entry owns its encoder list.
+	if len(entry.Encoders) == 0 {
+		return
+	}
+
+	entry.Encoders[0] = "changed"
+	if !slices.Equal(c.Encoders, chosenEncoders()) || !slices.Equal(previous, earlierEncoders()) {
+		t.Error("the entry shares its encoder list with the case or the previous manifest")
+	}
+}

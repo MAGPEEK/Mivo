@@ -68,8 +68,13 @@ func sidecarSubtitleCases() []mediaCase {
 func embeddedSubtitleCases() []mediaCase {
 	english := trackExpectation{Language: languageEnglish, Default: true}
 	secondary := trackExpectation{Language: languageEnglish}
+	// The MKV sets subtitle dispositions, so it marks its video and audio default as well.
+	video := defaultTrack()
+	audio := defaultTrack()
 
 	mkv := expect("mkv", probeMatroska, h264Video(), audioOf("aac"))
+	mkv.Video.Track = &video
+	mkv.Audio[0].Track = &audio
 	mkv.Subtitles = []subtitleExpectation{{Codec: codecSubRip, Track: &english}, {Codec: codecASS, Track: &secondary}}
 
 	mp4 := expect("mp4", probeISOBMFF, h264Video(), audioOf("aac"))
@@ -84,6 +89,7 @@ func embeddedSubtitleCases() []mediaCase {
 				Content: formatASS(englishCues(), defaultWidth, defaultHeight),
 			}},
 			Args: slices.Concat(x264Args(), audioArgs("aac"), []string{"-c:s:0", "srt", "-c:s:1", "ass"},
+				trackArgs("v:0", video), trackArgs("a:0", audio),
 				trackArgs("s:0", english), trackArgs("s:1", secondary)),
 			Expect: mkv,
 		},

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"path"
 	"path/filepath"
 	"slices"
@@ -143,6 +144,8 @@ type videoExpectation struct {
 	HDR    string `json:"hdr,omitempty"`
 	Width  int    `json:"width,omitempty"`
 	Height int    `json:"height,omitempty"`
+	// Track is set when the case controls the dispositions; video has no language tag.
+	Track *trackExpectation `json:"track,omitempty"`
 }
 
 // audioExpectation describes one expected audio stream, in stream order.
@@ -166,7 +169,8 @@ type subtitleExpectation struct {
 // same values through trackArgs, so the expectation and the FFmpeg options cannot diverge.
 type trackExpectation struct {
 	// Language is an ISO 639-2 code such as "eng" or "deu", as Matroska and players expect.
-	Language string `json:"language"`
+	// Empty means the stream has no language tag, which ffprobe reports as none.
+	Language string `json:"language,omitempty"`
 	Default  bool   `json:"default"`
 	Forced   bool   `json:"forced"`
 }
@@ -216,6 +220,14 @@ func (s sourceSpec) withSize(width, height int) sourceSpec {
 	return s
 }
 
+// withDuration returns the source with another length, for cases such as seek clips that need
+// more than the default clip length.
+func (s sourceSpec) withDuration(duration time.Duration) sourceSpec {
+	s.Duration = duration
+
+	return s
+}
+
 // withAudio returns the source with another audio format, for codecs with fixed rates.
 func (s sourceSpec) withAudio(sampleRate, channels int) sourceSpec {
 	s.SampleRate = sampleRate
@@ -249,7 +261,9 @@ func (s sourceSpec) inputCount() int {
 // isGap reports whether the case is a known gap that is never built.
 func (c mediaCase) isGap() bool { return c.Gap != "" }
 
-// expected returns the case expectation completed with the properties of its source.
+// expected returns the case expectation completed with the properties of its source. The
+// result shares no slice, map or pointer with the case or with other results, so callers
+// may change it freely.
 func (c mediaCase) expected() expectation {
 	result := c.Expect
 
@@ -257,26 +271,73 @@ func (c mediaCase) expected() expectation {
 		result.DurationSeconds = c.Source.Duration.Seconds()
 	}
 
-	if result.Video != nil {
-		video := *result.Video
-		video.Width = c.Source.Width
-		video.Height = c.Source.Height
-		result.Video = &video
+	result.Video = c.expectedVideo()
+	result.Audio = c.expectedAudio()
+	result.Subtitles = slices.Clone(c.Expect.Subtitles)
+
+	for index := range result.Subtitles {
+		result.Subtitles[index].Track = cloneTrack(result.Subtitles[index].Track)
 	}
 
-	result.Audio = slices.Clone(result.Audio)
-	for index := range result.Audio {
-		result.Audio[index].SampleRate = c.Source.SampleRate
-		result.Audio[index].Channels = c.Source.Channels
+	result.Chapters = slices.Clone(c.Expect.Chapters)
+	result.Tags = maps.Clone(c.Expect.Tags)
+	result.Sidecars = c.expectedSidecars()
+
+	return result
+}
+
+func (c mediaCase) expectedVideo() *videoExpectation {
+	if c.Expect.Video == nil {
+		return nil
 	}
+
+	video := *c.Expect.Video
+	video.Width = c.Source.Width
+	video.Height = c.Source.Height
+	video.Track = cloneTrack(video.Track)
+
+	return &video
+}
+
+func (c mediaCase) expectedAudio() []audioExpectation {
+	audio := slices.Clone(c.Expect.Audio)
+
+	for index := range audio {
+		audio[index].SampleRate = c.Source.SampleRate
+		audio[index].Channels = c.Source.Channels
+		audio[index].Track = cloneTrack(audio[index].Track)
+	}
+
+	return audio
+}
+
+// expectedSidecars appends the sidecar files to the declared sidecars in a new slice; appending
+// to the declared one could write into spare capacity another result shares.
+func (c mediaCase) expectedSidecars() []sidecarExpectation {
+	if len(c.Expect.Sidecars)+len(c.Sidecars) == 0 {
+		return nil
+	}
+
+	sidecars := make([]sidecarExpectation, 0, len(c.Expect.Sidecars)+len(c.Sidecars))
+	sidecars = append(sidecars, c.Expect.Sidecars...)
 
 	for _, sidecar := range c.Sidecars {
-		result.Sidecars = append(result.Sidecars, sidecarExpectation{
+		sidecars = append(sidecars, sidecarExpectation{
 			File: sidecar.Output, ProbeFormat: sidecar.ProbeFormat, Codec: sidecar.Codec,
 		})
 	}
 
-	return result
+	return sidecars
+}
+
+func cloneTrack(track *trackExpectation) *trackExpectation {
+	if track == nil {
+		return nil
+	}
+
+	clone := *track
+
+	return &clone
 }
 
 // buildArgs returns the complete FFmpeg argument list that writes the case to outputPath.
@@ -356,7 +417,8 @@ func textInputArgs(textInputs []textInput, inputDir string, firstIndex int) (inp
 }
 
 // trackArgs returns the options that set the language and dispositions of one output
-// stream; stream is a stream specifier such as "a:0" or "s:1".
+// stream; stream is a stream specifier such as "a:0" or "s:1". Without a language only the
+// dispositions are set.
 func trackArgs(stream string, track trackExpectation) []string {
 	disposition := "0"
 
@@ -369,7 +431,19 @@ func trackArgs(stream string, track trackExpectation) []string {
 		disposition = "forced"
 	}
 
-	return []string{"-metadata:s:" + stream, "language=" + track.Language, "-disposition:" + stream, disposition}
+	dispositionArgs := []string{"-disposition:" + stream, disposition}
+	if track.Language == "" {
+		return dispositionArgs
+	}
+
+	return append([]string{"-metadata:s:" + stream, "language=" + track.Language}, dispositionArgs...)
+}
+
+// defaultTrack marks a stream without a language tag as the default one. FFmpeg's Matroska
+// muxer passes dispositions through as they are, so without it the video and audio tracks of
+// a file that sets other dispositions are not flagged default.
+func defaultTrack() trackExpectation {
+	return trackExpectation{Default: true}
 }
 
 // knownGap declares a format FFmpeg cannot produce (ADR 0021). The category is the directory

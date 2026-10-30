@@ -6,8 +6,10 @@ import "slices"
 const multiTrackAudioTracks = 2
 
 // multiTrackCases returns a Matroska file with English and German audio and subtitles, for
-// track selection: English audio is the default track and the German subtitles are forced.
+// track selection: the video and the English audio are the default tracks and the German
+// subtitles are forced.
 func multiTrackCases() []mediaCase {
+	video := defaultTrack()
 	englishAudio := trackExpectation{Language: languageEnglish, Default: true}
 	germanAudio := trackExpectation{Language: languageGerman}
 	englishSubtitles := trackExpectation{Language: languageEnglish}
@@ -17,6 +19,7 @@ func multiTrackCases() []mediaCase {
 	source.AudioTracks = multiTrackAudioTracks
 
 	expected := expect("mkv", probeMatroska, h264Video(), nil)
+	expected.Video.Track = &video
 	expected.Audio = []audioExpectation{
 		{Codec: "aac", Track: &englishAudio},
 		{Codec: "aac", Track: &germanAudio},
@@ -35,7 +38,7 @@ func multiTrackCases() []mediaCase {
 				{FileName: "german.srt", Format: "srt", Role: roleSubtitle, Content: formatSRT(germanCues())},
 			},
 			Args: slices.Concat(x264Args(), audioArgs("aac"), []string{"-c:s", "srt"},
-				trackArgs("a:0", englishAudio), trackArgs("a:1", germanAudio),
+				trackArgs("v:0", video), trackArgs("a:0", englishAudio), trackArgs("a:1", germanAudio),
 				trackArgs("s:0", englishSubtitles), trackArgs("s:1", germanSubtitles)),
 			Expect: expected,
 		},

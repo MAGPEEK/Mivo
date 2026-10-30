@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"path"
 	"path/filepath"
 	"slices"
@@ -170,6 +171,9 @@ func TestBuildArgsForMultiTrackMapsAndTagsEveryStream(t *testing.T) {
 		[]string{
 			"-c:v", "libx264", "-preset", "veryfast", "-profile:v", "high", "-pix_fmt", "yuv420p",
 			"-c:a", "aac", "-c:s", "srt",
+			// FFmpeg's Matroska muxer passes dispositions through, so the video track is
+			// marked default explicitly; video has no language tag.
+			"-disposition:v:0", "default",
 			"-metadata:s:a:0", "language=eng", "-disposition:a:0", "default",
 			"-metadata:s:a:1", "language=deu", "-disposition:a:1", "0",
 			"-metadata:s:s:0", "language=eng", "-disposition:s:0", "0",
@@ -193,6 +197,101 @@ func TestBuildArgsForMultiTrackMapsAndTagsEveryStream(t *testing.T) {
 
 	if *expected.Subtitles[1].Track != (trackExpectation{Language: "deu", Forced: true}) {
 		t.Errorf("second subtitle expectation = %+v", *expected.Subtitles[1].Track)
+	}
+
+	if expected.Video.Track == nil || *expected.Video.Track != (trackExpectation{Default: true}) {
+		t.Errorf("video track expectation = %+v", expected.Video.Track)
+	}
+}
+
+func TestEmbeddedSubtitleMKVMarksVideoAndAudioDefault(t *testing.T) {
+	t.Parallel()
+
+	c := findCase(t, "subtitle-mkv-srt-ass")
+	args := strings.Join(buildArgs(c, "in", "out.partial"), " ")
+
+	for _, want := range []string{"-disposition:v:0 default", "-disposition:a:0 default"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args lack %q:\n%s", want, args)
+		}
+	}
+
+	expected := c.expected()
+	if expected.Video.Track == nil || !expected.Video.Track.Default ||
+		expected.Audio[0].Track == nil || *expected.Audio[0].Track != (trackExpectation{Default: true}) {
+		t.Errorf("video track = %+v, audio track = %+v", expected.Video.Track, expected.Audio[0].Track)
+	}
+}
+
+func TestSeekCasesHaveAFixedKeyframeInterval(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		// want are argument sequences the case must contain.
+		want      []string
+		wantVideo string
+		wantAudio string
+		container string
+	}{
+		{
+			name: "video-mkv-h264-aac-long",
+			want: []string{
+				"testsrc2=size=320x240:rate=25:duration=30", "sine=frequency=440:sample_rate=48000:duration=30",
+				"-c:v libx264 -preset veryfast -profile:v high", "-g 50 -keyint_min 50 -sc_threshold 0", "-t 30 -f matroska",
+			},
+			wantVideo: "h264", wantAudio: "aac", container: "mkv",
+		},
+		{
+			name: "video-ts-mpeg2-mp2-long",
+			want: []string{
+				"testsrc2=size=320x240:rate=25:duration=30",
+				"-c:v mpeg2video", "-g 50 -sc_threshold 1000000000", "-t 30 -f mpegts",
+			},
+			wantVideo: "mpeg2video", wantAudio: "mp2", container: "mpegts",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := findCase(t, test.name)
+			args := strings.Join(buildArgs(c, "", "out.partial"), " ")
+
+			for _, want := range test.want {
+				if !strings.Contains(args, want) {
+					t.Errorf("args lack %q:\n%s", want, args)
+				}
+			}
+
+			expected := c.expected()
+			if expected.DurationSeconds != 30 || expected.Container != test.container ||
+				expected.Video.Codec != test.wantVideo || expected.Audio[0].Codec != test.wantAudio {
+				t.Errorf("expectation = %+v video %+v audio %+v", expected, *expected.Video, expected.Audio)
+			}
+		})
+	}
+}
+
+func TestOnlySeekCasesChangeTheClipDuration(t *testing.T) {
+	t.Parallel()
+
+	source := standardSource()
+	if long := source.withDuration(seekClipDuration); long.Duration != 30*time.Second || source.Duration != clipDuration {
+		t.Errorf("withDuration = %v, original %v", long.Duration, source.Duration)
+	}
+
+	var long []string
+
+	for _, c := range allCases() {
+		if c.Source.Duration == seekClipDuration {
+			long = append(long, c.Name)
+		}
+	}
+
+	if want := []string{"video-mkv-h264-aac-long", "video-ts-mpeg2-mp2-long"}; !slices.Equal(long, want) {
+		t.Errorf("30 s cases = %v, want %v", long, want)
 	}
 }
 
@@ -238,6 +337,12 @@ func TestTrackArgsDispositions(t *testing.T) {
 		if got := trackArgs("s:0", test.track); !slices.Equal(got, want) {
 			t.Errorf("trackArgs(%+v) = %q, want %q", test.track, got, want)
 		}
+	}
+
+	// Without a language only the disposition is set; Matroska then stores "und".
+	want := []string{"-disposition:v:0", "default"}
+	if got := trackArgs("v:0", trackExpectation{Default: true}); !slices.Equal(got, want) {
+		t.Errorf("trackArgs without language = %q, want %q", got, want)
 	}
 }
 
@@ -362,9 +467,14 @@ func checkSourceShape(t *testing.T, c mediaCase) {
 	wantDuration := map[string]time.Duration{
 		categoryVideo: clipDuration, categoryAudio: audioDuration, categoryImage: imageSourceDuration,
 		categorySubtitle: clipDuration, categoryMultiTrack: clipDuration,
+	}[c.Category]
+	// Seek cases are the only long clips; their names say so.
+	if strings.HasSuffix(c.Name, seekCaseSuffix) {
+		wantDuration = seekClipDuration
 	}
-	if c.Source.Duration != wantDuration[c.Category] {
-		t.Errorf("%s: %s sources last %v, got %v", c.Name, c.Category, wantDuration[c.Category], c.Source.Duration)
+
+	if c.Source.Duration != wantDuration {
+		t.Errorf("%s: %s sources last %v, got %v", c.Name, c.Category, wantDuration, c.Source.Duration)
 	}
 
 	if isImage := c.Category == categoryImage; isImage != (c.Source.Frames > 0) {
@@ -497,5 +607,73 @@ func TestTextInputArgsIgnoresUnknownRoles(t *testing.T) {
 
 	if !slices.Equal(inputs, []string{"-f", "srt", "-i", filepath.Join("dir", "x.txt")}) || len(outputs) != 0 {
 		t.Errorf("textInputArgs = %q %q", inputs, outputs)
+	}
+}
+
+// TestExpectedReturnsIndependentCopies mutates one result of expected() everywhere and checks
+// that neither a second result nor the case itself changed.
+func TestExpectedReturnsIndependentCopies(t *testing.T) {
+	t.Parallel()
+
+	track := trackExpectation{Language: "eng", Default: true}
+	c := sampleCase("video-a", "video/a.mkv")
+	c.Expect.Video.Track = &trackExpectation{Default: true}
+	c.Expect.Audio[0].Track = &track
+	c.Expect.Subtitles = []subtitleExpectation{{Codec: codecSubRip, Track: &trackExpectation{Language: "deu"}}}
+	c.Expect.Chapters = []chapterExpectation{{Title: "One", EndSeconds: 1}}
+	c.Expect.Tags = map[string]string{"title": "T"}
+	// Spare capacity is what let appended sidecars of two results share one array.
+	c.Expect.Sidecars = make([]sidecarExpectation, 1, 4)
+	c.Expect.Sidecars[0] = sidecarExpectation{File: "video/declared.srt"}
+	c.Sidecars = []sidecarFile{{Output: "video/a.srt"}, {Output: "video/a.vtt"}}
+
+	// JSON snapshots cannot alias anything, unlike values compared with reflect.DeepEqual.
+	declared := snapshot(t, c.Expect)
+	earlier := c.expected()
+	want := snapshot(t, earlier)
+
+	mutated := c.expected()
+	mutateExpectation(&mutated)
+
+	for name, got := range map[string]string{
+		"a later result":    snapshot(t, c.expected()),
+		"an earlier result": snapshot(t, earlier),
+	} {
+		if got != want {
+			t.Errorf("mutating one result changed %s:\n%s\nwant\n%s", name, got, want)
+		}
+	}
+
+	if got := snapshot(t, c.Expect); got != declared {
+		t.Errorf("expected() or its result changed the case:\n%s\nwant\n%s", got, declared)
+	}
+}
+
+func snapshot(t *testing.T, e expectation) string {
+	t.Helper()
+
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(data)
+}
+
+// mutateExpectation changes every value an expectation holds through a reference.
+func mutateExpectation(e *expectation) {
+	const changed = "changed"
+
+	e.Video.Codec = changed
+	e.Video.Track.Language = changed
+	e.Audio[0].Codec = changed
+	e.Audio[0].Track.Language = changed
+	e.Subtitles[0].Codec = changed
+	e.Subtitles[0].Track.Forced = true
+	e.Chapters[0].Title = changed
+	e.Tags["title"] = changed
+
+	for index := range e.Sidecars {
+		e.Sidecars[index].File = changed
 	}
 }

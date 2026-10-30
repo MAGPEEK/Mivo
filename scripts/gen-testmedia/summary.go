@@ -11,10 +11,12 @@ import (
 // summaryTotalLabel names the line that adds up all categories.
 const summaryTotalLabel = "total"
 
-// tally counts the outcomes of one category. Skips are split by kind, because a case the
-// local FFmpeg cannot build, one excluded by -only and a known gap mean different things.
+// tally counts the outcomes of one category. Generated files are split into built and kept
+// ones, and skips by kind, because a case the local FFmpeg cannot build, one excluded by
+// -only and a known gap mean different things.
 type tally struct {
 	generated   int
+	kept        int
 	skipped     int
 	notSelected int
 	gaps        int
@@ -25,12 +27,22 @@ type tally struct {
 func (t *tally) add(entry manifestEntry) {
 	switch entry.Status {
 	case statusGenerated:
-		t.generated++
+		t.addGenerated(entry.kept)
 	case statusFailed:
 		t.failed++
 	case statusSkipped:
 		t.addSkip(entry.SkipKind)
 	}
+}
+
+func (t *tally) addGenerated(kept bool) {
+	if kept {
+		t.kept++
+
+		return
+	}
+
+	t.generated++
 }
 
 func (t *tally) addSkip(kind skipKind) {
@@ -49,6 +61,7 @@ func (t *tally) addSkip(kind skipKind) {
 func (t tally) plus(other tally) tally {
 	return tally{
 		generated:   t.generated + other.generated,
+		kept:        t.kept + other.kept,
 		skipped:     t.skipped + other.skipped,
 		notSelected: t.notSelected + other.notSelected,
 		gaps:        t.gaps + other.gaps,
@@ -58,8 +71,8 @@ func (t tally) plus(other tally) tally {
 }
 
 func (t tally) String() string {
-	text := fmt.Sprintf("%d generated, %d skipped, %d not selected, %d gaps, %d failed",
-		t.generated, t.skipped, t.notSelected, t.gaps, t.failed)
+	text := fmt.Sprintf("%d generated, %d kept, %d skipped, %d not selected, %d gaps, %d failed",
+		t.generated, t.kept, t.skipped, t.notSelected, t.gaps, t.failed)
 	if t.interrupted > 0 {
 		text += fmt.Sprintf(", %d interrupted", t.interrupted)
 	}

@@ -7,7 +7,7 @@
 // produce at all. Run it from the repository root:
 //
 //	go run ./scripts/gen-testmedia [-out testdata/media] [-ffmpeg ffmpeg] [-force]
-//	                               [-only <glob>] [-jobs N]
+//	                               [-only <glob>[,<glob>...]] [-jobs N]
 package main
 
 import (
@@ -41,20 +41,31 @@ var errCasesFailed = errors.New("at least one case failed, see the manifest for 
 var errInterrupted = errors.New("generation interrupted, run again to finish the corpus")
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := interruptContext(context.Background())
 	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 
 	stop()
 	os.Exit(code)
 }
 
+// interruptContext returns a context that the first Ctrl+C or SIGTERM cancels. The run then
+// stops its FFmpeg processes and still writes the manifest. Once the context is done, the
+// signal handlers are released, so a second Ctrl+C ends the program at once with the default
+// behaviour instead of being swallowed while the run winds down.
+func interruptContext(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	context.AfterFunc(ctx, stop)
+
+	return ctx, stop
+}
+
 // options holds the parsed command line.
 type options struct {
-	outDir   string
-	ffmpeg   string
-	force    bool
-	onlyGlob string
-	jobs     int
+	outDir string
+	ffmpeg string
+	force  bool
+	only   caseFilter
+	jobs   int
 }
 
 // run executes the command with the given arguments and returns the process exit code.
@@ -81,12 +92,16 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 func parseOptions(args []string, stderr io.Writer) (options, error) {
 	opts := options{}
 
+	var only string
+
 	flags := flag.NewFlagSet("gen-testmedia", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&opts.outDir, "out", defaultOutDir, "output directory for media files and manifest.json")
 	flags.StringVar(&opts.ffmpeg, "ffmpeg", defaultFFmpeg, "ffmpeg executable (name on PATH or path)")
 	flags.BoolVar(&opts.force, "force", false, "regenerate files that already exist")
-	flags.StringVar(&opts.onlyGlob, "only", "", "only build cases whose name matches this glob, e.g. 'video-mkv-*'")
+	flags.StringVar(&only, "only", "",
+		"only build cases whose name matches one of these comma-separated globs,\n"+
+			"e.g. 'video-mkv-*' or 'video-mp4-*,video-webm-vp9-opus'")
 	flags.IntVar(&opts.jobs, "jobs", runtime.NumCPU(), "number of parallel ffmpeg processes (minimum 1)")
 
 	if err := flags.Parse(args); err != nil {
@@ -97,10 +112,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, usageError(flags, fmt.Errorf("unexpected argument %q", flags.Arg(0)))
 	}
 
-	if err := validateFilter(opts.onlyGlob); err != nil {
+	filter, err := parseCaseFilter(only)
+	if err != nil {
 		return options{}, usageError(flags, err)
 	}
 
+	opts.only = filter
 	opts.jobs = max(opts.jobs, 1)
 
 	return opts, nil
@@ -126,8 +143,11 @@ func generateCorpus(ctx context.Context, opts options, ffmpeg commandRunner, std
 		return fmt.Errorf("use ffmpeg %q (install FFmpeg or pass -ffmpeg): %w", opts.ffmpeg, err)
 	}
 
-	gen := generator{ffmpeg: ffmpeg, outDir: opts.outDir, force: opts.force, jobs: opts.jobs, progress: stdout}
-	entries := gen.generateAll(ctx, planCases(allCases(), caps, opts.onlyGlob))
+	gen := generator{
+		ffmpeg: ffmpeg, outDir: opts.outDir, force: opts.force, jobs: opts.jobs, progress: stdout,
+		previous: loadPreviousEncoders(opts.outDir, stdout),
+	}
+	entries := gen.generateAll(ctx, planCases(allCases(), caps, opts.only))
 	result := newManifest(caps.version, entries)
 
 	// An interrupted run still writes the manifest, so it matches the files on disk.
@@ -147,4 +167,17 @@ func generateCorpus(ctx context.Context, opts options, ffmpeg commandRunner, std
 	}
 
 	return nil
+}
+
+// loadPreviousEncoders reads the encoders of the files the earlier runs built. An unusable
+// manifest is not fatal: the files it described are still kept, just listed without
+// encoders, and the note says why.
+func loadPreviousEncoders(outDir string, progress io.Writer) previousEncoders {
+	previous, err := readPreviousEncoders(outDir)
+	if err != nil {
+		// Progress output is informational; the manifest is the authoritative result.
+		_, _ = fmt.Fprintf(progress, "note: ignoring the previous manifest, kept files are listed without encoders: %v\n", err)
+	}
+
+	return previous
 }

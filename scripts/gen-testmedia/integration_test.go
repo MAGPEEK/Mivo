@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -96,7 +97,7 @@ func TestIntegrationGeneratesMultiTrackCase(t *testing.T) {
 	result := probeFile(t, ffprobePath, filepath.Join(outDir, filepath.FromSlash(entry.File)))
 
 	want := []string{
-		"video h264 lang= default=0 forced=0",
+		"video h264 lang= default=1 forced=0",
 		"audio aac lang=eng default=1 forced=0",
 		"audio aac lang=deu default=0 forced=0",
 		"subtitle subrip lang=eng default=0 forced=0",
@@ -114,6 +115,55 @@ func TestIntegrationGeneratesMultiTrackCase(t *testing.T) {
 	}
 
 	verifyEntry(t, ffprobePath, outDir, entry)
+}
+
+// TestIntegrationGeneratesSeekCases builds both 30 s clips with one -only list and checks
+// that their keyframes are exactly the fixed interval apart, which seek tests rely on.
+func TestIntegrationGeneratesSeekCases(t *testing.T) {
+	ffmpegPath, ffprobePath := requireFFmpeg(t)
+	t.Parallel()
+
+	names := []string{"video-mkv-h264-aac-long", "video-ts-mpeg2-mp2-long"}
+	outDir := t.TempDir()
+	result := generateCases(t, ffmpegPath, outDir, strings.Join(names, ","))
+
+	for _, name := range names {
+		entry := manifestEntryByName(t, result, name)
+
+		t.Run(name, func(t *testing.T) {
+			if entry.Status != statusGenerated {
+				t.Fatalf("entry = %+v", entry)
+			}
+
+			verifyEntry(t, ffprobePath, outDir, entry)
+			verifyKeyframeInterval(t, ffprobePath, filepath.Join(outDir, filepath.FromSlash(entry.File)))
+		})
+	}
+}
+
+// verifyKeyframeInterval checks that the video keyframes of a seek case lie seekKeyframeInterval
+// apart and cover the whole clip. MPEG-TS starts at an offset, so only differences count.
+func verifyKeyframeInterval(t *testing.T, ffprobePath, path string) {
+	t.Helper()
+
+	output := runFFprobe(t, ffprobePath, "-skip_frame", "nokey", "-select_streams", "v:0",
+		"-show_entries", "frame=pts_time", "-of", "csv=p=0", path)
+
+	var times []float64
+
+	for line := range strings.FieldsSeq(string(output)) {
+		times = append(times, parseSeconds(t, strings.Trim(line, ",")))
+	}
+
+	wantCount := int(seekClipDuration / seekKeyframeInterval)
+	if len(times) != wantCount {
+		t.Fatalf("%d keyframes at %v, want %d", len(times), times, wantCount)
+	}
+
+	for index := 1; index < len(times); index++ {
+		checkWithin(t, fmt.Sprintf("keyframe interval %d", index),
+			times[index]-times[index-1]-seekKeyframeInterval.Seconds(), chapterTolerance)
+	}
 }
 
 // TestIntegrationGeneratesNewCategories builds one representative case of every category
@@ -321,6 +371,7 @@ func verifyVideo(t *testing.T, stream probeStream, want videoExpectation) {
 	checkOptional(t, "color transfer", stream.ColorTransfer, want.ColorTransfer)
 	checkOptional(t, "color space", stream.ColorSpace, want.ColorSpace)
 	check(t, "size", fmt.Sprintf("%dx%d", stream.Width, stream.Height), fmt.Sprintf("%dx%d", want.Width, want.Height))
+	verifyTrack(t, stream, want.Track)
 }
 
 func verifyAudio(t *testing.T, streams []probeStream, want []audioExpectation) {

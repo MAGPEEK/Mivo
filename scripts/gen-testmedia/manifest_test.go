@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -136,7 +137,8 @@ func TestManifestJSONShapeOfTracksChaptersAndSidecars(t *testing.T) {
 	}
 
 	const want = `{"container":"mkv","probeFormat":"matroska,webm","durationSeconds":2,` +
-		`"video":{"codec":"h264","profile":"High","pixelFormat":"yuv420p","width":320,"height":240},` +
+		`"video":{"codec":"h264","profile":"High","pixelFormat":"yuv420p","width":320,"height":240,` +
+		`"track":{"default":true,"forced":false}},` +
 		`"audio":[{"codec":"aac","sampleRate":48000,"channels":2,"track":{"language":"eng","default":true,"forced":false}},` +
 		`{"codec":"aac","sampleRate":48000,"channels":2,"track":{"language":"deu","default":false,"forced":false}}],` +
 		`"subtitles":[{"codec":"subrip","track":{"language":"eng","default":false,"forced":false}},` +
@@ -239,5 +241,122 @@ func TestWriteFileAtomicallyFailsWithoutDirectory(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "missing", "file.txt")
 	if err := writeFileAtomically(target, []byte("x")); err == nil {
 		t.Error("writeFileAtomically succeeded in a missing directory")
+	}
+}
+
+func TestReadPreviousEncoders(t *testing.T) {
+	t.Parallel()
+
+	built := sampleCase("video-built", "video/built.mkv")
+	built.Encoders = []string{"libaom-av1", "libopus"}
+	skipped := sampleCase("video-skipped", "video/skipped.mkv")
+	skipped.Encoders = []string{"libx264"}
+
+	dir := t.TempDir()
+	if err := writeManifest(dir, newManifest("9.0.2", []manifestEntry{
+		newBuiltEntry(built),
+		newKeptEntry(sampleCase("video-kept", "video/kept.mkv"), nil),
+		newSkippedEntry(skipped, skipMissingCapability, "missing"),
+		newEntry(sampleCase("video-failed", "video/failed.mkv"), statusFailed, "boom"),
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	previous, err := readPreviousEncoders(dir)
+	if err != nil {
+		t.Fatalf("readPreviousEncoders: %v", err)
+	}
+
+	tests := []struct {
+		c    mediaCase
+		want []string
+	}{
+		{c: built, want: []string{"libaom-av1", "libopus"}},
+		// Another file under the same name was not built by the earlier run.
+		{c: sampleCase("video-built", "video/renamed.mkv")},
+		{c: sampleCase("video-kept", "video/kept.mkv")},
+		{c: skipped},
+		{c: sampleCase("video-failed", "video/failed.mkv")},
+		{c: sampleCase("video-new", "video/new.mkv")},
+	}
+
+	for _, test := range tests {
+		if got := previous.of(test.c); !slices.Equal(got, test.want) {
+			t.Errorf("encoders of %s (%s) = %v, want %v", test.c.Name, test.c.Output, got, test.want)
+		}
+	}
+}
+
+func TestReadPreviousEncodersWithoutAUsableManifest(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		prepare func(t *testing.T, dir string)
+		wantErr string
+	}{
+		{name: "missing", prepare: func(*testing.T, string) {}},
+		{
+			name:    "malformed",
+			prepare: func(t *testing.T, dir string) { writeFile(t, filepath.Join(dir, manifestFileName), "[") },
+			wantErr: "decode",
+		},
+		{
+			name: "other schema",
+			prepare: func(t *testing.T, dir string) {
+				writeFile(t, filepath.Join(dir, manifestFileName), `{"schemaVersion": 1}`)
+			},
+			wantErr: "schema version 1, want 2",
+		},
+		{
+			name: "unreadable",
+			prepare: func(t *testing.T, dir string) {
+				if err := os.Mkdir(filepath.Join(dir, manifestFileName), 0o750); err != nil {
+					t.Fatal(err)
+				}
+			},
+			wantErr: "read",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			test.prepare(t, dir)
+
+			previous, err := readPreviousEncoders(dir)
+			if len(previous) != 0 {
+				t.Errorf("previous = %v, want none", previous)
+			}
+
+			if test.wantErr == "" && err != nil || test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
+				t.Errorf("error = %v, want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestKeptEntriesAreGeneratedInTheManifest(t *testing.T) {
+	t.Parallel()
+
+	kept := newKeptEntry(sampleCase("video-a", "video/a.mkv"), []string{"libx264"})
+	built := newBuiltEntry(sampleCase("video-a", "video/a.mkv"))
+	built.Encoders = []string{"libx264"}
+
+	keptJSON, err := json.Marshal(kept)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	builtJSON, err := json.Marshal(built)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// "kept" only labels progress and summary; consumers see a generated file either way.
+	if string(keptJSON) != string(builtJSON) || kept.progressLabel() != "kept" || built.progressLabel() != "generated" {
+		t.Errorf("kept = %s (%s), built = %s (%s)", keptJSON, kept.progressLabel(), builtJSON, built.progressLabel())
 	}
 }

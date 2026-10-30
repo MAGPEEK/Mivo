@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseOptions(t *testing.T) {
@@ -30,7 +34,21 @@ func TestParseOptions(t *testing.T) {
 		{
 			name: "all flags",
 			args: []string{"-out", "media", "-ffmpeg", "/opt/ffmpeg", "-force", "-only", "video-*", "-jobs", "3"},
-			want: options{outDir: "media", ffmpeg: "/opt/ffmpeg", force: true, onlyGlob: "video-*", jobs: 3},
+			want: options{
+				outDir: "media", ffmpeg: "/opt/ffmpeg", force: true,
+				only: caseFilter{text: "video-*", globs: []string{"video-*"}}, jobs: 3,
+			},
+		},
+		{
+			name: "only takes a comma-separated glob list",
+			args: []string{"-only", "video-mp4-*,video-webm-vp9-opus"},
+			want: options{
+				outDir: defaultOutDir, ffmpeg: defaultFFmpeg, jobs: runtime.NumCPU(),
+				only: caseFilter{
+					text:  "video-mp4-*,video-webm-vp9-opus",
+					globs: []string{"video-mp4-*", "video-webm-vp9-opus"},
+				},
+			},
 		},
 		{
 			name: "jobs below one are raised to one",
@@ -48,10 +66,23 @@ func TestParseOptions(t *testing.T) {
 				t.Fatalf("parseOptions: %v", err)
 			}
 
-			if got != test.want {
+			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("options = %+v, want %+v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestUsageDescribesGlobLists(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	if _, err := parseOptions([]string{"-h"}, &stderr); !errors.Is(err, flag.ErrHelp) {
+		t.Fatalf("error = %v, want flag.ErrHelp", err)
+	}
+
+	if !strings.Contains(stderr.String(), "comma-separated") || !strings.Contains(stderr.String(), "'video-mp4-*,video-webm-vp9-opus'") {
+		t.Errorf("usage does not explain -only lists:\n%s", stderr.String())
 	}
 }
 
@@ -64,6 +95,8 @@ func TestParseOptionsRejectsInvalidCommandLines(t *testing.T) {
 		wantStderr string
 	}{
 		{name: "malformed glob", args: []string{"-only", "video-["}, wantStderr: "invalid -only glob"},
+		{name: "malformed glob in a list", args: []string{"-only", "video-*,audio-["}, wantStderr: `invalid -only glob "audio-["`},
+		{name: "empty glob in a list", args: []string{"-only", "video-*,,audio-*"}, wantStderr: "empty glob in -only"},
 		{name: "positional argument", args: []string{"extra"}, wantStderr: `unexpected argument "extra"`},
 		{name: "unknown flag", args: []string{"-bogus"}, wantStderr: "flag provided but not defined"},
 	}
@@ -206,7 +239,7 @@ func TestGenerateCorpusListsKnownGapsInEveryRun(t *testing.T) {
 	t.Parallel()
 
 	// Even a run that selects nothing lists the gaps, with a reason naming the missing piece.
-	opts := options{outDir: t.TempDir(), ffmpeg: "fake", onlyGlob: "nothing", jobs: 1}
+	opts := options{outDir: t.TempDir(), ffmpeg: "fake", only: mustParseFilter(t, "nothing"), jobs: 1}
 	if err := generateCorpus(context.Background(), opts, newFixtureFFmpeg(t), io.Discard); err != nil {
 		t.Fatalf("generateCorpus: %v", err)
 	}
@@ -226,7 +259,7 @@ func TestGenerateCorpusFiltersAndReportsFailures(t *testing.T) {
 
 	ffmpeg := newFixtureFFmpeg(t)
 	ffmpeg.failOutputs["h264_aac.mkv"] = "Conversion failed!"
-	opts := options{outDir: t.TempDir(), ffmpeg: "fake", onlyGlob: "video-mkv-*", jobs: 1}
+	opts := options{outDir: t.TempDir(), ffmpeg: "fake", only: mustParseFilter(t, "video-mkv-*"), jobs: 1}
 
 	err := generateCorpus(context.Background(), opts, ffmpeg, io.Discard)
 	if !errors.Is(err, errCasesFailed) {
@@ -278,7 +311,7 @@ func TestGenerateCorpusReportsInterruption(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		ffmpeg := newFixtureFFmpeg(t)
 		ffmpeg.onEncode = cancel
-		opts := options{outDir: t.TempDir(), ffmpeg: "fake", onlyGlob: "audio-*", jobs: 1}
+		opts := options{outDir: t.TempDir(), ffmpeg: "fake", only: mustParseFilter(t, "audio-*"), jobs: 1}
 
 		var stdout bytes.Buffer
 
@@ -301,8 +334,210 @@ func TestGenerateCorpusFailsWhenTheManifestCannotBeWritten(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "file")
 	writeFile(t, blocker, "x")
 
-	opts := options{outDir: blocker, ffmpeg: "fake", onlyGlob: "none", jobs: 1}
+	opts := options{outDir: blocker, ffmpeg: "fake", only: mustParseFilter(t, "none"), jobs: 1}
 	if err := generateCorpus(context.Background(), opts, newFixtureFFmpeg(t), io.Discard); err == nil {
 		t.Error("generateCorpus succeeded although the manifest could not be written")
+	}
+}
+
+func TestInterruptContextFollowsItsParent(t *testing.T) {
+	t.Parallel()
+
+	parent, cancel := context.WithCancel(context.Background())
+	ctx, stop := interruptContext(parent)
+
+	cancel()
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("the interrupt context ignored the cancellation of its parent")
+	}
+
+	// main calls stop again after the context released the signals itself.
+	stop()
+}
+
+// interruptHelperEnvironment makes the test binary act as the program that receives Ctrl+C.
+const interruptHelperEnvironment = "GEN_TESTMEDIA_INTERRUPT_HELPER"
+
+// TestSecondInterruptTerminatesTheProcess runs itself as a child process that interrupts
+// itself repeatedly: the first Ctrl+C only cancels the context, every later one must end the
+// process like an unhandled Ctrl+C, so a stuck run can always be stopped.
+func TestSecondInterruptTerminatesTheProcess(t *testing.T) {
+	if os.Getenv(interruptHelperEnvironment) == "1" {
+		interruptRepeatedly(t)
+
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows cannot send Ctrl+C to the own process; the test runs on Linux and macOS")
+	}
+
+	t.Parallel()
+
+	// The child is this test binary itself, running only this test; no shell is involved.
+	cmd := exec.CommandContext(t.Context(), os.Args[0], //nolint:gosec // see comment above
+		"-test.run=^TestSecondInterruptTerminatesTheProcess$")
+	cmd.Env = append(os.Environ(), interruptHelperEnvironment+"=1")
+	output, err := cmd.CombinedOutput()
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.String() != "signal: interrupt" {
+		t.Errorf("child ended with %v, want death by the second interrupt; output:\n%s", err, output)
+	}
+}
+
+// interruptRepeatedly sends Ctrl+C to the own process until it dies or a deadline passes.
+func interruptRepeatedly(t *testing.T) {
+	const (
+		retryInterval = 10 * time.Millisecond
+		deadline      = 5 * time.Second
+	)
+
+	ctx, stop := interruptContext(context.Background())
+	defer stop()
+
+	self, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	giveUp := time.After(deadline)
+
+	for {
+		if err := self.Signal(os.Interrupt); err != nil {
+			t.Fatalf("send interrupt: %v", err)
+		}
+
+		select {
+		case <-giveUp:
+			t.Fatalf("still alive after repeated interrupts (context done: %v)", ctx.Err() != nil)
+		case <-time.After(retryInterval):
+		}
+	}
+}
+
+// buildableCaseCount is the number of cases the fixture FFmpeg can build.
+func buildableCaseCount() int {
+	return len(groupByName(allCases())) - len(knownGapNames())
+}
+
+// mustGenerateCorpus runs the program logic with the fake FFmpeg and returns its output.
+func mustGenerateCorpus(t *testing.T, opts options, ffmpeg *fakeFFmpeg) string {
+	t.Helper()
+
+	var stdout bytes.Buffer
+	if err := generateCorpus(context.Background(), opts, ffmpeg, &stdout); err != nil {
+		t.Fatalf("generateCorpus: %v\n%s", err, stdout.String())
+	}
+
+	return stdout.String()
+}
+
+// checkManifestUnchanged compares the manifest in dir byte by byte with want.
+func checkManifestUnchanged(t *testing.T, dir, want string) {
+	t.Helper()
+
+	if got := readOutput(t, dir, manifestFileName); got != want {
+		t.Errorf("the run changed the manifest:\n%s", got)
+	}
+}
+
+// TestGenerateCorpusKeepsTheManifestOnLaterRuns checks that reruns, filtered runs and
+// interrupted runs list kept files with the encoders of the run that built them.
+func TestGenerateCorpusKeepsTheManifestOnLaterRuns(t *testing.T) {
+	t.Parallel()
+
+	outDir := t.TempDir()
+	mustGenerateCorpus(t, options{outDir: outDir, ffmpeg: "fake", jobs: 4}, newFixtureFFmpeg(t))
+	complete := readOutput(t, outDir, manifestFileName)
+
+	t.Run("rerun without force", func(t *testing.T) {
+		ffmpeg := newFixtureFFmpeg(t)
+		stdout := mustGenerateCorpus(t, options{outDir: outDir, ffmpeg: "fake", jobs: 4}, ffmpeg)
+
+		checkManifestUnchanged(t, outDir, complete)
+
+		if encoded := len(ffmpeg.encodedOutputs()); encoded != 0 {
+			t.Errorf("a rerun without -force encoded %d files", encoded)
+		}
+
+		wantTotal := fmt.Sprintf("0 generated, %d kept,", buildableCaseCount())
+		if !strings.Contains(stdout, wantTotal) || !strings.Contains(stdout, "kept      video-mkv-h264-aac\n") {
+			t.Errorf("progress and summary must label kept files, want %q:\n%s", wantTotal, stdout)
+		}
+	})
+
+	t.Run("filtered force run", func(t *testing.T) {
+		only := mustParseFilter(t, "video-mkv-*,audio-mp3")
+		mustGenerateCorpus(t, options{outDir: outDir, ffmpeg: "fake", force: true, only: only, jobs: 4}, newFixtureFFmpeg(t))
+		checkManifestUnchanged(t, outDir, complete)
+	})
+
+	t.Run("interrupted force run", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		ffmpeg := newFixtureFFmpeg(t)
+		ffmpeg.onEncode = cancel
+
+		err := generateCorpus(ctx, options{outDir: outDir, ffmpeg: "fake", force: true, jobs: 1}, ffmpeg, io.Discard)
+		if !errors.Is(err, errInterrupted) {
+			t.Fatalf("error = %v, want errInterrupted", err)
+		}
+
+		checkManifestUnchanged(t, outDir, complete)
+	})
+}
+
+func TestGenerateCorpusListsKeptFilesWithoutEncodersWhenTheManifestIsUnusable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		// manifest replaces the manifest of the first run; "" removes it.
+		manifest string
+		wantNote string
+	}{
+		{name: "missing manifest"},
+		{name: "malformed manifest", manifest: "{", wantNote: "note: ignoring the previous manifest"},
+		{name: "older schema", manifest: `{"schemaVersion": 1, "cases": []}`, wantNote: "schema version 1"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			outDir := t.TempDir()
+			opts := options{outDir: outDir, ffmpeg: "fake", only: mustParseFilter(t, "video-mkv-h264-aac"), jobs: 1}
+			mustGenerateCorpus(t, opts, newFixtureFFmpeg(t))
+			replaceManifest(t, outDir, test.manifest)
+
+			stdout := mustGenerateCorpus(t, opts, newFixtureFFmpeg(t))
+
+			// The file is kept, but nothing tells which alternative built it.
+			entry := manifestEntryByName(t, readManifest(t, outDir), "video-mkv-h264-aac")
+			if entry.Status != statusGenerated || entry.Encoders != nil {
+				t.Errorf("entry = %+v, want generated without encoders", entry)
+			}
+
+			if !strings.Contains(stdout, test.wantNote) {
+				t.Errorf("output lacks %q:\n%s", test.wantNote, stdout)
+			}
+		})
+	}
+}
+
+// replaceManifest removes the manifest in dir and writes content instead, unless it is "".
+func replaceManifest(t *testing.T, dir, content string) {
+	t.Helper()
+
+	path := filepath.Join(dir, manifestFileName)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	if content != "" {
+		writeFile(t, path, content)
 	}
 }
