@@ -62,3 +62,14 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
   `(ms, onTimeout) => { const id = setTimeout(onTimeout, ms); return () => clearTimeout(id); }`
   together with the video element's `canPlayType`, `MediaSource.isTypeSupported` and
   `navigator.mediaCapabilities.decodingInfo`.
+- (from M2-21) Use `planSeek` (local seek vs. new session, restart keeps 1 s before the end) and
+  `shouldRecreateSession({source:"http", status, concernsSession} | {source:"hls", error})`; add the
+  permanent compile-time check that player-core `PlaybackSession` is assignable to/from the
+  api-client type.
+- (from M2-21 review) Bound session recreation: at most once per position/failure (a persistent
+  segment 500 must not loop FFmpeg restarts) – then show the error. Media-element network errors
+  (direct play, native HLS after the idle timeout) carry no status: on such an error call GET on
+  the session and pass `{source:"http", status, concernsSession:true}` to `shouldRecreateSession`.
+  Add a test that `Hls.ErrorTypes.NETWORK_ERROR === "networkError"`, `ErrorDetails.FRAG_LOAD_ERROR`
+  / `FRAG_LOAD_TIMEOUT` match player-core's literals and hls.js `ErrorData` is assignable to
+  `HlsErrorData`. Refuse to load a delivery value the app does not know.

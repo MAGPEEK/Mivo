@@ -40,3 +40,9 @@ segment is ready, can be stopped at any time, and surfaces failures with a usefu
 - (from M2-12 review) On Linux/Docker close the Resolve→FFmpeg TOCTOU: open the media file
   through `libraryfs` (os.Root), pass it via `cmd.ExtraFiles` and give FFmpeg
   `file:/proc/self/fd/3` (seekable, exactly that inode). Keep `Resolve` on Windows.
+- (from M2-20) Implement the app/playback `Production` port: `Ready(ctx) error`, `Stop()`,
+  `Done() <-chan struct{}`; after Done is closed, Ready returns immediately with the exit result
+  (nil = clean end, error = failed). M2-25 and M2-29 rely on this.
+- (from M2-20 r2) After `Stop`, `Production.Ready` returns `ErrProductionStopped` (wraps
+  domain.ErrNotFound) – answer 404/410-like, never 500; a clean exit without any segment returns
+  an error.

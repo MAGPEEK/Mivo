@@ -30,3 +30,11 @@ startup, and shutdown stops every FFmpeg before the server exits (ADR 0024).
 - The reaper must not hold the registry lock while stopping a session (stopping waits for
   FFmpeg).
 - Keep timers injectable (ticker factory or clock with `After`) instead of `time.Sleep`.
+
+## Orchestrator note (from M2-20)
+- The service's process context is `context.Background()` for now (an uncalled cancel trips
+  gosec G118); make it cancellable in `Close` and remove the justified `//nolint:contextcheck`
+  rationale if it no longer applies. Registry, states and access times are prepared; no timers yet.
+- Production contract: after `Done`, `Ready` returns the exit result → map to ended/failed.
+- Open question recorded: there is no overall cap for direct-play sessions (ADR 0024 does not
+  require one); the idle reaper removes them – note this in ADR 0024 Notes.

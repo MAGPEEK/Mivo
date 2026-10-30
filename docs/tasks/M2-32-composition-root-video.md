@@ -70,3 +70,7 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
   mid-segment) would be logged at debug as status 200 if the handler just returns. Stream handlers
   must log such failures themselves at warn or `panic(http.ErrAbortHandler)` so the request is
   recorded as aborted at info.
+- (from M2-18) Implement `RootAvailable(ctx, root) bool` in libraryfs (os.OpenRoot + Stat(".")) for
+  the app/library `RootChecker` port, and inject a `*slog.Logger` into `applibrary.NewService`.
+- (from M2-17) Reject a configured transcode path containing `%` at startup with a clear message
+  (FFmpeg treats it as a segment template; HLSArguments returns ErrInvalid otherwise).

@@ -51,3 +51,9 @@ ADR 0011 status colours).
 - (from M2-07 test) `validatePlayerSearch` accepts any non-negative `t` (also 1e21) and any
   non-empty `fileId` string (no UUID check, no length cap). Treat both as untrusted: clamp `t` to
   the item duration and let the API reject unknown file ids; never build paths from them.
+- (from M2-21) Stream-info texts are translation keys relative to the player namespace under
+  `streamInfo.*` (27 keys, exported as `streamInfoTranslationKeys`); add a `streamInfo` block to
+  `features/player/locales/{en,de}.json` and a test that every exported key exists in both. Unknown
+  codes map to `<group>.unknown`; params always include `code`. `StreamInfoColorToken` is a local
+  union in player-core – add a compile-time check in the app that it is assignable to
+  `@mivo/ui-tokens` `ColorToken`.

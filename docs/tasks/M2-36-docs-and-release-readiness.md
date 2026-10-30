@@ -45,3 +45,23 @@ decision (OD-9).
   locks on SMB/NFS shares may not be honoured.
 - (from M2-08) ADR 0024 "Notes (M2)": requests with a body get a 30 s read deadline
   (`server.BodyReadTimeout`, set in the server middleware); bodiless requests (stream GETs) never do.
+- (from M2-16) `internal/adapters/ffmpeg/doc.go` still says "later tasks add capability detection";
+  update after M2-16/M2-17. ADR 0023 "Notes (M2-16)": detection is all-or-nothing under one 30 s
+  timeout (failure → direct play only), experimental encoders (flag X) do not count, version string
+  printable ASCII cut to 64 bytes; FFmpeg 7.1.5 marks native opus/vorbis/truehd/dca as experimental.
+- (from M2-21) ADR 0024 "Notes (M2-21)": restart keeps 1 s before the end, recovery rules
+  (404/410 on session requests, fatal hls.js network errors; 503 stream_not_ready is not a
+  recovery case), unknown modes/codes → fallback keys and `textMuted`, hardware encoders detected
+  by FFmpeg suffix.
+- (from M2-20 review) ADR 0024 "Notes (M2-20)": stream URLs are built once when a session is
+  created; M7 (time-limited/owner-signed URLs) must build them on read and changes the URLBuilder
+  port (owner, expiry). Overall session cap incl. direct play (MaxSessions).
+- (from M2-17) ADR 0024 "Notes (M2-17)": HLS output paths are built with forward slashes (a
+  backslash path makes the hls muxer write init.mp4 into FFmpeg's working directory); every seek
+  with copied video uses `-copypriorss 0` and StartPosition must be the KeyframeAtOrBefore result;
+  every AAC copy uses `-bsf:a aac_adtstoasc` (ADTS from MPEG-TS); `%` in the transcode path is
+  rejected (FFmpeg reads it as a template).
+- (from M2-15) ADR 0022 "Notes (M2-15)": the primary file of an item is its first file by relative
+  path; the items cursor is base64url(id NUL sortTitle), strictly decoded (opaque to clients);
+  undecodable stored rows return a plain error, never ErrInvalid; RemoveFiles ignores unknown or
+  other-library ids.

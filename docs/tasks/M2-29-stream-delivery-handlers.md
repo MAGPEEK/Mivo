@@ -39,3 +39,9 @@ ready for signed URLs later (ADR 0024).
   mid-segment) would be logged at debug as status 200 if the handler just returns. Stream handlers
   must log such failures themselves at warn or `panic(http.ErrAbortHandler)` so the request is
   recorded as aborted at info.
+- (from M2-20) A failed production: after `Done`, `Ready` returns the exit error → answer 500 (or
+  abort the stream, see the M2-08 note) for HLS requests of that session. Direct-play sessions
+  report StartPosition 0; the player seeks locally.
+- (from M2-20 r2) After `Stop`, `Production.Ready` returns `ErrProductionStopped` (wraps
+  domain.ErrNotFound) – answer 404/410-like, never 500; a clean exit without any segment returns
+  an error.

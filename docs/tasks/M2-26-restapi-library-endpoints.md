@@ -32,3 +32,15 @@ status, scan trigger, paged items and item detail (ADR 0017, ADR 0022).
   `domain.ErrInvalid`, which `ProblemForError` maps to 400. For `GET /libraries/{id}` and lists this
   is a server fault: handle stored-data errors like `GetSystemInfo` does (500); only
   path/query-parameter validation answers 400. Test both.
+- (from M2-18 review) listLibraries / getLibrary / getItem take no client value besides path ids:
+  every failure other than ErrNotFound is a 500 (decided per operation like `GetSystemInfo`).
+  listItems: ErrInvalid means a bad cursor/limit only (stores no longer wrap ErrInvalid for
+  undecodable stored rows).
+- (from M2-19 review) Update api/openapi.yaml descriptions: ScanStatus `finishedAt` is omitted while
+  a scan runs and before the first scan finished; list the known `errorCode` values
+  (root_unavailable, prober_unavailable, catalog_failed, scan_canceled, scan_failed; clients must
+  tolerate others); `failed` counts files that could not be probed or resolved.
+- (decision 2026-10-30, from M2-15) The items cursor is base64url(id NUL sortTitle) and can exceed
+  512 characters for very long Windows CJK file names. Raise `maxLength` of the `cursor` query
+  parameter and `nextCursor` to 2048 in api/openapi.yaml (regenerate server and client) and test a
+  cursor > 512 characters round-trip.
