@@ -1,4 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ServerVersion } from "../../features/system";
@@ -10,8 +11,14 @@ import { useSidebarState } from "./useSidebarState";
 // URL fragment, and the layout exists once per page.
 const mainContentId = "main-content";
 
+/** Props of {@link AppLayout}. */
+export interface AppLayoutProps {
+  /** Page content. Defaults to the matched child route; the not-found view passes itself. */
+  readonly children?: ReactNode;
+}
+
 /** Frame around every page: sidebar navigation, top bar with search and the page content. */
-export function AppLayout() {
+export function AppLayout({ children = <Outlet /> }: AppLayoutProps) {
   const { t } = useTranslation();
   const { collapsed, toggleCollapsed, expandAndFocusToggle, toggleRef } = useSidebarState();
   const searchInputRef = useSearchShortcut();
@@ -43,7 +50,7 @@ export function AppLayout() {
           tabIndex={-1}
           className="flex-1 px-6 py-8 focus-visible:outline-none"
         >
-          <Outlet />
+          {children}
         </main>
       </div>
     </div>

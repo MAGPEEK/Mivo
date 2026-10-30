@@ -1,0 +1,5 @@
+{
+  "heading": "Player",
+  "placeholder": "Item {{itemId}}, file {{fileId}}, from {{startAt}} s.",
+  "primaryFile": "primary file"
+}

@@ -6,3 +6,12 @@ export {
   supportedLanguages,
   type SupportedLanguage,
 } from "./languages";
+export {
+  defineLocales,
+  sharedLocales,
+  sharedNamespace,
+  type LocaleStrings,
+  type NamespaceLocales,
+  type NamespaceRegistry,
+  type Translation,
+} from "./resources";

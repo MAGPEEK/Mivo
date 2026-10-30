@@ -4,8 +4,8 @@ import { render } from "@testing-library/react";
 import type { i18n as I18n } from "i18next";
 
 import { App } from "../app/App";
+import { createAppI18n } from "../app/i18n";
 import { createAppRouter, type AppRouter } from "../app/router";
-import { createI18n } from "../shared/i18n";
 import { createFakeApiClient, healthyServer, type FakeFetch } from "./fakeApi";
 
 /** Options of {@link renderApp}. */
@@ -33,7 +33,7 @@ function createTestQueryClient(): QueryClient {
 /** Renders the whole app at `path` with its own router, query client, API and i18n instance. */
 export function renderApp(path = "/", options: RenderAppOptions = {}): RenderedApp {
   const { languages = ["en"], fetch = healthyServer } = options;
-  const i18n = createI18n(languages);
+  const i18n = createAppI18n(languages);
   const router = createAppRouter({ history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <App

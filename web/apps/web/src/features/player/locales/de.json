@@ -1,0 +1,5 @@
+{
+  "heading": "Wiedergabe",
+  "placeholder": "Eintrag {{itemId}}, Datei {{fileId}}, ab {{startAt}} s.",
+  "primaryFile": "Hauptdatei"
+}
