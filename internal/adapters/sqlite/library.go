@@ -12,13 +12,6 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// LibrarySummary is a library with the number of its items, as the library list and the
-// library detail show it.
-type LibrarySummary struct {
-	Library   library.Library
-	ItemCount int64
-}
-
 // LibraryRepository stores the configured libraries (ADR 0022). Reads go to the reader pool;
 // a sync runs in one transaction on the writer pool.
 type LibraryRepository struct {
@@ -41,7 +34,9 @@ func NewLibraryRepository(db *DB, clock func() time.Time) *LibraryRepository {
 // root path is a library's identity: a new root is inserted with an ID from newID, a known
 // root gets the configured name and kind, and a stored root that is no longer configured is
 // deleted with its items, files and streams. A library whose definition did not change is
-// not written, so its updated_at stays. It returns all libraries ordered by name.
+// not written, so its updated_at stays. It returns all libraries ordered by name, and the
+// removed ones (also ordered by name) with the item count they had before the delete. Both
+// lists are non-nil.
 //
 // Roots are compared exactly as given; the configuration has already cleaned them and
 // rejected duplicates that differ only in case on Windows. Invalid definitions, two
@@ -49,31 +44,31 @@ func NewLibraryRepository(db *DB, clock func() time.Time) *LibraryRepository {
 // then. When newID fails, the whole sync is rolled back.
 func (repository *LibraryRepository) SyncLibraries(ctx context.Context, definitions []library.Definition,
 	newID func() (string, error),
-) ([]library.Library, error) {
+) (library.SyncResult, error) {
 	if err := checkSyncInput(definitions, newID); err != nil {
-		return nil, fmt.Errorf("sync libraries: %w", err)
+		return library.SyncResult{}, fmt.Errorf("sync libraries: %w", err)
 	}
 
-	var synced []library.Library
+	var result library.SyncResult
 
 	err := inWriteTransaction(ctx, repository.writer, func(queries *sqlcgen.Queries) error {
 		run := librarySync{queries: queries, newID: newID, now: repository.clock().UnixMilli()}
 
 		var err error
 
-		synced, err = run.apply(ctx, definitions)
+		result, err = run.apply(ctx, definitions)
 
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("sync libraries: %w", err)
+		return library.SyncResult{}, fmt.Errorf("sync libraries: %w", err)
 	}
 
-	return synced, nil
+	return result, nil
 }
 
 // ListLibraries returns every library with its item count, ordered by name.
-func (repository *LibraryRepository) ListLibraries(ctx context.Context) ([]LibrarySummary, error) {
+func (repository *LibraryRepository) ListLibraries(ctx context.Context) ([]library.Summary, error) {
 	summaries, err := listSummaries(ctx, repository.reader)
 	if err != nil {
 		return nil, fmt.Errorf("list libraries: %w", err)
@@ -84,19 +79,19 @@ func (repository *LibraryRepository) ListLibraries(ctx context.Context) ([]Libra
 
 // GetLibrary returns the library with the given ID and its item count. An unknown ID wraps
 // domain.ErrNotFound.
-func (repository *LibraryRepository) GetLibrary(ctx context.Context, id string) (LibrarySummary, error) {
+func (repository *LibraryRepository) GetLibrary(ctx context.Context, id string) (library.Summary, error) {
 	row, err := repository.reader.GetLibrary(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return LibrarySummary{}, fmt.Errorf("get library %q: %w", id, domain.ErrNotFound)
+		return library.Summary{}, fmt.Errorf("get library %q: %w", id, domain.ErrNotFound)
 	}
 
 	if err != nil {
-		return LibrarySummary{}, fmt.Errorf("get library %q: %w", id, err)
+		return library.Summary{}, fmt.Errorf("get library %q: %w", id, err)
 	}
 
 	summary, err := summaryFromRow(sqlcgen.ListLibrariesRow(row))
 	if err != nil {
-		return LibrarySummary{}, fmt.Errorf("get library %q: %w", id, err)
+		return library.Summary{}, fmt.Errorf("get library %q: %w", id, err)
 	}
 
 	return summary, nil
@@ -134,10 +129,10 @@ type librarySync struct {
 	now int64
 }
 
-func (run librarySync) apply(ctx context.Context, definitions []library.Definition) ([]library.Library, error) {
+func (run librarySync) apply(ctx context.Context, definitions []library.Definition) (library.SyncResult, error) {
 	stored, err := listSummaries(ctx, run.queries)
 	if err != nil {
-		return nil, err
+		return library.SyncResult{}, err
 	}
 
 	storedByRoot := make(map[string]library.Library, len(stored))
@@ -151,9 +146,29 @@ func (run librarySync) apply(ctx context.Context, definitions []library.Definiti
 		configured[definition.Root] = true
 
 		if err := run.save(ctx, definition, storedByRoot); err != nil {
-			return nil, err
+			return library.SyncResult{}, err
 		}
 	}
+
+	removed, err := run.removeUnconfigured(ctx, stored, configured)
+	if err != nil {
+		return library.SyncResult{}, err
+	}
+
+	libraries, err := run.libraries(ctx)
+	if err != nil {
+		return library.SyncResult{}, err
+	}
+
+	return library.SyncResult{Libraries: libraries, Removed: removed}, nil
+}
+
+// removeUnconfigured deletes every stored library whose root is not configured and returns
+// them with the item counts read before the delete, in the order of stored.
+func (run librarySync) removeUnconfigured(ctx context.Context, stored []library.Summary,
+	configured map[string]bool,
+) ([]library.Summary, error) {
+	removed := []library.Summary{}
 
 	for _, summary := range stored {
 		if configured[summary.Library.Root] {
@@ -163,9 +178,11 @@ func (run librarySync) apply(ctx context.Context, definitions []library.Definiti
 		if err := run.queries.DeleteLibrary(ctx, summary.Library.ID); err != nil {
 			return nil, fmt.Errorf("delete library %q: %w", summary.Library.Name, err)
 		}
+
+		removed = append(removed, summary)
 	}
 
-	return run.libraries(ctx)
+	return removed, nil
 }
 
 // save inserts a new root, updates a known root whose name or kind changed and leaves an
@@ -253,13 +270,13 @@ func (run librarySync) libraries(ctx context.Context) ([]library.Library, error)
 	return libraries, nil
 }
 
-func listSummaries(ctx context.Context, queries *sqlcgen.Queries) ([]LibrarySummary, error) {
+func listSummaries(ctx context.Context, queries *sqlcgen.Queries) ([]library.Summary, error) {
 	rows, err := queries.ListLibraries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read libraries: %w", err)
 	}
 
-	summaries := make([]LibrarySummary, 0, len(rows))
+	summaries := make([]library.Summary, 0, len(rows))
 
 	for _, row := range rows {
 		summary, err := summaryFromRow(row)
@@ -275,45 +292,14 @@ func listSummaries(ctx context.Context, queries *sqlcgen.Queries) ([]LibrarySumm
 
 // summaryFromRow rejects a stored kind the domain does not know (an edited database or a
 // downgrade) with an error wrapping domain.ErrInvalid instead of handing it to clients.
-func summaryFromRow(row sqlcgen.ListLibrariesRow) (LibrarySummary, error) {
+func summaryFromRow(row sqlcgen.ListLibrariesRow) (library.Summary, error) {
 	kind, err := library.ParseKind(row.Kind)
 	if err != nil {
-		return LibrarySummary{}, fmt.Errorf("library %q: stored kind: %w", row.ID, err)
+		return library.Summary{}, fmt.Errorf("library %q: stored kind: %w", row.ID, err)
 	}
 
-	return LibrarySummary{
+	return library.Summary{
 		Library:   library.Library{ID: row.ID, Name: row.Name, Root: row.RootPath, Kind: kind},
 		ItemCount: row.ItemCount,
 	}, nil
-}
-
-// inWriteTransaction runs work in one transaction on the writer pool, which starts it with
-// BEGIN IMMEDIATE (see dataSourceName). It commits when work succeeds and rolls back
-// otherwise.
-func inWriteTransaction(ctx context.Context, writer *sql.DB, work func(*sqlcgen.Queries) error) error {
-	transaction, err := writer.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin write transaction: %w", err)
-	}
-
-	if err := work(sqlcgen.New(transaction)); err != nil {
-		return errors.Join(err, rollBack(transaction))
-	}
-
-	if err := transaction.Commit(); err != nil {
-		return fmt.Errorf("commit write transaction: %w", err)
-	}
-
-	return nil
-}
-
-// rollBack ignores sql.ErrTxDone: database/sql has already rolled back a transaction whose
-// context was cancelled.
-func rollBack(transaction *sql.Tx) error {
-	err := transaction.Rollback()
-	if err != nil && !errors.Is(err, sql.ErrTxDone) {
-		return fmt.Errorf("roll back write transaction: %w", err)
-	}
-
-	return nil
 }

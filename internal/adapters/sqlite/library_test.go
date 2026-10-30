@@ -104,12 +104,30 @@ func mustSync(t *testing.T, repository *sqlite.LibraryRepository, definitions []
 ) []library.Library {
 	t.Helper()
 
-	synced, err := repository.SyncLibraries(t.Context(), definitions, newID)
+	return mustSyncResult(t, repository, definitions, newID).Libraries
+}
+
+func mustSyncResult(t *testing.T, repository *sqlite.LibraryRepository, definitions []library.Definition,
+	newID func() (string, error),
+) library.SyncResult {
+	t.Helper()
+
+	result, err := repository.SyncLibraries(t.Context(), definitions, newID)
 	if err != nil {
 		t.Fatalf("SyncLibraries error = %v", err)
 	}
 
-	return synced
+	return result
+}
+
+// assertNothingRemoved fails when a sync reports removed libraries although every stored root
+// is still configured.
+func assertNothingRemoved(t *testing.T, result library.SyncResult) {
+	t.Helper()
+
+	if result.Removed == nil || len(result.Removed) != 0 {
+		t.Errorf("SyncLibraries removed = %#v, want an empty, non-nil list", result.Removed)
+	}
 }
 
 func TestSyncLibrariesInsertsNewRootsAndReturnsAllOrderedByName(t *testing.T) {
@@ -118,11 +136,13 @@ func TestSyncLibrariesInsertsNewRootsAndReturnsAllOrderedByName(t *testing.T) {
 	repository, _, inspection := newTestLibraryRepository(t)
 	newID, _ := idSequence(firstLibraryID, secondLibraryID, thirdLibraryID)
 
-	synced := mustSync(t, repository, []library.Definition{
+	result := mustSyncResult(t, repository, []library.Definition{
 		{Name: "Shows", Root: showsRoot, Kind: library.KindShows},
 		{Name: "anime", Root: animeRoot, Kind: library.KindMovies},
 		{Name: "Movies", Root: moviesRoot, Kind: library.KindMovies},
 	}, newID)
+	synced := result.Libraries
+	assertNothingRemoved(t, result)
 
 	want := []library.Library{
 		{ID: secondLibraryID, Name: "anime", Root: animeRoot, Kind: library.KindMovies},
@@ -156,7 +176,9 @@ func TestSyncLibrariesTwiceWithTheSameInputChangesNothing(t *testing.T) {
 
 	clock.Advance(time.Hour)
 
-	second := mustSync(t, repository, definitions, newID)
+	secondResult := mustSyncResult(t, repository, definitions, newID)
+	second := secondResult.Libraries
+	assertNothingRemoved(t, secondResult)
 
 	if !slices.Equal(first, second) {
 		t.Errorf("second SyncLibraries = %+v, want the first result %+v", second, first)
@@ -189,10 +211,14 @@ func TestSyncLibrariesUpdatesNameAndKindOfAKnownRoot(t *testing.T) {
 
 	clock.Advance(time.Minute)
 
-	synced := mustSync(t, repository, []library.Definition{
+	result := mustSyncResult(t, repository, []library.Definition{
 		{Name: "Films", Root: moviesRoot, Kind: library.KindShows},
 		{Name: "Shows", Root: showsRoot, Kind: library.KindShows},
 	}, newID)
+	synced := result.Libraries
+
+	// A renamed or re-kinded library keeps its root, so it is not reported as removed.
+	assertNothingRemoved(t, result)
 
 	want := []library.Library{
 		{ID: firstLibraryID, Name: "Films", Root: moviesRoot, Kind: library.KindShows},
@@ -221,20 +247,27 @@ func TestSyncLibrariesRemovesUnconfiguredRootsWithTheirCatalog(t *testing.T) {
 	repository, _, inspection := newTestLibraryRepository(t)
 	newID, _ := idSequence(firstLibraryID, secondLibraryID)
 
-	mustSync(t, repository, []library.Definition{
+	before := mustSync(t, repository, []library.Definition{
 		{Name: "Movies", Root: moviesRoot, Kind: library.KindMovies},
 		{Name: "Shows", Root: showsRoot, Kind: library.KindShows},
 	}, newID)
 	insertCatalogTree(t, inspection, firstLibraryID, "removed")
+	insertCatalogTree(t, inspection, firstLibraryID, "removed-too")
 	insertCatalogTree(t, inspection, secondLibraryID, "kept")
 
-	synced := mustSync(t, repository, []library.Definition{
+	result := mustSyncResult(t, repository, []library.Definition{
 		{Name: "Shows", Root: showsRoot, Kind: library.KindShows},
 	}, newID)
 
 	want := []library.Library{{ID: secondLibraryID, Name: "Shows", Root: showsRoot, Kind: library.KindShows}}
-	if !slices.Equal(synced, want) {
-		t.Errorf("SyncLibraries = %+v, want %+v", synced, want)
+	if !slices.Equal(result.Libraries, want) {
+		t.Errorf("SyncLibraries = %+v, want %+v", result.Libraries, want)
+	}
+
+	// The removed library is reported with the item count it had before the delete.
+	wantRemoved := []library.Summary{{Library: before[0], ItemCount: 2}}
+	if !slices.Equal(result.Removed, wantRemoved) {
+		t.Errorf("SyncLibraries removed = %+v, want %+v", result.Removed, wantRemoved)
 	}
 
 	wantRows := map[string]int{"libraries": 1, "items": 1, "media_files": 1, "media_streams": catalogTreeStreams}
@@ -249,13 +282,22 @@ func TestSyncLibrariesWithoutDefinitionsRemovesEveryLibrary(t *testing.T) {
 	t.Parallel()
 
 	repository, _, inspection := newTestLibraryRepository(t)
-	newID, _ := idSequence(firstLibraryID)
+	newID, _ := idSequence(firstLibraryID, secondLibraryID)
 
-	mustSync(t, repository, []library.Definition{{Name: "Movies", Root: moviesRoot, Kind: library.KindMovies}}, newID)
+	before := mustSync(t, repository, []library.Definition{
+		{Name: "Shows", Root: showsRoot, Kind: library.KindShows},
+		{Name: "Movies", Root: moviesRoot, Kind: library.KindMovies},
+	}, newID)
 
-	synced := mustSync(t, repository, nil, newID)
-	if synced == nil || len(synced) != 0 {
-		t.Errorf("SyncLibraries(nil) = %#v, want an empty, non-nil list", synced)
+	result := mustSyncResult(t, repository, nil, newID)
+	if result.Libraries == nil || len(result.Libraries) != 0 {
+		t.Errorf("SyncLibraries(nil) = %#v, want an empty, non-nil list", result.Libraries)
+	}
+
+	// Ordered by name like the library list, each with its (empty) item count.
+	wantRemoved := []library.Summary{{Library: before[0]}, {Library: before[1]}}
+	if !slices.Equal(result.Removed, wantRemoved) {
+		t.Errorf("SyncLibraries(nil) removed = %+v, want %+v", result.Removed, wantRemoved)
 	}
 
 	if got := rowCount(t, inspection, "libraries"); got != 0 {
@@ -405,7 +447,7 @@ func TestListLibrariesReturnsTheItemCountOfEachLibrary(t *testing.T) {
 		t.Fatalf("ListLibraries error = %v", err)
 	}
 
-	want := []sqlite.LibrarySummary{
+	want := []library.Summary{
 		{Library: synced[0], ItemCount: 3},
 		{Library: synced[1], ItemCount: 0},
 	}
@@ -440,7 +482,7 @@ func TestGetLibraryReturnsTheLibraryWithItsItemCount(t *testing.T) {
 		t.Fatalf("GetLibrary error = %v", err)
 	}
 
-	if want := (sqlite.LibrarySummary{Library: synced[0], ItemCount: 2}); got != want {
+	if want := (library.Summary{Library: synced[0], ItemCount: 2}); got != want {
 		t.Errorf("GetLibrary = %+v, want %+v", got, want)
 	}
 }
