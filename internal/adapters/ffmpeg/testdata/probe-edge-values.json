@@ -1,0 +1,85 @@
+{
+    "streams": [
+        {
+            "index": 0,
+            "codec_name": "h264",
+            "profile": "unknown",
+            "codec_type": "video",
+            "codec_tag_string": "[27][0][0][0]",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "yuv420p10le",
+            "level": -99,
+            "color_space": "unknown",
+            "color_transfer": "arib-std-b67",
+            "color_primaries": "bt2020",
+            "r_frame_rate": "25/0",
+            "avg_frame_rate": "0/0",
+            "bit_rate": "N/A",
+            "disposition": {
+                "default": 1,
+                "forced": 0,
+                "attached_pic": 0
+            },
+            "tags": {
+                "LANGUAGE": "und",
+                "TITLE": "Main feature"
+            }
+        },
+        {
+            "index": 1,
+            "codec_name": "mp2",
+            "codec_type": "audio",
+            "codec_tag_string": "[4][0][0][0]",
+            "sample_fmt": "s16p",
+            "sample_rate": "N/A",
+            "channels": 0,
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "bit_rate": "N/A"
+        },
+        {
+            "index": 2,
+            "codec_name": "mjpeg",
+            "profile": "Baseline",
+            "codec_type": "video",
+            "codec_tag_string": "[0][0][0][0]",
+            "width": 600,
+            "height": 600,
+            "pix_fmt": "yuvj420p",
+            "level": -99,
+            "r_frame_rate": "90000/1",
+            "avg_frame_rate": "0/0",
+            "bits_per_raw_sample": "N/A",
+            "disposition": {
+                "default": 0,
+                "forced": 0,
+                "attached_pic": 1
+            },
+            "tags": {
+                "filename": "cover.jpg",
+                "mimetype": "image/jpeg"
+            }
+        },
+        {
+            "index": 3,
+            "codec_type": "attachment",
+            "codec_tag_string": "[0][0][0][0]",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0",
+            "tags": {
+                "filename": "font.ttf",
+                "mimetype": "font/ttf"
+            }
+        }
+    ],
+    "format": {
+        "filename": "file:edge.mkv",
+        "nb_streams": 4,
+        "format_name": "matroska,webm",
+        "start_time": "N/A",
+        "duration": "N/A",
+        "size": "N/A",
+        "bit_rate": "N/A"
+    }
+}

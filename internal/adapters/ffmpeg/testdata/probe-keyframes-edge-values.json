@@ -1,0 +1,25 @@
+{
+    "frames": [
+        {
+            "key_frame": 0,
+            "pts_time": "3.000000",
+            "best_effort_timestamp_time": "3.000000"
+        },
+        {
+            "key_frame": 1,
+            "pts_time": "N/A",
+            "best_effort_timestamp_time": "4.000000"
+        },
+        {
+            "pts_time": "5.000000"
+        },
+        {
+            "key_frame": 1,
+            "pts_time": "N/A",
+            "best_effort_timestamp_time": "N/A"
+        }
+    ],
+    "format": {
+        "start_time": "N/A"
+    }
+}

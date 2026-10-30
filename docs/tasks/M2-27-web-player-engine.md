@@ -56,3 +56,5 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
   positively, which makes `detectClientProfile` report HLS delivery `native` instead of the
   reference `mse`. Check against the real installed Chrome/Edge and decide (prefer `mse` when
   MediaSource is available) before relying on the reference profile in E2E.
+- (decision 2026-10-30) player-core reports HLS delivery "mse" whenever MSE is available; "native"
+  only without MSE. The engine must still handle "native" (iOS Safari) via the video element.

@@ -38,3 +38,6 @@ installed, in a branded browser with proprietary codecs (ADR 0025, OD-7).
   positively, which makes `detectClientProfile` report HLS delivery `native` instead of the
   reference `mse`. Check against the real installed Chrome/Edge and decide (prefer `mse` when
   MediaSource is available) before relying on the reference profile in E2E.
+- (from M2-14 test) Playwright's bundled Chromium 156 plays H.264/AAC on the dev machine – check
+  whether the branded-channel project (OD-7 C) is still needed; Playwright's Firefox 157 does not
+  start here (side-by-side error) – report rather than work around.

@@ -1,0 +1,12 @@
+{
+    "frames": [
+        {
+            "key_frame": 1,
+            "pts_time": "28.000000",
+            "best_effort_timestamp_time": "28.000000"
+        }
+    ],
+    "format": {
+        "start_time": "0.000000"
+    }
+}

@@ -59,3 +59,16 @@ bundled Chromium has no proprietary codecs (H.264, AAC, HEVC).
 - `go test ./...` takes longer with FFmpeg installed (all video cases are remuxed or
   transcoded); `-short` skips it.
 - Results on the Docker image's FFmpeg are only checked by the smoke test, not by `go test`.
+
+## Notes (M2-14 test, orchestrator)
+
+- Measured on the dev machine (headless, probe answers only): Chrome/Edge 156 and Playwright's
+  bundled Chromium 156 answer `canPlayType` positively for HLS playlists, `video/x-matroska`, 3gp,
+  HEVC (branded only) and 10-bit H.264; Playwright's Chromium 156 **does** play H.264/AAC. Firefox
+  159 matches the reference profile except for HEVC (present) and MP3 in MP4/HLS (absent).
+- Consequences: the reference profiles stay the fixed test inputs for the engine, but they no longer
+  describe current browsers exactly. player-core prefers MSE over native HLS when MSE is available
+  (decision 2026-10-30). M2-34 must re-check whether the branded channel (OD-7 C) is still needed
+  for H.264 playback; the bundled Chromium may suffice.
+- Playwright's bundled Firefox 157 does not start on the dev machine ("side-by-side configuration
+  is incorrect"); the installed Firefox was used for manual probes.
