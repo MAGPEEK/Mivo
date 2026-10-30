@@ -114,3 +114,36 @@ identifiers)
 - Adding a client type (TV, DLNA) means producing a profile, not changing the engine.
 - Browsers whose `canPlayType` underreports (for example Matroska in Chromium) get a remux
   instead of direct play. This is cheap and predictable; per-browser overrides are not added.
+
+## Notes (M2-09)
+
+Details settled while implementing `internal/domain/playback`; they refine the decision above
+without changing it.
+
+- **Profile validation**: unknown direct-play keys (for example `avi`) are tolerated and
+  never match, so newer clients keep working. Free text (`name`, codec-limit profiles) must be
+  valid UTF-8 without control characters (CR, LF, ESC, DEL, C1).
+- **Duplicate direct-play keys** are merged: the codecs of all entries for one key are
+  combined, so any video/audio combination across those entries counts as playable. Revisit
+  for DLNA renderer profiles in milestone 8, where per-entry combinations may matter.
+- **Codec limits** apply to video only (there are no audio limit reasons and no audio sample
+  depth in `domain/media`). Several entries for one codec must all hold. Profile names compare
+  case-insensitively. An unknown profile passes; an unknown bit depth (after the pixel-format
+  fallback of `media.BitDepth`) **fails closed** with `video_bit_depth_not_supported`, which
+  leads to a transcode to the known 8-bit target.
+- **Failure precedence**: every client limit before any server limit, i.e.
+  `no_compatible_format` (no HLS, or the client cannot play the H.264/AAC target) before
+  `transcode_unavailable` (no HLS muxer, missing encoder).
+- **Policy**: `Policy.Validate()` rejects a negative or odd `MaxTranscodeHeight` and is meant
+  to be called once when the use case is constructed (fail fast); `Decide` repeats it as a
+  guard. 0 means no cap.
+- **Request**: a start position below 0 or at/after a known duration is `ErrInvalid`; an
+  unknown requested audio index is `ErrInvalid` (never `ErrNotFound`).
+- A file with neither audio nor video (cover art and subtitles only) fails with plain
+  `domain.ErrUnsupported`.
+- **Transcode size** is always even (libx264 rejects odd 4:2:0 sizes): without a downscale,
+  odd source dimensions are rounded down. `StreamDecision.ScaleRequired` tells
+  `adapters/ffmpeg` to add a scale filter; `Downscaled` only marks the height cap and drives
+  the `video_downscaled` warning.
+- `Downscaled`, `ScaleRequired`, `Plan.Video()`/`Audio()` and `FailureCodeOf` are internal Go
+  helpers, not part of the API contract.
