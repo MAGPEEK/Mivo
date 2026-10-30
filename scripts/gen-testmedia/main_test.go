@@ -162,18 +162,61 @@ func TestGenerateCorpusWithFixtureCapabilities(t *testing.T) {
 		t.Errorf("ffmpeg version = %q", result.FFmpegVersion)
 	}
 
-	// The fixture build has every encoder and muxer the video cases need.
-	if got, want := result.count(statusGenerated), len(groupByName(allCases())); got != want {
+	// The fixture build has every encoder and muxer the cases need; only known gaps remain.
+	gaps := knownGapNames()
+	if got, want := result.count(statusGenerated), len(groupByName(allCases()))-len(gaps); got != want {
 		t.Errorf("generated %d cases, want %d: %+v", got, want, result.Cases)
 	}
 
-	if !strings.Contains(stdout.String(), "0 skipped, 0 failed") {
-		t.Errorf("summary missing: %s", stdout.String())
+	for _, want := range []string{"  audio ", "  image ", "  multitrack ", "  subtitle ", "  video ", "  total "} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("summary lacks the line %q:\n%s", want, stdout.String())
+		}
 	}
 
 	for _, entry := range result.Cases {
+		if entry.Status != statusGenerated {
+			continue
+		}
+
 		if got := readOutput(t, opts.outDir, entry.File); got != fakeMediaContent {
 			t.Errorf("%s: content = %q", entry.File, got)
+		}
+	}
+
+	if got := readOutput(t, opts.outDir, "subtitle/sidecar.srt"); got != formatSRT(englishCues()) {
+		t.Errorf("sidecar SRT = %q", got)
+	}
+}
+
+// knownGapNames returns the names of all known gap cases.
+func knownGapNames() []string {
+	var names []string
+
+	for _, c := range allCases() {
+		if c.isGap() {
+			names = append(names, c.Name)
+		}
+	}
+
+	return names
+}
+
+func TestGenerateCorpusListsKnownGapsInEveryRun(t *testing.T) {
+	t.Parallel()
+
+	// Even a run that selects nothing lists the gaps, with a reason naming the missing piece.
+	opts := options{outDir: t.TempDir(), ffmpeg: "fake", onlyGlob: "nothing", jobs: 1}
+	if err := generateCorpus(context.Background(), opts, newFixtureFFmpeg(t), io.Discard); err != nil {
+		t.Fatalf("generateCorpus: %v", err)
+	}
+
+	result := readManifest(t, opts.outDir)
+	for _, name := range knownGapNames() {
+		entry := manifestEntryByName(t, result, name)
+		if entry.Status != statusSkipped || entry.SkipKind != skipKnownGap ||
+			!strings.HasPrefix(entry.Reason, gapReasonPrefix+"ffmpeg ") {
+			t.Errorf("gap entry = %+v", entry)
 		}
 	}
 }
@@ -212,6 +255,44 @@ func TestGenerateCorpusFiltersAndReportsFailures(t *testing.T) {
 	if len(result.Cases) != len(groupByName(allCases())) {
 		t.Errorf("a filtered run must still list every case, got %d", len(result.Cases))
 	}
+}
+
+func TestGenerateCorpusReportsInterruption(t *testing.T) {
+	t.Parallel()
+
+	t.Run("before capability detection", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := generateCorpus(ctx, options{outDir: t.TempDir(), ffmpeg: "fake", jobs: 1}, newFixtureFFmpeg(t), io.Discard)
+		if !errors.Is(err, errInterrupted) || !errors.Is(err, context.Canceled) {
+			t.Errorf("error = %v, want errInterrupted wrapping context.Canceled", err)
+		}
+	})
+
+	t.Run("during generation", func(t *testing.T) {
+		t.Parallel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		ffmpeg := newFixtureFFmpeg(t)
+		ffmpeg.onEncode = cancel
+		opts := options{outDir: t.TempDir(), ffmpeg: "fake", onlyGlob: "audio-*", jobs: 1}
+
+		var stdout bytes.Buffer
+
+		err := generateCorpus(ctx, opts, ffmpeg, &stdout)
+		if !errors.Is(err, errInterrupted) {
+			t.Fatalf("error = %v, want errInterrupted", err)
+		}
+
+		// The manifest still matches the disk, and nothing counts as failed.
+		result := readManifest(t, opts.outDir)
+		if result.count(statusFailed) != 0 || !strings.Contains(stdout.String(), "interrupted") {
+			t.Errorf("failed = %d, summary:\n%s", result.count(statusFailed), stdout.String())
+		}
+	})
 }
 
 func TestGenerateCorpusFailsWhenTheManifestCannotBeWritten(t *testing.T) {

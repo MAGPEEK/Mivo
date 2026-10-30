@@ -8,120 +8,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
-	"time"
 )
-
-// helperModeVariable switches the test binary into a fake external process, so execRunner is
-// tested with a real child process but without FFmpeg.
-const helperModeVariable = "GEN_TESTMEDIA_HELPER_MODE"
-
-func TestHelperProcess(t *testing.T) {
-	mode := os.Getenv(helperModeVariable)
-	if mode == "" {
-		t.Skip("helper process for execRunner tests, not a test on its own")
-	}
-
-	switch mode {
-	case "stdout":
-		fmt.Print("Encoders:\n ------\n")
-		os.Exit(0)
-	case "fail":
-		fmt.Fprint(os.Stderr, strings.Repeat("noise ", maxStderrBytes)+"Unknown encoder 'libfoo'\n")
-		os.Exit(1)
-	case "hang":
-		time.Sleep(time.Minute)
-		os.Exit(0)
-	}
-}
-
-func helperRunner(t *testing.T, mode string) execRunner {
-	t.Helper()
-	t.Setenv(helperModeVariable, mode)
-
-	return execRunner{executable: os.Args[0]}
-}
-
-func helperArgs() []string { return []string{"-test.run=^TestHelperProcess$"} }
-
-func TestExecRunnerReturnsStdout(t *testing.T) {
-	output, err := helperRunner(t, "stdout").Run(context.Background(), helperArgs())
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-
-	if !strings.HasPrefix(string(output), "Encoders:") {
-		t.Errorf("stdout = %q", output)
-	}
-}
-
-func TestExecRunnerPutsTruncatedStderrIntoTheError(t *testing.T) {
-	_, err := helperRunner(t, "fail").Run(context.Background(), helperArgs())
-	if err == nil {
-		t.Fatal("Run succeeded, want an error")
-	}
-
-	message := err.Error()
-	if !strings.Contains(message, "[truncated]") || !strings.HasSuffix(message, "Unknown encoder 'libfoo'") {
-		t.Errorf("error does not end with the stderr tail: %q", message)
-	}
-
-	if len(message) > maxStderrBytes+len("exit status 1: [truncated] ") {
-		t.Errorf("error is %d bytes long, stderr was not truncated", len(message))
-	}
-}
-
-func TestExecRunnerKillsTheProcessOnCancel(t *testing.T) {
-	runner := helperRunner(t, "hang")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	started := time.Now()
-
-	_, err := runner.Run(ctx, helperArgs())
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("error = %v, want context.DeadlineExceeded", err)
-	}
-
-	if elapsed := time.Since(started); elapsed > 30*time.Second {
-		t.Errorf("Run returned after %v, the process was not killed", elapsed)
-	}
-}
-
-func TestExecRunnerReportsMissingExecutable(t *testing.T) {
-	t.Parallel()
-
-	runner := execRunner{executable: filepath.Join(t.TempDir(), "no-such-ffmpeg")}
-	if _, err := runner.Run(context.Background(), []string{"-version"}); err == nil {
-		t.Error("Run succeeded with a missing executable")
-	}
-}
-
-func TestTailBufferKeepsTheEnd(t *testing.T) {
-	t.Parallel()
-
-	buffer := newTailBuffer(5)
-	for _, chunk := range []string{"abc", "defg", "hi"} {
-		if _, err := buffer.Write([]byte(chunk)); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if got := buffer.String(); got != "[truncated] efghi" {
-		t.Errorf("String = %q", got)
-	}
-
-	short := newTailBuffer(10)
-	if _, err := short.Write([]byte(" ok \n")); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := short.String(); got != "ok" {
-		t.Errorf("String = %q", got)
-	}
-}
 
 func newTestGenerator(t *testing.T, ffmpeg *fakeFFmpeg, force bool) (*generator, *bytes.Buffer) {
 	t.Helper()
@@ -154,16 +44,31 @@ func readOutput(t *testing.T, dir, relative string) string {
 	return string(data)
 }
 
+// subtitleSample is a case with a subtitle input and two sidecar files.
+func subtitleSample() mediaCase {
+	c := sampleCase("subtitle-a", "subtitle/a.mkv")
+	c.Category = categorySubtitle
+	c.Encoders = []string{"libx264", "srt"}
+	c.Inputs = []textInput{{FileName: "a.srt", Format: "srt", Role: roleSubtitle, Content: "input subtitle"}}
+	c.Sidecars = []sidecarFile{
+		{Output: "subtitle/a.srt", Content: "sidecar srt"},
+		{Output: "subtitle/a.vtt", Content: "sidecar vtt"},
+	}
+
+	return c
+}
+
 func TestGenerateBuildsAndRenamesThePartialFile(t *testing.T) {
 	t.Parallel()
 
 	ffmpeg := newFixtureFFmpeg(t)
 	gen, progress := newTestGenerator(t, ffmpeg, false)
 	c := sampleCase("video-a", "video/a.mkv")
+	c.Encoders = []string{"libx264", "aac"}
 
 	entry := gen.generate(context.Background(), plannedCase{Case: c, Action: actionBuild})
 
-	if entry.Status != statusGenerated || entry.Reason != "" {
+	if entry.Status != statusGenerated || entry.Reason != "" || !slices.Equal(entry.Encoders, c.Encoders) {
 		t.Fatalf("entry = %+v", entry)
 	}
 
@@ -180,6 +85,89 @@ func TestGenerateBuildsAndRenamesThePartialFile(t *testing.T) {
 
 	if !strings.Contains(progress.String(), "generated video-a") {
 		t.Errorf("progress = %q", progress.String())
+	}
+}
+
+func TestGenerateWritesTextInputsAndSidecars(t *testing.T) {
+	t.Parallel()
+
+	ffmpeg := newFixtureFFmpeg(t)
+	gen, _ := newTestGenerator(t, ffmpeg, false)
+
+	entry := gen.generate(context.Background(), plannedCase{Case: subtitleSample(), Action: actionBuild})
+	if entry.Status != statusGenerated {
+		t.Fatalf("entry = %+v", entry)
+	}
+
+	// The fake FFmpeg read the input while it existed; afterwards the directory is gone.
+	inputs := ffmpeg.textInputs()
+	if len(inputs) != 1 || inputs[0].content != "input subtitle" {
+		t.Fatalf("ffmpeg saw text inputs %+v", inputs)
+	}
+
+	if _, err := os.Stat(filepath.Dir(inputs[0].path)); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("temporary input directory left behind: %v", err)
+	}
+
+	for file, want := range map[string]string{"subtitle/a.srt": "sidecar srt", "subtitle/a.vtt": "sidecar vtt"} {
+		if got := readOutput(t, gen.outDir, file); got != want {
+			t.Errorf("%s = %q, want %q", file, got, want)
+		}
+	}
+}
+
+func TestGenerateRestoresMissingSidecarsOfKeptFiles(t *testing.T) {
+	t.Parallel()
+
+	ffmpeg := newFixtureFFmpeg(t)
+	gen, _ := newTestGenerator(t, ffmpeg, false)
+	writeFile(t, filepath.Join(gen.outDir, "subtitle", "a.mkv"), "old")
+	writeFile(t, filepath.Join(gen.outDir, "subtitle", "a.srt"), "edited by hand")
+
+	entry := gen.generate(context.Background(), plannedCase{Case: subtitleSample(), Action: actionBuild})
+	if entry.Status != statusGenerated || len(ffmpeg.encodedOutputs()) != 0 {
+		t.Fatalf("entry = %+v, encodes = %v", entry, ffmpeg.encodedOutputs())
+	}
+
+	if got := readOutput(t, gen.outDir, "subtitle/a.srt"); got != "edited by hand" {
+		t.Errorf("existing sidecar was replaced without -force: %q", got)
+	}
+
+	if got := readOutput(t, gen.outDir, "subtitle/a.vtt"); got != "sidecar vtt" {
+		t.Errorf("missing sidecar was not restored: %q", got)
+	}
+}
+
+func TestGenerateFailsWhenASidecarCannotBeWritten(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		existing bool
+	}{
+		{name: "after building"},
+		{name: "for a kept file", existing: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			gen, _ := newTestGenerator(t, newFixtureFFmpeg(t), false)
+			if test.existing {
+				writeFile(t, filepath.Join(gen.outDir, "subtitle", "a.mkv"), "old")
+			}
+
+			// A directory where the sidecar belongs makes the rename fail.
+			if err := os.MkdirAll(filepath.Join(gen.outDir, "subtitle", "a.vtt", "blocker"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+
+			entry := gen.generate(context.Background(), plannedCase{Case: subtitleSample(), Action: actionBuild})
+			if entry.Status != statusFailed || !strings.Contains(entry.Reason, "sidecar subtitle/a.vtt") {
+				t.Errorf("entry = %+v", entry)
+			}
+		})
 	}
 }
 
@@ -258,12 +246,20 @@ func TestGenerateWithoutBuilding(t *testing.T) {
 		action     action
 		existing   bool
 		wantStatus entryStatus
+		wantKind   skipKind
 		wantReason string
 	}{
-		{name: "skip", action: actionSkip, wantStatus: statusSkipped, wantReason: "why"},
-		{name: "skip ignores an old file", action: actionSkip, existing: true, wantStatus: statusSkipped, wantReason: "why"},
+		{name: "skip", action: actionSkip, wantStatus: statusSkipped, wantKind: skipMissingCapability, wantReason: "why"},
+		{
+			name: "skip ignores an old file", action: actionSkip, existing: true,
+			wantStatus: statusSkipped, wantKind: skipMissingCapability, wantReason: "why",
+		},
+		{name: "gap", action: actionGap, wantStatus: statusSkipped, wantKind: skipKnownGap, wantReason: "why"},
 		{name: "keep-only lists an existing file", action: actionKeepOnly, existing: true, wantStatus: statusGenerated},
-		{name: "keep-only without a file", action: actionKeepOnly, wantStatus: statusSkipped, wantReason: "why"},
+		{
+			name: "keep-only without a file", action: actionKeepOnly,
+			wantStatus: statusSkipped, wantKind: skipNotSelected, wantReason: "why",
+		},
 		{name: "unknown action", action: action(99), wantStatus: statusFailed, wantReason: "unknown plan action 99"},
 	}
 
@@ -281,8 +277,13 @@ func TestGenerateWithoutBuilding(t *testing.T) {
 			plan := plannedCase{Case: sampleCase("video-a", "video/a.mkv"), Action: test.action, Reason: "why"}
 			entry := gen.generate(context.Background(), plan)
 
-			if entry.Status != test.wantStatus || entry.Reason != test.wantReason {
-				t.Errorf("entry = %s %q, want %s %q", entry.Status, entry.Reason, test.wantStatus, test.wantReason)
+			if entry.Status != test.wantStatus || entry.SkipKind != test.wantKind || entry.Reason != test.wantReason {
+				t.Errorf("entry = %s %q %q, want %s %q %q", entry.Status, entry.SkipKind, entry.Reason,
+					test.wantStatus, test.wantKind, test.wantReason)
+			}
+
+			if len(entry.Encoders) != 0 {
+				t.Errorf("encoders %v recorded for a case this run did not build", entry.Encoders)
 			}
 
 			if len(ffmpeg.encodedOutputs()) != 0 {
@@ -313,7 +314,6 @@ func TestGenerateAllKeepsPlanOrder(t *testing.T) {
 
 	ffmpeg := newFixtureFFmpeg(t)
 	gen, _ := newTestGenerator(t, ffmpeg, false)
-	gen.jobs = 0 // raised to one worker
 
 	plans := make([]plannedCase, 0, caseCount)
 	for index := range caseCount {
@@ -321,6 +321,7 @@ func TestGenerateAllKeepsPlanOrder(t *testing.T) {
 		plans = append(plans, plannedCase{Case: sampleCase(name, "video/"+name+".mkv")})
 	}
 
+	// Zero jobs are raised to one worker.
 	for _, jobs := range []int{0, 4} {
 		gen.jobs = jobs
 		gen.force = true
@@ -334,17 +335,56 @@ func TestGenerateAllKeepsPlanOrder(t *testing.T) {
 	}
 }
 
-func TestGenerateAllFailsCasesAfterCancellation(t *testing.T) {
+func TestGenerateAllAfterCancellationDoesNotFailUntouchedCases(t *testing.T) {
 	t.Parallel()
 
 	ffmpeg := newFixtureFFmpeg(t)
-	gen, _ := newTestGenerator(t, ffmpeg, false)
+	gen, _ := newTestGenerator(t, ffmpeg, true)
+	writeFile(t, filepath.Join(gen.outDir, "video", "kept.mkv"), "old")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	entries := gen.generateAll(ctx, []plannedCase{{Case: sampleCase("video-a", "video/a.mkv")}})
-	if entries[0].Status != statusFailed || !strings.Contains(entries[0].Reason, context.Canceled.Error()) {
-		t.Errorf("entry = %+v", entries[0])
+	entries := gen.generateAll(ctx, []plannedCase{
+		{Case: sampleCase("video-a", "video/a.mkv")},
+		{Case: sampleCase("video-kept", "video/kept.mkv")},
+	})
+
+	if entries[0].Status != statusSkipped || entries[0].SkipKind != skipInterrupted || entries[0].Reason != interruptedReason {
+		t.Errorf("untouched case = %+v", entries[0])
+	}
+
+	if entries[1].Status != statusGenerated {
+		t.Errorf("a file from an earlier run must stay listed: %+v", entries[1])
+	}
+
+	if len(ffmpeg.encodedOutputs()) != 0 {
+		t.Error("ffmpeg ran after the run was interrupted")
+	}
+}
+
+func TestGenerateTreatsAFailureDuringInterruptionAsInterrupted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ffmpeg := newFixtureFFmpeg(t)
+	// The fake cancels the run while FFmpeg works, like Ctrl+C during an encode.
+	ffmpeg.onEncode = cancel
+	ffmpeg.failOutputs["a.mkv"] = "killed"
+	gen, _ := newTestGenerator(t, ffmpeg, false)
+
+	entry := gen.generate(ctx, plannedCase{Case: sampleCase("video-a", "video/a.mkv")})
+	if entry.Status != statusSkipped || entry.SkipKind != skipInterrupted {
+		t.Errorf("entry = %+v", entry)
+	}
+}
+
+func TestWriteTextInputsReportsUnwritableFiles(t *testing.T) {
+	t.Parallel()
+
+	// A file name with a directory that does not exist inside the temporary directory.
+	dir, err := writeTextInputs([]textInput{{FileName: filepath.Join("missing", "a.srt"), Content: "x"}})
+	if err == nil || dir != "" {
+		t.Errorf("writeTextInputs = %q, %v; want an error", dir, err)
 	}
 }

@@ -1,8 +1,10 @@
 // Command gen-testmedia generates the rights-free test media corpus (ADR 0021).
 //
-// It builds short clips from FFmpeg lavfi sources in every container and codec the local
-// FFmpeg can produce, skips cases it cannot build and writes <out>/manifest.json, which lists
-// every case with its status and expected properties. Run it from the repository root:
+// It builds short video clips, audio files, images and subtitle files (sidecar, embedded and
+// multi-track) from FFmpeg lavfi sources and text it writes itself, in every format the local
+// FFmpeg can produce. It skips cases it cannot build and writes <out>/manifest.json, which
+// lists every case with its status, expected properties and the known gaps FFmpeg cannot
+// produce at all. Run it from the repository root:
 //
 //	go run ./scripts/gen-testmedia [-out testdata/media] [-ffmpeg ffmpeg] [-force]
 //	                               [-only <glob>] [-jobs N]
@@ -18,6 +20,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 const (
@@ -34,8 +37,11 @@ const (
 // errCasesFailed reports that at least one buildable case failed; details are in the manifest.
 var errCasesFailed = errors.New("at least one case failed, see the manifest for reasons")
 
+// errInterrupted reports a run stopped by Ctrl+C or SIGTERM; the manifest lists what was done.
+var errInterrupted = errors.New("generation interrupted, run again to finish the corpus")
+
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 
 	stop()
@@ -112,6 +118,10 @@ func usageError(flags *flag.FlagSet, err error) error {
 // generateCorpus detects what FFmpeg can build, generates the cases and writes the manifest.
 func generateCorpus(ctx context.Context, opts options, ffmpeg commandRunner, stdout io.Writer) error {
 	caps, err := detectCapabilities(ctx, ffmpeg)
+	if ctx.Err() != nil {
+		return fmt.Errorf("%w: %w", errInterrupted, ctx.Err())
+	}
+
 	if err != nil {
 		return fmt.Errorf("use ffmpeg %q (install FFmpeg or pass -ffmpeg): %w", opts.ffmpeg, err)
 	}
@@ -120,14 +130,17 @@ func generateCorpus(ctx context.Context, opts options, ffmpeg commandRunner, std
 	entries := gen.generateAll(ctx, planCases(allCases(), caps, opts.onlyGlob))
 	result := newManifest(caps.version, entries)
 
+	// An interrupted run still writes the manifest, so it matches the files on disk.
 	if err := writeManifest(opts.outDir, result); err != nil {
 		return err
 	}
 
 	// The summary is informational; the manifest is the authoritative result.
-	_, _ = fmt.Fprintf(stdout, "ffmpeg %s: %d generated, %d skipped, %d failed; manifest: %s\n",
-		result.FFmpegVersion, result.count(statusGenerated), result.count(statusSkipped),
-		result.count(statusFailed), filepath.Join(opts.outDir, manifestFileName))
+	_ = writeSummary(stdout, result, filepath.Join(opts.outDir, manifestFileName))
+
+	if ctx.Err() != nil {
+		return fmt.Errorf("%w: %w", errInterrupted, ctx.Err())
+	}
 
 	if result.count(statusFailed) > 0 {
 		return errCasesFailed

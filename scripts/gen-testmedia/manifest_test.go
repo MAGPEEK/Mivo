@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io/fs"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -22,7 +24,7 @@ func TestNewManifestSortsEntriesByName(t *testing.T) {
 	entries := []manifestEntry{
 		newEntry(sampleCase("video-c", "video/c.mkv"), statusGenerated, ""),
 		newEntry(sampleCase("video-a", "video/a.mkv"), statusFailed, "boom"),
-		newEntry(sampleCase("video-b", "video/b.mkv"), statusSkipped, "missing"),
+		newSkippedEntry(sampleCase("video-b", "video/b.mkv"), skipMissingCapability, "missing"),
 	}
 
 	result := newManifest("9.0", entries)
@@ -48,13 +50,14 @@ func TestNewManifestSortsEntriesByName(t *testing.T) {
 func TestManifestJSONShape(t *testing.T) {
 	t.Parallel()
 
+	built := sampleCase("video-mkv-h264-aac", "video/h264_aac.mkv")
+	built.Encoders = []string{"libx264", "aac"}
+
 	result := newManifest("9.0.2", []manifestEntry{
-		newEntry(sampleCase("video-mkv-h264-aac", "video/h264_aac.mkv"), statusGenerated, ""),
-		newEntry(mediaCase{
-			Name: "video-rm-rv20", Category: categoryVideo, Output: "video/rv20.rm",
-			Source: standardSource().withAudio(realAudio144SampleRate, monoChannels),
-			Expect: expect("rm", "rm", videoOf("rv20", ""), audioOf("ra_144")),
-		}, statusSkipped, "ffmpeg lacks encoder rv20"),
+		newBuiltEntry(built),
+		newSkippedEntry(knownGap("video-rmvb-rv40", "video/rv40.rmvb",
+			expect("rm", "rm", &videoExpectation{Codec: "rv40"}, nil), "no RV40 encoder"),
+			skipKnownGap, gapReasonPrefix+"no RV40 encoder"),
 	})
 
 	got, err := result.encode()
@@ -63,7 +66,7 @@ func TestManifestJSONShape(t *testing.T) {
 	}
 
 	const want = `{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "ffmpegVersion": "9.0.2",
   "cases": [
     {
@@ -72,9 +75,14 @@ func TestManifestJSONShape(t *testing.T) {
       "file": "video/h264_aac.mkv",
       "status": "generated",
       "reason": "",
+      "encoders": [
+        "libx264",
+        "aac"
+      ],
       "expected": {
         "container": "mkv",
         "probeFormat": "matroska,webm",
+        "durationSeconds": 2,
         "video": {
           "codec": "h264",
           "profile": "High",
@@ -82,31 +90,27 @@ func TestManifestJSONShape(t *testing.T) {
           "width": 320,
           "height": 240
         },
-        "audio": {
-          "codec": "aac",
-          "sampleRate": 48000,
-          "channels": 2
-        }
+        "audio": [
+          {
+            "codec": "aac",
+            "sampleRate": 48000,
+            "channels": 2
+          }
+        ]
       }
     },
     {
-      "name": "video-rm-rv20",
+      "name": "video-rmvb-rv40",
       "category": "video",
-      "file": "video/rv20.rm",
+      "file": "video/rv40.rmvb",
       "status": "skipped",
-      "reason": "ffmpeg lacks encoder rv20",
+      "skipKind": "known-gap",
+      "reason": "known gap (ADR 0021): no RV40 encoder",
       "expected": {
         "container": "rm",
         "probeFormat": "rm",
         "video": {
-          "codec": "rv20",
-          "width": 320,
-          "height": 240
-        },
-        "audio": {
-          "codec": "ra_144",
-          "sampleRate": 8000,
-          "channels": 1
+          "codec": "rv40"
         }
       }
     }
@@ -115,6 +119,43 @@ func TestManifestJSONShape(t *testing.T) {
 `
 	if string(got) != want {
 		t.Errorf("manifest JSON =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestManifestJSONShapeOfTracksChaptersAndSidecars(t *testing.T) {
+	t.Parallel()
+
+	entry := newBuiltEntry(findCase(t, "multitrack-mkv-eng-deu"))
+	entry.Expected.Chapters = []chapterExpectation{{Title: "One", StartSeconds: 0, EndSeconds: 1.5}}
+	entry.Expected.Tags = map[string]string{"title": "T"}
+	entry.Expected.Sidecars = []sidecarExpectation{{File: "multitrack/a.srt", ProbeFormat: "srt", Codec: "subrip"}}
+
+	data, err := json.Marshal(entry.Expected)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const want = `{"container":"mkv","probeFormat":"matroska,webm","durationSeconds":2,` +
+		`"video":{"codec":"h264","profile":"High","pixelFormat":"yuv420p","width":320,"height":240},` +
+		`"audio":[{"codec":"aac","sampleRate":48000,"channels":2,"track":{"language":"eng","default":true,"forced":false}},` +
+		`{"codec":"aac","sampleRate":48000,"channels":2,"track":{"language":"deu","default":false,"forced":false}}],` +
+		`"subtitles":[{"codec":"subrip","track":{"language":"eng","default":false,"forced":false}},` +
+		`{"codec":"subrip","track":{"language":"deu","default":false,"forced":true}}],` +
+		`"chapters":[{"title":"One","startSeconds":0,"endSeconds":1.5}],"tags":{"title":"T"},` +
+		`"sidecars":[{"file":"multitrack/a.srt","probeFormat":"srt","codec":"subrip"}]}`
+
+	if string(data) != want {
+		t.Errorf("expected JSON =\n%s\nwant\n%s", data, want)
+	}
+
+	// Consumers decode the manifest; the nested track objects must survive a round trip.
+	var decoded expectation
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+
+	if decoded.Subtitles[1].Track == nil || !decoded.Subtitles[1].Track.Forced {
+		t.Errorf("decoded subtitles = %+v", decoded.Subtitles)
 	}
 }
 
@@ -157,6 +198,28 @@ func TestWriteManifestReplacesTheFile(t *testing.T) {
 	}
 }
 
+func TestWriteManifestIsGroupReadable(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no group permission bits; Chmod only toggles read-only")
+	}
+
+	dir := t.TempDir()
+	if err := writeManifest(dir, newManifest("x", nil)); err != nil {
+		t.Fatalf("writeManifest: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, manifestFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := info.Mode().Perm(); got != outputFilePermissions {
+		t.Errorf("manifest permissions = %v, want %v", got, os.FileMode(outputFilePermissions))
+	}
+}
+
 func TestWriteManifestFailsWhenDirectoryIsAFile(t *testing.T) {
 	t.Parallel()
 
@@ -167,5 +230,14 @@ func TestWriteManifestFailsWhenDirectoryIsAFile(t *testing.T) {
 
 	if err := writeManifest(blocker, newManifest("x", nil)); err == nil {
 		t.Error("writeManifest succeeded inside a regular file")
+	}
+}
+
+func TestWriteFileAtomicallyFailsWithoutDirectory(t *testing.T) {
+	t.Parallel()
+
+	target := filepath.Join(t.TempDir(), "missing", "file.txt")
+	if err := writeFileAtomically(target, []byte("x")); err == nil {
+		t.Error("writeFileAtomically succeeded in a missing directory")
 	}
 }

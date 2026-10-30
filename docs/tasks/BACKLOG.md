@@ -15,5 +15,5 @@ Entries already carried into a later task file are listed there, not here.
 | sqlite | DB/WAL/SHM files created 0644 inside a 0750 data dir → pre-create 0600 or document umask | M1-08 review | M7 (auth data) |
 | sqlite | `sqlc.yaml`: verify the binary against the release `checksums.txt`; verify the Docker path produces identical output (blocked by Docker Hub login) | M1-08 review | M1-22 |
 | sqlite | nits: Ping that touches the file, reject zero `CreatedAt`, UNC path test, `t.Run` in dsn role loop | M1-08 review | next change |
-| testmedia | `encoders` for kept files must not claim this run's alternative (record only when encoded or carry over from the old manifest; test it) | M1-19 review | next change to `scripts/gen-testmedia` |
+| testmedia | `encoders` for kept files: never claim this run's alternative and never drop them on interrupted or `-only` runs (`keptOrSkipped` in runner.go) – carry over from the old manifest; label kept files "kept" instead of "generated"; tests | M1-19 review + test | next change to `scripts/gen-testmedia` |
 | testmedia | nits: `expected()` sidecar slice aliasing; second Ctrl+C via `context.AfterFunc(ctx, stop)`; default dispositions for video/audio in multi-track MKVs | M1-19 review | next change |

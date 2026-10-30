@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,84 +17,15 @@ const (
 	// caseTimeout bounds one FFmpeg run. A 2 s clip takes well under a second with software
 	// encoders; the margin covers slow machines (weak ARM NAS) and the slowest AV1 encoder.
 	caseTimeout = 2 * time.Minute
-	// processWaitDelay is how long Wait waits for FFmpeg's output pipes after the process
-	// was killed on cancellation before it gives up.
-	processWaitDelay = 5 * time.Second
-	// maxStderrBytes limits the FFmpeg error output kept in a failure reason; the tail holds
-	// the actual error.
-	maxStderrBytes = 2048
-	// partialSuffix marks files FFmpeg is still writing; they are renamed when complete.
+	// partialSuffix marks files that are still being written; they are renamed when complete.
 	partialSuffix = ".partial"
 	// outputDirPermissions keeps the corpus readable for the owner and group only.
 	outputDirPermissions = 0o750
+	// interruptedReason explains cases a cancelled run did not build.
+	interruptedReason = "run interrupted before the case was built"
+	// inputFilePermissions protects the temporary text inputs, which only FFmpeg reads.
+	inputFilePermissions = 0o600
 )
-
-// commandRunner runs FFmpeg with the given arguments and returns its standard output.
-type commandRunner interface {
-	Run(ctx context.Context, args []string) ([]byte, error)
-}
-
-// execRunner runs a real FFmpeg executable as an external process (ADR 0015).
-type execRunner struct {
-	executable string
-}
-
-// Run starts the executable without a shell. The process is killed when ctx is done. On
-// failure the error contains the tail of FFmpeg's stderr.
-func (r execRunner) Run(ctx context.Context, args []string) ([]byte, error) {
-	// The executable comes from the -ffmpeg flag of a developer tool and args are built from
-	// static case data; no shell is involved, so nothing can be injected.
-	cmd := exec.CommandContext(ctx, r.executable, args...) //nolint:gosec // see comment above
-
-	var stdout bytes.Buffer
-
-	stderr := newTailBuffer(maxStderrBytes)
-	cmd.Stdout = &stdout
-	cmd.Stderr = stderr
-	cmd.WaitDelay = processWaitDelay
-
-	if err := cmd.Run(); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			err = errors.Join(ctxErr, err)
-		}
-
-		return nil, fmt.Errorf("%w: %s", err, stderr.String())
-	}
-
-	return stdout.Bytes(), nil
-}
-
-// tailBuffer is an io.Writer that keeps only the last limit bytes written to it.
-type tailBuffer struct {
-	limit     int
-	data      []byte
-	truncated bool
-}
-
-func newTailBuffer(limit int) *tailBuffer {
-	return &tailBuffer{limit: limit}
-}
-
-func (b *tailBuffer) Write(p []byte) (int, error) {
-	b.data = append(b.data, p...)
-
-	if excess := len(b.data) - b.limit; excess > 0 {
-		b.data = append(b.data[:0], b.data[excess:]...)
-		b.truncated = true
-	}
-
-	return len(p), nil
-}
-
-// String returns the kept output, trimmed and marked when earlier output was dropped.
-func (b *tailBuffer) String() string {
-	text := strings.TrimSpace(string(b.data))
-	if b.truncated {
-		return "[truncated] " + text
-	}
-
-	return text
-}
 
 // generator builds planned cases with a fixed number of parallel FFmpeg processes.
 type generator struct {
@@ -137,46 +66,80 @@ func (g *generator) generateAll(ctx context.Context, plans []plannedCase) []mani
 
 // generate carries out one plan.
 func (g *generator) generate(ctx context.Context, plan plannedCase) manifestEntry {
-	target := filepath.Join(g.outDir, filepath.FromSlash(plan.Case.Output))
-	exists := isNonEmptyFile(target)
+	target := g.path(plan.Case.Output)
 
 	switch plan.Action {
 	case actionKeepOnly:
-		if exists {
-			return newEntry(plan.Case, statusGenerated, "")
-		}
-
-		return newEntry(plan.Case, statusSkipped, plan.Reason)
+		return keptOrSkipped(plan.Case, target, skipNotSelected, plan.Reason)
 	case actionSkip:
-		return newEntry(plan.Case, statusSkipped, plan.Reason)
+		return newSkippedEntry(plan.Case, skipMissingCapability, plan.Reason)
+	case actionGap:
+		return newSkippedEntry(plan.Case, skipKnownGap, plan.Reason)
 	case actionBuild:
-		if exists && !g.force {
-			return newEntry(plan.Case, statusGenerated, "")
-		}
-
-		if err := g.build(ctx, plan.Case, target); err != nil {
-			return newEntry(plan.Case, statusFailed, err.Error())
-		}
-
-		return newEntry(plan.Case, statusGenerated, "")
+		return g.buildOrKeep(ctx, plan.Case, target)
 	}
 
 	return newEntry(plan.Case, statusFailed, fmt.Sprintf("unknown plan action %d", plan.Action))
 }
 
+// keptOrSkipped lists a file left by an earlier run as generated and skips the case otherwise.
+func keptOrSkipped(c mediaCase, target string, kind skipKind, reason string) manifestEntry {
+	if isNonEmptyFile(target) {
+		return newEntry(c, statusGenerated, "")
+	}
+
+	return newSkippedEntry(c, kind, reason)
+}
+
+// buildOrKeep builds the case unless its file exists and -force is not given. Cases the run
+// could not build because it was interrupted are not failures; they keep an earlier file or
+// are skipped.
+func (g *generator) buildOrKeep(ctx context.Context, c mediaCase, target string) manifestEntry {
+	if isNonEmptyFile(target) && !g.force {
+		// Sidecars are cheap text; restoring deleted ones keeps the manifest truthful.
+		if err := g.writeSidecars(c, false); err != nil {
+			return newEntry(c, statusFailed, err.Error())
+		}
+
+		return newBuiltEntry(c)
+	}
+
+	if ctx.Err() != nil {
+		return keptOrSkipped(c, target, skipInterrupted, interruptedReason)
+	}
+
+	if err := g.build(ctx, c, target); err != nil {
+		if ctx.Err() != nil {
+			return keptOrSkipped(c, target, skipInterrupted, interruptedReason)
+		}
+
+		return newEntry(c, statusFailed, err.Error())
+	}
+
+	return newBuiltEntry(c)
+}
+
 // build writes the case to a partial file and renames it to target once FFmpeg succeeded,
-// so an interrupted run never leaves a truncated file that a later run would keep.
-func (g *generator) build(ctx context.Context, c mediaCase, target string) error {
+// so an interrupted run never leaves a truncated file that a later run would keep. Text
+// inputs live in a temporary directory that is removed afterwards.
+func (g *generator) build(ctx context.Context, c mediaCase, target string) (err error) {
 	if err := os.MkdirAll(filepath.Dir(target), outputDirPermissions); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}
+
+	inputDir, err := writeTextInputs(c.Inputs)
+	if err != nil {
+		return err
+	}
+
+	defer func() { err = errors.Join(err, removeTextInputs(inputDir)) }()
 
 	partial := target + partialSuffix
 
 	caseCtx, cancel := context.WithTimeout(ctx, caseTimeout)
 	defer cancel()
 
-	if _, err := g.ffmpeg.Run(caseCtx, buildArgs(c, partial)); err != nil {
+	if _, err := g.ffmpeg.Run(caseCtx, buildArgs(c, inputDir, partial)); err != nil {
 		return errors.Join(fmt.Errorf("ffmpeg: %w", err), removePartial(partial))
 	}
 
@@ -184,7 +147,28 @@ func (g *generator) build(ctx context.Context, c mediaCase, target string) error
 		return errors.Join(fmt.Errorf("finish %s: %w", c.Output, err), removePartial(partial))
 	}
 
+	return g.writeSidecars(c, true)
+}
+
+// writeSidecars writes the sidecar files of a case. Without overwrite, existing ones are kept.
+func (g *generator) writeSidecars(c mediaCase, overwrite bool) error {
+	for _, sidecar := range c.Sidecars {
+		path := g.path(sidecar.Output)
+		if !overwrite && isNonEmptyFile(path) {
+			continue
+		}
+
+		if err := writeFileAtomically(path, []byte(sidecar.Content)); err != nil {
+			return fmt.Errorf("sidecar %s: %w", sidecar.Output, err)
+		}
+	}
+
 	return nil
+}
+
+// path converts a corpus path with forward slashes into a path below the output directory.
+func (g *generator) path(output string) string {
+	return filepath.Join(g.outDir, filepath.FromSlash(output))
 }
 
 func (g *generator) report(entry manifestEntry) {
@@ -198,6 +182,39 @@ func (g *generator) report(entry manifestEntry) {
 
 	// Progress output is informational; the manifest is the authoritative result.
 	_, _ = fmt.Fprintln(g.progress, line)
+}
+
+// writeTextInputs writes the text inputs of a case to a new temporary directory and returns
+// it, or "" when the case has none.
+func writeTextInputs(inputs []textInput) (string, error) {
+	if len(inputs) == 0 {
+		return "", nil
+	}
+
+	dir, err := os.MkdirTemp("", "gen-testmedia-inputs-*")
+	if err != nil {
+		return "", fmt.Errorf("create input directory: %w", err)
+	}
+
+	for _, input := range inputs {
+		if err := os.WriteFile(filepath.Join(dir, input.FileName), []byte(input.Content), inputFilePermissions); err != nil {
+			return "", errors.Join(fmt.Errorf("write input %s: %w", input.FileName, err), removeTextInputs(dir))
+		}
+	}
+
+	return dir, nil
+}
+
+func removeTextInputs(dir string) error {
+	if dir == "" {
+		return nil
+	}
+
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("remove input directory: %w", err)
+	}
+
+	return nil
 }
 
 func removePartial(partial string) error {

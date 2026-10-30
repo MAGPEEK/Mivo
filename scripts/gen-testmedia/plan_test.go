@@ -121,3 +121,16 @@ func TestValidateFilter(t *testing.T) {
 		t.Error("validateFilter accepted a malformed glob")
 	}
 }
+
+func TestPlanCasesListsKnownGapsRegardlessOfFilter(t *testing.T) {
+	t.Parallel()
+
+	gap := knownGap("audio-ape", "audio/a.ape", expectation{}, "no APE encoder")
+
+	for _, glob := range []string{"", "video-*"} {
+		plans := planCases([]mediaCase{gap}, capabilitiesOf(nil, nil), glob)
+		if len(plans) != 1 || plans[0].Action != actionGap || plans[0].Reason != gapReasonPrefix+"no APE encoder" {
+			t.Errorf("glob %q: plans = %+v", glob, plans)
+		}
+	}
+}

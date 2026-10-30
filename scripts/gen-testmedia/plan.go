@@ -17,13 +17,15 @@ const (
 	// actionKeepOnly leaves a case excluded by -only untouched: an existing file from an
 	// earlier run is listed as generated, so a filtered run never shrinks the manifest.
 	actionKeepOnly
+	// actionGap records a known gap (ADR 0021): a format FFmpeg cannot produce at all.
+	actionGap
 )
 
 // plannedCase is one case with the decision of what to do with it.
 type plannedCase struct {
 	Case   mediaCase
 	Action action
-	// Reason explains actionSkip and actionKeepOnly.
+	// Reason explains actionSkip, actionKeepOnly and actionGap.
 	Reason string
 }
 
@@ -42,6 +44,11 @@ func planCases(cases []mediaCase, caps capabilities, onlyGlob string) []plannedC
 
 func planAlternatives(alternatives []mediaCase, caps capabilities, onlyGlob string) plannedCase {
 	first := alternatives[0]
+	// Gaps are listed in every run, filtered or not, so the manifest always shows them.
+	if first.isGap() {
+		return plannedCase{Case: first, Action: actionGap, Reason: first.Gap}
+	}
+
 	if !matchesFilter(first.Name, onlyGlob) {
 		return plannedCase{
 			Case: first, Action: actionKeepOnly,

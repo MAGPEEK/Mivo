@@ -14,7 +14,12 @@ const (
 	// manifestFileName is the manifest inside the output directory.
 	manifestFileName = "manifest.json"
 	// manifestSchemaVersion changes when consumers have to adapt to the JSON shape.
-	manifestSchemaVersion = 1
+	// Version 2: audio is a list of streams, subtitles, chapters, tags, sidecars, skipKind
+	// and the encoders used were added.
+	manifestSchemaVersion = 2
+	// outputFilePermissions keeps corpus files readable for the owner and group, matching
+	// outputDirPermissions.
+	outputFilePermissions = 0o640
 )
 
 // entryStatus is the outcome of one case.
@@ -24,6 +29,20 @@ const (
 	statusGenerated entryStatus = "generated"
 	statusSkipped   entryStatus = "skipped"
 	statusFailed    entryStatus = "failed"
+)
+
+// skipKind says why a case was skipped.
+type skipKind string
+
+const (
+	// skipMissingCapability: the local FFmpeg lacks an encoder or muxer the case needs.
+	skipMissingCapability skipKind = "missing-capability"
+	// skipNotSelected: the case was excluded by -only and no file exists from earlier runs.
+	skipNotSelected skipKind = "not-selected"
+	// skipKnownGap: no FFmpeg build can produce the format (ADR 0021).
+	skipKnownGap skipKind = "known-gap"
+	// skipInterrupted: the run was interrupted before the case was built.
+	skipInterrupted skipKind = "interrupted"
 )
 
 // manifest lists every case of a run. Integration tests read it to find corpus files.
@@ -39,8 +58,14 @@ type manifestEntry struct {
 	Category string      `json:"category"`
 	File     string      `json:"file"`
 	Status   entryStatus `json:"status"`
+	// SkipKind classifies skipped cases and is empty otherwise.
+	SkipKind skipKind `json:"skipKind,omitempty"`
 	// Reason explains skipped and failed cases and is empty for generated ones.
-	Reason   string      `json:"reason"`
+	Reason string `json:"reason"`
+	// Encoders are the FFmpeg encoders of the alternative this run chose for a buildable case.
+	// A file kept from an earlier run may come from another alternative. They are empty when
+	// the run did not choose one, e.g. for skipped cases or cases excluded by -only.
+	Encoders []string    `json:"encoders,omitempty"`
 	Expected expectation `json:"expected"`
 }
 
@@ -53,6 +78,21 @@ func newEntry(c mediaCase, status entryStatus, reason string) manifestEntry {
 		Reason:   reason,
 		Expected: c.expected(),
 	}
+}
+
+// newBuiltEntry is a generated case whose encoders this run chose.
+func newBuiltEntry(c mediaCase) manifestEntry {
+	entry := newEntry(c, statusGenerated, "")
+	entry.Encoders = c.Encoders
+
+	return entry
+}
+
+func newSkippedEntry(c mediaCase, kind skipKind, reason string) manifestEntry {
+	entry := newEntry(c, statusSkipped, reason)
+	entry.SkipKind = kind
+
+	return entry
 }
 
 // newManifest builds a manifest whose entries are sorted by name, so the file is stable
@@ -99,20 +139,28 @@ func writeManifest(dir string, m manifest) error {
 		return fmt.Errorf("create output directory: %w", err)
 	}
 
-	temp, err := os.CreateTemp(dir, manifestFileName+"-*"+partialSuffix)
+	return writeFileAtomically(filepath.Join(dir, manifestFileName), data)
+}
+
+// writeFileAtomically writes data to a temporary file next to target and renames it, so
+// readers never see half a file and an interrupted write never leaves a truncated target.
+func writeFileAtomically(target string, data []byte) error {
+	temp, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+"-*"+partialSuffix)
 	if err != nil {
-		return fmt.Errorf("create manifest: %w", err)
+		return fmt.Errorf("create %s: %w", filepath.Base(target), err)
 	}
 
 	_, writeErr := temp.Write(data)
+	// CreateTemp uses 0600; corpus files are group-readable like their directories.
+	chmodErr := temp.Chmod(outputFilePermissions)
 	closeErr := temp.Close()
 
-	if err := errors.Join(writeErr, closeErr); err != nil {
-		return errors.Join(fmt.Errorf("write manifest: %w", err), removePartial(temp.Name()))
+	if err := errors.Join(writeErr, chmodErr, closeErr); err != nil {
+		return errors.Join(fmt.Errorf("write %s: %w", filepath.Base(target), err), removePartial(temp.Name()))
 	}
 
-	if err := os.Rename(temp.Name(), filepath.Join(dir, manifestFileName)); err != nil {
-		return errors.Join(fmt.Errorf("replace manifest: %w", err), removePartial(temp.Name()))
+	if err := os.Rename(temp.Name(), target); err != nil {
+		return errors.Join(fmt.Errorf("replace %s: %w", filepath.Base(target), err), removePartial(temp.Name()))
 	}
 
 	return nil

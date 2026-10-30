@@ -71,6 +71,7 @@ func hdrCases() []mediaCase {
 	video := hevcMain10Video()
 	video.ColorPrimaries = "bt2020"
 	video.ColorTransfer = "smpte2084"
+	video.ColorSpace = "bt2020nc"
 	video.HDR = "hdr10"
 
 	return []mediaCase{
@@ -271,6 +272,9 @@ func realMediaCases() []mediaCase {
 			Source: source, Muxer: "rm", Encoders: []string{"rv20", "real_144"},
 			Args: args, Expect: expected,
 		},
+		knownGap("video-rmvb-rv40-cook", "video/rv40_cook.rmvb",
+			expect("rm", "rm", &videoExpectation{Codec: "rv40"}, audioOf("cook")),
+			"ffmpeg has no RealVideo 4 (RV40) or Cook encoder"),
 	}
 }
 
@@ -296,8 +300,14 @@ func audioArgs(encoder string) []string {
 	return []string{"-c:a", encoder}
 }
 
+// expect builds the expectation of a file with at most one video and one audio stream.
 func expect(container, probeFormat string, video *videoExpectation, audio *audioExpectation) expectation {
-	return expectation{Container: container, ProbeFormat: probeFormat, Video: video, Audio: audio}
+	result := expectation{Container: container, ProbeFormat: probeFormat, Video: video}
+	if audio != nil {
+		result.Audio = []audioExpectation{*audio}
+	}
+
+	return result
 }
 
 func videoOf(codec, pixelFormat string) *videoExpectation {
