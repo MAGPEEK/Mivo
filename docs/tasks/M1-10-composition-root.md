@@ -40,3 +40,10 @@ skeleton.
   HTTP server. On failure, close what was opened (in reverse order).
 - Leave the HTTP fallback handler nil. M1-16 plugs in the web UI.
 - `CLAUDE.md` says `go run ./cmd/mivo` starts the server. That must hold after this task.
+
+## Review carry-over from M1-02
+- `run(args, stdout, stderr)` already has 3 parameters. Adding `ctx` and an env lookup must not
+  exceed the 4-parameter limit: bundle I/O and environment into a small struct
+  (e.g. `runEnv{stdout, stderr io.Writer; lookupEnv func(string) (string, bool)}`).
+- Tighten `cmd/mivo/main_test.go`: success cases assert empty stderr; the unknown-flag case
+  asserts the rejection reason; format the "unexpected argument" error only once.
