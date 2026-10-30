@@ -1,0 +1,24 @@
+# go-test-coverage configuration (ADR 0019). Run after
+#   go test -coverprofile=coverage.out ./...
+# with
+#   go tool go-test-coverage --config=.testcoverage.yml
+# Thresholds are never lowered to get a green run; add tests instead.
+profile: coverage.out
+
+threshold:
+  total: 70
+
+override:
+  # The domain is pure logic and must stay at least 90 % covered. go-test-coverage has no
+  # subtree total, so the rule applies to every package below internal/domain. The pattern
+  # matches package paths only (file paths contain a dot), so files keep no own threshold.
+  - path: ^internal/domain(/[\w-]+)*$
+    threshold: 90
+
+exclude:
+  paths:
+    # Generated code (oapi-codegen, sqlc) is tested through the code that uses it.
+    - /apigen/
+    - /sqlcgen/
+    # The architecture test is a test helper, not product code.
+    - ^internal/archtest/

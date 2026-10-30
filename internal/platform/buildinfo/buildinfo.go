@@ -25,7 +25,9 @@ const (
 
 // version is overridden at link time for release builds:
 // -ldflags "-X github.com/magpeek/mivo/internal/platform/buildinfo.version=1.2.3".
-var version string //nolint:gochecknoglobals // set by the linker
+// gochecknoglobals exempts globals named "version" for exactly this purpose, so a
+// suppression directive here would be reported as unused.
+var version string
 
 // Info describes the running binary.
 type Info struct {

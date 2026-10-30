@@ -1,0 +1,201 @@
+# golangci-lint v2 configuration. Every rule here enforces a code rule from CLAUDE.md;
+# the layer matrix and linter list are defined in docs/adr/0019-quality-gates.md.
+version: "2"
+
+run:
+  # Paths in exclusions are relative to this file (the repository root).
+  relative-path-mode: cfg
+  tests: true
+
+issues:
+  # Show every finding; a capped list hides how far a change is from clean.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # Several linters may flag the same line (e.g. revive and funlen); report all of them.
+  uniq-by-line: false
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - contextcheck
+    - depguard
+    - errcheck
+    - errorlint
+    - exhaustive
+    - forbidigo
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - mnd
+    - noctx
+    - nolintlint
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unused
+
+  settings:
+    depguard:
+      # Layer matrix from ADR 0019. internal/archtest checks the same matrix inside go test.
+      # A trailing "$" makes a deny entry match exactly; otherwise entries are prefixes, so
+      # "net$" forbids net but still allows net/url and net/netip in the domain.
+      rules:
+        domain:
+          list-mode: strict
+          files:
+            - "**/internal/domain/**"
+          allow:
+            - $gostd
+            - github.com/magpeek/mivo/internal/domain
+          deny:
+            - pkg: os$
+              desc: the domain is pure; file system access belongs to an adapter
+            - pkg: os/exec
+              desc: the domain is pure; processes belong to an adapter
+            - pkg: net$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: net/http
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: database/sql
+              desc: the domain is pure; persistence belongs to adapters/sqlite
+            - pkg: syscall
+              desc: the domain is pure and platform independent
+        app:
+          list-mode: strict
+          files:
+            - "**/internal/app/**"
+          allow:
+            - $gostd
+            - github.com/magpeek/mivo/internal/domain
+            - github.com/magpeek/mivo/internal/app
+          deny:
+            - pkg: os/exec
+              desc: use cases declare a port; processes belong to an adapter
+            - pkg: net/http
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: database/sql
+              desc: use cases declare a port; persistence belongs to adapters/sqlite
+        platform:
+          list-mode: lax
+          files:
+            - "**/internal/platform/**"
+          deny:
+            - pkg: github.com/magpeek/mivo/internal/domain
+              desc: platform is infrastructure and must not depend on business layers
+            - pkg: github.com/magpeek/mivo/internal/app
+              desc: platform is infrastructure and must not depend on business layers
+            - pkg: github.com/magpeek/mivo/internal/adapters
+              desc: platform is infrastructure and must not depend on adapters
+            - pkg: github.com/magpeek/mivo/cmd
+              desc: only cmd wires the application
+        adapters:
+          list-mode: lax
+          files:
+            - "**/internal/adapters/**"
+          deny:
+            - pkg: github.com/magpeek/mivo/cmd
+              desc: only cmd wires the application
+
+    errcheck:
+      check-type-assertions: true
+
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^panic$
+          msg: return an error instead; panic is only allowed in cmd/ (CLAUDE.md)
+        # Inject a *slog.Logger instead of using the process-wide default logger.
+        - pattern: ^slog\.(Debug|Info|Warn|Error)(Context)?$
+          pkg: ^log/slog$
+          msg: inject a *slog.Logger instead of using the package-level default logger
+        - pattern: ^slog\.(Log|LogAttrs|Default|SetDefault)$
+          pkg: ^log/slog$
+          msg: inject a *slog.Logger instead of using the package-level default logger
+
+    funlen:
+      lines: 50
+      statements: -1
+      ignore-comments: true
+
+    gocognit:
+      min-complexity: 15
+
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    revive:
+      rules:
+        # CLAUDE.md: at most 4 parameters, otherwise an options struct.
+        - name: argument-limit
+          arguments: [4]
+        # CLAUDE.md: exported identifiers have doc comments.
+        - name: exported
+        - name: package-comments
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+
+  exclusions:
+    # Only files with the standard "// Code generated ... DO NOT EDIT." header.
+    generated: strict
+    # The web workspace has node_modules with stray .go files.
+    paths:
+      - ^web/
+    rules:
+      # Table-driven tests are long and full of literal fixtures by nature.
+      - path: _test\.go$
+        linters:
+          - funlen
+          - mnd
+      # The composition root may panic during wiring.
+      - path: ^cmd/
+        linters:
+          - forbidigo
+        text: panic
+      # The slog restriction applies to internal/ only; cmd/ configures the default logger.
+      - path-except: ^internal/
+        linters:
+          - forbidigo
+        text: slog
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      module-path: github.com/magpeek/mivo
+    goimports:
+      local-prefixes:
+        - github.com/magpeek/mivo
+  exclusions:
+    generated: strict
+    paths:
+      - ^web/
