@@ -117,61 +117,45 @@ func TestNewJSONWritesOneValidObjectPerLine(t *testing.T) {
 func TestNewRejectsInvalidOptions(t *testing.T) {
 	t.Parallel()
 
-	var output bytes.Buffer
+	// Each case builds its own writer so that parallel subtests never share a buffer.
 	tests := []struct {
-		name    string
-		options logging.Options
-		wantErr error
+		name      string
+		level     string
+		format    string
+		noWriter  bool
+		wantErr   error
+		wantQuote string
 	}{
-		{
-			name:    "unknown level",
-			options: logging.Options{Level: "verbose", Format: logging.FormatText, Writer: &output},
-			wantErr: logging.ErrUnknownLevel,
-		},
-		{
-			name:    "empty level",
-			options: logging.Options{Level: "", Format: logging.FormatText, Writer: &output},
-			wantErr: logging.ErrUnknownLevel,
-		},
-		{
-			name:    "slog offset level",
-			options: logging.Options{Level: "info+2", Format: logging.FormatText, Writer: &output},
-			wantErr: logging.ErrUnknownLevel,
-		},
-		{
-			name:    "unknown format",
-			options: logging.Options{Level: logging.LevelInfo, Format: "xml", Writer: &output},
-			wantErr: logging.ErrUnknownFormat,
-		},
-		{
-			name:    "missing writer",
-			options: logging.Options{Level: logging.LevelInfo, Format: logging.FormatJSON},
-			wantErr: logging.ErrNoWriter,
-		},
+		{name: "unknown level", level: "loud", format: logging.FormatText, wantErr: logging.ErrUnknownLevel, wantQuote: `"loud"`},
+		{name: "empty level", level: "", format: logging.FormatText, wantErr: logging.ErrUnknownLevel, wantQuote: `""`},
+		{name: "slog offset level", level: "info+2", format: logging.FormatText, wantErr: logging.ErrUnknownLevel, wantQuote: `"info+2"`},
+		{name: "unknown format", level: logging.LevelInfo, format: "xml", wantErr: logging.ErrUnknownFormat, wantQuote: `"xml"`},
+		{name: "empty format", level: logging.LevelInfo, format: "", wantErr: logging.ErrUnknownFormat, wantQuote: `""`},
+		{name: "missing writer", level: logging.LevelInfo, format: logging.FormatJSON, noWriter: true, wantErr: logging.ErrNoWriter},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger, err := logging.New(test.options)
+			options := logging.Options{Level: test.level, Format: test.format}
+			if !test.noWriter {
+				options.Writer = &bytes.Buffer{}
+			}
+
+			logger, err := logging.New(options)
 			if !errors.Is(err, test.wantErr) {
 				t.Fatalf("New() error = %v, want %v", err, test.wantErr)
+			}
+
+			if !strings.Contains(err.Error(), test.wantQuote) {
+				t.Errorf("New() error = %q, want it to quote the invalid value as %s", err, test.wantQuote)
 			}
 
 			if logger != nil {
 				t.Errorf("New() logger = %v, want nil on error", logger)
 			}
 		})
-	}
-}
-
-func TestNewErrorNamesTheInvalidValue(t *testing.T) {
-	t.Parallel()
-
-	_, err := logging.New(logging.Options{Level: "loud", Format: logging.FormatText, Writer: &bytes.Buffer{}})
-	if err == nil || !strings.Contains(err.Error(), `"loud"`) {
-		t.Errorf("New() error = %v, want it to quote the invalid value", err)
 	}
 }
 

@@ -2,7 +2,24 @@
 //
 // The package only constructs loggers; it never installs a process-wide default and keeps
 // no package-level logger. Callers inject the returned *slog.Logger through constructors
-// (CLAUDE.md: no globals). Sensitive attributes are redacted by every logger it returns.
+// (CLAUDE.md: no globals).
+//
+// # Redaction
+//
+// Every logger it returns replaces the value of sensitive attributes with RedactedValue.
+// A key is normalised first (lower-cased, the separators '_', '-' and '.' removed) and is
+// sensitive when the result ends with one of the words password, passphrase, secret, token,
+// apikey, authorization, cookie, privatekey or sessionid. So "x-api-key", "Set-Cookie",
+// "access_token" and "dbPassword" are redacted, while "tokenCount" and "passwordHint" stay
+// visible. Every leaf below a group with a sensitive key is redacted as well, whether the
+// group comes from slog.Group, Logger.WithGroup or a slog.LogValuer.
+//
+// Limits: redaction works on attribute keys only. A value logged as a whole under a
+// harmless key, for example a struct, a map or an http.Header passed through slog.Any, is
+// encoded without inspection, and secrets inside it are written in clear text. Types that
+// hold secrets must therefore implement slog.LogValuer and leave the secret out or put it
+// under a sensitive key, and HTTP headers must be logged through an allowlist of header
+// names (to be done in adapters/http), never as a whole.
 package logging
 
 import (

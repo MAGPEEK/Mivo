@@ -19,7 +19,44 @@ func (credentials sessionCredentials) LogValue() slog.Value {
 	return slog.GroupValue(slog.String("token", credentials.token), slog.String("user", "alice"))
 }
 
-func TestNewRedactsSensitiveAttributes(t *testing.T) {
+// opaqueCredentials resolves to a group whose own keys look harmless, so only the
+// sensitive key it is logged under can trigger redaction.
+type opaqueCredentials struct{ value string }
+
+func (credentials opaqueCredentials) LogValue() slog.Value {
+	return slog.GroupValue(slog.String("value", credentials.value), slog.String("kind", "bearer"))
+}
+
+func TestNewRedactsSensitiveKeys(t *testing.T) {
+	t.Parallel()
+
+	keys := []string{
+		// The words from sensitiveKeySuffixes in their plain form.
+		"password", "passphrase", "secret", "token", "apikey", "authorization",
+		"cookie", "privatekey", "sessionid",
+		// Matching is case-insensitive.
+		"PASSWORD", "ApiKey", "Authorization",
+		// The separators '_', '-' and '.' are ignored.
+		"api_key", "x-api-key", "API.KEY", "Set-Cookie", "Proxy-Authorization",
+		"access_token", "refresh_token", "client_secret", "jwt.secret", "private_key", "session_id",
+		// Prefixed names end with a sensitive word.
+		"dbPassword", "githubToken", "accessToken", "refreshToken", "clientSecret", "jwtSecret",
+		"setCookie", "proxyAuthorization", "privateKey", "X-Auth-Token",
+	}
+
+	for _, key := range keys {
+		t.Run(key, func(t *testing.T) {
+			t.Parallel()
+
+			var output bytes.Buffer
+			logWith(key, secretValue)(newJSONLogger(t, &output))
+
+			assertRedacted(t, output.Bytes(), []string{key})
+		})
+	}
+}
+
+func TestNewRedactsSensitiveStructures(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -28,14 +65,6 @@ func TestNewRedactsSensitiveAttributes(t *testing.T) {
 		// path is the key path of the redacted field in the decoded JSON record.
 		path []string
 	}{
-		{name: "password", log: logWith("password", secretValue), path: []string{"password"}},
-		{name: "token", log: logWith("token", secretValue), path: []string{"token"}},
-		{name: "secret", log: logWith("secret", secretValue), path: []string{"secret"}},
-		{name: "apiKey", log: logWith("apiKey", secretValue), path: []string{"apiKey"}},
-		{name: "authorization", log: logWith("authorization", secretValue), path: []string{"authorization"}},
-		{name: "upper case", log: logWith("PASSWORD", secretValue), path: []string{"PASSWORD"}},
-		{name: "mixed case", log: logWith("ApiKey", secretValue), path: []string{"ApiKey"}},
-		{name: "header case", log: logWith("Authorization", secretValue), path: []string{"Authorization"}},
 		// The number is only checked through the path: timestamps may contain any digits.
 		{name: "non-string value", log: logWith("token", 424242), path: []string{"token"}},
 		{
@@ -60,6 +89,13 @@ func TestNewRedactsSensitiveAttributes(t *testing.T) {
 			path: []string{"request", "token"},
 		},
 		{
+			name: "logger WithGroup with a sensitive name",
+			log: func(logger *slog.Logger) {
+				logger.WithGroup("authorization").Info("call", "scheme", secretValue)
+			},
+			path: []string{"authorization", "scheme"},
+		},
+		{
 			name: "logger With",
 			log: func(logger *slog.Logger) {
 				logger.With("apikey", secretValue).Info("call")
@@ -67,11 +103,18 @@ func TestNewRedactsSensitiveAttributes(t *testing.T) {
 			path: []string{"apikey"},
 		},
 		{
-			name: "LogValuer",
+			name: "LogValuer with a sensitive field",
 			log: func(logger *slog.Logger) {
 				logger.Info("session", "session", sessionCredentials{token: secretValue})
 			},
 			path: []string{"session", "token"},
+		},
+		{
+			name: "LogValuer group under a sensitive key",
+			log: func(logger *slog.Logger) {
+				logger.Info("call", "client_secret", opaqueCredentials{value: secretValue})
+			},
+			path: []string{"client_secret", "value"},
 		},
 		{
 			name: "every field below a sensitive group",
@@ -87,14 +130,9 @@ func TestNewRedactsSensitiveAttributes(t *testing.T) {
 			t.Parallel()
 
 			var output bytes.Buffer
-			test.log(newTestLogger(t, logging.Options{
-				Level: logging.LevelInfo, Format: logging.FormatJSON, Writer: &output,
-			}))
+			test.log(newJSONLogger(t, &output))
 
-			assertNoSecret(t, output.String())
-			if got := lookupPath(t, output.Bytes(), test.path); got != logging.RedactedValue {
-				t.Errorf("field %v = %v, want %q", test.path, got, logging.RedactedValue)
-			}
+			assertRedacted(t, output.Bytes(), test.path)
 		})
 	}
 }
@@ -107,8 +145,11 @@ func TestNewKeepsNonSensitiveAttributes(t *testing.T) {
 		key  string
 	}{
 		{name: "plain key", key: "user"},
-		{name: "key containing a sensitive word", key: "tokenCount"},
-		{name: "key with a sensitive suffix", key: "passwordHint"},
+		{name: "sensitive word followed by a qualifier", key: "tokenCount"},
+		{name: "qualifier after a separator", key: "token_count"},
+		{name: "password hint", key: "passwordHint"},
+		{name: "sensitive word inside a longer word", key: "secretary"},
+		{name: "public key", key: "publicKey"},
 	}
 
 	for _, test := range tests {
@@ -116,9 +157,7 @@ func TestNewKeepsNonSensitiveAttributes(t *testing.T) {
 			t.Parallel()
 
 			var output bytes.Buffer
-			logWith(test.key, "visible-value")(newTestLogger(t, logging.Options{
-				Level: logging.LevelInfo, Format: logging.FormatJSON, Writer: &output,
-			}))
+			logWith(test.key, "visible-value")(newJSONLogger(t, &output))
 
 			if got := lookupPath(t, output.Bytes(), []string{test.key}); got != "visible-value" {
 				t.Errorf("field %q = %v, want it unchanged", test.key, got)
@@ -149,6 +188,24 @@ func TestNewRedactsInTextFormat(t *testing.T) {
 func logWith(key string, value any) func(logger *slog.Logger) {
 	return func(logger *slog.Logger) {
 		logger.Info("event", key, value)
+	}
+}
+
+func newJSONLogger(t *testing.T, output *bytes.Buffer) *slog.Logger {
+	t.Helper()
+
+	return newTestLogger(t, logging.Options{
+		Level: logging.LevelInfo, Format: logging.FormatJSON, Writer: output,
+	})
+}
+
+// assertRedacted checks that the secret is gone and that the field at path carries the marker.
+func assertRedacted(t *testing.T, record []byte, path []string) {
+	t.Helper()
+
+	assertNoSecret(t, string(record))
+	if got := lookupPath(t, record, path); got != logging.RedactedValue {
+		t.Errorf("field %v = %v, want %q", path, got, logging.RedactedValue)
 	}
 }
 
