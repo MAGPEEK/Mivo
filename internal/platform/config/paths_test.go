@@ -124,18 +124,24 @@ func TestLoadWindowsPathsWithoutDrive(t *testing.T) {
 }
 
 // otherOS returns an environment for the OS the tests do not run on, whose defaults are
-// therefore not absolute on this host.
+// therefore not absolute on this host. It overlays the home directory of that OS on the
+// fixture's variables without changing them.
 func otherOS(f fixture) paths.Environment {
-	other := f.env
+	goos, homeVariable, home := "windows", envUserProfile, `C:\Users\alice`
 	if runtime.GOOS == "windows" {
-		other.GOOS = "linux"
-		f.vars[envHome] = "/home/alice"
-	} else {
-		other.GOOS = "windows"
-		f.vars[envUserProfile] = `C:\Users\alice`
+		goos, homeVariable, home = "linux", envHome, "/home/alice"
 	}
 
-	return other
+	return paths.Environment{
+		GOOS: goos,
+		LookupEnv: func(key string) (string, bool) {
+			if key == homeVariable {
+				return home, true
+			}
+
+			return f.env.Lookup(key)
+		},
+	}
 }
 
 func TestLoadRejectsDefaultsThatAreNotAbsoluteOnThisHost(t *testing.T) {

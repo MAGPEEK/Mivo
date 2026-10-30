@@ -34,12 +34,12 @@ func TestEverySettingIsAcceptedInTheFile(t *testing.T) {
 	t.Parallel()
 
 	for _, entry := range settings() {
-		values, err := parseFile([]byte(nestedYAML(entry.key, "x")))
+		content, err := parseFile([]byte(nestedYAML(entry.key, "x")))
 		if err != nil {
 			t.Fatalf("parseFile(%s): %v", entry.key, err)
 		}
 
-		if got := values[entry.key]; got.raw != "x" || got.line != len(parentSections(entry.key))+1 {
+		if got := content.values[entry.key]; got.raw != "x" || got.line != len(parentSections(entry.key))+1 {
 			t.Errorf("parseFile(%s) value = %+v, want raw x on the last line", entry.key, got)
 		}
 	}
@@ -81,6 +81,9 @@ func TestEnvName(t *testing.T) {
 	}{
 		{key: "server.port", want: brand.EnvPrefix + "_SERVER_PORT"},
 		{key: "paths.transcode", want: brand.EnvPrefix + "_PATHS_TRANSCODE"},
+		{key: "transcode.max_sessions", want: brand.EnvPrefix + "_TRANSCODE_MAX_SESSIONS"},
+		{key: "tools.ffprobe", want: brand.EnvPrefix + "_TOOLS_FFPROBE"},
+		{key: keyLibraries, want: brand.EnvPrefix + "_LIBRARIES"},
 	}
 
 	for _, tt := range tests {

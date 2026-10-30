@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -107,8 +108,11 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		Server:    config.Server{Host: "", Port: 8460},
 		Log:       config.Log{Level: "info", Format: "text"},
 		Paths:     config.Paths{Data: dirs.Data.Path, Cache: dirs.Cache.Path, Transcode: dirs.Transcode.Path},
+		Libraries: []config.LibraryConfig{},
+		Tools:     config.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"},
+		Transcode: config.Transcode{MaxSessions: 2},
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)
 	}
 
@@ -148,7 +152,7 @@ type precedenceCase struct {
 }
 
 func precedenceCases() []precedenceCase {
-	return []precedenceCase{
+	return append([]precedenceCase{
 		{
 			key: "server.host", yaml: "server:\n  host: 127.0.0.1\n",
 			envName: env("SERVER_HOST"), envValue: "::1",
@@ -197,6 +201,33 @@ func precedenceCases() []precedenceCase {
 			wantFile: "file-transcode", wantEnv: "env-transcode", relative: true,
 			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Transcode.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Transcode },
+		},
+	}, toolAndTranscodeCases()...)
+}
+
+// toolAndTranscodeCases cover the scalar keys of milestone 2 (ADR 0022, ADR 0024).
+func toolAndTranscodeCases() []precedenceCase {
+	return []precedenceCase{
+		{
+			key: "tools.ffmpeg", yaml: "tools:\n  ffmpeg: file-bin/ffmpeg\n",
+			envName: env("TOOLS_FFMPEG"), envValue: "env-bin/ffmpeg",
+			wantFile: filepath.Join("file-bin", "ffmpeg"), wantEnv: filepath.Join("env-bin", "ffmpeg"), relative: true,
+			defaultOf: func(paths.DefaultDirectories) string { return "ffmpeg" },
+			get:       func(cfg config.Config) string { return cfg.Tools.FFmpeg },
+		},
+		{
+			key: "tools.ffprobe", yaml: "tools:\n  ffprobe: ffprobe7\n",
+			envName: env("TOOLS_FFPROBE"), envValue: "ffprobe8",
+			wantFile: "ffprobe7", wantEnv: "ffprobe8",
+			defaultOf: func(paths.DefaultDirectories) string { return "ffprobe" },
+			get:       func(cfg config.Config) string { return cfg.Tools.FFprobe },
+		},
+		{
+			key: "transcode.max_sessions", yaml: "transcode:\n  max_sessions: 4\n",
+			envName: env("TRANSCODE_MAX_SESSIONS"), envValue: "8",
+			wantFile: "4", wantEnv: "8",
+			defaultOf: func(paths.DefaultDirectories) string { return "2" },
+			get:       func(cfg config.Config) string { return strconv.Itoa(cfg.Transcode.MaxSessions) },
 		},
 	}
 }
@@ -325,5 +356,33 @@ func TestLoadConfigDirError(t *testing.T) {
 	_, err := config.Load(config.Options{Environment: f.env})
 	if !errors.Is(err, paths.ErrEmptyPath) || !strings.Contains(err.Error(), paths.ConfigDirEnv()) {
 		t.Errorf("Load error = %v, want ErrEmptyPath naming %s", err, paths.ConfigDirEnv())
+	}
+}
+
+func TestLoadRejectsDriveRelativeConfigDirOnWindows(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		flag     string
+		vars     map[string]string
+		wantPart string
+	}{
+		{name: "flag", flag: "C:cfg", wantPart: "flag value"},
+		{name: "environment", vars: map[string]string{paths.ConfigDirEnv(): "D:cfg"}, wantPart: paths.ConfigDirEnv()},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t, "", tt.vars)
+			f.env.GOOS = "windows"
+
+			_, err := config.Load(config.Options{ConfigDirFlag: tt.flag, Environment: f.env})
+			if !errors.Is(err, paths.ErrDriveRelative) || !strings.Contains(err.Error(), tt.wantPart) {
+				t.Errorf("Load error = %v, want ErrDriveRelative naming %s", err, tt.wantPart)
+			}
+		})
 	}
 }

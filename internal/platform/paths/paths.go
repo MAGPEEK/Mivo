@@ -1,5 +1,5 @@
 // Package paths computes the OS-specific default directories of the server (ADR 0018),
-// resolves configured paths and creates directories on demand.
+// resolves and compares configured paths and creates directories on demand.
 //
 // The computation is pure: it sees the host only through an Environment value, so the
 // Windows and Linux defaults are testable on any host. Paths are joined with the host
@@ -50,6 +50,9 @@ const (
 
 	// homeShorthand is expanded by shells only, never by the server.
 	homeShorthand = "~"
+
+	windowsSeparator = `\`
+	unixSeparator    = "/"
 )
 
 var (
@@ -116,10 +119,12 @@ func ConfigDirEnv() string {
 
 // ConfigDir resolves the config directory: flag value > ConfigDirEnv() > OS default.
 // flagValue is empty when the flag was not given. Flag and variable values may be relative;
-// the caller resolves them against the working directory.
+// the caller resolves them against the working directory. A Windows drive-relative value
+// ("C:cfg") is rejected like in Resolve, because it depends on the hidden current
+// directory of that drive.
 func ConfigDir(flagValue string, env Environment) (string, error) {
 	if flagValue != "" {
-		if err := checkUsable(flagValue); err != nil {
+		if err := checkConfigDirValue(flagValue, env.GOOS); err != nil {
 			return "", fmt.Errorf("flag value: %w", err)
 		}
 
@@ -127,7 +132,7 @@ func ConfigDir(flagValue string, env Environment) (string, error) {
 	}
 
 	if value, ok := env.Lookup(ConfigDirEnv()); ok {
-		if err := checkUsable(value); err != nil {
+		if err := checkConfigDirValue(value, env.GOOS); err != nil {
 			return "", fmt.Errorf("environment variable %s: %w", ConfigDirEnv(), err)
 		}
 
@@ -229,6 +234,15 @@ func isWindowsDriveAbsolute(value string) bool {
 		value[colon] == ':' && isWindowsSeparator(value[separator])
 }
 
+// isWindowsDriveRelative matches "C:" and "C:data": a drive letter whose colon is not
+// followed by a separator.
+func isWindowsDriveRelative(value string) bool {
+	const driveLetter, colon, minLength = 0, 1, 2
+
+	return len(value) >= minLength && isASCIILetter(value[driveLetter]) &&
+		value[colon] == ':' && !isWindowsDriveAbsolute(value)
+}
+
 // isWindowsUNC matches "\\server\share" paths, including "\\?\" long paths.
 func isWindowsUNC(value string) bool {
 	return strings.HasPrefix(value, `\\`) || strings.HasPrefix(value, "//")
@@ -274,6 +288,58 @@ func checkUsable(value string) error {
 	}
 
 	return nil
+}
+
+// checkConfigDirValue rejects config directory values that are never usable on goos. The
+// check follows goos rather than the host so that it is testable everywhere.
+func checkConfigDirValue(value, goos string) error {
+	if err := checkUsable(value); err != nil {
+		return err
+	}
+
+	if goos == goosWindows && isWindowsDriveRelative(value) {
+		return fmt.Errorf("%q: %w", value, ErrDriveRelative)
+	}
+
+	return nil
+}
+
+// Within reports whether path is root itself or lies below it. Both must be cleaned
+// absolute paths of goos. On Windows the comparison ignores case and treats "/" like "\",
+// as the file system does; elsewhere it is exact. Symlinks are not evaluated, so neither
+// path has to exist.
+func Within(goos, root, path string) bool {
+	root, path = comparablePath(goos, root), comparablePath(goos, path)
+	if root == path {
+		return true
+	}
+
+	separator := separatorOf(goos)
+
+	prefix := root
+	if !strings.HasSuffix(prefix, separator) {
+		prefix += separator
+	}
+
+	return strings.HasPrefix(path, prefix)
+}
+
+// comparablePath folds the spellings of one Windows path to a single form. Upper case
+// mirrors the up-case table NTFS compares names with.
+func comparablePath(goos, path string) string {
+	if goos != goosWindows {
+		return path
+	}
+
+	return strings.ToUpper(strings.ReplaceAll(path, "/", windowsSeparator))
+}
+
+func separatorOf(goos string) string {
+	if goos == goosWindows {
+		return windowsSeparator
+	}
+
+	return unixSeparator
 }
 
 // Ensure creates every directory (and missing parents) with mode 0o750.

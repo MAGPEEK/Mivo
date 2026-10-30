@@ -81,3 +81,37 @@ without changing it.
 - **Injected environment**: the variable lookup (including the home directory) is passed in
   by `cmd`, so tests and the startup in M1-10 never mix an injected environment with the
   variables of the host.
+- **How strictness is implemented**: `config.yaml` is decoded into a `yaml.Node` tree and
+  walked against the explicit key table, not decoded into structs with `KnownFields`. The
+  walk is what tells an absent key from an explicit null and reports unknown keys with their
+  full key path and line. An empty or null *section* (`server:` without keys) is allowed and
+  sets nothing; only a null *value* is an error.
+
+## Notes (M2-04)
+
+Keys added in milestone 2 (ADR 0022, ADR 0024; OD-1 A and OD-4 A accepted):
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `libraries` (list of `{name, path, kind}`) | `<PREFIX>_LIBRARIES` (OS path list) | empty | see below |
+| `tools.ffmpeg` | `<PREFIX>_TOOLS_FFMPEG` | `ffmpeg` | not empty or blank; a bare name stays for the `PATH` lookup at startup, a value with a path separator or drive follows the path rules |
+| `tools.ffprobe` | `<PREFIX>_TOOLS_FFPROBE` | `ffprobe` | as `tools.ffmpeg` |
+| `transcode.max_sessions` | `<PREFIX>_TRANSCODE_MAX_SESSIONS` | `2` | integer 1–8; counts re-encoding sessions only. The maximum is the fixed cap of 8 FFmpeg sessions (ADR 0024), so no accepted value is ineffective |
+
+- **Library entries**: `path` is required and follows the path rules above (relative →
+  config directory, `~` and drive-relative rejected). `name` defaults to the last element of
+  the resolved path (the whole path for a volume root) and must not be blank. `kind` is
+  `movies` (default) or `shows`, case-insensitive. Unknown fields are reported like other
+  unknown keys (`line N: unknown key "libraries[0].pth"`), errors name the entry as
+  `libraries[i]`.
+- **The environment replaces the whole list**: `<PREFIX>_LIBRARIES` is split with the OS
+  list separator (`;` on Windows, `:` elsewhere); each element becomes a `movies` library
+  named after its last path element. An empty value sets an empty list, so it can switch off
+  a list from the file or an image preset. Lists are never merged entry by entry.
+- **Overlap rules**: after resolution, roots must be unique, not nested in each other, and
+  neither be, contain nor lie inside the config, data, cache or transcode directory. On
+  Windows the comparison ignores case and treats `/` like `\`. Symlinks are not evaluated,
+  because a root need not exist at startup (NAS shares mount late, ADR 0022). Since relative
+  roots resolve against the config directory, a useful relative root starts with `..`.
+- **Drive-relative config directory**: `--config-dir C:cfg` and `<PREFIX>_CONFIG_DIR=C:cfg`
+  are rejected on Windows like drive-relative values in the file.

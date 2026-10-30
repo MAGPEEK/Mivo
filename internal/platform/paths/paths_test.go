@@ -281,6 +281,12 @@ func TestConfigDir(t *testing.T) {
 			vars: map[string]string{paths.ConfigDirEnv(): envDir + string(filepath.Separator)},
 			want: envDir,
 		},
+		{
+			// A colon is an ordinary file name character outside Windows.
+			name:      "drive-like name is kept on Linux",
+			flagValue: "C:cfg",
+			want:      "C:cfg",
+		},
 	}
 
 	for _, tt := range tests {
@@ -339,6 +345,19 @@ func TestConfigDirErrors(t *testing.T) {
 			wantErr: paths.ErrNoHomeDir,
 			wantMsg: "default config directory",
 		},
+		{
+			name:      "drive-relative flag on Windows",
+			flagValue: "C:cfg",
+			env:       windowsEnv(map[string]string{"USERPROFILE": windowsHome}),
+			wantErr:   paths.ErrDriveRelative,
+			wantMsg:   "flag value",
+		},
+		{
+			name:    "drive-relative env variable on Windows",
+			env:     windowsEnv(map[string]string{paths.ConfigDirEnv(): "d:", "USERPROFILE": windowsHome}),
+			wantErr: paths.ErrDriveRelative,
+			wantMsg: paths.ConfigDirEnv(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -354,6 +373,61 @@ func TestConfigDirErrors(t *testing.T) {
 				t.Errorf("ConfigDir error = %q, want it to contain %q", err, tt.wantMsg)
 			}
 		})
+	}
+}
+
+func TestConfigDirAcceptsWindowsDrivePaths(t *testing.T) {
+	t.Parallel()
+
+	for _, value := range []string{`C:\cfg`, `c:/cfg`, `\\server\share\cfg`} {
+		env := windowsEnv(map[string]string{"USERPROFILE": windowsHome})
+
+		got, err := paths.ConfigDir(value, env)
+		if err != nil {
+			t.Errorf("ConfigDir(%q): %v", value, err)
+		}
+
+		if want := filepath.Clean(value); got != want {
+			t.Errorf("ConfigDir(%q) = %q, want %q", value, got, want)
+		}
+	}
+}
+
+type withinCase struct {
+	goos string
+	root string
+	path string
+	want bool
+}
+
+func withinCases() []withinCase {
+	return []withinCase{
+		{goos: "linux", root: "/media", path: "/media", want: true},
+		{goos: "linux", root: "/media", path: "/media/movies", want: true},
+		{goos: "linux", root: "/media/movies", path: "/media", want: false},
+		{goos: "linux", root: "/media", path: "/mediathek", want: false},
+		{goos: "linux", root: "/media", path: "/Media", want: false},
+		{goos: "linux", root: "/", path: "/media", want: true},
+		{goos: "linux", root: "/media", path: `/media\movies`, want: false},
+		{goos: "windows", root: `C:\Media`, path: `c:\media`, want: true},
+		{goos: "windows", root: `C:\Media`, path: `c:\MEDIA\Movies`, want: true},
+		{goos: "windows", root: `C:\Media`, path: `C:/media/movies`, want: true},
+		{goos: "windows", root: `C:\Media`, path: `C:\Mediathek`, want: false},
+		{goos: "windows", root: `C:\Media\Movies`, path: `C:\Media`, want: false},
+		{goos: "windows", root: `C:\`, path: `c:\media`, want: true},
+		{goos: "windows", root: `C:\Media`, path: `D:\Media`, want: false},
+		{goos: "windows", root: `\\NAS\Share`, path: `\\nas\share\Movies`, want: true},
+		{goos: "windows", root: "/media", path: "/MEDIA/x", want: true},
+	}
+}
+
+func TestWithin(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range withinCases() {
+		if got := paths.Within(tt.goos, tt.root, tt.path); got != tt.want {
+			t.Errorf("Within(%s, %q, %q) = %v, want %v", tt.goos, tt.root, tt.path, got, tt.want)
+		}
 	}
 }
 

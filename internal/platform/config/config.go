@@ -5,7 +5,8 @@
 // the brand prefix, e.g. server.port becomes <PREFIX>_SERVER_PORT. Relative paths, from
 // the file or the environment, resolve against the config directory so the result does
 // not depend on the working directory of the process. Every directory in Config.Paths is
-// absolute.
+// absolute. The library list (ADR 0022) comes from the file or, as a whole, from
+// <PREFIX>_LIBRARIES; it is never merged entry by entry.
 package config
 
 import (
@@ -23,12 +24,25 @@ const FileName = "config.yaml"
 // DefaultPort is the default HTTP port (ADR 0018).
 const DefaultPort = 8460
 
+// Defaults of the milestone-2 settings (ADR 0022, ADR 0024). A bare program name is looked
+// up on PATH at startup.
+const (
+	DefaultFFmpeg  = "ffmpeg"
+	DefaultFFprobe = "ffprobe"
+	// DefaultTranscodeMaxSessions follows OD-4: two re-encoding sessions saturate a typical
+	// NAS CPU.
+	DefaultTranscodeMaxSessions = 2
+)
+
 var (
 	// ErrInvalid marks a configuration value that failed validation.
 	ErrInvalid = errors.New("invalid configuration value")
 
 	// ErrUnknownKey marks a key in config.yaml that is not a setting.
 	ErrUnknownKey = errors.New("unknown key")
+
+	// errNoDefault explains a missing directory whose OS default reported no reason.
+	errNoDefault = errors.New("no OS default")
 )
 
 // Config is the complete server configuration. It is passed by value; app and domain never
@@ -40,6 +54,27 @@ type Config struct {
 	Server    Server
 	Log       Log
 	Paths     Paths
+	// Libraries are the media libraries in configuration order; empty, never nil, when
+	// none is configured. Roots are absolute, unique and do not overlap each other or a
+	// directory in Paths or ConfigDir.
+	Libraries []LibraryConfig
+	Tools     Tools
+	Transcode Transcode
+}
+
+// Tools names the external programs the server runs.
+type Tools struct {
+	// FFmpeg is a bare program name looked up on PATH at startup or an absolute path.
+	FFmpeg string
+	// FFprobe is a bare program name looked up on PATH at startup or an absolute path.
+	FFprobe string
+}
+
+// Transcode holds the limits of FFmpeg sessions (ADR 0024).
+type Transcode struct {
+	// MaxSessions limits concurrent playback sessions that re-encode a stream; remux
+	// sessions only count towards the fixed safety cap of the playback service.
+	MaxSessions int
 }
 
 // Server holds the HTTP listener settings.
@@ -85,7 +120,8 @@ func Load(options Options) (Config, error) {
 	defaults := paths.Defaults(options.Environment)
 	cfg := defaultConfig(configDir, defaults)
 
-	if err := applyFile(&cfg, configDir); err != nil {
+	libraries, err := applyFile(&cfg, configDir)
+	if err != nil {
 		return Config{}, err
 	}
 
@@ -93,9 +129,24 @@ func Load(options Options) (Config, error) {
 		return Config{}, err
 	}
 
+	envLibraries, ok, err := environmentLibraries(options.Environment, configDir)
+	if err != nil {
+		return Config{}, err
+	}
+
+	if ok {
+		libraries = envLibraries
+	}
+
 	if err := requirePaths(cfg, defaults); err != nil {
 		return Config{}, err
 	}
+
+	if err := checkLibraryRoots(libraries, cfg, options.Environment.GOOS); err != nil {
+		return Config{}, err
+	}
+
+	cfg.Libraries = libraryConfigs(libraries)
 
 	return cfg, nil
 }
@@ -124,6 +175,9 @@ func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 			Cache:     defaults.Cache.Path,
 			Transcode: defaults.Transcode.Path,
 		},
+		Libraries: []LibraryConfig{},
+		Tools:     Tools{FFmpeg: DefaultFFmpeg, FFprobe: DefaultFFprobe},
+		Transcode: Transcode{MaxSessions: DefaultTranscodeMaxSessions},
 	}
 }
 
@@ -137,8 +191,13 @@ func requirePaths(cfg Config, defaults paths.DefaultDirectories) error {
 
 		value := *entry.pathField(&cfg)
 		if value == "" {
+			reason := entry.pathDefault(defaults).Err
+			if reason == nil {
+				reason = errNoDefault
+			}
+
 			return fmt.Errorf("%s: no value in %s or %s and no OS default: %w",
-				entry.key, FileName, envName(entry.key), entry.pathDefault(defaults).Err)
+				entry.key, FileName, envName(entry.key), reason)
 		}
 
 		if !filepath.IsAbs(value) {
