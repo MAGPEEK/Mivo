@@ -1,6 +1,6 @@
 # 0020 Embedding the web UI into the Go binary
 
-- Status: Proposed
+- Status: Accepted (2026-10-30, confirmed by project owner)
 - Date: 2026-10-29
 
 ## Context

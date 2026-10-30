@@ -21,12 +21,12 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0013](0013-webos-6-minimum.md) | webOS 6.0 is the minimum TV platform | Accepted |
 | [0014](0014-docker-first-nas-distribution.md) | Docker-first distribution for NAS | Accepted |
 | [0015](0015-ffmpeg-external-process.md) | FFmpeg as external process; jellyfin-ffmpeg bundled | Accepted |
-| [0016](0016-go-module-path.md) | Go module path `github.com/magpeek/mivo` | Proposed |
-| [0017](0017-api-contract-spec-first.md) | Spec-first REST API with generated stubs and client | Proposed |
-| [0018](0018-configuration-and-os-paths.md) | Configuration and OS-specific paths | Proposed |
-| [0019](0019-quality-gates.md) | Quality gates and their enforcement | Proposed |
-| [0020](0020-embedded-web-ui.md) | Embedding the web UI into the Go binary | Proposed |
-| [0021](0021-generated-test-media-corpus.md) | Generated test media corpus | Proposed |
+| [0016](0016-go-module-path.md) | Go module path `github.com/magpeek/mivo` | Accepted |
+| [0017](0017-api-contract-spec-first.md) | Spec-first REST API with generated stubs and client | Accepted |
+| [0018](0018-configuration-and-os-paths.md) | Configuration and OS-specific paths | Accepted |
+| [0019](0019-quality-gates.md) | Quality gates and their enforcement | Accepted |
+| [0020](0020-embedded-web-ui.md) | Embedding the web UI into the Go binary | Accepted |
+| [0021](0021-generated-test-media-corpus.md) | Generated test media corpus | Accepted |
 
 ## Template
 

@@ -1,6 +1,6 @@
 # 0021 Generated test media corpus
 
-- Status: Proposed
+- Status: Accepted (2026-10-30, confirmed by project owner)
 - Date: 2026-10-29
 - Refines: "Verifikation" in `docs/plan.md`
 

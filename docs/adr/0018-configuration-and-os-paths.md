@@ -1,6 +1,6 @@
 # 0018 Configuration (YAML + env overrides) and OS-specific paths
 
-- Status: Proposed
+- Status: Accepted (2026-10-30, confirmed by project owner)
 - Date: 2026-10-29
 - Refines: tech stack row "Logging/Config" in `docs/plan.md`
 
