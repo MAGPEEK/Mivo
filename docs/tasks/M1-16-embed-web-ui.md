@@ -42,3 +42,7 @@ without Node. This implements ADR 0020.
 - Use `http.ServeFileFS` or equivalent with the safe `fs.FS` path rules. Do not join raw URL
   paths onto OS paths.
 - The fallback hook in `server.Options` comes from M1-09. Only `cmd/mivo` wiring changes.
+
+## Orchestrator note (from M1-14)
+- `pnpm -C web build` already writes to `internal/adapters/http/webui/dist` (emptyOutDir). Add the
+  matching `.gitignore` entry (keep a placeholder if `//go:embed` needs the directory to exist).

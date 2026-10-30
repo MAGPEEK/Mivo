@@ -1,0 +1,64 @@
+# Git hooks (ADR 0019, task M1-21). lefthook is a pinned Go tool in tools/go.mod.
+#
+# Install the hooks once per clone, from the repository root (PowerShell needs the quotes,
+# it would split the unquoted argument at the dot):
+#   go tool "-modfile=tools/go.mod" lefthook install
+# Run a hook by hand (`--all-files` checks every tracked file instead of the staged ones):
+#   go tool "-modfile=tools/go.mod" lefthook run pre-commit
+# Skip the hooks in an emergency with `git commit --no-verify` or LEFTHOOK=0.
+#
+# The hooks stay fast on purpose: they check staged files, lint only the Go packages that
+# contain them and run the quick test suites. The full gates (`golangci-lint run`,
+# `go test -race ./...`, coverage, `pnpm -C web lint`, `pnpm -C web test`) run in CI.
+#
+# lefthook runs every `run` line through Git's sh, also on Windows. Keep them on one line and
+# without double quotes: on Windows lefthook passes the line to `sh -c` inside double quotes.
+
+# The generated .git/hooks scripts call lefthook through this command. Git starts hooks in
+# the repository root, so the relative -modfile path resolves.
+lefthook: go tool -modfile=tools/go.mod lefthook
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: go-format
+      glob: "*.go"
+      exclude:
+        - "web/*"
+      run: golangci-lint fmt --diff {staged_files}
+
+    # golangci-lint needs whole packages, so lint the packages that contain staged files.
+    # Breakage in other packages that import them is left to the full gates.
+    - name: go-lint
+      glob: "*.go"
+      exclude:
+        - "web/*"
+        - "*testdata/*"
+      run: golangci-lint run $(for file in {staged_files}; do dirname -- $file; done | sort -u | sed -e s,^,./,)
+
+    - name: go-test
+      glob: "*.go"
+      exclude:
+        - "web/*"
+      run: go test ./internal/domain/... ./internal/app/...
+
+    - name: web-format
+      root: web/
+      glob: "web/*"
+      run: pnpm exec prettier --check --ignore-unknown {staged_files}
+
+    - name: web-lint
+      root: web/
+      glob: "web/*.{ts,tsx,js,jsx,mjs,cjs}"
+      run: pnpm exec eslint --max-warnings=0 --no-warn-ignored {staged_files}
+
+    # Coverage is off: thresholds apply to the whole suite, a partial run would always miss them.
+    - name: web-test
+      root: web/
+      glob: "web/*.{ts,tsx}"
+      run: pnpm exec vitest related --run --coverage.enabled=false --passWithNoTests {staged_files}
+
+commit-msg:
+  jobs:
+    - name: conventional-commits
+      run: go run ./scripts/commitmsg {1}

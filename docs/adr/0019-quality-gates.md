@@ -86,3 +86,13 @@ Added 2026-10-30 with task M1-03b:
   allowed packages that touch the file system (`filepath.Walk`, `WalkDir`, `Glob`,
   `EvalSymlinks`, `Abs`) or the standard logger (`log.Print*`, `log.Fatal*`, `log.Panic*`)
   are forbidden in the domain by forbidigo.
+
+Added 2026-10-30 with task M1-21:
+
+- **lefthook** is a pinned Go tool in `tools/go.mod` (no global or npm install). Install the
+  hooks per clone with `go tool -modfile=tools/go.mod lefthook install`; the `lefthook:` key
+  in `lefthook.yml` makes the generated `.git/hooks` scripts call the same command, so they
+  work from PowerShell and Git Bash. pre-commit lints only the packages that contain staged
+  Go files (golangci-lint needs whole packages); breakage in importing packages is caught by
+  the full gates. commit-msg runs `scripts/commitmsg`, which also accepts git's own merge,
+  revert and `fixup!`/`squash!`/`amend!` subjects.

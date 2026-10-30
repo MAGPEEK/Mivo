@@ -44,3 +44,13 @@ package Mivo by following the docs, and every documented command works as writte
   M1-11 (pnpm) and M1-21 (lefthook).
 - CI (GitHub Actions) is not part of milestone 1. Mention it as upcoming in
   `docs/development.md`.
+
+## Orchestrator notes (from M1-14)
+- Document `MIVO_DEV_API_TARGET` (dev proxy target for `/api`, default `http://localhost:8460`).
+- Vite scripts run with `--configLoader runner` (default loader cannot resolve `@mivo/ui-tokens`).
+
+## Review carry-over from M1-21 (APPROVE)
+- `lefthook.yml`: quote the commit-msg argument as `'{1}'` (lefthook does not escape git args; worktree paths with spaces would block commits).
+- `docs/adr/0019`: use the quoted install command `go tool "-modfile=tools/go.mod" lefthook install` (PowerShell).
+- Document install (lefthook v2.2.2), bypass (`--no-verify`, `LEFTHOOK=0`) and that go.mod/go.sum/.golangci.yml-only commits skip Go jobs (or widen the glob).
+- Nits for `scripts/commitmsg`: remove or justify trailer stripping; help text lists squash!/amend!/Reapply; tests for nested Revert and "Merge … into …"; note the `#` commentChar limitation.
