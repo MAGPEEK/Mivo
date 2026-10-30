@@ -22,3 +22,6 @@ Entries already carried into a later task file are listed there, not here.
 | http/webui | Content-Security-Policy (`default-src 'self'`, `frame-ancestors 'none'`) for UI responses, tuned to the Vite build and the Cast SDK exception (ADR 0010) | M1-16 review | before M7b (remote access) |
 | http/webui | nits: SHA-256 ETags at startup for 304s; replace `testing/fstest.MapFS` in the placeholder with a tiny `fs.FS`; extend the content-type table when images/fonts land in `public/` | M1-16 review | next change |
 | http/webui | nits: check the API path before the method in webui; Fallback doc wording; nil-fallback guard test row; cross-reference `isAPIPath` / `isAPIName` | M1-16 review r2 | next change |
+| ui-tokens | add a dedicated `danger`/error colour token (the collapsed-sidebar error indicator currently uses the coral accent) | M1-17 | M5 (web UI complete) |
+| docker | `debian:stable-slim` floats across Debian majors (FFmpeg/libc change silently) – pin by digest (or codename) with Renovate; stamp the commit into the binary (`-X`) since `-buildvcs=false` | M1-20 review | M9 (distribution) |
+| docker | set `HOME`/`XDG_CACHE_HOME` (e.g. `/config`) for fontconfig/libass caches before subtitle burn-in | M1-20 review | M3/M4 |

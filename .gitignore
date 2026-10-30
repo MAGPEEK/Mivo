@@ -29,6 +29,11 @@ web/**/test-results/
 *.db-wal
 *.db-shm
 
+# Local environment files (may hold secrets; Vite loads .env.local and .env.*.local)
+.env
+.env.*
+*.local
+
 # Editors / OS
 .vscode/*
 !.vscode/extensions.json

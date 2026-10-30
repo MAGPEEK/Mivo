@@ -76,6 +76,10 @@ type options struct {
 // run executes the command with the given arguments and returns the process exit code. The
 // server runs until ctx is done.
 func run(ctx context.Context, args []string, env runEnv, hooks runHooks) int {
+	if len(args) > 0 && args[0] == healthcheckCommand {
+		return runHealthcheck(ctx, args[1:], env)
+	}
+
 	opts, err := parseOptions(args, env.stderr)
 	if errors.Is(err, flag.ErrHelp) {
 		return exitOK
@@ -117,6 +121,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 
 	flags := flag.NewFlagSet(brand.ID, flag.ContinueOnError)
 	flags.SetOutput(stderr)
+	flags.Usage = func() {
+		// A failed write to stderr cannot be reported anywhere else.
+		_, _ = fmt.Fprintf(stderr, "Usage:\n  %[1]s [flags]\n  %[1]s %[2]s [flags]\n\nFlags:\n",
+			brand.ID, healthcheckCommand)
+		flags.PrintDefaults()
+	}
 	flags.BoolVar(&opts.showVersion, "version", false, "print the version and exit")
 	flags.StringVar(&opts.configDir, "config-dir", "",
 		"directory of the optional "+config.FileName+" (default: $"+paths.ConfigDirEnv()+" or the OS default)")
