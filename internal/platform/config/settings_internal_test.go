@@ -80,6 +80,7 @@ func TestEnvName(t *testing.T) {
 		want string
 	}{
 		{key: "server.port", want: brand.EnvPrefix + "_SERVER_PORT"},
+		{key: "server.lan_only", want: brand.EnvPrefix + "_SERVER_LAN_ONLY"},
 		{key: "paths.transcode", want: brand.EnvPrefix + "_PATHS_TRANSCODE"},
 		{key: "transcode.max_sessions", want: brand.EnvPrefix + "_TRANSCODE_MAX_SESSIONS"},
 		{key: "tools.ffprobe", want: brand.EnvPrefix + "_TOOLS_FFPROBE"},

@@ -41,6 +41,12 @@ type chainSettings struct {
 	quiet quietRoutes
 	// bodyReadTimeout is BodyReadTimeout; tests shorten it.
 	bodyReadTimeout time.Duration
+	// allowPublicClients is Options.AllowPublicClients.
+	allowPublicClients bool
+	// interfacePrefixes is Options.InterfacePrefixes or the system default.
+	interfacePrefixes InterfacePrefixProvider
+	// now is the clock of the interface prefix cache, time.Now outside tests.
+	now func() time.Time
 }
 
 // newChainSettings validates the parts of options only the middleware understands.
@@ -50,15 +56,29 @@ func newChainSettings(options Options) (chainSettings, error) {
 		return chainSettings{}, err
 	}
 
-	return chainSettings{logger: options.Logger, quiet: quiet, bodyReadTimeout: BodyReadTimeout}, nil
+	interfacePrefixes := options.InterfacePrefixes
+	if interfacePrefixes == nil {
+		interfacePrefixes = systemInterfacePrefixes{}
+	}
+
+	return chainSettings{
+		logger: options.Logger, quiet: quiet, bodyReadTimeout: BodyReadTimeout,
+		allowPublicClients: options.AllowPublicClients, interfacePrefixes: interfacePrefixes, now: time.Now,
+	}, nil
 }
 
 // withMiddleware wraps next in the chain, outermost first: the request ID exists before
 // anything logs, the body read deadline is set before any handler can answer (or leave the
 // body unread), security headers are set even on panics, the access log sees the status the
-// recover middleware writes.
+// recover middleware writes. The LAN guard is innermost, so a refusal carries the request
+// ID and security headers and appears in the access log like any other answer.
 func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
-	handler := recoverPanics(next, settings.logger)
+	handler := next
+	if !settings.allowPublicClients {
+		handler = newLANGuard(settings).wrap(handler)
+	}
+
+	handler = recoverPanics(handler, settings.logger)
 	handler = logAccess(handler, settings.logger, settings.quiet)
 	handler = setSecurityHeaders(handler)
 	handler = limitBodyReadTime(handler, settings.logger, settings.bodyReadTimeout)

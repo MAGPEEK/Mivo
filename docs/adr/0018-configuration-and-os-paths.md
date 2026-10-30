@@ -115,3 +115,62 @@ Keys added in milestone 2 (ADR 0022, ADR 0024; OD-1 A and OD-4 A accepted):
   roots resolve against the config directory, a useful relative root starts with `..`.
 - **Drive-relative config directory**: `--config-dir C:cfg` and `<PREFIX>_CONFIG_DIR=C:cfg`
   are rejected on Windows like drive-relative values in the file.
+
+## Notes (M2-31)
+
+Key added for the LAN-only guard (OD-10 A accepted):
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `server.lan_only` | `<PREFIX>_SERVER_LAN_ONLY` | `true` | `true` or `false`, case-insensitive; `yes`, `no`, `on`, `off`, `1`, `0` and an empty value are rejected so a security switch never flips on a guess |
+
+- **What it does**: until accounts exist (milestone 7) the HTTP server answers every request
+  whose socket peer is not in the local network with `403`, problem code `forbidden` and the
+  fixed detail "Requests from outside the local network are refused (server.lan_only)."
+  Local are loopback, RFC 1918, RFC 6598 (`100.64.0.0/10`, e.g. Tailscale), link-local and
+  IPv6 unique local addresses; IPv4-mapped IPv6 peers count as their IPv4 address. `GET` and
+  `HEAD` of `/api/v1/health` stay reachable for container health checks and monitoring. The
+  startup line `http server listening` carries `lan_only=true|false`. `OPTIONS *` goes
+  through the guard as well (`DisableGeneralOptionsHandler`).
+- **On-link IPv6 prefixes**: dual-stack home networks (e.g. a FritzBox with an ISP prefix)
+  give LAN clients only global and link-local IPv6 addresses, and browsers connect with the
+  global one. The guard therefore also admits IPv6 peers inside a prefix of `/48` or longer
+  on a host interface that is up and not loopback, provided the prefix lies in the global
+  unicast space `2000::/3` and outside the tunnel ranges Teredo (`2001::/32`; on Windows the
+  on-link /64 of the Teredo pseudo-interface holds every Teredo client of the same relay)
+  and 6to4 (`2002::/16`). IPv4-compatible (`::/96`, Linux `sit0`), NAT64 (`64:ff9b::/96`),
+  discard (`100::/64`), unique local, link-local and multicast prefixes are never taken from
+  the interfaces; the private ones are covered by the fixed ranges. IPv4 interface subnets
+  are never trusted (on a VPS they would admit the neighbours).
+- **Refresh**: the prefixes come from an injected provider (`server.Options.InterfacePrefixes`,
+  nil = the host's interfaces) and are reread at most every 30 s because ISP prefixes
+  rotate. One request performs the refresh while all others keep deciding with the current
+  snapshot; only the very first read blocks concurrent requests. When reading fails, the
+  last known prefixes stay trusted for at most 4 consecutive failed refreshes (about two
+  minutes) and are then dropped, so the guard fails closed. A failure streak logs one warning
+  when it starts and one when the stale prefixes are dropped.
+- **Only the socket peer counts**: `X-Forwarded-For`, `X-Real-IP` and `Forwarded` are
+  ignored until a trusted-proxy setting exists (milestone 7b).
+- **Trade-offs and known limits** (details for Docker users in `packaging/docker/README.md`):
+  - Host-side clients of a Docker bridge network come from the private bridge gateway, so
+    NAS setups keep working. The default bridge has no IPv6: Docker's proxy accepts IPv6 on
+    `[::]:<port>` and forwards it over IPv4 from the gateway, so every IPv6 client, public
+    ones included, passes. Publish IPv4 only (`-p 0.0.0.0:8460:8460`), use an IPv6-enabled
+    network or `network_mode: host`. On-link IPv6 prefixes of the host are visible only with
+    host networking.
+  - A reverse proxy on the LAN, Docker Desktop, rootless Docker and tunnels on the same host
+    (cloudflared, Tailscale Serve or Funnel, ngrok) show every client with a private or
+    loopback address; behind them the guard lets everyone through.
+  - Some VPS and hosting providers put many customers into one on-link /64. There the
+    interface path admits those neighbours, the problem that makes the guard refuse IPv4
+    subnets. This is a known limit: such servers must restrict access with a firewall or a
+    proxy (keeping `lan_only` on still refuses everyone else).
+  - Stateful DHCPv6 addresses appear as `/128` on Windows and with NetworkManager or
+    systemd-networkd, so the interface yields no prefix that holds other hosts. On
+    DHCPv6-only networks LAN clients that connect with a global IPv6 address get `403` (the
+    safe direction); they can use IPv4 or a unique local address.
+  - `100.64.0.0/10` is kept per OD-10 for Tailscale. It also admits carrier-grade-NAT
+    neighbours at the ISP when the router's WAN side lies in shared space and the port is
+    forwarded, devices shared into the tailnet from other tailnets, and cloud or Kubernetes
+    networks that use the range.
+- `false` turns the guard off; do that only when another layer restricts access.

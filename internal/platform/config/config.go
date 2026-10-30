@@ -24,6 +24,11 @@ const FileName = "config.yaml"
 // DefaultPort is the default HTTP port (ADR 0018).
 const DefaultPort = 8460
 
+// DefaultLANOnly keeps the server out of reach of public IP addresses unless the owner opts
+// out: without accounts (milestone 7) a forwarded port would otherwise expose every library
+// (OD-10).
+const DefaultLANOnly = true
+
 // Defaults of the milestone-2 settings (ADR 0022, ADR 0024). A bare program name is looked
 // up on PATH at startup.
 const (
@@ -83,6 +88,9 @@ type Server struct {
 	Host string
 	// Port is the TCP port; 0 lets the OS choose one (used by tests).
 	Port int
+	// LANOnly refuses requests from public IP addresses until accounts exist (OD-10,
+	// milestone 7); the health endpoint stays reachable. On by default.
+	LANOnly bool
 }
 
 // Log holds the logging settings.
@@ -168,7 +176,7 @@ func resolveConfigDir(options Options) (string, error) {
 func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 	return Config{
 		ConfigDir: configDir,
-		Server:    Server{Host: "", Port: DefaultPort},
+		Server:    Server{Host: "", Port: DefaultPort, LANOnly: DefaultLANOnly},
 		Log:       Log{Level: logging.LevelInfo, Format: logging.FormatText},
 		Paths: Paths{
 			Data:      defaults.Data.Path,

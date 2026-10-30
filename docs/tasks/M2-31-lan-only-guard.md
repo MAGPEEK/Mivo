@@ -28,3 +28,9 @@ are refused.
   the documented trade-off.
 - Wiring (`server.Options`) happens in M2-32.
 - If OD-10 is rejected, drop this task and say so in `M2-00-overview.md`.
+
+## Orchestrator note (rounds 2–3)
+- Besides the fixed ranges the guard admits peers inside on-link IPv6 prefixes of the host's
+  interfaces (≥ /48, inside 2000::/3, outside Teredo 2001::/32 and 6to4 2002::/16), refreshed every
+  30 s and dropped after 4 consecutive failed reads (decision 2026-10-30, M2-31 review r1; details
+  in ADR 0018 Notes M2-31). At most two warnings per failure streak (start, drop).

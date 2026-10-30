@@ -60,6 +60,20 @@ type Options struct {
 	// stay at info. They match like the server routes: by method (GET also matches HEAD),
 	// escaped path and wildcards. A malformed or conflicting pattern is invalid.
 	QuietPatterns []string
+	// AllowPublicClients turns the LAN-only guard off (config server.lan_only=false). By
+	// default every request whose socket peer is not a loopback, private, RFC 6598 or
+	// link-local address, nor an IPv6 address inside an on-link prefix of a host interface,
+	// gets a 403 forbidden problem, except GET and HEAD of the health endpoint (OD-10). The
+	// option is phrased as an opt-out so that the zero value, and a composition root that
+	// forgets it, keeps the guard on.
+	AllowPublicClients bool
+	// InterfacePrefixes reports the host's interface prefixes for the LAN-only guard: IPv6
+	// peers inside a global unicast prefix (2000::/3 without Teredo and 6to4) of /48 or
+	// longer count as LAN, because dual-stack home networks give their clients global IPv6
+	// addresses. The guard rereads them at most every 30 seconds; when reading fails it keeps
+	// the last known ones for about two minutes and then refuses such peers. Nil means the
+	// interfaces of this host.
+	InterfacePrefixes InterfacePrefixProvider
 }
 
 // Server is an HTTP server built by New. Run it once.
@@ -68,6 +82,8 @@ type Server struct {
 	address    string
 	listener   net.Listener
 	logger     *slog.Logger
+	// lanOnly tells the startup log whether the LAN-only guard is on.
+	lanOnly bool
 }
 
 // New validates options and builds the server without opening any socket. Invalid options
@@ -83,6 +99,9 @@ func New(options Options) (*Server, error) {
 			Handler:           newHandler(options, settings),
 			ReadHeaderTimeout: ReadHeaderTimeout,
 			IdleTimeout:       IdleTimeout,
+			// net/http would answer "OPTIONS *" itself, outside the middleware chain, so it
+			// would bypass the LAN guard, the security headers and the access log.
+			DisableGeneralOptionsHandler: true,
 			// WriteTimeout stays 0 on purpose: media streaming writes one response for as
 			// long as playback runs. ReadTimeout stays 0 as well: net/http's background
 			// read would hit it during a long response and cancel the request context.
@@ -93,6 +112,7 @@ func New(options Options) (*Server, error) {
 		address:  options.Address,
 		listener: options.Listener,
 		logger:   options.Logger,
+		lanOnly:  !options.AllowPublicClients,
 	}, nil
 }
 
@@ -176,7 +196,8 @@ func (server *Server) Run(ctx context.Context) error {
 		return err
 	}
 
-	server.logger.InfoContext(ctx, "http server listening", slog.String("address", listener.Addr().String()))
+	server.logger.InfoContext(ctx, "http server listening",
+		slog.String("address", listener.Addr().String()), slog.Bool("lan_only", server.lanOnly))
 
 	serveResult := make(chan error, 1)
 	go func() { serveResult <- server.httpServer.Serve(listener) }()

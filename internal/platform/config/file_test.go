@@ -223,6 +223,15 @@ func TestLoadInvalidValues(t *testing.T) {
 		{name: "file port not a number", yaml: "server:\n  host: x\n  port: http\n", wantPart: "line 3: key server.port"},
 		{name: "env port not a number", vars: map[string]string{env("SERVER_PORT"): "abc"}, wantPart: env("SERVER_PORT")},
 		{name: "env port too high", vars: map[string]string{env("SERVER_PORT"): "70000"}, wantPart: env("SERVER_PORT")},
+		// YAML 1.2 reads yes/no/on/off as plain strings; only true and false switch the guard.
+		{
+			name: "file lan only yes", yaml: "server:\n  lan_only: yes\n",
+			wantPart: `line 2: key server.lan_only: invalid configuration value: "yes" is not one of true, false`,
+		},
+		{name: "file lan only number", yaml: "server:\n  lan_only: 0\n", wantPart: "line 2: key server.lan_only"},
+		{name: "env lan only one", vars: map[string]string{env("SERVER_LAN_ONLY"): "1"}, wantPart: env("SERVER_LAN_ONLY")},
+		{name: "env lan only off", vars: map[string]string{env("SERVER_LAN_ONLY"): "off"}, wantPart: env("SERVER_LAN_ONLY")},
+		{name: "env lan only empty", vars: map[string]string{env("SERVER_LAN_ONLY"): ""}, wantPart: env("SERVER_LAN_ONLY")},
 		{name: "file unknown log level", yaml: "log:\n  level: verbose\n", wantPart: "key log.level"},
 		{name: "env unknown log level", vars: map[string]string{env("LOG_LEVEL"): "trace"}, wantPart: env("LOG_LEVEL")},
 		{name: "file unknown log format", yaml: "log:\n  format: xml\n", wantPart: "key log.format"},

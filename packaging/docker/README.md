@@ -49,6 +49,46 @@ shutdown that hangs; as PID 1 the server would otherwise ignore it.
 
 `HEALTHCHECK` runs `mivo healthcheck`, which GETs `/api/v1/health` on the configured port.
 
+### Local network only
+
+The server has no accounts yet (milestone 7), so by default it refuses requests from outside
+the local network with `403` (`MIVO_SERVER_LAN_ONLY=true`, ADR 0018); `/api/v1/health` stays
+reachable. It admits loopback, private (RFC 1918, IPv6 ULA), link-local and `100.64.0.0/10`
+addresses, plus IPv6 addresses inside a global prefix (`/48` or longer, without the Teredo
+and 6to4 tunnel ranges) of the server's own network interfaces, because dual-stack home
+networks give their clients global IPv6 addresses. If those prefixes cannot be read for
+about two minutes, such clients are refused. Only the address of the connection counts;
+`X-Forwarded-For` is ignored.
+
+What Docker networking does to that address:
+
+- **IPv4 on the default bridge network (Linux, NAS)**: the container sees the real address
+  of clients from the LAN or the internet; connections from the host itself come from the
+  bridge gateway, a private address. LAN setups keep working.
+- **IPv6 on the default bridge network**: the default bridge has no IPv6, so Docker's proxy
+  accepts IPv6 connections on `[::]:8460` and forwards them over IPv4 from the bridge
+  gateway (`172.17.0.1`). Every IPv6 client, public ones included, then passes the guard.
+  Publish the port for IPv4 only (`-p 0.0.0.0:8460:8460`, compose `"0.0.0.0:8460:8460"`;
+  browsers fall back to IPv4), or use an IPv6-enabled network or `network_mode: host`.
+- **Global IPv6 addresses of LAN clients** are recognised only with `network_mode: host`: in
+  a bridge container the server sees the container's interfaces, not the host's prefix, so
+  on an IPv6-enabled bridge network such clients get `403` unless they use IPv4.
+- **Docker Desktop, rootless Docker, a reverse proxy on the LAN and tunnels on the same host**
+  (cloudflared, Tailscale Serve or Funnel, ngrok) replace every client address with a private
+  or loopback one. Behind them the guard lets everyone through, so the proxy, tunnel or
+  firewall has to restrict access.
+- **VPS and hosting**: some providers put many customers into one on-link /64; the guard then
+  admits those neighbours. Restrict access with a firewall or proxy there.
+- **DHCPv6-only networks**: stateful DHCPv6 addresses appear as `/128`, so the server learns
+  no LAN prefix and clients with a global IPv6 address get `403`; use IPv4 or a unique local
+  address.
+- **`100.64.0.0/10`** is admitted for Tailscale. It also admits carrier-grade-NAT neighbours
+  at the ISP when the router's WAN address lies in that range and the port is forwarded,
+  devices shared into your tailnet from other tailnets, and cloud or Kubernetes networks
+  that use the range.
+
+Set `MIVO_SERVER_LAN_ONLY=false` only when another layer controls who can reach the port.
+
 ### Configure through environment or `/config`, not command flags
 
 Change settings such as the port with `MIVO_*` variables (`-e MIVO_SERVER_PORT=9000`) or in

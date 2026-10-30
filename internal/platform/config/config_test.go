@@ -105,7 +105,7 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 
 	want := config.Config{
 		ConfigDir: f.configDir,
-		Server:    config.Server{Host: "", Port: 8460},
+		Server:    config.Server{Host: "", Port: 8460, LANOnly: true},
 		Log:       config.Log{Level: "info", Format: "text"},
 		Paths:     config.Paths{Data: dirs.Data.Path, Cache: dirs.Cache.Path, Transcode: dirs.Transcode.Path},
 		Libraries: []config.LibraryConfig{},
@@ -166,6 +166,13 @@ func precedenceCases() []precedenceCase {
 			wantFile: "9000", wantEnv: "0",
 			defaultOf: func(paths.DefaultDirectories) string { return "8460" },
 			get:       func(cfg config.Config) string { return strconv.Itoa(cfg.Server.Port) },
+		},
+		{
+			key: "server.lan_only", yaml: "server:\n  lan_only: false\n",
+			envName: env("SERVER_LAN_ONLY"), envValue: "TRUE",
+			wantFile: "false", wantEnv: "true",
+			defaultOf: func(paths.DefaultDirectories) string { return "true" },
+			get:       func(cfg config.Config) string { return strconv.FormatBool(cfg.Server.LANOnly) },
 		},
 		{
 			key: "log.level", yaml: "log:\n  level: debug\n",

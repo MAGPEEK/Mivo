@@ -102,10 +102,17 @@ func newTestChain(t *testing.T, options Options) http.Handler {
 	return newHandler(options, settings)
 }
 
+// lanPeer is the socket peer of test requests: a LAN address the LAN guard lets through.
+// httptest's default, 192.0.2.1, is a public documentation address the guard refuses.
+const lanPeer = "192.168.1.20:50000"
+
 func newRequest(t *testing.T, method, target string) *http.Request {
 	t.Helper()
 
-	return httptest.NewRequestWithContext(t.Context(), method, target, nil)
+	request := httptest.NewRequestWithContext(t.Context(), method, target, nil)
+	request.RemoteAddr = lanPeer
+
+	return request
 }
 
 func TestRoutesSplitAPIAndFallback(t *testing.T) {

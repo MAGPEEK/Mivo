@@ -19,6 +19,7 @@ import (
 const (
 	keyServerHost           = "server.host"
 	keyServerPort           = "server.port"
+	keyServerLANOnly        = "server.lan_only"
 	keyLogLevel             = "log.level"
 	keyLogFormat            = "log.format"
 	keyPathsData            = "paths.data"
@@ -67,6 +68,7 @@ func settings() []setting {
 	return []setting{
 		{key: keyServerHost, apply: applyHost},
 		{key: keyServerPort, apply: applyPort},
+		{key: keyServerLANOnly, apply: applyLANOnly},
 		{
 			key: keyLogLevel,
 			apply: applyChoice(logLevelField,
@@ -119,6 +121,20 @@ func applyPort(cfg *Config, raw, _ string) error {
 	}
 
 	cfg.Server.Port = port
+
+	return nil
+}
+
+// applyLANOnly accepts only true and false, case-insensitively. strconv.ParseBool would also
+// take "t" or "0", and YAML 1.1 spellings such as "yes" or "off" are plain strings in the
+// YAML 1.2 parser; rejecting them keeps a security switch from flipping on a guess.
+func applyLANOnly(cfg *Config, raw, _ string) error {
+	value, err := parseChoice(raw, strconv.FormatBool(true), strconv.FormatBool(false))
+	if err != nil {
+		return err
+	}
+
+	cfg.Server.LANOnly = value == strconv.FormatBool(true)
 
 	return nil
 }
