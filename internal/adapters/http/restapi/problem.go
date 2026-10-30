@@ -6,7 +6,9 @@ import (
 	"net/http"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
 // ProblemMediaType is the content type of every error response (RFC 9457).
@@ -67,9 +69,15 @@ type errorMapping struct {
 	code   string
 }
 
-// domainErrorMappings is checked in order; the first sentinel the error wraps wins.
+// domainErrorMappings is checked in order; the first sentinel the error wraps wins. The
+// playback sentinels come first because each wraps a generic one below (specific before
+// generic): ErrNoCompatibleFormat and ErrTranscodeUnavailable wrap domain.ErrUnsupported,
+// ErrSessionLimitReached wraps domain.ErrUnavailable.
 func domainErrorMappings() []errorMapping {
 	return []errorMapping{
+		{target: playback.ErrNoCompatibleFormat, status: http.StatusUnprocessableEntity, code: CodeNoCompatibleFormat},
+		{target: playback.ErrTranscodeUnavailable, status: http.StatusUnprocessableEntity, code: CodeTranscodeUnavailable},
+		{target: appplayback.ErrSessionLimitReached, status: http.StatusServiceUnavailable, code: CodeSessionLimitReached},
 		{target: domain.ErrNotFound, status: http.StatusNotFound, code: CodeNotFound},
 		{target: domain.ErrForbidden, status: http.StatusForbidden, code: CodeForbidden},
 		{target: domain.ErrConflict, status: http.StatusConflict, code: CodeConflict},
@@ -95,9 +103,11 @@ func InternalProblem() apigen.Problem {
 	return NewProblem(http.StatusInternalServerError, CodeInternal)
 }
 
-// ProblemForError maps a domain error to its problem: ErrNotFound 404, ErrForbidden 403,
-// ErrConflict 409, ErrInvalid 400, ErrUnsupported 422, ErrUnavailable 503 and anything else
-// 500. Only this adapter maps domain errors to HTTP (ADR 0017).
+// ProblemForError maps a domain error to its problem: the playback failures
+// no_compatible_format and transcode_unavailable 422 and session_limit_reached 503, then
+// ErrNotFound 404, ErrForbidden 403, ErrConflict 409, ErrInvalid 400, ErrUnsupported 422,
+// ErrUnavailable 503 and anything else 500. Only this adapter maps domain errors to HTTP
+// (ADR 0017). A session_limit_reached answer also needs Retry-After, which the caller sets.
 func ProblemForError(err error) apigen.Problem {
 	for _, mapping := range domainErrorMappings() {
 		if errors.Is(err, mapping.target) {
