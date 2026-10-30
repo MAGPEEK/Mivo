@@ -23,7 +23,11 @@ public release, so renaming must be cheap.
   2. npm workspace scope `@mivo/*`
   3. `api/openapi.yaml` `info.title`
   4. Docker image name, the `MIVO_*` variables and the OCI labels in `packaging/docker/`
-  5. Later: webOS app id, GoReleaser config, installer names, systemd unit
+  5. Docker Hub repository `docker.io/magpeek/mivo-media-server` (published since
+     0.1.0-alpha.1 – a rename needs a new repository and a deprecation note on the old one)
+  6. Docs that name the product or derived values: `README.md`, `CLAUDE.md`,
+     `docs/development.md`, `packaging/docker/README.md`
+  7. Later: webOS app id, GoReleaser config, installer names, systemd unit
 
 ## Consequences
 
