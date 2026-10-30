@@ -7,9 +7,9 @@ import (
 	"maps"
 	"net/http"
 	"runtime/debug"
-	"strings"
 	"time"
 
+	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/statuswriter"
@@ -23,13 +23,9 @@ const (
 	valueNoReferrer          = "no-referrer"
 )
 
-// accessLogHeaders is the allowlist of request headers written to the access log. Headers
-// are never logged as a whole: the log redaction works on attribute keys only and cannot
-// see secrets inside an http.Header value (platform/logging). Never add Authorization,
-// Cookie or headers that may carry tokens.
-func accessLogHeaders() []string {
-	return []string{"User-Agent"}
-}
+// maxLoggedPanicBytes bounds the panic value in the panic record. It is mostly server text
+// and worth more room than a client value, but may quote client input.
+const maxLoggedPanicBytes = 4 << 10
 
 // headersKeptOnPanic are the response headers the panic problem keeps. Everything else a
 // panicking handler set (Content-Type, Content-Length, caching, ...) belongs to the response
@@ -38,13 +34,34 @@ func headersKeptOnPanic() []string {
 	return []string{headerContentTypeOptions, headerReferrerPolicy, requestid.HeaderName}
 }
 
+// chainSettings are the middleware settings New derives from Options.
+type chainSettings struct {
+	logger *slog.Logger
+	// quiet selects the requests whose success is logged at debug level.
+	quiet quietRoutes
+	// bodyReadTimeout is BodyReadTimeout; tests shorten it.
+	bodyReadTimeout time.Duration
+}
+
+// newChainSettings validates the parts of options only the middleware understands.
+func newChainSettings(options Options) (chainSettings, error) {
+	quiet, err := newQuietRoutes(options.QuietPatterns)
+	if err != nil {
+		return chainSettings{}, err
+	}
+
+	return chainSettings{logger: options.Logger, quiet: quiet, bodyReadTimeout: BodyReadTimeout}, nil
+}
+
 // withMiddleware wraps next in the chain, outermost first: the request ID exists before
-// anything logs, security headers are set even on panics, the access log sees the status
-// the recover middleware writes.
-func withMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
-	handler := recoverPanics(next, logger)
-	handler = logAccess(handler, logger)
+// anything logs, the body read deadline is set before any handler can answer (or leave the
+// body unread), security headers are set even on panics, the access log sees the status the
+// recover middleware writes.
+func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
+	handler := recoverPanics(next, settings.logger)
+	handler = logAccess(handler, settings.logger, settings.quiet)
 	handler = setSecurityHeaders(handler)
+	handler = limitBodyReadTime(handler, settings.logger, settings.bodyReadTimeout)
 
 	return requestid.Middleware(handler)
 }
@@ -56,63 +73,6 @@ func setSecurityHeaders(next http.Handler) http.Handler {
 		header.Set(headerReferrerPolicy, valueNoReferrer)
 		next.ServeHTTP(writer, request)
 	})
-}
-
-// logAccess writes one info record per request, aborted ones included. Only the path is
-// logged, never the query: query strings may carry tokens in later milestones.
-func logAccess(next http.Handler, logger *slog.Logger) http.Handler {
-	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		access := accessRecord{logger: logger, started: time.Now(), recorder: statuswriter.New(writer)}
-		defer access.finish(request)
-
-		next.ServeHTTP(access.recorder, request)
-	})
-}
-
-// accessRecord holds what the deferred access log needs about one request.
-type accessRecord struct {
-	logger   *slog.Logger
-	started  time.Time
-	recorder *statuswriter.Recorder
-}
-
-// finish must be deferred directly, so its recover sees an abort. Only http.ErrAbortHandler
-// reaches it, because recoverPanics handles every other panic; the abort is logged and then
-// passed on, so net/http still drops the connection.
-func (access accessRecord) finish(request *http.Request) {
-	recovered := recover()
-
-	attributes := []any{
-		slog.String("method", request.Method),
-		slog.String("path", truncateForLog(request.URL.Path)),
-		slog.Int("status", access.recorder.StatusOrOK()),
-		slog.Bool("aborted", recovered != nil),
-		slog.Duration("duration", time.Since(access.started)),
-		slog.Int64("bytes", access.recorder.Written()),
-		slog.String("request_id", requestid.FromContext(request.Context())),
-	}
-	attributes = append(attributes, allowlistedHeaders(request.Header)...)
-
-	access.logger.InfoContext(request.Context(), "http request", attributes...)
-
-	if recovered != nil {
-		panic(recovered) //nolint:forbidigo // net/http contract to abort a response
-	}
-}
-
-// allowlistedHeaders returns the accessLogHeaders that are present, keyed in snake case
-// ("User-Agent" becomes "user_agent") and cut to maxLoggedValueBytes.
-func allowlistedHeaders(header http.Header) []any {
-	var attributes []any
-
-	for _, name := range accessLogHeaders() {
-		if value := header.Get(name); value != "" {
-			key := strings.ReplaceAll(strings.ToLower(name), "-", "_")
-			attributes = append(attributes, slog.String(key, truncateForLog(value)))
-		}
-	}
-
-	return attributes
 }
 
 // recoverPanics turns a panicking handler into a 500 problem and an error log with the
@@ -144,8 +104,9 @@ func (recovery panicRecovery) handle(request *http.Request) {
 	}
 
 	if isAbort(recovered) {
-		// A deliberate abort is no bug: net/http drops the connection without a log line.
-		panic(recovered) //nolint:forbidigo // net/http contract to abort a response
+		// A deliberate abort is no bug. net/http drops the connection silently only for the
+		// sentinel itself (it compares with ==), so a wrapped abort is passed on unwrapped.
+		panic(http.ErrAbortHandler) //nolint:forbidigo // net/http contract to abort a response
 	}
 
 	recovery.logPanic(request, recovered)
@@ -163,15 +124,13 @@ func (recovery panicRecovery) handle(request *http.Request) {
 
 func (recovery panicRecovery) logPanic(request *http.Request, recovered any) {
 	recovery.logger.ErrorContext(request.Context(), "http handler panicked",
-		slog.String("panic", fmt.Sprint(recovered)),
-		slog.String("stack", string(debug.Stack())),
-		slog.String("method", request.Method),
-		slog.String("path", truncateForLog(request.URL.Path)),
-		slog.String("request_id", requestid.FromContext(request.Context())))
+		logtext.RequestAttributes(request,
+			slog.String("panic", logtext.TruncateMiddleTo(fmt.Sprint(recovered), maxLoggedPanicBytes)),
+			slog.String("stack", string(debug.Stack())))...)
 }
 
-// isAbort reports whether recovered is http.ErrAbortHandler, the sentinel handlers panic
-// with to make net/http drop the connection.
+// isAbort reports whether recovered is or wraps http.ErrAbortHandler, the sentinel handlers
+// panic with to make net/http drop the connection.
 func isAbort(recovered any) bool {
 	err, ok := recovered.(error)
 

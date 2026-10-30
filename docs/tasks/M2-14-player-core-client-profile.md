@@ -41,3 +41,10 @@ codecs inside HLS, bit depths – so the decision engine picks the cheapest work
   the probe (ADR 0023 consequence), do not special-case browsers.
 - Keep the probe tables as data so the TV app (milestone 10) can reuse them.
 - `decodingInfo` is async and may throw for unknown types: treat a rejection as unsupported.
+
+## Orchestrator note (2026-10-30) – supersedes the HLS order and probe list above
+- HLS delivery: "mse" whenever MediaSource reports at least one HLS video codec; "native" only
+  without MSE (e.g. iOS Safari); "none" otherwise.
+- `ClientProbes.startTimer` is a required probe; each decodingInfo query times out after 2000 ms
+  and counts as unsupported.
+- Codec limits are the intersection over the contexts where the codec plays.

@@ -87,7 +87,7 @@ func publicHealthStatus(status system.HealthStatus) apigen.HealthStatus {
 func (api *API) GetSystemInfo(ctx context.Context, _ apigen.GetSystemInfoRequestObject) (apigen.GetSystemInfoResponseObject, error) {
 	info, err := api.system.Info(ctx)
 	if err != nil && ctx.Err() != nil {
-		// The client went away or the server is shutting down: no server fault, so no
+		// The client went away or the server was Closed: no server fault, so no
 		// error log. writeResponseError logs it at debug level and writes nothing.
 		return nil, fmt.Errorf("%s: %w", operationGetSystemInfo, err)
 	}

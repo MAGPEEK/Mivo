@@ -58,3 +58,7 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
   MediaSource is available) before relying on the reference profile in E2E.
 - (decision 2026-10-30) player-core reports HLS delivery "mse" whenever MSE is available; "native"
   only without MSE. The engine must still handle "native" (iOS Safari) via the video element.
+- (from M2-14 r2) `ClientProbes.startTimer` is required: pass
+  `(ms, onTimeout) => { const id = setTimeout(onTimeout, ms); return () => clearTimeout(id); }`
+  together with the video element's `canPlayType`, `MediaSource.isTypeSupported` and
+  `navigator.mediaCapabilities.decodingInfo`.

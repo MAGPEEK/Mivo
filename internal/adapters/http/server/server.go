@@ -49,9 +49,17 @@ type Options struct {
 	Logger *slog.Logger
 	// APIHandler serves every path below /api/. Required.
 	APIHandler http.Handler
-	// Fallback serves every other path. It never sees a path whose decoded and cleaned form
-	// lies below /api, such as /api%2Fv1%2Fx. When nil those paths answer 404.
+	// Fallback serves every path outside the API. Paths whose decoded and cleaned form lies
+	// below /api, such as /api%2Fv1%2Fx, always go to APIHandler instead. When Fallback is
+	// nil, every path outside the API answers a plain 404.
 	Fallback http.Handler
+	// QuietPatterns are net/http ServeMux patterns, normally with a method, such as
+	// "GET /api/v1/playback/sessions/{sessionId}/hls/{fileName}". Requests they match are
+	// access-logged at debug level while they succeed (status below 400), so polling of
+	// stream segments does not flood the info log (ADR 0024); failed and aborted requests
+	// stay at info. They match like the server routes: by method (GET also matches HEAD),
+	// escaped path and wildcards. A malformed or conflicting pattern is invalid.
+	QuietPatterns []string
 }
 
 // Server is an HTTP server built by New. Run it once.
@@ -65,18 +73,21 @@ type Server struct {
 // New validates options and builds the server without opening any socket. Invalid options
 // are a wiring bug and are reported as an error wrapping domain.ErrInvalid.
 func New(options Options) (*Server, error) {
-	if err := options.validate(); err != nil {
+	settings, err := options.validate()
+	if err != nil {
 		return nil, err
 	}
 
 	return &Server{
 		httpServer: &http.Server{
-			Handler:           newHandler(options),
+			Handler:           newHandler(options, settings),
 			ReadHeaderTimeout: ReadHeaderTimeout,
 			IdleTimeout:       IdleTimeout,
-			// WriteTimeout stays 0 on purpose: media streaming (milestone 3) writes one
-			// response for as long as playback runs. ReadTimeout stays 0 for the same
-			// reason with uploads; ReadHeaderTimeout covers slow clients.
+			// WriteTimeout stays 0 on purpose: media streaming writes one response for as
+			// long as playback runs. ReadTimeout stays 0 as well: net/http's background
+			// read would hit it during a long response and cancel the request context.
+			// ReadHeaderTimeout covers slow headers, BodyReadTimeout bodies (see
+			// limitBodyReadTime).
 			ErrorLog: slog.NewLogLogger(options.Logger.Handler(), slog.LevelWarn),
 		},
 		address:  options.Address,
@@ -85,7 +96,9 @@ func New(options Options) (*Server, error) {
 	}, nil
 }
 
-func (options Options) validate() error {
+// validate reports every problem of options at once and returns the middleware settings
+// derived from them.
+func (options Options) validate() (chainSettings, error) {
 	var problems []error
 
 	if (options.Address == "") == (options.Listener == nil) {
@@ -100,16 +113,21 @@ func (options Options) validate() error {
 		problems = append(problems, errors.New("missing api handler"))
 	}
 
-	if len(problems) > 0 {
-		return fmt.Errorf("invalid http server options: %w: %w", errors.Join(problems...), domain.ErrInvalid)
+	settings, err := newChainSettings(options)
+	if err != nil {
+		problems = append(problems, err)
 	}
 
-	return nil
+	if len(problems) > 0 {
+		return chainSettings{}, fmt.Errorf("invalid http server options: %w: %w", errors.Join(problems...), domain.ErrInvalid)
+	}
+
+	return settings, nil
 }
 
 // newHandler routes /api/ to the API and everything else to the fallback, behind the
 // middleware chain.
-func newHandler(options Options) http.Handler {
+func newHandler(options Options, settings chainSettings) http.Handler {
 	fallback := options.Fallback
 	if fallback == nil {
 		fallback = http.NotFoundHandler()
@@ -119,7 +137,7 @@ func newHandler(options Options) http.Handler {
 	mux.Handle(apiPathPrefix, options.APIHandler)
 	mux.Handle("/", apiPathGuard{api: options.APIHandler, fallback: fallback})
 
-	return withMiddleware(mux, options.Logger)
+	return withMiddleware(mux, settings)
 }
 
 // apiPathGuard sends a request the mux passed to the fallback to the API instead when its
@@ -143,6 +161,7 @@ func (guard apiPathGuard) ServeHTTP(writer http.ResponseWriter, request *http.Re
 
 // isAPIPath reports whether the decoded urlPath names the API root or a path below it.
 // Cleaning resolves encoded dot segments such as /%2e%2e/api/v1, which the mux leaves alone.
+// webui.isAPIName applies the same rule to file names as defence in depth; keep both in step.
 func isAPIPath(urlPath string) bool {
 	cleaned := path.Clean("/" + urlPath)
 

@@ -33,6 +33,25 @@ func TestRecorderKeepsFirstFinalStatus(t *testing.T) {
 	}
 }
 
+// TestRecorderTreatsSwitchingProtocolsAsFinal follows net/http, which sends the header block
+// with a 101 and ignores every later WriteHeader: after a 101 the status can no longer change.
+func TestRecorderTreatsSwitchingProtocolsAsFinal(t *testing.T) {
+	t.Parallel()
+
+	recorder := statuswriter.New(httptest.NewRecorder())
+	recorder.WriteHeader(http.StatusSwitchingProtocols)
+
+	if !recorder.HeadersSent() || recorder.StatusOrOK() != http.StatusSwitchingProtocols {
+		t.Fatalf("after 101: sent %v, status %d, want sent and 101", recorder.HeadersSent(), recorder.StatusOrOK())
+	}
+
+	recorder.WriteHeader(http.StatusOK)
+
+	if got := recorder.StatusOrOK(); got != http.StatusSwitchingProtocols {
+		t.Errorf("status = %d, want the first final status 101", got)
+	}
+}
+
 func TestRecorderCountsBodyAndRecordsImplicitOK(t *testing.T) {
 	t.Parallel()
 
@@ -82,14 +101,39 @@ func TestRecorderCountsBodyAndRecordsImplicitOK(t *testing.T) {
 func TestRecorderUsesUnderlyingReaderFrom(t *testing.T) {
 	t.Parallel()
 
-	underlying := &readerFromWriter{ResponseWriter: httptest.NewRecorder()}
-
-	if _, err := statuswriter.New(underlying).ReadFrom(strings.NewReader("file")); err != nil {
-		t.Fatalf("ReadFrom: %v", err)
+	tests := []struct {
+		name string
+		copy func(recorder *statuswriter.Recorder, source io.Reader) (int64, error)
+	}{
+		{name: "ReadFrom", copy: func(recorder *statuswriter.Recorder, source io.Reader) (int64, error) {
+			return recorder.ReadFrom(source)
+		}},
+		// http.ServeContent copies with io.CopyN, which reaches ReadFrom through io.Copy.
+		{name: "io.CopyN", copy: func(recorder *statuswriter.Recorder, source io.Reader) (int64, error) {
+			return io.CopyN(recorder, source, int64(len("file")))
+		}},
 	}
 
-	if !underlying.readFromCalled {
-		t.Error("the wrapped writer's ReadFrom was bypassed, which disables sendfile")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			underlying := &readerFromWriter{ResponseWriter: httptest.NewRecorder()}
+			recorder := statuswriter.New(underlying)
+
+			copied, err := test.copy(recorder, strings.NewReader("file"))
+			if err != nil {
+				t.Fatalf("copy: %v", err)
+			}
+
+			if !underlying.readFromCalled {
+				t.Error("the wrapped writer's ReadFrom was bypassed, which disables sendfile")
+			}
+
+			if copied != int64(len("file")) || recorder.Written() != copied {
+				t.Errorf("copied %d, recorded %d, want both 4", copied, recorder.Written())
+			}
+		})
 	}
 }
 

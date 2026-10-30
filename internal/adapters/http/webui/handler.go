@@ -14,7 +14,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/magpeek/mivo/internal/adapters/http/requestid"
+	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 )
 
@@ -77,18 +77,19 @@ func NewHandler(files fs.FS, logger *slog.Logger) (*Handler, error) {
 // ServeHTTP answers GET and HEAD for the UI files. It is meant for every path outside /api/;
 // the server routes API paths elsewhere, so unknown API routes never get index.html.
 func (handler *Handler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-	if request.Method != http.MethodGet && request.Method != http.MethodHead {
-		writer.Header().Set("Allow", allowedMethods)
-		http.Error(writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	name := fileName(request.URL.Path)
+	if isAPIName(name) {
+		// Defence in depth behind the server's routing: an API client asking for a missing
+		// route must get the API's 404 problem, never index.html with status 200 nor the
+		// UI's plain-text 405, so the path is checked before the method.
+		restapi.WriteProblem(writer, restapi.NewProblem(http.StatusNotFound, restapi.CodeNotFound))
 
 		return
 	}
 
-	name := fileName(request.URL.Path)
-	if isAPIName(name) {
-		// Defence in depth behind the server's routing: an API client asking for a missing
-		// route must get the API's 404 problem, never index.html with status 200.
-		restapi.WriteProblem(writer, restapi.NewProblem(http.StatusNotFound, restapi.CodeNotFound))
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		writer.Header().Set("Allow", allowedMethods)
+		http.Error(writer, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 
 		return
 	}
@@ -120,16 +121,17 @@ func (handler *Handler) open(name string) (fileWithInfo, string, error) {
 }
 
 // serverError logs err and answers 500 without its text, which may name internal paths.
+// The request and the error text, which repeats the requested file name before the cause,
+// are cut like every client-controlled value.
 func (handler *Handler) serverError(writer http.ResponseWriter, request *http.Request, err error) {
 	handler.logger.ErrorContext(request.Context(), "web ui request failed",
-		slog.String("method", request.Method),
-		slog.String("path", request.URL.Path),
-		slog.String("request_id", requestid.FromContext(request.Context())),
-		slog.Any("error", err))
+		logtext.RequestAttributes(request, logtext.Error(err))...)
 	http.Error(writer, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
-// isAPIName reports whether a cleaned file name lies in the API subtree.
+// isAPIName reports whether a cleaned file name lies in the API subtree. It mirrors
+// server.isAPIPath, which routes such paths to the API before they get here; keep both in
+// step.
 func isAPIName(name string) bool {
 	return name == apiRootName || strings.HasPrefix(name, apiNamePrefix)
 }

@@ -35,3 +35,7 @@ ready for signed URLs later (ADR 0024).
   about the URL shape beyond the builder, so a token path segment can be added in milestone 7.
 - `http.ServeContent` needs a `ReadSeeker` and a modtime; use the file's mtime, no ETag.
 - Never write a problem after the body has started (use the statuswriter recorder).
+- (from M2-08 review r2) On quiet stream routes a failure after the 200 is sent (e.g. FFmpeg dies
+  mid-segment) would be logged at debug as status 200 if the handler just returns. Stream handlers
+  must log such failures themselves at warn or `panic(http.ErrAbortHandler)` so the request is
+  recorded as aborted at info.

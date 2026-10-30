@@ -50,3 +50,6 @@ info log (BACKLOG, ADR 0024).
 - `statuswriter` treats 101 Switching Protocols as final, like net/http (which ignores later
   `WriteHeader` calls); the BACKLOG wording "treats 101 as final" as a bug was wrong. When
   WebSockets arrive, record a hijacked connection in `Recorder` (libraries write the 101 themselves).
+- Round 2 replaced `QuietPathPrefixes` with `server.Options.QuietPatterns` (ServeMux patterns via a
+  private mux; GET matches HEAD) and moved the body read deadline into the server middleware
+  (`server.BodyReadTimeout`); criteria above that name the old option are met by these.

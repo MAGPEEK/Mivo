@@ -13,6 +13,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/webui"
 )
 
@@ -232,6 +233,60 @@ func TestHandlerAnswersAPIPathsWithNotFoundProblem(t *testing.T) {
 				t.Errorf("body = %q, want the not_found problem and no index.html", body)
 			}
 		})
+	}
+}
+
+// TestHandlerAnswersAPIPathsBeforeCheckingTheMethod: an API client that posts to a missing
+// route gets the API's 404 problem, not the web UI's plain-text 405.
+func TestHandlerAnswersAPIPathsBeforeCheckingTheMethod(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(t, distFiles(t))
+
+	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			t.Parallel()
+
+			recorder := serve(t, handler, method, "/api%2Fv1%2Fx")
+
+			assertStatus(t, recorder, http.StatusNotFound)
+			assertHeader(t, recorder, "Content-Type", "application/problem+json")
+			assertHeader(t, recorder, "Allow", "")
+		})
+	}
+}
+
+// TestServerErrorLogTruncatesClientText requests a 10 KiB client route whose open fails:
+// the path and the error text, which repeats the file name, are client-controlled.
+func TestServerErrorLogTruncatesClientText(t *testing.T) {
+	t.Parallel()
+
+	longName := strings.Repeat("r", 10<<10)
+
+	var logOutput bytes.Buffer
+
+	logger := slog.New(slog.NewJSONHandler(&logOutput, nil))
+	files := faultyFS{files: distFiles(t), failOpen: longName, err: errors.New("disk on fire")}
+
+	recorder := serve(t, newHandlerWithLogger(t, files, logger), http.MethodGet, "/"+longName)
+	assertStatus(t, recorder, http.StatusInternalServerError)
+
+	var record struct {
+		Path  string `json:"path"`
+		Error string `json:"error"`
+	}
+
+	if err := json.Unmarshal(bytes.TrimSpace(logOutput.Bytes()), &record); err != nil {
+		t.Fatalf("decode log record %q: %v", logOutput.Bytes(), err)
+	}
+
+	if record.Path != logtext.Truncate("/"+longName) {
+		t.Errorf("logged path of %d bytes, want it cut to %d", len(record.Path), logtext.MaxBytes)
+	}
+
+	// The cause sits behind the 10 KiB name and must survive the cut.
+	if len(record.Error) > logtext.MaxBytes || !strings.HasSuffix(record.Error, "disk on fire") {
+		t.Errorf("logged error %q (%d bytes), want it cut to %d with the cause kept", record.Error, len(record.Error), logtext.MaxBytes)
 	}
 }
 

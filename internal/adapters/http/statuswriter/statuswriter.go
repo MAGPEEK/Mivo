@@ -9,8 +9,9 @@ import (
 )
 
 // Recorder wraps an http.ResponseWriter and remembers the first final status and the number
-// of body bytes written through it. It stays transparent for http.ResponseController
-// (Flush, deadlines) and keeps the io.ReaderFrom fast path (sendfile) of the wrapped writer.
+// of body bytes written through it, ReadFrom included. It stays transparent for
+// http.ResponseController (Flush, deadlines) and keeps the io.ReaderFrom fast path
+// (sendfile) of the wrapped writer.
 type Recorder struct {
 	http.ResponseWriter
 	status  int
@@ -22,13 +23,20 @@ func New(writer http.ResponseWriter) *Recorder {
 	return &Recorder{ResponseWriter: writer}
 }
 
-// WriteHeader records the first final (non-1xx) status.
+// WriteHeader records the first final status.
 func (recorder *Recorder) WriteHeader(status int) {
-	if recorder.status == 0 && status >= http.StatusOK {
+	if recorder.status == 0 && isFinal(status) {
 		recorder.status = status
 	}
 
 	recorder.ResponseWriter.WriteHeader(status)
+}
+
+// isFinal reports whether net/http treats status as the final status line: every status
+// from 200 on, and 101 Switching Protocols, after which no other header block may follow.
+// Other 1xx statuses are informational and leave the status open.
+func isFinal(status int) bool {
+	return status >= http.StatusOK || status == http.StatusSwitchingProtocols
 }
 
 // Write records an implicit 200 when no status was written before, as net/http does.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,9 +12,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"unicode/utf8"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 )
@@ -84,9 +85,21 @@ func serveChain(t *testing.T, options Options, request *http.Request) *httptest.
 	t.Helper()
 
 	recorder := httptest.NewRecorder()
-	newHandler(options).ServeHTTP(recorder, request)
+	newTestChain(t, options).ServeHTTP(recorder, request)
 
 	return recorder
+}
+
+// newTestChain builds the routed middleware chain the way New does.
+func newTestChain(t *testing.T, options Options) http.Handler {
+	t.Helper()
+
+	settings, err := newChainSettings(options)
+	if err != nil {
+		t.Fatalf("newChainSettings: %v", err)
+	}
+
+	return newHandler(options, settings)
 }
 
 func newRequest(t *testing.T, method, target string) *http.Request {
@@ -123,6 +136,8 @@ func TestRoutesSplitAPIAndFallback(t *testing.T) {
 		{name: "encoded slash lookalike is not api", options: withFallback, target: "/apix%2Fv1", wantStatus: http.StatusOK, wantBody: "web"},
 		{name: "nil fallback answers 404", options: withoutFallback, target: "/library/7", wantStatus: http.StatusNotFound},
 		{name: "nil fallback keeps api", options: withoutFallback, target: "/api/v1/health", wantStatus: http.StatusOK, wantBody: "api"},
+		// The guard also runs in front of the default 404 handler.
+		{name: "nil fallback keeps encoded api paths in api", options: withoutFallback, target: "/api%2Fv1%2Fx", wantStatus: http.StatusOK, wantBody: "api"},
 	}
 
 	for _, test := range tests {
@@ -290,7 +305,7 @@ func TestRecoverWritesProblemAndLogsStack(t *testing.T) {
 func serveOverNetwork(t *testing.T, options Options) (*http.Response, error) {
 	t.Helper()
 
-	testServer := httptest.NewServer(newHandler(options))
+	testServer := httptest.NewServer(newTestChain(t, options))
 	t.Cleanup(testServer.Close)
 
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, testServer.URL+"/api/v1/health", nil)
@@ -350,66 +365,200 @@ func TestRecoverPassesDeliberateAbortWithoutErrorLog(t *testing.T) {
 		t.Errorf("log %q reports a deliberate abort as a panic", log)
 	}
 
-	if !strings.Contains(log, `msg="http request"`) || !strings.Contains(log, "aborted=true") {
-		t.Errorf("access log %q does not record the aborted request", log)
+	// No status line reached the client, so the log must not claim a 200.
+	if !strings.Contains(log, `msg="http request"`) || !strings.Contains(log, "status=0 aborted=true") {
+		t.Errorf("access log %q does not record the aborted request with status 0", log)
 	}
 }
 
-func TestAccessLogTruncatesClientText(t *testing.T) {
+// TestLogRecordsTruncateClientText sends a 10 KiB method, path, User-Agent and panic value
+// to a panicking handler, so both the panic record and the access record carry them.
+func TestLogRecordsTruncateClientText(t *testing.T) {
 	t.Parallel()
 
 	logger, logs := newTestLogger()
-	longPath := "/api/" + strings.Repeat("p", 2*maxLoggedValueBytes)
-	longAgent := strings.Repeat("ä", maxLoggedValueBytes)
+	longMethod := strings.Repeat("M", tenKibibytes)
+	longPath := "/api/" + strings.Repeat("p", tenKibibytes)
+	longAgent := strings.Repeat("ä", tenKibibytes/len("ä"))
+	longPanic := strings.Repeat("v", tenKibibytes) + " cause"
 
 	request := newRequest(t, http.MethodGet, longPath)
+	request.Method = longMethod
 	request.Header.Set("User-Agent", longAgent)
 
-	serveChain(t, Options{Logger: logger, APIHandler: textHandler(http.StatusOK, "")}, request)
+	panicking := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(longPanic) //nolint:forbidigo // the recover middleware under test needs a panicking handler
+	})
+	serveChain(t, Options{Logger: logger, APIHandler: panicking}, request)
 
-	log := logs.String()
-	if strings.Contains(log, longPath) || strings.Contains(log, longAgent) {
-		t.Errorf("access log has an uncut client value: %d bytes", len(log))
+	records := strings.Split(strings.TrimSpace(logs.String()), "\n")
+	if len(records) != 2 {
+		t.Fatalf("log %q, want the panic record and the access record", logs.String())
 	}
 
-	for _, want := range []string{"path=" + truncateForLog(longPath), "user_agent=" + truncateForLog(longAgent)} {
-		if !strings.Contains(log, want) {
-			t.Errorf("access log %q lacks the cut value %q", log, want)
+	// The bound includes the marker, so no record holds MaxBytes bytes of a client value.
+	uncut := []string{"M", "p", "ä"}
+	for _, record := range records {
+		for _, letter := range uncut {
+			if strings.Contains(record, strings.Repeat(letter, logtext.MaxBytes/len(letter))) {
+				t.Errorf("record of %d bytes holds an uncut %q value", len(record), letter)
+			}
 		}
+
+		for _, want := range []string{"method=" + logtext.Truncate(longMethod), "path=" + logtext.Truncate(longPath)} {
+			if !strings.Contains(record, want) {
+				t.Errorf("record lacks the cut value %.40q...", want)
+			}
+		}
+	}
+
+	if strings.Contains(records[0], strings.Repeat("v", maxLoggedPanicBytes)) || !strings.Contains(records[0], "cause") {
+		t.Errorf("panic record of %d bytes, want the panic value cut to %d with its end kept", len(records[0]), maxLoggedPanicBytes)
+	}
+
+	if !strings.Contains(records[1], "user_agent="+logtext.Truncate(longAgent)) {
+		t.Errorf("access record %q lacks the cut User-Agent", records[1])
 	}
 }
 
-func TestTruncateForLog(t *testing.T) {
+// tenKibibytes is the size of the hostile client values in the truncation tests.
+const tenKibibytes = 10 << 10
+
+// streamPatterns are the quiet patterns M2-32 passes for the stream routes.
+func streamPatterns() []string {
+	return []string{
+		"GET /api/v1/playback/sessions/{sessionId}/file",
+		"GET /api/v1/playback/sessions/{sessionId}/hls/{fileName}",
+	}
+}
+
+func TestAccessLogLevelForQuietPatterns(t *testing.T) {
 	t.Parallel()
 
-	fits := strings.Repeat("a", maxLoggedValueBytes)
-	ascii := strings.Repeat("a", maxLoggedValueBytes+1)
-	// "€" is three bytes, so a cut at a fixed byte offset lands inside a sequence.
-	multiByte := strings.Repeat("€", maxLoggedValueBytes)
+	const (
+		session = "/api/v1/playback/sessions/0b8c6d4e-3f2a-4c1b-9d8e-7f6a5b4c3d2e"
+		segment = session + "/hls/segment-1.m4s"
+	)
 
 	tests := []struct {
-		name  string
-		value string
-		want  string
+		name      string
+		method    string
+		target    string
+		handler   http.Handler
+		wantLevel slog.Level
 	}{
-		{name: "empty", value: "", want: ""},
-		{name: "fits exactly", value: fits, want: fits},
-		{name: "ascii", value: ascii, want: ascii[:maxLoggedValueBytes-len(truncationMarker)] + truncationMarker},
-		{name: "multi-byte", value: multiByte, want: strings.Repeat("€", (maxLoggedValueBytes-len(truncationMarker))/len("€")) + truncationMarker},
+		{name: "segment ok", target: segment, handler: textHandler(http.StatusOK, "data"), wantLevel: slog.LevelDebug},
+		{name: "file partial content", target: session + "/file", handler: textHandler(http.StatusPartialContent, "data"), wantLevel: slog.LevelDebug},
+		{name: "file head", method: http.MethodHead, target: session + "/file", handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelDebug},
+		{name: "segment not modified", target: segment, handler: textHandler(http.StatusNotModified, ""), wantLevel: slog.LevelDebug},
+		{name: "segment nothing written", target: segment, handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), wantLevel: slog.LevelDebug},
+		{name: "segment bad request", target: segment, handler: textHandler(http.StatusBadRequest, ""), wantLevel: slog.LevelInfo},
+		{name: "segment not found", target: segment, handler: textHandler(http.StatusNotFound, ""), wantLevel: slog.LevelInfo},
+		{name: "segment not ready", target: segment, handler: textHandler(http.StatusServiceUnavailable, ""), wantLevel: slog.LevelInfo},
+		{name: "segment panic", target: segment, handler: panickingHandler(false), wantLevel: slog.LevelInfo},
+		{name: "segment aborted", target: segment, handler: abortingHandler(), wantLevel: slog.LevelInfo},
+		{name: "segment with another method", method: http.MethodPost, target: segment, handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelInfo},
+		{name: "nested below hls", target: session + "/hls/a/b", handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelInfo},
+		{name: "get session", target: session, handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelInfo},
+		{name: "stop session", method: http.MethodDelete, target: session, handler: textHandler(http.StatusNoContent, ""), wantLevel: slog.LevelInfo},
+		{name: "other api path", target: "/api/v1/health", handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelInfo},
+		{name: "web path", target: "/library/1", handler: textHandler(http.StatusOK, ""), wantLevel: slog.LevelInfo},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := truncateForLog(test.value)
-			if got != test.want {
-				t.Errorf("truncateForLog = %q, want %q", got, test.want)
+			logs := &syncBuffer{}
+			logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+			options := Options{Logger: logger, APIHandler: test.handler, Fallback: test.handler, QuietPatterns: streamPatterns()}
+
+			method := test.method
+			if method == "" {
+				method = http.MethodGet
 			}
 
-			if len(got) > maxLoggedValueBytes || !utf8.ValidString(got) {
-				t.Errorf("truncateForLog = %d bytes, valid UTF-8 %v; want at most %d valid bytes", len(got), utf8.ValidString(got), maxLoggedValueBytes)
+			serveAndRecoverAbort(t, options, newRequest(t, method, test.target))
+
+			want := "level=" + test.wantLevel.String() + ` msg="http request"`
+			if !strings.Contains(logs.String(), want) {
+				t.Errorf("log %q, want an access record with %q", logs.String(), want)
 			}
 		})
 	}
+}
+
+// serveAndRecoverAbort serves request through the chain and swallows the abort panic that
+// net/http would otherwise turn into a dropped connection.
+func serveAndRecoverAbort(t *testing.T, options Options, request *http.Request) {
+	t.Helper()
+
+	defer func() {
+		if recovered := recover(); recovered != nil && recovered != any(http.ErrAbortHandler) {
+			t.Errorf("panic %v escaped the chain, want only http.ErrAbortHandler", recovered)
+		}
+	}()
+
+	serveChain(t, options, request)
+}
+
+func TestNewQuietRoutesRejectsBadPatterns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		patterns []string
+	}{
+		{name: "empty", patterns: []string{""}},
+		{name: "unclosed wildcard", patterns: []string{"GET /api/v1/{id"}},
+		{name: "duplicate", patterns: []string{"GET /api/v1/x", "GET /api/v1/x"}},
+		{name: "conflicting wildcards", patterns: []string{"GET /api/v1/{a}/file", "GET /api/v1/{b}/file"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			routes, err := newQuietRoutes(test.patterns)
+			if err == nil || routes.mux != nil {
+				t.Errorf("newQuietRoutes(%q) = %v, %v, want an error", test.patterns, routes, err)
+			}
+		})
+	}
+}
+
+func TestQuietRoutesWithoutPatternsMatchNothing(t *testing.T) {
+	t.Parallel()
+
+	routes, err := newQuietRoutes(nil)
+	if err != nil {
+		t.Fatalf("newQuietRoutes(nil): %v", err)
+	}
+
+	if routes.match(newRequest(t, http.MethodGet, "/api/v1/playback/sessions/1/file")) {
+		t.Error("match without patterns = true, want false")
+	}
+}
+
+// TestRecoverRepanicsPlainAbortSentinel: net/http only stays silent for the sentinel itself
+// (it compares with ==); a wrapped abort would be logged with a stack.
+func TestRecoverRepanicsPlainAbortSentinel(t *testing.T) {
+	t.Parallel()
+
+	wrappedAbort := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(fmt.Errorf("stop streaming: %w", http.ErrAbortHandler)) //nolint:forbidigo // the recover middleware under test must normalise a wrapped abort
+	})
+	logger, logs := newTestLogger()
+
+	defer func() {
+		if recovered := recover(); recovered != any(http.ErrAbortHandler) {
+			t.Errorf("re-panicked %v, want the plain http.ErrAbortHandler", recovered)
+		}
+
+		if strings.Contains(logs.String(), "panicked") {
+			t.Errorf("log %q reports a deliberate abort as a panic", logs.String())
+		}
+	}()
+
+	recoverPanics(wrappedAbort, logger).ServeHTTP(httptest.NewRecorder(), newRequest(t, http.MethodGet, "/api/v1/x"))
 }

@@ -53,7 +53,7 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
 - (from M2-11 review) On Windows, reject `tools.ffmpeg` / `tools.ffprobe` that resolve (after
   `LookPath` with PATHEXT) to a `.bat` or `.cmd` file: `cmd.exe` re-parses such command lines and
   a media file name like `x&\host\s\evil&.mkv` could inject commands. Test it.
-- (from M2-08) `server.Options.QuietPathPrefixes`: quiet only the stream delivery paths (the file
+- (from M2-08) `server.Options.QuietPatterns` (M2-08 round 2 replaced QuietPathPrefixes): quiet only the stream delivery paths (the file
   and HLS routes under a session), not `/api/v1/playback/sessions/` as a whole – that would also
   quiet single-session GET/DELETE. Pick the narrowest prefix the stream routes allow (see the
   M2-08 review) and test that a session DELETE is still logged at info.
@@ -64,3 +64,9 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
   `/hls/` and `/file`). Quiet them by method + pattern (`GET /api/v1/playback/sessions/{id}/hls/{fileName}`,
   `GET /api/v1/playback/sessions/{id}/file`, checked via a private ServeMux) or by a quiet flag the
   stream handler sets; M2-08 round 2 provides the mechanism.
+- (from M2-08 r2) Use `server.Options.QuietPatterns = []string{"GET /api/v1/playback/sessions/{sessionId}/file", "GET /api/v1/playback/sessions/{sessionId}/hls/{fileName}"}`
+  (GET also matches HEAD). The body read deadline is `server.BodyReadTimeout` (server middleware).
+- (from M2-08 review r2) On quiet stream routes a failure after the 200 is sent (e.g. FFmpeg dies
+  mid-segment) would be logged at debug as status 200 if the handler just returns. Stream handlers
+  must log such failures themselves at warn or `panic(http.ErrAbortHandler)` so the request is
+  recorded as aborted at info.

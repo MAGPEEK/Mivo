@@ -57,3 +57,8 @@ shutdown (ADR 0022).
 - (from M2-11 review r2) `app` must not import `adapters/ffmpeg`, so `ffmpeg.ErrorOutput` cannot be
   used here. Instead M2-32 (or a small follow-up in adapters/ffmpeg) injects a `*slog.Logger` into
   the prober, which logs the stderr tail at debug level itself; the scan only records the code.
+- (from M2-12 r2) The walker port has the signature
+  `Walk(ctx, root string, visit func(...) error) (skipped []string, err error)`: `skipped` lists
+  root-relative paths that could not be read (directories, entries, directories beyond the depth
+  limit of 64). Declare the port with exactly this shape; keep catalog entries below any skipped
+  prefix. A root lost mid-walk returns `domain.ErrUnavailable`.

@@ -289,6 +289,14 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 		},
 		{name: "missing logger", options: server.Options{Address: ":0", APIHandler: apiHandler}},
 		{name: "missing api handler", options: server.Options{Address: ":0", Logger: discardLogger()}},
+		{
+			name:    "empty quiet pattern",
+			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, QuietPatterns: []string{""}},
+		},
+		{
+			name:    "conflicting quiet patterns",
+			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, QuietPatterns: []string{"GET /a/{x}", "GET /a/{y}"}},
+		},
 	}
 
 	for _, test := range tests {

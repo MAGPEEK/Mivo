@@ -10,6 +10,7 @@ import (
 	"net/http"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	"github.com/magpeek/mivo/internal/domain/system"
 )
@@ -103,20 +104,19 @@ func (api *API) routerOptions(mux *http.ServeMux) apigen.StdHTTPServerOptions {
 }
 
 // writeRequestError answers a request the generated code could not parse or bind. The
-// error text describes the client's mistake but may quote internals, so it is only logged.
-// A body above the body limit is answered with 413 instead of 400, also when the decoder
-// failed on its content before it reached the limit.
+// error text describes the client's mistake but may quote internals, so it is only logged,
+// cut like every client-controlled value. A body above the body limit is answered with 413
+// instead of 400, also when the decoder failed on its content before it reached the limit.
 func (api *API) writeRequestError(writer http.ResponseWriter, request *http.Request, err error) {
-	api.logger.DebugContext(request.Context(), "rejected malformed request",
-		requestAttributes(request, slog.Any("error", err))...)
-
+	problem := NewProblem(http.StatusBadRequest, CodeBadRequest)
 	if isBodyTooLarge(err) || remainingBodyTooLarge(request) {
-		WriteProblem(writer, payloadTooLargeProblem())
-
-		return
+		problem = payloadTooLargeProblem()
 	}
 
-	WriteProblem(writer, NewProblem(http.StatusBadRequest, CodeBadRequest))
+	api.logger.DebugContext(request.Context(), "rejected malformed request",
+		logtext.RequestAttributes(request, slog.Int("status", int(problem.Status)), logtext.Error(err))...)
+
+	WriteProblem(writer, problem)
 }
 
 // writeResponseError answers an error returned by a handler or by encoding or writing its
@@ -125,8 +125,9 @@ func (api *API) writeResponseError(writer http.ResponseWriter, request *http.Req
 	if responseAbandoned(writer, request) {
 		// Typically a client that went away mid-request: nobody reads a problem, and a
 		// second status line would only make net/http log a superfluous WriteHeader call.
+		// The cause may be a client mistake quoting its input, so it is cut.
 		api.logger.DebugContext(request.Context(), "api response abandoned",
-			requestAttributes(request, slog.Any("error", err))...)
+			logtext.RequestAttributes(request, logtext.Error(err))...)
 
 		return
 	}
@@ -137,16 +138,17 @@ func (api *API) writeResponseError(writer http.ResponseWriter, request *http.Req
 	case problem.Status == http.StatusInternalServerError:
 		// The client only sees the generic problem; the cause is in the log.
 		api.logger.ErrorContext(request.Context(), "api request failed",
-			requestAttributes(request, slog.Any("error", err))...)
+			logtext.RequestAttributes(request, slog.Any("error", err))...)
 	case problem.Status > http.StatusInternalServerError:
 		// For example a shutdown in progress (ErrUnavailable): worth a trace, but no
 		// server fault.
 		api.logger.WarnContext(request.Context(), "api request could not be served",
-			requestAttributes(request, slog.Any("error", err))...)
+			logtext.RequestAttributes(request, slog.Any("error", err))...)
 	default:
 		// A client mistake such as an unknown ID; the cause helps when debugging a client.
+		// It may quote the client's input, so it is cut.
 		api.logger.DebugContext(request.Context(), "api request rejected",
-			requestAttributes(request, slog.Any("error", err))...)
+			logtext.RequestAttributes(request, logtext.Error(err))...)
 	}
 
 	WriteProblem(writer, problem)
@@ -188,7 +190,7 @@ type headerReporter interface {
 }
 
 // responseAbandoned reports whether a problem can no longer reach the client: its request
-// context is done (disconnect or server shutdown) or the status line was already sent.
+// context is done (disconnect or server Close) or the status line was already sent.
 func responseAbandoned(writer http.ResponseWriter, request *http.Request) bool {
 	if request.Context().Err() != nil {
 		return true
@@ -197,12 +199,4 @@ func responseAbandoned(writer http.ResponseWriter, request *http.Request) bool {
 	reporter, ok := writer.(headerReporter)
 
 	return ok && reporter.HeadersSent()
-}
-
-func requestAttributes(request *http.Request, extra ...any) []any {
-	return append([]any{
-		slog.String("method", request.Method),
-		slog.String("path", request.URL.Path),
-		slog.String("request_id", requestid.FromContext(request.Context())),
-	}, extra...)
 }
