@@ -1,0 +1,11 @@
+{
+  "home": {
+    "heading": "Home",
+    "placeholder": "Your libraries will appear here."
+  },
+  "notFound": {
+    "heading": "Page not found",
+    "message": "The page you are looking for does not exist.",
+    "backHome": "Back to home"
+  }
+}

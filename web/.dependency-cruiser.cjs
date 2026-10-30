@@ -1,10 +1,12 @@
 // Layer rules for the web workspace (ADR 0005, ADR 0019). Paths are relative to web/.
 // Rules for apps/<app>/src/{app,features,shared} apply as soon as those folders exist.
 
-// React, React DOM, React-specific libraries and their types, whether resolved through
-// node_modules (including pnpm's .pnpm store) or left unresolved because they are not installed.
-const reactModules =
-  "(^|node_modules/)(react|react-dom|react-[^/]+|@tanstack/react-[^/]+|@types/react[^/]*)(/|$)";
+// React itself and every React-specific package, scoped or not: react, react-dom, react-i18next,
+// @types/react, @tanstack/react-query, @radix-ui/react-slot, @testing-library/react, ...
+// Matches whether the import resolved through node_modules (including pnpm's .pnpm store) or
+// stayed unresolved because the package is not installed. Written as flat alternatives because
+// dependency-cruiser rejects nested quantifiers as unsafe regular expressions.
+const reactModules = "(^|node_modules/)(react|react-[^/]+|@[^/]+/react|@[^/]+/react-[^/]+)(/|$)";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -39,9 +41,10 @@ module.exports = {
     },
     {
       name: "framework-free-packages-not-to-react",
-      comment: "player-core and api-client stay framework-free so the TV app can reuse them.",
+      comment:
+        "player-core, api-client and ui-tokens stay framework-free so the TV app can reuse them.",
       severity: "error",
-      from: { path: "^packages/(player-core|api-client)/" },
+      from: { path: "^packages/(player-core|api-client|ui-tokens)/" },
       to: { path: reactModules },
     },
     {

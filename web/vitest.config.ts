@@ -23,7 +23,10 @@ export default defineConfig({
       include: ["packages/*/src/**/*.{ts,tsx}", "apps/*/src/**/*.{ts,tsx}"],
       exclude: [
         "**/generated/**",
+        "**/*.gen.ts",
         "**/*.d.ts",
+        // App entry points only wire providers into the DOM; the providers are tested directly.
+        "apps/*/src/main.tsx",
         "**/*.{test,spec}.{ts,tsx}",
         "**/test/**",
         "**/e2e/**",

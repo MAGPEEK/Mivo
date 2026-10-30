@@ -4,10 +4,16 @@
  *   @import "tailwindcss";
  *   @import "@mivo/ui-tokens/theme.css";
  *
- * The values mirror the TypeScript tokens in this package; test/drift.test.ts fails when they
- * differ (hex digits compare case-insensitively, Prettier lowercases them). The default Tailwind colours, radii, shadows and text sizes are removed so that
- * components can only use design tokens (no `bg-orange-500`). Sizes use the web scale; the TV
- * app overrides them with the 10-foot scale.
+ * The values mirror the TypeScript tokens in this package. test/drift.test.ts checks every
+ * declaration in both directions: each token has its variable with the same value, and the
+ * block declares no variable without a token. Hex digits compare case-insensitively because
+ * Prettier lowercases them.
+ *
+ * The default Tailwind colours, radii, shadows and text sizes are removed so that components
+ * can only use design tokens (no `bg-orange-500`). The colour reset also removes `white` and
+ * `black`; use `text`, `background` or another token instead. `transparent` and `current`
+ * stay available because they are not theme variables. Sizes use the web scale; the TV app
+ * overrides them with the 10-foot scale.
  */
 @theme {
   --color-*: initial;
@@ -25,8 +31,8 @@
   --color-transcode: #f5b544;
 
   --font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif;
+    "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-mono:
     ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 

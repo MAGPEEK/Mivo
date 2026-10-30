@@ -1,0 +1,14 @@
+@import "tailwindcss";
+@import "@mivo/ui-tokens/theme.css";
+
+@layer base {
+  html {
+    color-scheme: dark;
+    @apply bg-background font-sans text-text antialiased;
+  }
+
+  /* One token-based focus ring for every interactive element, visible on keyboard use. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+}

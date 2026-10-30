@@ -95,3 +95,24 @@ describe("theme.css typography, spacing, radii and shadows", () => {
     expect(declarations.get(`--shadow-${toKebabCase(name)}`)).toBe(value);
   });
 });
+
+describe("theme.css declarations", () => {
+  // Every variable a TypeScript token maps to. The reverse check below fails when theme.css
+  // declares a variable no token backs, in any namespace, not only colours.
+  const expectedProperties = [
+    ...tokenColorsByProperty.keys(),
+    "--font-sans",
+    "--font-mono",
+    ...Object.keys(typeScale.web).flatMap((step) => [
+      `--text-${step}`,
+      `--text-${step}--line-height`,
+    ]),
+    "--spacing",
+    ...Object.keys(radii).map((name) => `--radius-${name}`),
+    ...Object.keys(shadows).map((name) => `--shadow-${toKebabCase(name)}`),
+  ];
+
+  it("declares exactly the variables of the TypeScript tokens", () => {
+    expect([...declarations.keys()].toSorted()).toEqual(expectedProperties.toSorted());
+  });
+});

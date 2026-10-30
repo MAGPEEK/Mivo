@@ -6,9 +6,13 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import sonarjs from "eslint-plugin-sonarjs";
+import { createRequire } from "node:module";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import { configs as typeScriptConfigs } from "typescript-eslint";
+
+// Node 24 strips the types of this plain-constant module, so the guard follows a rename.
+import { productName } from "./packages/ui-tokens/src/brand.ts";
 
 const maxCognitiveComplexity = 15;
 const maxLinesPerFunction = 50;
@@ -17,14 +21,55 @@ const maxParams = 4;
 const sourceFiles = ["**/*.{ts,tsx,js,mjs,cjs,jsx}"];
 const typeScriptFiles = ["**/*.{ts,tsx}"];
 const reactFiles = ["**/*.{tsx,jsx}"];
+// Hooks live in .ts files too, so the hook rules cover every app source file.
+const appSourceFiles = ["apps/**/*.{ts,tsx}"];
 const plainJavaScriptFiles = ["**/*.{js,mjs,cjs,jsx}"];
 const testFiles = ["**/*.{test,spec}.{ts,tsx}", "**/test/**", "**/e2e/**"];
+const tokenFiles = ["packages/ui-tokens/**"];
+const brandFile = "packages/ui-tokens/src/brand.ts";
 
-// Matches #rgb, #rgba, #rrggbb and #rrggbbaa when not followed by more word characters, so
-// fragments like "#section-2" stay allowed. Colours belong in packages/ui-tokens (ADR 0011).
-const hexColour = String.raw`/#(?:[0-9A-Fa-f]{3,4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})(?![\w-])/`;
+// eslint-plugin-react cannot detect the version from the workspace root (pnpm isolates react
+// in apps/web), so it reads the installed version there and stays in sync on upgrades.
+const reactVersion = createRequire(new URL("apps/web/package.json", import.meta.url))(
+  "react/package.json",
+).version;
+
+// Colours belong in packages/ui-tokens (ADR 0011). Flagged:
+// - #rgb, #rgba, #rrggbb and #rrggbbaa at the start of a string or after a CSS delimiter
+//   ("[", "(", ":", ",") or a Tailwind arbitrary-value space ("_"), e.g. "#fff",
+//   "bg-[#ff6b57]", "color: #fff", "shadow-[0_1px_#fff]", "border-[1px_solid_#f00]".
+// - #rrggbb and #rrggbbaa after whitespace, e.g. "1px solid #ff6b57".
+// Trade-off: 3- and 4-digit hex after whitespace ("1px solid #fff") stays unflagged, because
+// it is indistinguishable from text such as "Episode #123" or "Season #12". The reverse cost
+// is that a 6- or 8-digit hex-only word after a space ("Ticket #123456", "#facade") is
+// rejected; such text belongs in the locale files anyway. Fragments such as "/library#add"
+// or "#section-2" stay allowed. "_" may follow a colour ("_#fff_inset"), any other word
+// character or "-" may not.
+const hexDigits = "[0-9A-Fa-f]";
+const anyHexColour = `#(?:${hexDigits}{3,4}|${hexDigits}{6}|${hexDigits}{8})`;
+const longHexColour = `#(?:${hexDigits}{6}|${hexDigits}{8})`;
+const hexColour = String.raw`/(?:(?:^|[[(:,_]\s*)${anyHexColour}|\s${longHexColour})(?![0-9A-Za-z-])/`;
 const hexColourMessage =
   "Hex colour literals are only allowed in packages/ui-tokens. Use a design token instead.";
+
+// The working title may appear in exactly one source file (ADR 0002). Case-sensitive, so the
+// npm scope and lowercase ids stay allowed. Escaped, because esquery reads it as a regex.
+const productNameLiteral = `/${productName.replace(/[.*+?^${}()|[\]\\/]/g, String.raw`\$&`)}/`;
+const productNameMessage = `The product name is configurable. Import productName from @mivo/ui-tokens (${brandFile}) instead.`;
+
+/**
+ * Builds no-restricted-syntax entries that reject string, template and JSX text literals
+ * matching an esquery regular expression.
+ * @param {string} pattern esquery regular expression literal, e.g. "/abc/"
+ * @param {string} message error message
+ */
+function restrictedLiterals(pattern, message) {
+  return [
+    { selector: `Literal[value=${pattern}]`, message },
+    { selector: `TemplateElement[value.raw=${pattern}]`, message },
+    { selector: `JSXText[value=${pattern}]`, message },
+  ];
+}
 
 export default defineConfig(
   globalIgnores([
@@ -90,7 +135,8 @@ export default defineConfig(
       "import-x/resolver-next": [
         createTypeScriptImportResolver({
           alwaysTryTypes: true,
-          project: ["packages/*/tsconfig.json", "apps/*/tsconfig.json"],
+          // The solution config references every project, so one entry covers the workspace.
+          project: "tsconfig.json",
         }),
       ],
     },
@@ -118,27 +164,42 @@ export default defineConfig(
     extends: [
       react.configs.flat.recommended,
       react.configs.flat["jsx-runtime"],
-      reactHooks.configs.flat.recommended,
       jsxA11y.flatConfigs.strict,
     ],
     languageOptions: {
       globals: globals.browser,
     },
     settings: {
-      // Explicit, because react is not installed at the workspace root (pnpm isolation).
-      react: { version: "19.2" },
+      react: { version: reactVersion },
     },
   },
 
   {
+    files: appSourceFiles,
+    extends: [reactHooks.configs.flat.recommended],
+  },
+
+  // no-restricted-syntax options do not merge across config objects, so each file group lists
+  // every restriction that applies to it.
+  {
     files: sourceFiles,
-    ignores: ["packages/ui-tokens/**"],
+    ignores: tokenFiles,
     rules: {
       "no-restricted-syntax": [
         "error",
-        { selector: `Literal[value=${hexColour}]`, message: hexColourMessage },
-        { selector: `TemplateElement[value.raw=${hexColour}]`, message: hexColourMessage },
-        { selector: `JSXText[value=${hexColour}]`, message: hexColourMessage },
+        ...restrictedLiterals(hexColour, hexColourMessage),
+        ...restrictedLiterals(productNameLiteral, productNameMessage),
+      ],
+    },
+  },
+
+  {
+    files: tokenFiles,
+    ignores: [brandFile],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...restrictedLiterals(productNameLiteral, productNameMessage),
       ],
     },
   },

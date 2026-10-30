@@ -46,7 +46,7 @@ describe("colors", () => {
 describe("text contrast (>= 4.5:1)", () => {
   it.each([
     ...pairs(["text", "textMuted"], ["background", "surface", "surfaceRaised"]),
-    ...pairs(["onAccent"], ["accent"]),
+    ...pairs(["onAccent"], ["accent", "accentHover"]),
   ])("$foreground on $background", ({ foreground, background }) => {
     expect(contrastRatio(colors[foreground], colors[background])).toBeGreaterThanOrEqual(
       textContrast,
@@ -55,12 +55,14 @@ describe("text contrast (>= 4.5:1)", () => {
 });
 
 describe("non-text contrast (>= 3:1)", () => {
-  it.each(pairs(["accent", "directPlay", "directStream", "transcode"], ["background", "surface"]))(
-    "$foreground on $background",
-    ({ foreground, background }) => {
-      expect(contrastRatio(colors[foreground], colors[background])).toBeGreaterThanOrEqual(
-        nonTextContrast,
-      );
-    },
-  );
+  it.each(
+    pairs(
+      ["accent", "directPlay", "directStream", "transcode"],
+      ["background", "surface", "surfaceRaised"],
+    ),
+  )("$foreground on $background", ({ foreground, background }) => {
+    expect(contrastRatio(colors[foreground], colors[background])).toBeGreaterThanOrEqual(
+      nonTextContrast,
+    );
+  });
 });

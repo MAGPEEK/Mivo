@@ -1,0 +1,11 @@
+{
+  "home": {
+    "heading": "Startseite",
+    "placeholder": "Hier erscheinen bald deine Bibliotheken."
+  },
+  "notFound": {
+    "heading": "Seite nicht gefunden",
+    "message": "Die gesuchte Seite gibt es nicht.",
+    "backHome": "Zur Startseite"
+  }
+}

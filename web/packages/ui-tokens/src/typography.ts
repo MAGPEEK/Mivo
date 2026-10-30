@@ -1,9 +1,14 @@
 /**
- * Font stack with Inter first. The app self-hosts Inter (ADR 0010); the system fonts only
- * bridge the time until it has loaded.
+ * Family name of the self-hosted variable Inter. The apps bundle it through
+ * `@fontsource-variable/inter` (ADR 0010), which registers the font under this name.
  */
-export const fontStackSans =
-  'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+export const selfHostedSansFamily = "Inter Variable";
+
+/**
+ * Font stack with the self-hosted Inter first. A locally installed Inter and the system fonts
+ * only bridge the time until it has loaded.
+ */
+export const fontStackSans = `"${selfHostedSansFamily}", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
 
 /** Monospace stack for technical details such as codec chips and the stream info overlay. */
 export const fontStackMono =

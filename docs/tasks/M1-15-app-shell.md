@@ -44,3 +44,7 @@ a search field (Ctrl+K), an empty home page, and the server version loaded live 
   and must not import from `src/features/**`. The version footer is composed in
   `src/app/layout` from `features/system`.
 - `staleTime: Infinity` is fine for system info. Retry once.
+
+## Review carry-over from M1-14 (round 2)
+- `web/eslint.config.js`: extend the hex-rule comment – text after `(` or `,` such as "Fixes (#123)" is also flagged and belongs in locale files.
+- `web/apps/web/test/fontFamily.test.ts`: resolve the bare `@fontsource-variable/inter` specifier (as `main.tsx` imports it) instead of `/index.css`.

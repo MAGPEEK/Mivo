@@ -15,6 +15,7 @@ export {
   fontStackSans,
   fontWeights,
   minimumTenFootFontSize,
+  selfHostedSansFamily,
   typeScale,
   type TypeScale,
   type TypeScaleStep,

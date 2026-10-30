@@ -5,6 +5,7 @@ import {
   fontWeights,
   minimumTenFootFontSize,
   radii,
+  selfHostedSansFamily,
   spacing,
   spacingUnit,
   tenFootSafeArea,
@@ -18,8 +19,11 @@ const minimumRadius = 6;
 const maximumRadius = 10;
 
 describe("typography", () => {
-  it("puts Inter first in the font stack", () => {
-    expect(fontStackSans.split(",")[0]).toBe("Inter");
+  it("puts the self-hosted Inter first and a locally installed Inter second", () => {
+    const [first, second] = fontStackSans.split(",").map((family) => family.trim());
+
+    expect(first).toBe(`"${selfHostedSansFamily}"`);
+    expect(second).toBe("Inter");
   });
 
   it("orders the font weights from light to heavy", () => {
