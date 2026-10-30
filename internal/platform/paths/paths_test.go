@@ -27,107 +27,120 @@ func envOf(vars map[string]string) func(string) (string, bool) {
 	}
 }
 
-func windowsDirs(base string) paths.Directories {
+func windowsEnv(vars map[string]string) paths.Environment {
+	return paths.Environment{GOOS: "windows", LookupEnv: envOf(vars)}
+}
+
+func linuxEnv(vars map[string]string) paths.Environment {
+	return paths.Environment{GOOS: "linux", LookupEnv: envOf(vars)}
+}
+
+func at(path string) paths.Default {
+	return paths.Default{Path: path}
+}
+
+func windowsDirs(base string) paths.DefaultDirectories {
 	root := filepath.Join(base, brand.DisplayName)
 
-	return paths.Directories{
-		Config:    root,
-		Data:      filepath.Join(root, "data"),
-		Cache:     filepath.Join(root, "cache"),
-		Transcode: filepath.Join(root, "transcode"),
+	return paths.DefaultDirectories{
+		Config:    at(root),
+		Data:      at(filepath.Join(root, "data")),
+		Cache:     at(filepath.Join(root, "cache")),
+		Transcode: at(filepath.Join(root, "transcode")),
 	}
 }
 
-func xdgDirs(configHome, dataHome, cacheHome string) paths.Directories {
+func xdgDirs(configHome, dataHome, cacheHome string) paths.DefaultDirectories {
 	cache := filepath.Join(cacheHome, brand.ID)
 
-	return paths.Directories{
-		Config:    filepath.Join(configHome, brand.ID),
-		Data:      filepath.Join(dataHome, brand.ID),
-		Cache:     cache,
-		Transcode: filepath.Join(cache, "transcode"),
+	return paths.DefaultDirectories{
+		Config:    at(filepath.Join(configHome, brand.ID)),
+		Data:      at(filepath.Join(dataHome, brand.ID)),
+		Cache:     at(cache),
+		Transcode: at(filepath.Join(cache, "transcode")),
 	}
+}
+
+func linuxHomeDirs() paths.DefaultDirectories {
+	return xdgDirs(
+		filepath.Join(linuxHome, ".config"),
+		filepath.Join(linuxHome, ".local", "share"),
+		filepath.Join(linuxHome, ".cache"),
+	)
 }
 
 func TestDefaults(t *testing.T) {
 	t.Parallel()
 
+	windowsFallback := windowsDirs(filepath.Join(windowsHome, "AppData", "Local"))
+
 	tests := []struct {
 		name string
 		env  paths.Environment
-		want paths.Directories
+		want paths.DefaultDirectories
 	}{
 		{
 			name: "windows uses LOCALAPPDATA and the display name",
-			env: paths.Environment{
-				GOOS:      "windows",
-				LookupEnv: envOf(map[string]string{"LOCALAPPDATA": windowsLocalAppData}),
-				HomeDir:   windowsHome,
-			},
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": windowsLocalAppData, "USERPROFILE": windowsHome}),
 			want: windowsDirs(windowsLocalAppData),
 		},
 		{
-			name: "windows falls back to the home directory without LOCALAPPDATA",
-			env:  paths.Environment{GOOS: "windows", HomeDir: windowsHome},
-			want: windowsDirs(filepath.Join(windowsHome, "AppData", "Local")),
+			name: "windows needs no home directory when LOCALAPPDATA is set",
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": windowsLocalAppData}),
+			want: windowsDirs(windowsLocalAppData),
+		},
+		{
+			name: "windows accepts a UNC LOCALAPPDATA",
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": `\\server\share\appdata`}),
+			want: windowsDirs(`\\server\share\appdata`),
+		},
+		{
+			name: "windows falls back to USERPROFILE without LOCALAPPDATA",
+			env:  windowsEnv(map[string]string{"USERPROFILE": windowsHome}),
+			want: windowsFallback,
 		},
 		{
 			name: "windows treats an empty LOCALAPPDATA as unset",
-			env: paths.Environment{
-				GOOS:      "windows",
-				LookupEnv: envOf(map[string]string{"LOCALAPPDATA": ""}),
-				HomeDir:   windowsHome,
-			},
-			want: windowsDirs(filepath.Join(windowsHome, "AppData", "Local")),
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": "", "USERPROFILE": windowsHome}),
+			want: windowsFallback,
+		},
+		{
+			name: "windows ignores a relative LOCALAPPDATA",
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": `AppData\Local`, "USERPROFILE": "C:/Users/alice"}),
+			want: windowsDirs(filepath.Join("C:/Users/alice", "AppData", "Local")),
+		},
+		{
+			name: "windows ignores a LOCALAPPDATA without drive",
+			env:  windowsEnv(map[string]string{"LOCALAPPDATA": `\AppData`, "USERPROFILE": windowsHome}),
+			want: windowsFallback,
 		},
 		{
 			name: "linux uses home fallbacks without XDG variables",
-			env:  paths.Environment{GOOS: "linux", LookupEnv: envOf(nil), HomeDir: linuxHome},
-			want: xdgDirs(
-				filepath.Join(linuxHome, ".config"),
-				filepath.Join(linuxHome, ".local", "share"),
-				filepath.Join(linuxHome, ".cache"),
-			),
+			env:  linuxEnv(map[string]string{"HOME": linuxHome}),
+			want: linuxHomeDirs(),
 		},
 		{
 			name: "linux honours absolute XDG variables",
-			env: paths.Environment{
-				GOOS: "linux",
-				LookupEnv: envOf(map[string]string{
-					"XDG_CONFIG_HOME": "/xdg/config",
-					"XDG_DATA_HOME":   "/xdg/data",
-					"XDG_CACHE_HOME":  "/xdg/cache",
-				}),
-				HomeDir: linuxHome,
-			},
+			env: linuxEnv(map[string]string{
+				"XDG_CONFIG_HOME": "/xdg/config",
+				"XDG_DATA_HOME":   "/xdg/data",
+				"XDG_CACHE_HOME":  "/xdg/cache",
+				"HOME":            linuxHome,
+			}),
 			want: xdgDirs("/xdg/config", "/xdg/data", "/xdg/cache"),
 		},
 		{
 			name: "linux ignores relative and empty XDG variables",
-			env: paths.Environment{
-				GOOS: "linux",
-				LookupEnv: envOf(map[string]string{
-					"XDG_CONFIG_HOME": "relative/config",
-					"XDG_DATA_HOME":   "",
-				}),
-				HomeDir: linuxHome,
-			},
-			want: xdgDirs(
-				filepath.Join(linuxHome, ".config"),
-				filepath.Join(linuxHome, ".local", "share"),
-				filepath.Join(linuxHome, ".cache"),
-			),
+			env: linuxEnv(map[string]string{
+				"XDG_CONFIG_HOME": "relative/config",
+				"XDG_DATA_HOME":   "",
+				"HOME":            linuxHome,
+			}),
+			want: linuxHomeDirs(),
 		},
 		{
 			name: "linux needs no home directory when all XDG variables are set",
-			env: paths.Environment{
-				GOOS: "linux",
-				LookupEnv: envOf(map[string]string{
-					"XDG_CONFIG_HOME": "/c",
-					"XDG_DATA_HOME":   "/d",
-					"XDG_CACHE_HOME":  "/k",
-				}),
-			},
+			env:  linuxEnv(map[string]string{"XDG_CONFIG_HOME": "/c", "XDG_DATA_HOME": "/d", "XDG_CACHE_HOME": "/k"}),
 			want: xdgDirs("/c", "/d", "/k"),
 		},
 	}
@@ -136,51 +149,56 @@ func TestDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := paths.Defaults(tt.env)
-			if err != nil {
-				t.Fatalf("Defaults: %v", err)
-			}
-
-			if got != tt.want {
+			if got := paths.Defaults(tt.env); got != tt.want {
 				t.Errorf("Defaults = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestDefaultsWithoutHomeDir(t *testing.T) {
+// directoriesByName lets the tests address a DefaultDirectories field by name.
+func directoriesByName(dirs paths.DefaultDirectories) map[string]paths.Default {
+	return map[string]paths.Default{
+		"config": dirs.Config, "data": dirs.Data, "cache": dirs.Cache, "transcode": dirs.Transcode,
+	}
+}
+
+func TestDefaultsWithoutUsableHome(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		env         paths.Environment
-		wantVarName string
+		name string
+		env  paths.Environment
+		// failing maps every directory without default to the variables its error names;
+		// the other directories must have a default.
+		failing map[string][]string
 	}{
 		{
-			name:        "windows without LOCALAPPDATA",
-			env:         paths.Environment{GOOS: "windows"},
-			wantVarName: "LOCALAPPDATA",
-		},
-		{
-			name:        "linux without XDG_CONFIG_HOME",
-			env:         paths.Environment{GOOS: "linux"},
-			wantVarName: "XDG_CONFIG_HOME",
-		},
-		{
-			name: "linux without XDG_DATA_HOME",
-			env: paths.Environment{
-				GOOS:      "linux",
-				LookupEnv: envOf(map[string]string{"XDG_CONFIG_HOME": "/c"}),
+			name: "windows without LOCALAPPDATA and USERPROFILE",
+			env:  windowsEnv(nil),
+			failing: map[string][]string{
+				"config": {"LOCALAPPDATA", "USERPROFILE"}, "data": {"LOCALAPPDATA", "USERPROFILE"},
+				"cache": {"LOCALAPPDATA", "USERPROFILE"}, "transcode": {"LOCALAPPDATA", "USERPROFILE"},
 			},
-			wantVarName: "XDG_DATA_HOME",
 		},
 		{
-			name: "linux without XDG_CACHE_HOME",
-			env: paths.Environment{
-				GOOS:      "linux",
-				LookupEnv: envOf(map[string]string{"XDG_CONFIG_HOME": "/c", "XDG_DATA_HOME": "/d"}),
+			name: "windows with a relative USERPROFILE",
+			env:  windowsEnv(map[string]string{"USERPROFILE": `Users\alice`}),
+			failing: map[string][]string{
+				"config": {"USERPROFILE"}, "data": {"USERPROFILE"}, "cache": {"USERPROFILE"}, "transcode": {"USERPROFILE"},
 			},
-			wantVarName: "XDG_CACHE_HOME",
+		},
+		{
+			name:    "linux without XDG_CONFIG_HOME only loses the config directory",
+			env:     linuxEnv(map[string]string{"XDG_DATA_HOME": "/d", "XDG_CACHE_HOME": "/k"}),
+			failing: map[string][]string{"config": {"XDG_CONFIG_HOME", "HOME"}},
+		},
+		{
+			name: "linux with a relative home directory",
+			env:  linuxEnv(map[string]string{"XDG_CONFIG_HOME": "/c", "HOME": "home/alice"}),
+			failing: map[string][]string{
+				"data": {"XDG_DATA_HOME", "HOME"}, "cache": {"XDG_CACHE_HOME", "HOME"}, "transcode": {"XDG_CACHE_HOME"},
+			},
 		},
 	}
 
@@ -188,15 +206,32 @@ func TestDefaultsWithoutHomeDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := paths.Defaults(tt.env)
-			if !errors.Is(err, paths.ErrNoHomeDir) {
-				t.Fatalf("Defaults error = %v, want ErrNoHomeDir", err)
-			}
-
-			if !strings.Contains(err.Error(), tt.wantVarName) {
-				t.Errorf("Defaults error = %q, want it to name %s", err, tt.wantVarName)
+			for name, dir := range directoriesByName(paths.Defaults(tt.env)) {
+				assertDefault(t, name, dir, tt.failing[name])
 			}
 		})
+	}
+}
+
+func assertDefault(t *testing.T, name string, dir paths.Default, wantVariables []string) {
+	t.Helper()
+
+	if wantVariables == nil {
+		if dir.Err != nil || dir.Path == "" {
+			t.Errorf("%s = %+v, want a default", name, dir)
+		}
+
+		return
+	}
+
+	if !errors.Is(dir.Err, paths.ErrNoHomeDir) || dir.Path != "" {
+		t.Fatalf("%s = %+v, want ErrNoHomeDir and no path", name, dir)
+	}
+
+	for _, variable := range wantVariables {
+		if !strings.Contains(dir.Err.Error(), variable) {
+			t.Errorf("%s error = %q, want it to name %s", name, dir.Err, variable)
+		}
 	}
 }
 
@@ -252,9 +287,12 @@ func TestConfigDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			env := paths.Environment{GOOS: "linux", LookupEnv: envOf(tt.vars), HomeDir: linuxHome}
+			vars := map[string]string{"HOME": linuxHome}
+			for key, value := range tt.vars {
+				vars[key] = value
+			}
 
-			got, err := paths.ConfigDir(tt.flagValue, env)
+			got, err := paths.ConfigDir(tt.flagValue, linuxEnv(vars))
 			if err != nil {
 				t.Fatalf("ConfigDir: %v", err)
 			}
@@ -270,24 +308,34 @@ func TestConfigDirErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name    string
-		env     paths.Environment
-		wantErr error
-		wantMsg string
+		name      string
+		flagValue string
+		env       paths.Environment
+		wantErr   error
+		wantMsg   string
 	}{
 		{
-			name: "empty env variable",
-			env: paths.Environment{
-				GOOS:      "linux",
-				LookupEnv: envOf(map[string]string{paths.ConfigDirEnv(): ""}),
-				HomeDir:   linuxHome,
-			},
+			name:    "empty env variable",
+			env:     linuxEnv(map[string]string{paths.ConfigDirEnv(): "", "HOME": linuxHome}),
 			wantErr: paths.ErrEmptyPath,
 			wantMsg: paths.ConfigDirEnv(),
 		},
 		{
+			name:    "env variable with home shorthand",
+			env:     linuxEnv(map[string]string{paths.ConfigDirEnv(): "~/mivo", "HOME": linuxHome}),
+			wantErr: paths.ErrHomeShorthand,
+			wantMsg: paths.ConfigDirEnv(),
+		},
+		{
+			name:      "flag with home shorthand",
+			flagValue: "~",
+			env:       linuxEnv(map[string]string{"HOME": linuxHome}),
+			wantErr:   paths.ErrHomeShorthand,
+			wantMsg:   "flag value",
+		},
+		{
 			name:    "no default without home directory",
-			env:     paths.Environment{GOOS: "linux"},
+			env:     linuxEnv(nil),
 			wantErr: paths.ErrNoHomeDir,
 			wantMsg: "default config directory",
 		},
@@ -297,7 +345,7 @@ func TestConfigDirErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := paths.ConfigDir("", tt.env)
+			_, err := paths.ConfigDir(tt.flagValue, tt.env)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("ConfigDir error = %v, want %v", err, tt.wantErr)
 			}
@@ -309,16 +357,23 @@ func TestConfigDirErrors(t *testing.T) {
 	}
 }
 
-func TestHostEnvironment(t *testing.T) {
+func TestHostEnvironmentUsesTheGivenLookup(t *testing.T) {
 	t.Parallel()
 
-	env := paths.HostEnvironment()
+	env := paths.HostEnvironment(envOf(map[string]string{"ONLY_HERE": "injected"}))
 	if env.GOOS != runtime.GOOS {
 		t.Errorf("GOOS = %q, want %q", env.GOOS, runtime.GOOS)
 	}
 
-	if env.LookupEnv == nil {
-		t.Error("LookupEnv is nil, want os.LookupEnv")
+	if value, ok := env.Lookup("ONLY_HERE"); !ok || value != "injected" {
+		t.Errorf("Lookup(ONLY_HERE) = (%q, %v), want the injected value", value, ok)
+	}
+
+	// The home directory comes from the injected lookup too, never from the host.
+	for _, dir := range directoriesByName(paths.Defaults(env)) {
+		if !errors.Is(dir.Err, paths.ErrNoHomeDir) {
+			t.Errorf("default = %+v, want ErrNoHomeDir without injected home variables", dir)
+		}
 	}
 }
 
@@ -327,6 +382,67 @@ func TestEnvironmentLookupWithoutFunction(t *testing.T) {
 
 	if value, ok := (paths.Environment{}).Lookup("ANY"); ok || value != "" {
 		t.Errorf("Lookup = (%q, %v), want (\"\", false)", value, ok)
+	}
+}
+
+type resolveCase struct {
+	name    string
+	value   string
+	want    string
+	wantErr error
+}
+
+func resolveCases(baseDir string) []resolveCase {
+	absolute := filepath.Join(baseDir, "elsewhere")
+	cases := []resolveCase{
+		{name: "relative joins the base", value: "data", want: filepath.Join(baseDir, "data")},
+		{name: "relative is cleaned", value: filepath.Join("a", "..", "b"), want: filepath.Join(baseDir, "b")},
+		{name: "absolute is kept", value: absolute, want: absolute},
+		{name: "absolute is cleaned", value: absolute + string(filepath.Separator) + ".", want: absolute},
+		{name: "empty", value: "", wantErr: paths.ErrEmptyPath},
+		{name: "home shorthand alone", value: "~", wantErr: paths.ErrHomeShorthand},
+		{name: "home shorthand with path", value: "~/media", wantErr: paths.ErrHomeShorthand},
+		{name: "home shorthand of a user", value: "~alice/media", wantErr: paths.ErrHomeShorthand},
+	}
+
+	if runtime.GOOS == "windows" {
+		volume := filepath.VolumeName(baseDir)
+		cases = append(cases,
+			resolveCase{name: "rooted uses the base volume", value: `\data`, want: volume + `\data`},
+			resolveCase{name: "rooted with slash", value: "/data/x", want: volume + `\data\x`},
+			resolveCase{name: "drive-relative", value: "C:data", wantErr: paths.ErrDriveRelative},
+		)
+	} else {
+		cases = append(cases,
+			resolveCase{name: "backslash is a file name character", value: `\data`, want: filepath.Join(baseDir, `\data`)},
+		)
+	}
+
+	return cases
+}
+
+func TestResolve(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+
+	for _, tt := range resolveCases(baseDir) {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := paths.Resolve(tt.value, baseDir)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Resolve(%q) error = %v, want %v", tt.value, err, tt.wantErr)
+			}
+
+			if got != tt.want {
+				t.Errorf("Resolve(%q) = %q, want %q", tt.value, got, tt.want)
+			}
+
+			if tt.wantErr == nil && !filepath.IsAbs(got) {
+				t.Errorf("Resolve(%q) = %q, want an absolute path", tt.value, got)
+			}
+		})
 	}
 }
 

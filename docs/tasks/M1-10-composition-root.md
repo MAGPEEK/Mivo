@@ -47,3 +47,7 @@ skeleton.
   (e.g. `runEnv{stdout, stderr io.Writer; lookupEnv func(string) (string, bool)}`).
 - Tighten `cmd/mivo/main_test.go`: success cases assert empty stderr; the unknown-flag case
   asserts the rejection reason; format the "unexpected argument" error only once.
+
+## Orchestrator note (from M1-04b)
+- Use `paths.HostEnvironment(lookupEnv)` with the injected lookup (`os.LookupEnv` in production);
+  `paths.Directories` and `Environment.HomeDir` no longer exist.

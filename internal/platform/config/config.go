@@ -4,7 +4,8 @@
 // environment variables. Environment variables are named after the YAML key path with
 // the brand prefix, e.g. server.port becomes <PREFIX>_SERVER_PORT. Relative paths, from
 // the file or the environment, resolve against the config directory so the result does
-// not depend on the working directory of the process.
+// not depend on the working directory of the process. Every directory in Config.Paths is
+// absolute.
 package config
 
 import (
@@ -12,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/magpeek/mivo/internal/platform/logging"
 	"github.com/magpeek/mivo/internal/platform/paths"
 )
 
@@ -21,19 +23,13 @@ const FileName = "config.yaml"
 // DefaultPort is the default HTTP port (ADR 0018).
 const DefaultPort = 8460
 
-// Log levels and formats accepted by log.level and log.format.
-const (
-	LogLevelDebug = "debug"
-	LogLevelInfo  = "info"
-	LogLevelWarn  = "warn"
-	LogLevelError = "error"
+var (
+	// ErrInvalid marks a configuration value that failed validation.
+	ErrInvalid = errors.New("invalid configuration value")
 
-	LogFormatText = "text"
-	LogFormatJSON = "json"
+	// ErrUnknownKey marks a key in config.yaml that is not a setting.
+	ErrUnknownKey = errors.New("unknown key")
 )
-
-// ErrInvalid marks a configuration value that failed validation.
-var ErrInvalid = errors.New("invalid configuration value")
 
 // Config is the complete server configuration. It is passed by value; app and domain never
 // import this package.
@@ -56,9 +52,9 @@ type Server struct {
 
 // Log holds the logging settings.
 type Log struct {
-	// Level is one of the LogLevel constants.
+	// Level is one of the logging.Level* constants.
 	Level string
-	// Format is one of the LogFormat constants.
+	// Format is one of the logging.Format* constants.
 	Format string
 }
 
@@ -73,7 +69,7 @@ type Paths struct {
 type Options struct {
 	// ConfigDirFlag is the value of the --config-dir flag; empty when not given.
 	ConfigDirFlag string
-	// Environment is the view of the host: OS, environment variables and home directory.
+	// Environment is the view of the host: OS and environment variables.
 	Environment paths.Environment
 }
 
@@ -85,8 +81,8 @@ func Load(options Options) (Config, error) {
 		return Config{}, err
 	}
 
-	// A failed default is only fatal if neither the file nor the environment set the path.
-	defaults, defaultsErr := paths.Defaults(options.Environment)
+	// A missing default is only fatal if neither the file nor the environment set the path.
+	defaults := paths.Defaults(options.Environment)
 	cfg := defaultConfig(configDir, defaults)
 
 	if err := applyFile(&cfg, configDir); err != nil {
@@ -97,7 +93,7 @@ func Load(options Options) (Config, error) {
 		return Config{}, err
 	}
 
-	if err := requirePaths(cfg, defaultsErr); err != nil {
+	if err := requirePaths(cfg, defaults); err != nil {
 		return Config{}, err
 	}
 
@@ -118,32 +114,36 @@ func resolveConfigDir(options Options) (string, error) {
 	return absolute, nil
 }
 
-func defaultConfig(configDir string, defaults paths.Directories) Config {
+func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 	return Config{
 		ConfigDir: configDir,
 		Server:    Server{Host: "", Port: DefaultPort},
-		Log:       Log{Level: LogLevelInfo, Format: LogFormatText},
+		Log:       Log{Level: logging.LevelInfo, Format: logging.FormatText},
 		Paths: Paths{
-			Data:      defaults.Data,
-			Cache:     defaults.Cache,
-			Transcode: defaults.Transcode,
+			Data:      defaults.Data.Path,
+			Cache:     defaults.Cache.Path,
+			Transcode: defaults.Transcode.Path,
 		},
 	}
 }
 
-// requirePaths reports a path that has neither an OS default nor a configured value.
-func requirePaths(cfg Config, defaultsErr error) error {
-	if defaultsErr == nil {
-		return nil
-	}
-
+// requirePaths reports a directory that has neither an OS default nor a configured value,
+// and an OS default that is not absolute on this host (an Environment for another OS).
+func requirePaths(cfg Config, defaults paths.DefaultDirectories) error {
 	for _, entry := range settings() {
-		if entry.pathField == nil || *entry.pathField(&cfg) != "" {
+		if entry.pathField == nil {
 			continue
 		}
 
-		return fmt.Errorf("%s: no value in %s or %s and no OS default: %w",
-			entry.key, FileName, envName(entry.key), defaultsErr)
+		value := *entry.pathField(&cfg)
+		if value == "" {
+			return fmt.Errorf("%s: no value in %s or %s and no OS default: %w",
+				entry.key, FileName, envName(entry.key), entry.pathDefault(defaults).Err)
+		}
+
+		if !filepath.IsAbs(value) {
+			return fmt.Errorf("%s: %w: %q is not an absolute path on this host", entry.key, ErrInvalid, value)
+		}
 	}
 
 	return nil

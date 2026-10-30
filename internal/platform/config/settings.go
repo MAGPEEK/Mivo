@@ -2,12 +2,12 @@ package config
 
 import (
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/magpeek/mivo/internal/platform/brand"
+	"github.com/magpeek/mivo/internal/platform/logging"
 	"github.com/magpeek/mivo/internal/platform/paths"
 )
 
@@ -23,6 +23,9 @@ const (
 	keyPathsTranscode = "paths.transcode"
 )
 
+// keySeparator separates the sections of a key path.
+const keySeparator = "."
+
 const (
 	minPort = 0
 	maxPort = 65535
@@ -37,8 +40,10 @@ type applyFunc func(cfg *Config, raw, baseDir string) error
 type setting struct {
 	key   string
 	apply applyFunc
-	// pathField is set for directory settings so Load can check they have a value.
-	pathField func(cfg *Config) *string
+	// pathField and pathDefault are set for directory settings so Load can fill in and
+	// check the OS default.
+	pathField   func(cfg *Config) *string
+	pathDefault func(defaults paths.DefaultDirectories) paths.Default
 }
 
 // settings returns every configurable key in a stable order.
@@ -46,17 +51,27 @@ func settings() []setting {
 	return []setting{
 		{key: keyServerHost, apply: applyHost},
 		{key: keyServerPort, apply: applyPort},
-		{key: keyLogLevel, apply: applyChoice(logLevelField, LogLevelDebug, LogLevelInfo, LogLevelWarn, LogLevelError)},
-		{key: keyLogFormat, apply: applyChoice(logFormatField, LogFormatText, LogFormatJSON)},
-		{key: keyPathsData, apply: applyPath(dataField), pathField: dataField},
-		{key: keyPathsCache, apply: applyPath(cacheField), pathField: cacheField},
-		{key: keyPathsTranscode, apply: applyPath(transcodeField), pathField: transcodeField},
+		{
+			key: keyLogLevel,
+			apply: applyChoice(logLevelField,
+				logging.LevelDebug, logging.LevelInfo, logging.LevelWarn, logging.LevelError),
+		},
+		{key: keyLogFormat, apply: applyChoice(logFormatField, logging.FormatText, logging.FormatJSON)},
+		pathSetting(keyPathsData, dataField, dataDefault),
+		pathSetting(keyPathsCache, cacheField, cacheDefault),
+		pathSetting(keyPathsTranscode, transcodeField, transcodeDefault),
 	}
+}
+
+func pathSetting(
+	key string, field func(cfg *Config) *string, fallback func(paths.DefaultDirectories) paths.Default,
+) setting {
+	return setting{key: key, apply: applyPath(field), pathField: field, pathDefault: fallback}
 }
 
 // envName turns a key path into its environment variable, e.g. server.port → <PREFIX>_SERVER_PORT.
 func envName(key string) string {
-	return brand.EnvPrefix + "_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+	return brand.EnvPrefix + "_" + strings.ToUpper(strings.ReplaceAll(key, keySeparator, "_"))
 }
 
 func logLevelField(cfg *Config) *string  { return &cfg.Log.Level }
@@ -64,6 +79,10 @@ func logFormatField(cfg *Config) *string { return &cfg.Log.Format }
 func dataField(cfg *Config) *string      { return &cfg.Paths.Data }
 func cacheField(cfg *Config) *string     { return &cfg.Paths.Cache }
 func transcodeField(cfg *Config) *string { return &cfg.Paths.Transcode }
+
+func dataDefault(defaults paths.DefaultDirectories) paths.Default      { return defaults.Data }
+func cacheDefault(defaults paths.DefaultDirectories) paths.Default     { return defaults.Cache }
+func transcodeDefault(defaults paths.DefaultDirectories) paths.Default { return defaults.Transcode }
 
 // applyHost accepts any value; the listener reports unusable hosts when it binds.
 func applyHost(cfg *Config, raw, _ string) error {
@@ -102,18 +121,15 @@ func applyChoice(field func(cfg *Config) *string, allowed ...string) applyFunc {
 	}
 }
 
-// applyPath rejects empty paths and resolves relative ones against baseDir.
+// applyPath stores the path made absolute by paths.Resolve, relative to baseDir.
 func applyPath(field func(cfg *Config) *string) applyFunc {
 	return func(cfg *Config, raw, baseDir string) error {
-		if raw == "" {
-			return fmt.Errorf("%w: %w", ErrInvalid, paths.ErrEmptyPath)
+		resolved, err := paths.Resolve(raw, baseDir)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalid, err)
 		}
 
-		if filepath.IsAbs(raw) {
-			*field(cfg) = filepath.Clean(raw)
-		} else {
-			*field(cfg) = filepath.Join(baseDir, raw)
-		}
+		*field(cfg) = resolved
 
 		return nil
 	}

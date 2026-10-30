@@ -3,6 +3,7 @@ package config_test
 import (
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,7 +13,14 @@ import (
 
 	"github.com/magpeek/mivo/internal/platform/brand"
 	"github.com/magpeek/mivo/internal/platform/config"
+	"github.com/magpeek/mivo/internal/platform/logging"
 	"github.com/magpeek/mivo/internal/platform/paths"
+)
+
+// Home directory variables of Windows and the other systems; the fixture sets both.
+const (
+	envUserProfile = "USERPROFILE"
+	envHome        = "HOME"
 )
 
 // fixture is a config directory and a fake host environment for one test.
@@ -32,9 +40,11 @@ func newFixture(t *testing.T, yamlContent string, vars map[string]string) fixtur
 		writeConfigFile(t, configDir, yamlContent)
 	}
 
-	if vars == nil {
-		vars = map[string]string{}
-	}
+	// A copy keeps table maps unchanged when parallel subtests add variables.
+	home := t.TempDir()
+	merged := map[string]string{envUserProfile: home, envHome: home}
+	maps.Copy(merged, vars)
+	vars = merged
 
 	env := paths.Environment{
 		GOOS: runtime.GOOS,
@@ -43,7 +53,6 @@ func newFixture(t *testing.T, yamlContent string, vars map[string]string) fixtur
 
 			return value, ok
 		},
-		HomeDir: t.TempDir(),
 	}
 
 	return fixture{configDir: configDir, vars: vars, env: env}
@@ -69,12 +78,14 @@ func env(suffix string) string {
 	return brand.EnvPrefix + "_" + suffix
 }
 
-func defaultDirs(t *testing.T, f fixture) paths.Directories {
+func defaultDirs(t *testing.T, f fixture) paths.DefaultDirectories {
 	t.Helper()
 
-	dirs, err := paths.Defaults(f.env)
-	if err != nil {
-		t.Fatalf("paths.Defaults: %v", err)
+	dirs := paths.Defaults(f.env)
+	for _, dir := range []paths.Default{dirs.Data, dirs.Cache, dirs.Transcode} {
+		if dir.Err != nil {
+			t.Fatalf("paths.Defaults: %v", dir.Err)
+		}
 	}
 
 	return dirs
@@ -95,7 +106,7 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		ConfigDir: f.configDir,
 		Server:    config.Server{Host: "", Port: 8460},
 		Log:       config.Log{Level: "info", Format: "text"},
-		Paths:     config.Paths{Data: dirs.Data, Cache: dirs.Cache, Transcode: dirs.Transcode},
+		Paths:     config.Paths{Data: dirs.Data.Path, Cache: dirs.Cache.Path, Transcode: dirs.Transcode.Path},
 	}
 	if got != want {
 		t.Errorf("Load = %+v, want %+v", got, want)
@@ -117,7 +128,7 @@ func TestLoadEmptyFileUsesDefaults(t *testing.T) {
 			t.Fatalf("Load(%q): %v", content, err)
 		}
 
-		if got.Server.Port != config.DefaultPort || got.Log.Level != config.LogLevelInfo {
+		if got.Server.Port != config.DefaultPort || got.Log.Level != logging.LevelInfo {
 			t.Errorf("Load(%q) = %+v, want defaults", content, got)
 		}
 	}
@@ -132,7 +143,7 @@ type precedenceCase struct {
 	wantEnv  string
 	// relative marks path settings whose wantFile and wantEnv resolve against the config dir.
 	relative  bool
-	defaultOf func(dirs paths.Directories) string
+	defaultOf func(dirs paths.DefaultDirectories) string
 	get       func(cfg config.Config) string
 }
 
@@ -142,49 +153,49 @@ func precedenceCases() []precedenceCase {
 			key: "server.host", yaml: "server:\n  host: 127.0.0.1\n",
 			envName: env("SERVER_HOST"), envValue: "::1",
 			wantFile: "127.0.0.1", wantEnv: "::1",
-			defaultOf: func(paths.Directories) string { return "" },
+			defaultOf: func(paths.DefaultDirectories) string { return "" },
 			get:       func(cfg config.Config) string { return cfg.Server.Host },
 		},
 		{
 			key: "server.port", yaml: "server:\n  port: 9000\n",
 			envName: env("SERVER_PORT"), envValue: "0",
 			wantFile: "9000", wantEnv: "0",
-			defaultOf: func(paths.Directories) string { return "8460" },
+			defaultOf: func(paths.DefaultDirectories) string { return "8460" },
 			get:       func(cfg config.Config) string { return strconv.Itoa(cfg.Server.Port) },
 		},
 		{
 			key: "log.level", yaml: "log:\n  level: debug\n",
 			envName: env("LOG_LEVEL"), envValue: "error",
 			wantFile: "debug", wantEnv: "error",
-			defaultOf: func(paths.Directories) string { return "info" },
+			defaultOf: func(paths.DefaultDirectories) string { return "info" },
 			get:       func(cfg config.Config) string { return cfg.Log.Level },
 		},
 		{
 			key: "log.format", yaml: "log:\n  format: json\n",
 			envName: env("LOG_FORMAT"), envValue: "text",
 			wantFile: "json", wantEnv: "text",
-			defaultOf: func(paths.Directories) string { return "text" },
+			defaultOf: func(paths.DefaultDirectories) string { return "text" },
 			get:       func(cfg config.Config) string { return cfg.Log.Format },
 		},
 		{
 			key: "paths.data", yaml: "paths:\n  data: file-data\n",
 			envName: env("PATHS_DATA"), envValue: "env-data",
 			wantFile: "file-data", wantEnv: "env-data", relative: true,
-			defaultOf: func(dirs paths.Directories) string { return dirs.Data },
+			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Data.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Data },
 		},
 		{
 			key: "paths.cache", yaml: "paths:\n  cache: file-cache\n",
 			envName: env("PATHS_CACHE"), envValue: "env-cache",
 			wantFile: "file-cache", wantEnv: "env-cache", relative: true,
-			defaultOf: func(dirs paths.Directories) string { return dirs.Cache },
+			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Cache.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Cache },
 		},
 		{
 			key: "paths.transcode", yaml: "paths:\n  transcode: file-transcode\n",
 			envName: env("PATHS_TRANSCODE"), envValue: "env-transcode",
 			wantFile: "file-transcode", wantEnv: "env-transcode", relative: true,
-			defaultOf: func(dirs paths.Directories) string { return dirs.Transcode },
+			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Transcode.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Transcode },
 		},
 	}
@@ -246,111 +257,6 @@ func assertPrecedence(t *testing.T, tc precedenceCase, layer precedenceLayer) {
 	}
 }
 
-func TestLoadUnknownKeyNamesKeyAndFile(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		yaml    string
-		wantKey string
-	}{
-		{name: "nested typo", yaml: "server:\n  prot: 1\n", wantKey: "prot"},
-		{name: "flow mapping", yaml: "server: {prot: 1}\n", wantKey: "prot"},
-		{name: "unknown section", yaml: "metrics:\n  enabled: true\n", wantKey: "metrics"},
-		{name: "ffmpeg path is not a key yet", yaml: "paths:\n  ffmpeg: /usr/bin/ffmpeg\n", wantKey: "ffmpeg"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := newFixture(t, tt.yaml, nil)
-
-			_, err := f.load()
-			if err == nil {
-				t.Fatal("Load succeeded, want error")
-			}
-
-			for _, part := range []string{tt.wantKey, f.configFile()} {
-				if !strings.Contains(err.Error(), part) {
-					t.Errorf("Load error = %q, want it to contain %q", err, part)
-				}
-			}
-		})
-	}
-}
-
-func TestLoadInvalidValues(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		yaml     string
-		vars     map[string]string
-		wantPart string
-	}{
-		{name: "file port too high", yaml: "server:\n  port: 65536\n", wantPart: "server.port"},
-		{name: "file port negative", yaml: "server:\n  port: -1\n", wantPart: "server.port"},
-		{name: "file port not a number", yaml: "server:\n  port: http\n", wantPart: "server.port"},
-		{name: "env port not a number", vars: map[string]string{env("SERVER_PORT"): "abc"}, wantPart: env("SERVER_PORT")},
-		{name: "env port too high", vars: map[string]string{env("SERVER_PORT"): "70000"}, wantPart: env("SERVER_PORT")},
-		{name: "file unknown log level", yaml: "log:\n  level: verbose\n", wantPart: "log.level"},
-		{name: "env unknown log level", vars: map[string]string{env("LOG_LEVEL"): "trace"}, wantPart: env("LOG_LEVEL")},
-		{name: "file unknown log format", yaml: "log:\n  format: xml\n", wantPart: "log.format"},
-		{name: "env unknown log format", vars: map[string]string{env("LOG_FORMAT"): "logfmt"}, wantPart: env("LOG_FORMAT")},
-		{name: "file empty data path", yaml: "paths:\n  data: \"\"\n", wantPart: "paths.data"},
-		{name: "file empty cache path", yaml: "paths:\n  cache: ''\n", wantPart: "paths.cache"},
-		{name: "env empty transcode path", vars: map[string]string{env("PATHS_TRANSCODE"): ""}, wantPart: env("PATHS_TRANSCODE")},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := newFixture(t, tt.yaml, tt.vars)
-
-			_, err := f.load()
-			if !errors.Is(err, config.ErrInvalid) {
-				t.Fatalf("Load error = %v, want ErrInvalid", err)
-			}
-
-			if !strings.Contains(err.Error(), tt.wantPart) {
-				t.Errorf("Load error = %q, want it to contain %q", err, tt.wantPart)
-			}
-
-			if tt.yaml != "" && !strings.Contains(err.Error(), f.configFile()) {
-				t.Errorf("Load error = %q, want it to name %s", err, f.configFile())
-			}
-		})
-	}
-}
-
-func TestLoadRejectsMalformedFile(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		yaml string
-	}{
-		{name: "broken syntax", yaml: "server: [\n"},
-		{name: "mapping where a value belongs", yaml: "server:\n  port:\n    value: 1\n"},
-		{name: "sequence at the top level", yaml: "- server\n"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := newFixture(t, tt.yaml, nil)
-
-			_, err := f.load()
-			if err == nil || !strings.Contains(err.Error(), f.configFile()) {
-				t.Errorf("Load error = %v, want it to name %s", err, f.configFile())
-			}
-		})
-	}
-}
-
 func TestLoadReportsUnreadableFile(t *testing.T) {
 	t.Parallel()
 
@@ -375,24 +281,8 @@ func TestLoadNormalisesChoices(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if got.Log != (config.Log{Level: config.LogLevelDebug, Format: config.LogFormatJSON}) {
+	if got.Log != (config.Log{Level: logging.LevelDebug, Format: logging.FormatJSON}) {
 		t.Errorf("Log = %+v, want debug/json", got.Log)
-	}
-}
-
-func TestLoadKeepsAbsolutePaths(t *testing.T) {
-	t.Parallel()
-
-	absolute := filepath.Join(t.TempDir(), "media", "..", "data")
-	f := newFixture(t, "", map[string]string{env("PATHS_DATA"): absolute})
-
-	got, err := f.load()
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if want := filepath.Clean(absolute); got.Paths.Data != want {
-		t.Errorf("Paths.Data = %q, want %q", got.Paths.Data, want)
 	}
 }
 
@@ -435,48 +325,5 @@ func TestLoadConfigDirError(t *testing.T) {
 	_, err := config.Load(config.Options{Environment: f.env})
 	if !errors.Is(err, paths.ErrEmptyPath) || !strings.Contains(err.Error(), paths.ConfigDirEnv()) {
 		t.Errorf("Load error = %v, want ErrEmptyPath naming %s", err, paths.ConfigDirEnv())
-	}
-}
-
-func TestLoadWithoutHomeDirectory(t *testing.T) {
-	t.Parallel()
-
-	allPaths := map[string]string{
-		env("PATHS_DATA"):      "data",
-		env("PATHS_CACHE"):     "cache",
-		env("PATHS_TRANSCODE"): "transcode",
-	}
-
-	tests := []struct {
-		name     string
-		vars     map[string]string
-		wantPart string
-	}{
-		{name: "paths unset", vars: map[string]string{}, wantPart: "paths.data"},
-		{name: "only data set", vars: map[string]string{env("PATHS_DATA"): "data"}, wantPart: "paths.cache"},
-		{name: "all paths set", vars: allPaths},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			f := newFixture(t, "", tt.vars)
-			f.env.GOOS = "linux"
-			f.env.HomeDir = ""
-
-			_, err := f.load()
-			if tt.wantPart == "" {
-				if err != nil {
-					t.Fatalf("Load: %v", err)
-				}
-
-				return
-			}
-
-			if !errors.Is(err, paths.ErrNoHomeDir) || !strings.Contains(err.Error(), tt.wantPart) {
-				t.Errorf("Load error = %v, want ErrNoHomeDir naming %s", err, tt.wantPart)
-			}
-		})
 	}
 }

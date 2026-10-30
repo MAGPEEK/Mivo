@@ -1,25 +1,74 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 
 	"github.com/magpeek/mivo/internal/platform/brand"
 )
 
-// The settings table and the YAML file model list the keys twice; this keeps them aligned.
-func TestEverySettingHasAFileValue(t *testing.T) {
-	t.Parallel()
+// nestedYAML turns "a.b" and "x" into "a:\n  b: x\n".
+func nestedYAML(key, value string) string {
+	var builder strings.Builder
 
-	values := fileConfig{}.values()
-	if len(values) != len(settings()) {
-		t.Errorf("file model has %d keys, settings table has %d", len(values), len(settings()))
+	parts := strings.Split(key, keySeparator)
+	for depth, part := range parts {
+		builder.WriteString(strings.Repeat("  ", depth) + part + ":")
+
+		if depth == len(parts)-1 {
+			builder.WriteString(" " + value)
+		}
+
+		builder.WriteString("\n")
 	}
 
+	return builder.String()
+}
+
+// The walker derives the accepted keys from the settings table; every setting must be
+// reachable through config.yaml.
+func TestEverySettingIsAcceptedInTheFile(t *testing.T) {
+	t.Parallel()
+
 	for _, entry := range settings() {
-		if _, ok := values[entry.key]; !ok {
-			t.Errorf("setting %s has no field in the YAML file model", entry.key)
+		values, err := parseFile([]byte(nestedYAML(entry.key, "x")))
+		if err != nil {
+			t.Fatalf("parseFile(%s): %v", entry.key, err)
 		}
+
+		if got := values[entry.key]; got.raw != "x" || got.line != len(parentSections(entry.key))+1 {
+			t.Errorf("parseFile(%s) value = %+v, want raw x on the last line", entry.key, got)
+		}
+	}
+}
+
+func TestParentSections(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		key  string
+		want []string
+	}{
+		{key: "server", want: []string{}},
+		{key: "server.port", want: []string{"server"}},
+		{key: "a.b.c", want: []string{"a", "a.b"}},
+	}
+
+	for _, tt := range tests {
+		if got := parentSections(tt.key); !slices.Equal(got, tt.want) {
+			t.Errorf("parentSections(%q) = %q, want %q", tt.key, got, tt.want)
+		}
+	}
+}
+
+func TestRootOfDocumentWithoutContentIsNull(t *testing.T) {
+	t.Parallel()
+
+	if root := rootOf(&yaml.Node{Kind: yaml.DocumentNode}); !isNull(root) {
+		t.Errorf("rootOf(empty document) = %+v, want a null node", root)
 	}
 }
 

@@ -29,3 +29,8 @@ and errors are clear for the startup message in M1-10.
 
 ## Notes
 - Source: M1-04 reviewer findings (minor 1–5, nits 1–5).
+
+## Deferred (from review, APPROVE) – pick up with the next change to internal/platform/config|paths
+- `paths.ConfigDir`: reject drive-relative `C:cfg` for flag and env (`ErrDriveRelative`) or document the exception in ADR 0018.
+- ADR 0018: note that strictness comes from the `yaml.Node` walk (not `KnownFields`) and that an empty/null section is allowed.
+- Nits: wrap `ErrInvalid` for invalid-YAML / multiple-documents / duplicate-key errors; include the section in the non-scalar-key error; only `%w` a non-nil default error; `otherOS` test helper side effect.
