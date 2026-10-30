@@ -41,3 +41,10 @@ libraries can be synced, listed and read.
 - The media queries (items, files, streams) are M2-15 in wave 3; this task only creates the
   tables. Keep `queries/libraries.sql` separate so M2-15 adds `queries/media.sql`.
 - Timestamps: Unix ms UTC (ADR 0004).
+
+## Orchestrator note (from M2-03)
+- `internal/domain/library` defines `ItemKind` with the values `movie` and `episode`, plus
+  `ItemKindForLibrary` (`movies` → `movie`, `shows` → `episode`) and `ParseItemKind`. Use exactly
+  these values (e.g. the `items.kind` CHECK constraint) and derive the kind via `ItemKindForLibrary`.
+- `ParseRelativePath` returns a plain `string` (the input unchanged) and rejects `.` segments and
+  drive-relative prefixes such as `C:x`.

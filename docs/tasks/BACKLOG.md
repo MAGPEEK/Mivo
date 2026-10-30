@@ -21,3 +21,5 @@ M2-10; sqlite single-instance lock → M2-13; api-client nits → M2-01; docs co
 | web/e2e | one unidentified e2e failure ("1 failed, 9 passed") in 11 implementer runs, not reproduced in 886 later runs; keep `playwright-report` when it recurs | M1-17b r2 | when it recurs |
 | docker | `debian:stable-slim` floats across Debian majors (FFmpeg/libc change silently) – pin by digest (or codename) with Renovate; stamp the commit into the binary (`-X`) since `-buildvcs=false` | M1-20 review | M9 (distribution) |
 | docker | set `HOME`/`XDG_CACHE_HOME` (e.g. `/config`) for fontconfig/libass caches before subtitle burn-in | M1-20 review | M3/M4 |
+| domain/library | nits: explicit regression tests for `//server`, `\\?\`, `\\.\` (reject) and `%2e%2e`, `...`, full-width dots (accept); unreachable "Untitled" fallback (i18n placeholder instead?); `ItemKind.IsValid`; `MaxNameLength` in tests; whitespace-only root; shared `nulCharacter` placement | M2-03 review | next change to `internal/domain/library` |
+| domain/library | NFC normalisation of titles/sort titles (macOS NFD file names over SMB sort differently) | M2-03 review | M3 (name parser) |

@@ -39,3 +39,10 @@ shutdown (ADR 0022).
 - Log one info line per finished scan with the counts, and per-file problems at debug with
   relative paths only.
 - Titles come from `library.TitleFromFileName`.
+
+## Orchestrator note (from M2-03)
+- `internal/domain/library` defines `ItemKind` with the values `movie` and `episode`, plus
+  `ItemKindForLibrary` (`movies` → `movie`, `shows` → `episode`) and `ParseItemKind`. Use exactly
+  these values (e.g. the `items.kind` CHECK constraint) and derive the kind via `ItemKindForLibrary`.
+- `ParseRelativePath` returns a plain `string` (the input unchanged) and rejects `.` segments and
+  drive-relative prefixes such as `C:x`.
