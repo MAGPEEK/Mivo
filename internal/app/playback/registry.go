@@ -26,6 +26,14 @@ const LimitReachedCode = "session_limit_reached"
 // domain.ErrUnavailable: retrying later may succeed.
 var ErrSessionLimitReached = fmt.Errorf("%s: %w", LimitReachedCode, domain.ErrUnavailable)
 
+// ErrServiceClosed reports a request after Close: the server is shutting down. It wraps
+// domain.ErrUnavailable.
+var ErrServiceClosed = fmt.Errorf("playback service is shut down: %w", domain.ErrUnavailable)
+
+// errWorkspacePurging refuses new sessions while the startup purge runs, which would delete
+// their directories.
+var errWorkspacePurging = fmt.Errorf("playback workspace is being purged: %w", domain.ErrUnavailable)
+
 // sessionEntry is the registry's record of one session. The registry guards every field;
 // callers only ever receive copies.
 type sessionEntry struct {
@@ -48,6 +56,9 @@ type sessionEntry struct {
 	contentType  string
 	directory    string
 	production   Production
+	// inFlight counts the stream requests still being served. The reaper keeps a session
+	// with any: a browser may stream a whole MP4 over one long Range request.
+	inFlight int
 }
 
 // activation is what a started production adds to a pending session.
@@ -55,6 +66,8 @@ type activation struct {
 	production    Production
 	directory     string
 	startPosition time.Duration
+	// activatedAt restarts the idle time: clients learn the session ID only now.
+	activatedAt time.Time
 }
 
 // sessionLimits are the limits of OD-4 A plus the overall cap.
@@ -69,6 +82,24 @@ type sessionCounts struct {
 	reencoding, ffmpeg, all int
 }
 
+// add counts existing, which claimant is about to replace (nil when no one claimed it). The
+// slots of a claimed session belong to its claimant, except in the categories the claimant
+// does not occupy: a transcode being replaced by a remux keeps re-encoding until the remux
+// has started and stopped it.
+func (counts *sessionCounts) add(existing, claimant *sessionEntry) {
+	if claimant == nil {
+		counts.all++
+	}
+
+	if existing.reencodes && (claimant == nil || !claimant.reencodes) {
+		counts.reencoding++
+	}
+
+	if existing.runsFFmpeg && (claimant == nil || !claimant.runsFFmpeg) {
+		counts.ffmpeg++
+	}
+}
+
 // registry holds the sessions in memory and enforces the limits atomically, so concurrent
 // starts never exceed them. Its methods never call ports, so the lock is never held while
 // waiting for FFmpeg or the file system.
@@ -76,6 +107,16 @@ type registry struct {
 	mutex   sync.Mutex
 	entries map[string]*sessionEntry
 	limits  sessionLimits
+
+	// closed refuses new sessions after Close; purging refuses them while the workspace is
+	// purged; used records that a session was ever reserved, after which a purge could
+	// delete a live directory.
+	closed, purging, used bool
+	// holders counts the work that holds session records outside the registry (starts,
+	// stops, the reaper, production watchers). Close waits for it, so no FFmpeg outlives
+	// the service. Every Add happens under the mutex while the registry is open, so no Add
+	// races with the Wait of Close.
+	holders sync.WaitGroup
 }
 
 func newRegistry(limits sessionLimits) *registry {
@@ -87,9 +128,14 @@ func newRegistry(limits sessionLimits) *registry {
 // in the same step, so no other client can take it during a seek (ADR 0024: seeking never
 // trips the limit); an unknown or already claimed session is ignored. A reached limit wraps
 // ErrSessionLimitReached; a session ID in use is an internal error (a broken generator).
+// On success the caller holds the entry and must call untrack when it is done with it.
 func (sessions *registry) reserve(entry *sessionEntry) error {
 	sessions.mutex.Lock()
 	defer sessions.mutex.Unlock()
+
+	if err := sessions.admission(); err != nil {
+		return err
+	}
 
 	if _, exists := sessions.entries[entry.session.ID]; exists {
 		return fmt.Errorf("session id %s is already in use", entry.session.ID)
@@ -110,14 +156,27 @@ func (sessions *registry) reserve(entry *sessionEntry) error {
 
 	entry.pending = true
 	sessions.entries[entry.session.ID] = entry
+	sessions.used = true
+	sessions.holders.Add(1)
 
 	return nil
 }
 
-// checkLimits counts pending sessions too (their FFmpeg is about to start) but not the
-// session the entry replaces.
+// admission tells whether new sessions are accepted; the caller holds the lock.
+func (sessions *registry) admission() error {
+	switch {
+	case sessions.closed:
+		return ErrServiceClosed
+	case sessions.purging:
+		return errWorkspacePurging
+	default:
+		return nil
+	}
+}
+
+// checkLimits counts pending sessions too (their FFmpeg is about to start).
 func (sessions *registry) checkLimits(entry, replaced *sessionEntry) error {
-	counts := sessions.countExcept(replaced)
+	counts := sessions.count(entry, replaced)
 
 	if counts.all >= sessions.limits.maxSessions {
 		return fmt.Errorf("%d sessions running, at most %d allowed: %w",
@@ -137,25 +196,23 @@ func (sessions *registry) checkLimits(entry, replaced *sessionEntry) error {
 	return nil
 }
 
-// countExcept counts the slots in use, leaving out excluded (which may be nil). A session
-// claimed by a replacement is left out as well: its slot belongs to the replacement.
-func (sessions *registry) countExcept(excluded *sessionEntry) sessionCounts {
+// count counts the slots in use as entry sees them when it claims replaced (nil when it
+// replaces none). Every claimed session, including replaced, shares its slots with its
+// claimant (see sessionCounts.add). The caller holds the lock.
+func (sessions *registry) count(entry, replaced *sessionEntry) sessionCounts {
 	var counts sessionCounts
 
 	for _, existing := range sessions.entries {
-		if existing == excluded || existing.replacedBy != "" {
-			continue
+		var claimant *sessionEntry
+
+		switch {
+		case existing == replaced:
+			claimant = entry
+		case existing.replacedBy != "":
+			claimant = sessions.entries[existing.replacedBy]
 		}
 
-		counts.all++
-
-		if existing.reencodes {
-			counts.reencoding++
-		}
-
-		if existing.runsFFmpeg {
-			counts.ffmpeg++
-		}
+		counts.add(existing, claimant)
 	}
 
 	return counts
@@ -177,6 +234,7 @@ func (sessions *registry) activate(id string, started activation) (Session, *ses
 	entry.production = started.production
 	entry.directory = started.directory
 	entry.session.StartPosition = started.startPosition
+	entry.session.LastAccessedAt = started.activatedAt
 
 	return entry.session.clone(), sessions.takeReplaced(entry), true
 }
@@ -225,17 +283,20 @@ func (sessions *registry) get(id string) (Session, bool) {
 	return entry.session.clone(), true
 }
 
-// touch records an access of a visible session and returns what its stream handler needs.
-func (sessions *registry) touch(id string, now time.Time) (StreamAccess, bool) {
+// touch records the start of a stream request of a visible session: it marks the session in
+// use until endAccess and returns what the stream handler needs, plus the record endAccess
+// takes.
+func (sessions *registry) touch(id string, now time.Time) (StreamAccess, *sessionEntry, bool) {
 	sessions.mutex.Lock()
 	defer sessions.mutex.Unlock()
 
 	entry, found := sessions.visible(id)
 	if !found {
-		return StreamAccess{}, false
+		return StreamAccess{}, nil, false
 	}
 
 	entry.session.LastAccessedAt = now
+	entry.inFlight++
 
 	access := StreamAccess{Delivery: entry.session.Plan.Delivery, sessionID: id, production: entry.production}
 	if access.Delivery == playback.DeliveryFile {
@@ -244,11 +305,30 @@ func (sessions *registry) touch(id string, now time.Time) (StreamAccess, bool) {
 		access.Directory = entry.directory
 	}
 
-	return access, true
+	return access, entry, true
+}
+
+// endAccess records the end of a stream request: the idle time restarts at now, so a session
+// read by one long request becomes idle only when that request ends. It works on the record,
+// not the ID, so a request of a session that was stopped meanwhile changes nothing visible;
+// the count never goes below zero.
+func (sessions *registry) endAccess(entry *sessionEntry, now time.Time) {
+	sessions.mutex.Lock()
+	defer sessions.mutex.Unlock()
+
+	if entry.inFlight > 0 {
+		entry.inFlight--
+	}
+
+	if now.After(entry.session.LastAccessedAt) {
+		entry.session.LastAccessedAt = now
+	}
 }
 
 // remove takes a visible session out of the registry and returns its record. Exactly one
-// caller gets the record, so only that caller tears the session down.
+// caller gets the record, so only that caller tears the session down; it must call untrack
+// when the teardown is done. Its Add never races with the Wait of Close: close empties the
+// registry under the same lock, so once it is closed remove finds nothing and adds nothing.
 func (sessions *registry) remove(id string) (*sessionEntry, bool) {
 	sessions.mutex.Lock()
 	defer sessions.mutex.Unlock()
@@ -259,6 +339,7 @@ func (sessions *registry) remove(id string) (*sessionEntry, bool) {
 	}
 
 	delete(sessions.entries, id)
+	sessions.holders.Add(1)
 
 	return entry, true
 }

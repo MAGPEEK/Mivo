@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
@@ -126,10 +127,13 @@ func (env *environment) dependencies() appplayback.Dependencies {
 		URLs:      pathURLs{},
 		IDs:       env.ids,
 		Clock:     env.clock.Now,
+		After:     env.clock.After,
 		Logger:    slog.New(slog.NewTextHandler(env.logs, nil)),
 	}
 }
 
+// service returns a new Service that is closed when the test ends, so its reaper and
+// production watchers never outlive the test.
 func (env *environment) service(t *testing.T) *appplayback.Service {
 	t.Helper()
 
@@ -138,7 +142,42 @@ func (env *environment) service(t *testing.T) *appplayback.Service {
 		t.Fatalf("NewService error = %v", err)
 	}
 
+	closeAtCleanup(t, service)
+
 	return service
+}
+
+func closeAtCleanup(t *testing.T, service *appplayback.Service) {
+	t.Helper()
+
+	t.Cleanup(func() {
+		// t.Context() is already cancelled when cleanups run.
+		if err := service.Close(context.Background()); err != nil {
+			t.Errorf("Close at cleanup error = %v", err)
+		}
+	})
+}
+
+// inBubble runs test in a synctest bubble with a fresh environment: synctest.Wait then waits
+// until the service's goroutines are idle, and the bubble fails the test when a goroutine
+// is still blocked after the cleanups ran (a goroutine leak).
+func inBubble(t *testing.T, test func(t *testing.T, env *environment)) {
+	t.Helper()
+
+	synctest.Test(t, func(t *testing.T) {
+		test(t, newEnvironment())
+	})
+}
+
+// passTime advances the clock by total in steps of the reaper interval and lets the
+// service's goroutines settle after each step, so the reaper checks once per step.
+func (env *environment) passTime(total time.Duration) {
+	synctest.Wait()
+
+	for passed := time.Duration(0); passed < total; passed += appplayback.IdleCheckInterval {
+		env.clock.advance(min(appplayback.IdleCheckInterval, total-passed))
+		synctest.Wait()
+	}
 }
 
 // request asks to play fileID with the Chromium reference profile.

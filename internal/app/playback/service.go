@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
@@ -29,7 +30,9 @@ type Dependencies struct {
 	URLs      StreamURLBuilder
 	IDs       IDGenerator
 	// Clock returns the current time; injected so tests control access times.
-	Clock  func() time.Time
+	Clock func() time.Time
+	// After waits like time.After; injected so tests drive the idle reaper without sleeping.
+	After  func(wait time.Duration) <-chan time.Time
 	Logger *slog.Logger
 }
 
@@ -54,26 +57,30 @@ type Service struct {
 	urls         StreamURLBuilder
 	ids          IDGenerator
 	clock        func() time.Time
+	after        func(wait time.Duration) <-chan time.Time
 	logger       *slog.Logger
 	capabilities playback.ServerCapabilities
 	policy       playback.Policy
 	sessions     *registry
 
-	// processContext outlives every request: FFmpeg runs under it, never under a request
-	// context (ADR 0024). Shutdown (Close, M2-25) makes it cancellable and cancels it.
-	processContext context.Context
+	// processContext outlives every request: FFmpeg, the reaper and the production watchers
+	// run under it, never under a request context (ADR 0024). Close cancels it.
+	processContext  context.Context
+	cancelProcesses context.CancelFunc
 }
 
 // NewService validates the dependencies and options and returns a Service. A missing
 // dependency or an invalid option is a wiring or configuration bug and wraps
 // domain.ErrInvalid, so a bad transcode height fails at startup instead of on the first
-// request.
+// request. The service starts its idle reaper at once; Close stops it.
 func NewService(dependencies Dependencies, options Options) (*Service, error) {
 	if err := errors.Join(dependencies.validate(), options.validate()); err != nil {
 		return nil, fmt.Errorf("new playback service: %w", err)
 	}
 
-	return &Service{
+	processContext, cancelProcesses := context.WithCancel(context.Background())
+
+	service := &Service{
 		files:        dependencies.Files,
 		paths:        dependencies.Paths,
 		keyframes:    dependencies.Keyframes,
@@ -82,6 +89,7 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 		urls:         dependencies.URLs,
 		ids:          dependencies.IDs,
 		clock:        dependencies.Clock,
+		after:        dependencies.After,
 		logger:       dependencies.Logger,
 		capabilities: options.Capabilities,
 		policy:       options.Policy,
@@ -90,8 +98,13 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 			maxFFmpeg:     MaxFFmpegSessions,
 			maxSessions:   MaxSessions,
 		}),
-		processContext: context.Background(),
-	}, nil
+		processContext:  processContext,
+		cancelProcesses: cancelProcesses,
+	}
+
+	service.startReaper()
+
+	return service, nil
 }
 
 func (dependencies Dependencies) validate() error {
@@ -107,6 +120,7 @@ func (dependencies Dependencies) validate() error {
 		{name: "stream url builder", present: dependencies.URLs != nil},
 		{name: "id generator", present: dependencies.IDs != nil},
 		{name: "clock", present: dependencies.Clock != nil},
+		{name: "timer", present: dependencies.After != nil},
 		{name: "logger", present: dependencies.Logger != nil},
 	}
 
@@ -141,13 +155,18 @@ func (s *Service) Get(_ context.Context, id string) (Session, error) {
 	return session, nil
 }
 
-// Access records a stream request for the session and returns what the stream handler
-// needs. An unknown or stopped session wraps domain.ErrNotFound.
+// Access records the start of a stream request for the session and returns what the stream
+// handler needs. The session counts as in use until the returned access is released, so the
+// caller must call StreamAccess.Release (deferred) when the request ends; Stop, Close and a
+// replacement still end the session while it is in use. An unknown or stopped session wraps
+// domain.ErrNotFound.
 func (s *Service) Access(_ context.Context, id string) (StreamAccess, error) {
-	access, found := s.sessions.touch(id, s.clock())
+	access, entry, found := s.sessions.touch(id, s.clock())
 	if !found {
 		return StreamAccess{}, fmt.Errorf("playback session %s: %w", id, domain.ErrNotFound)
 	}
+
+	access.lease = &accessLease{end: func() { s.sessions.endAccess(entry, s.clock()) }}
 
 	return access, nil
 }
@@ -159,10 +178,23 @@ func (s *Service) Access(_ context.Context, id string) (StreamAccess, error) {
 // of milestone 7 (ADR 0024), so the HTTP port need not change then.
 func (s *Service) Stop(ctx context.Context, id string) error {
 	if entry, found := s.sessions.remove(id); found {
+		defer s.sessions.untrack()
+
 		s.teardown(ctx, entry)
 	}
 
 	return nil
+}
+
+// teardownAll stops several sessions in parallel: each stop waits for its FFmpeg to exit.
+func (s *Service) teardownAll(ctx context.Context, entries []*sessionEntry) {
+	var group sync.WaitGroup
+
+	for _, entry := range entries {
+		group.Go(func() { s.teardown(ctx, entry) })
+	}
+
+	group.Wait()
 }
 
 // teardown stops a session that is no longer in the registry. Only the caller that took the

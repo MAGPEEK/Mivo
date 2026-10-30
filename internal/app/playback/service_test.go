@@ -39,6 +39,7 @@ func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 		{name: "urls", mutate: func(d *appplayback.Dependencies) { d.URLs = nil }, wantText: "stream url builder"},
 		{name: "ids", mutate: func(d *appplayback.Dependencies) { d.IDs = nil }, wantText: "id generator"},
 		{name: "clock", mutate: func(d *appplayback.Dependencies) { d.Clock = nil }, wantText: "clock"},
+		{name: "after", mutate: func(d *appplayback.Dependencies) { d.After = nil }, wantText: "timer"},
 		{name: "logger", mutate: func(d *appplayback.Dependencies) { d.Logger = nil }, wantText: "logger"},
 	}
 
@@ -70,7 +71,7 @@ func TestNewServiceReportsEveryMissingDependency(t *testing.T) {
 
 	for _, name := range []string{
 		"file source", "path resolver", "keyframe locator", "stream producer", "workspace",
-		"stream url builder", "id generator", "clock", "logger",
+		"stream url builder", "id generator", "clock", "timer", "logger",
 	} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("NewService(empty) error = %q, want it to name %q", err, name)
@@ -117,9 +118,14 @@ func TestNewServiceAcceptsTheLimitBounds(t *testing.T) {
 		env.options.MaxTranscodeSessions = limit
 		env.options.Policy.MaxTranscodeHeight = 0
 
-		if _, err := appplayback.NewService(env.dependencies(), env.options); err != nil {
+		service, err := appplayback.NewService(env.dependencies(), env.options)
+		if err != nil {
 			t.Errorf("NewService(max transcodes %d, no height cap) error = %v", limit, err)
+
+			continue
 		}
+
+		closeAtCleanup(t, service)
 	}
 }
 
@@ -296,6 +302,8 @@ func TestAccessOfADirectPlaySession(t *testing.T) {
 		t.Fatalf("Access error = %v", err)
 	}
 
+	defer access.Release()
+
 	want := appplayback.StreamAccess{
 		Delivery: playback.DeliveryFile, LibraryRoot: libraryRoot,
 		RelativePath: directRelativePath, ContentType: "video/mp4",
@@ -323,6 +331,8 @@ func TestAccessOfAnHLSSessionWaitsForTheProduction(t *testing.T) {
 		t.Fatalf("Access error = %v", err)
 	}
 
+	defer access.Release()
+
 	if access.Delivery != playback.DeliveryHLS || access.Directory != workspaceDir(started.ID) ||
 		access.LibraryRoot != "" || access.RelativePath != "" || access.ContentType != "" {
 		t.Errorf("Access = %+v, want HLS with the workspace %s only", access, workspaceDir(started.ID))
@@ -332,7 +342,8 @@ func TestAccessOfAnHLSSessionWaitsForTheProduction(t *testing.T) {
 		t.Errorf("WaitReady error = %v, want nil", err)
 	}
 
-	env.producer.productionOf(started.ID).setReadyErr(errBoom)
+	// The production fails after its first segment: Ready reports the exit error.
+	env.producer.productionOf(started.ID).exit(errBoom)
 
 	assertWrappedError(t, access.WaitReady(t.Context()), errBoom, "wait for stream of session "+started.ID)
 }
@@ -348,6 +359,8 @@ func TestWaitReadyAfterStopReportsAStoppedProduction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Access error = %v", err)
 	}
+
+	defer access.Release()
 
 	if err := service.Stop(t.Context(), started.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
@@ -375,9 +388,7 @@ func TestAccessRecordsTheAccessTime(t *testing.T) {
 
 	env.clock.advance(90 * time.Second)
 
-	if _, err := service.Access(t.Context(), started.ID); err != nil {
-		t.Fatalf("Access error = %v", err)
-	}
+	mustAccess(t, service, started.ID).Release()
 
 	env.clock.advance(time.Second)
 

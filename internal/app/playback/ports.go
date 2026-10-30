@@ -1,7 +1,8 @@
 // Package playback contains the playback session use cases (ADR 0023, ADR 0024): a client
 // asks to play a media file with its profile, the decision engine picks direct play, remux
 // or transcode, and the service starts FFmpeg only for the HLS modes, enforces the session
-// limits and stops sessions on request. Sessions live in memory.
+// limits and stops sessions on request. Sessions live in memory; their state follows the
+// production, idle sessions are reaped, and Close stops every FFmpeg on shutdown.
 //
 // The package declares the ports it needs; adapters implement them (sqlite: the playable
 // file source, fs/libraryfs: the path resolver, ffmpeg: the keyframe locator and the stream
@@ -108,6 +109,9 @@ type Workspace interface {
 	Create(ctx context.Context, sessionID string) (string, error)
 	// Remove deletes the directory of a session; a missing directory is not an error.
 	Remove(ctx context.Context, sessionID string) error
+	// Purge deletes the session directories a previous run left behind and returns how many
+	// it removed. It continues after a failed removal and reports the joined errors.
+	Purge(ctx context.Context) (int, error)
 }
 
 // StreamURLBuilder builds the opaque stream URL clients load. Implemented by

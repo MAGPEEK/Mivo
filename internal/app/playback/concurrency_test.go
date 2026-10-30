@@ -4,6 +4,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"testing/synctest"
 
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
@@ -143,20 +144,129 @@ func TestAStartingSessionIsInvisibleButHoldsItsSlot(t *testing.T) {
 func startReplacementHeldAtTheGate(t *testing.T, env *environment, service *appplayback.Service, oldID string) <-chan startResult {
 	t.Helper()
 
-	env.producer.gate = make(chan struct{})
-	env.producer.entered = make(chan struct{}, 1)
-	results := make(chan startResult, 1)
 	seek := request(transcodeFileID)
 	seek.ReplacesSessionID = oldID
 
+	return startHeldAtTheGate(t, env, service, seek)
+}
+
+// startHeldAtTheGate starts startRequest and returns once its production waits at the
+// producer gate.
+func startHeldAtTheGate(t *testing.T, env *environment, service *appplayback.Service, startRequest appplayback.StartRequest) <-chan startResult {
+	t.Helper()
+
+	env.producer.gate = make(chan struct{})
+	env.producer.entered = make(chan struct{}, 1)
+	results := make(chan startResult, 1)
+
 	go func() {
-		session, err := service.Start(t.Context(), seek)
+		session, err := service.Start(t.Context(), startRequest)
 		results <- startResult{session: session, err: err}
 	}()
 
 	<-env.producer.entered
 
 	return results
+}
+
+func TestAccessOfTheOldSessionDuringASwapServesItsWorkspace(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment()
+	service := env.service(t)
+	old := mustStart(t, service, request(remuxFileID))
+	results := startReplacementHeldAtTheGate(t, env, service, old.ID)
+
+	access, err := service.Access(t.Context(), old.ID)
+	if err != nil {
+		t.Fatalf("Access of the old session during the swap error = %v", err)
+	}
+
+	defer access.Release()
+
+	if access.Directory != workspaceDir(old.ID) {
+		t.Errorf("Access directory = %q during the swap, want the old workspace %q", access.Directory, workspaceDir(old.ID))
+	}
+
+	if err := access.WaitReady(t.Context()); err != nil {
+		t.Errorf("WaitReady of the old session during the swap error = %v", err)
+	}
+
+	close(env.producer.gate)
+
+	if result := <-results; result.err != nil {
+		t.Fatalf("replacement error = %v", result.err)
+	}
+}
+
+func TestALowerClassReplacementKeepsTheOldSessionsSlotCounted(t *testing.T) {
+	t.Parallel()
+
+	inBubble(t, func(t *testing.T, env *environment) {
+		env.options.MaxTranscodeSessions = 1
+		service := env.service(t)
+		old := mustStart(t, service, request(transcodeFileID))
+
+		// A seek that turns the transcode into a remux: the new session re-encodes nothing,
+		// but the old one keeps re-encoding until the remux runs.
+		seek := request(remuxFileID)
+		seek.ReplacesSessionID = old.ID
+		results := startHeldAtTheGate(t, env, service, seek)
+		env.producer.entered = make(chan struct{}, 1)
+		third := make(chan error, 1)
+
+		go func() {
+			_, err := service.Start(t.Context(), request(audioTranscodeFileID))
+			third <- err
+		}()
+
+		// An admitted third transcode would wait at the producer gate instead of answering.
+		synctest.Wait()
+
+		select {
+		case err := <-third:
+			if !errors.Is(err, appplayback.ErrSessionLimitReached) {
+				t.Errorf("third transcode during the swap error = %v, want ErrSessionLimitReached", err)
+			}
+		default:
+			t.Errorf("third transcode during the swap was admitted, want ErrSessionLimitReached")
+		}
+
+		env.producer.err = errBoom
+		close(env.producer.gate)
+
+		if result := <-results; !errors.Is(result.err, errBoom) {
+			t.Fatalf("replacement = %+v, %v; want errBoom", result.session, result.err)
+		}
+
+		// The failed remux released its claim; the old transcode still runs and holds the slot.
+		mustGet(t, service, old.ID)
+
+		env.producer.err = nil
+
+		if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+			t.Errorf("transcode after the failed swap error = %v, want ErrSessionLimitReached", err)
+		}
+	})
+}
+
+func TestAHigherClassReplacementTakesOverTheOldFFmpegSlot(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment()
+	env.options.MaxTranscodeSessions = 1
+	service := env.service(t)
+	old := mustStart(t, service, request(remuxFileID))
+
+	for range cappedFFmpegSessions - 1 {
+		mustStart(t, service, request(remuxFileID))
+	}
+
+	// The FFmpeg cap is full; a remux turning into a transcode still takes over its slot.
+	seek := request(transcodeFileID)
+	seek.ReplacesSessionID = old.ID
+
+	mustStart(t, service, seek)
 }
 
 func TestAReplacementHoldsTheSlotAtomicallyWhileItStarts(t *testing.T) {
@@ -336,9 +446,12 @@ func exerciseSession(t *testing.T, service *appplayback.Service, id string) {
 	var group sync.WaitGroup
 
 	group.Go(func() {
-		if _, err := service.Access(t.Context(), id); err != nil && !errors.Is(err, domain.ErrNotFound) {
+		access, err := service.Access(t.Context(), id)
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("Access error = %v", err)
 		}
+
+		access.Release()
 	})
 	group.Go(func() {
 		if _, err := service.Get(t.Context(), id); err != nil && !errors.Is(err, domain.ErrNotFound) {

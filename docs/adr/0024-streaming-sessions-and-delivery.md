@@ -122,3 +122,52 @@ it.
   `MaxFFmpegSessions` / the transcode limit by the number of replacements in flight.
 - Overall cap: at most 256 sessions (`MaxSessions`) including direct play, answered with 503
   `session_limit_reached` – bounds memory while there is no authentication (until M7).
+
+## Notes (M2-25)
+
+Lifecycle details of `app/playback`; they refine the decision above without changing it.
+
+- The idle reaper checks every 15 s (`IdleCheckInterval`) and stops sessions not accessed for
+  2 minutes or longer (`IdleTimeout`), so a session ends at most 15 s after its timeout. The
+  idle time starts when a session becomes visible (its production has started), and only
+  stream requests (`Access`) count, not `GET` of the session.
+- A stream request in flight is activity: a browser often streams a direct-play MP4 over one
+  long Range request, which would otherwise be reaped mid-playback. `Access` marks the session
+  in use until the delivery adapter releases the returned access (`StreamAccess.Release`,
+  deferred, idempotent); the reaper skips sessions in use, and the idle time restarts when the
+  last request ends. `DELETE`, a replacement and shutdown still end a session in use; the open
+  request's reads then fail.
+- Direct-play sessions have no cap of their own (this ADR does not require one): they count
+  only against `MaxSessions`, and the idle reaper removes forgotten ones.
+- An HLS session is `ready` with the first segment, `ended` after a clean FFmpeg exit and
+  `failed` with `failureCode` `transcode_failed` after an exit error or a clean exit without
+  any segment. The session resource of an ended or failed session
+  (`GET /api/v1/playback/sessions/{id}`) stays readable until `DELETE` or the idle timeout, so a
+  client can read why it failed. An ended session keeps serving its HLS files; for a failed
+  session the delivery adapter answers 500 for every HLS file, including segments written
+  before the failure. A stopped session is removed, not ended. The FFmpeg producer logs a failed process once at warn (exit code,
+  stderr tail); the playback service records the state change only at info (session, file,
+  failure code), so one failure is warned about once.
+- When a replacement re-encodes less than the session it replaces (transcode → remux), the old
+  session keeps counting in the categories the replacement does not occupy until it is stopped,
+  so the limits hold while both run.
+- The startup purge runs before the first session only; afterwards it would delete live
+  directories and is refused. Sessions requested while it runs get 503 (`ErrUnavailable`).
+- Shutdown (`Close`): new sessions get 503 (`ErrServiceClosed`, wraps `ErrUnavailable`), also
+  a start that races the shutdown; all sessions are stopped in parallel (Stop first, so a kill
+  is not reported as a crash), starts still in flight tear down what they started and a
+  running purge finishes, then the process context is cancelled. Close is bounded by its
+  context; when it runs out, the cancelled context kills what is left.
+
+## Notes (M2-24)
+
+- Every failed production is logged once at warn by the producer, with the session, the exit
+  code, the number of segments written and the tail of FFmpeg's stderr (at most 4 KiB, cut at a
+  character boundary). The tail may contain an absolute media path; it stays in the server log
+  and is never returned to clients. `app/playback` records the resulting state change at info
+  only (Notes M2-25), so a failure produces one warning.
+- The producer reads the playlist through the session directory's `os.Root`, and the delivery
+  adapter opens playlist and segments the same way and only for the duration of one response.
+- When the service context ends without `Stop`, `Ready` reports `ErrProductionStopped` and no
+  warning is logged.
+

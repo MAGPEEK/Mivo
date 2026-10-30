@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain/playback"
@@ -12,8 +13,10 @@ import (
 // State is the lifecycle state of a session (API PlaybackSessionState, ADR 0024).
 type State string
 
-// The session states. Direct-play sessions start ready; HLS sessions start starting. The
-// transitions to ready, ended and failed follow the production (M2-25).
+// The session states. Direct-play sessions start ready; HLS sessions start starting and
+// follow their production: ready with the first segment, ended after a clean exit with
+// segments, failed (FailureTranscodeFailed) after an exit error or a clean exit without any
+// segment. A stopped session is removed, not ended.
 const (
 	StateStarting State = "starting"
 	StateReady    State = "ready"
@@ -64,12 +67,17 @@ type StartRequest struct {
 	StartPosition time.Duration
 	// AudioStreamIndex selects an audio stream by its ffprobe index; nil plays the default.
 	AudioStreamIndex *int
-	// ReplacesSessionID names a session to stop before the limits are checked, for example
-	// after a seek outside the produced range. Empty or unknown IDs are ignored.
+	// ReplacesSessionID names the session this one replaces, for example after a seek outside
+	// the produced range. The new session takes over its slot when it is reserved, so the
+	// limits never refuse the seek; the old session keeps playing until the new production
+	// has started and is stopped only then, so a failed start leaves it untouched. Empty,
+	// unknown or already replaced IDs are ignored.
 	ReplacesSessionID string
 }
 
-// StreamAccess is what the stream handler needs to serve a session's bytes.
+// StreamAccess is what the stream handler needs to serve a session's bytes. It also marks the
+// session in use: the idle reaper keeps a session while any of its accesses is open, so the
+// delivery adapter must call Release (deferred) once it has served the request.
 type StreamAccess struct {
 	Delivery playback.Delivery
 	// LibraryRoot, RelativePath and ContentType locate and describe the original file of a
@@ -83,6 +91,24 @@ type StreamAccess struct {
 
 	sessionID  string
 	production Production
+	// lease is shared by every copy of the access, so releasing one copy releases all.
+	lease *accessLease
+}
+
+// accessLease ends one access exactly once.
+type accessLease struct {
+	once sync.Once
+	end  func()
+}
+
+// Release ends the request this access was opened for: the session's idle time restarts
+// now, and when no other request is open the reaper may stop it after IdleTimeout. Every
+// successful Service.Access must be released, typically with defer. Release is idempotent
+// (also across copies), safe after the session was stopped, and a no-op on the zero value.
+func (access StreamAccess) Release() {
+	if access.lease != nil {
+		access.lease.once.Do(access.lease.end)
+	}
 }
 
 // WaitReady blocks until the stream can be loaded. Direct play is ready at once; HLS waits

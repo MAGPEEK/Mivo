@@ -26,7 +26,8 @@ const fallbackContentType = "application/octet-stream"
 // Errors wrap domain.ErrInvalid (profile or request), domain.ErrNotFound (unknown file or a
 // file missing on disk), domain.ErrForbidden (a file outside its library),
 // domain.ErrUnsupported (file without a probe result, or a playback.Decide failure such as
-// playback.ErrNoCompatibleFormat), ErrSessionLimitReached, or the error of a port.
+// playback.ErrNoCompatibleFormat), ErrSessionLimitReached, domain.ErrUnavailable (the service
+// is closed, ErrServiceClosed, or the startup purge runs), or the error of a port.
 func (s *Service) Start(ctx context.Context, request StartRequest) (Session, error) {
 	session, err := s.start(ctx, request)
 	if err != nil {
@@ -53,6 +54,9 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 		return Session{}, err
 	}
 
+	// Close waits until this start has activated or torn down what it started.
+	defer s.sessions.untrack()
+
 	var started activation
 
 	if prepared.plan.Delivery == playback.DeliveryHLS {
@@ -64,7 +68,18 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 		}
 	}
 
-	return s.activate(ctx, id, started)
+	started.activatedAt = s.clock()
+
+	session, err := s.activate(ctx, id, started)
+	if err != nil {
+		return Session{}, err
+	}
+
+	if started.production != nil {
+		s.follow(id, started.production)
+	}
+
+	return session, nil
 }
 
 // preparedStart is a decided plan for a file whose path was resolved.
@@ -159,7 +174,7 @@ func (s *Service) newEntry(prepared preparedStart, replaces string) (*sessionEnt
 }
 
 // activate makes the started session visible and tears down the session it replaced. A
-// session that vanished while it started (shutdown, M2-25) must not leave its FFmpeg behind.
+// session that vanished while it started (Close) must not leave its FFmpeg behind.
 func (s *Service) activate(ctx context.Context, id string, started activation) (Session, error) {
 	session, replaced, found := s.sessions.activate(id, started)
 	if !found {
@@ -167,7 +182,8 @@ func (s *Service) activate(ctx context.Context, id string, started activation) (
 			session: Session{ID: id}, production: started.production, directory: started.directory,
 		})
 
-		return Session{}, fmt.Errorf("session %s ended while it started: %w", id, domain.ErrUnavailable)
+		// Only Close removes a pending session that its start did not release.
+		return Session{}, fmt.Errorf("session %s ended while it started: %w", id, ErrServiceClosed)
 	}
 
 	if replaced != nil {
@@ -210,6 +226,12 @@ func (s *Service) produce(ctx context.Context, request productionRequest) (activ
 	if err != nil {
 		if cleanupErr := s.removeWorkspace(ctx, id); cleanupErr != nil {
 			s.logger.WarnContext(ctx, "clean up after a failed stream start", "session", id, "error", cleanupErr)
+		}
+
+		// A start racing Close sees the cancelled process context; that is the shutdown
+		// (503), not a server error, so the cancellation is not wrapped.
+		if s.processContext.Err() != nil {
+			return activation{}, fmt.Errorf("start stream producer: %w", ErrServiceClosed)
 		}
 
 		return activation{}, fmt.Errorf("start stream producer: %w", err)

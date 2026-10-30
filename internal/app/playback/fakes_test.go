@@ -3,6 +3,7 @@ package playback_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -97,39 +98,92 @@ func (locator *scriptedKeyframes) recordedCalls() []keyframeCall {
 	return append([]keyframeCall(nil), locator.calls...)
 }
 
-// fakeProduction is a Production whose readiness the test scripts.
+// errNoSegments is what a fake production reports for a clean exit without any segment.
+var errNoSegments = errors.New("ffmpeg exited without writing a segment")
+
+// fakeProduction is a Production that keeps the port contract while the test decides when
+// the first segment appears, how the process exits and how long Stop takes.
 type fakeProduction struct {
-	mutex    sync.Mutex
-	readyErr error
-	stops    int
-	done     chan struct{}
-	doneOnce sync.Once
+	mutex   sync.Mutex
+	stops   int
+	exitErr error
+	// segment is closed once the first segment exists.
+	segment     chan struct{}
+	segmentOnce sync.Once
+	done        chan struct{}
+	doneOnce    sync.Once
+	// stopGate, when set, makes Stop wait for it to close before the process "exits".
+	stopGate <-chan struct{}
+	// jobContext is the context the producer got; killedByContext records whether it was
+	// already cancelled when Stop ran, which a real producer would report as a crash.
+	jobContext      context.Context
+	killedByContext bool
 }
 
-func newFakeProduction() *fakeProduction {
-	return &fakeProduction{done: make(chan struct{})}
+func newFakeProduction(jobContext context.Context, stopGate <-chan struct{}) *fakeProduction {
+	return &fakeProduction{
+		segment: make(chan struct{}), done: make(chan struct{}),
+		stopGate: stopGate, jobContext: jobContext,
+	}
 }
 
 func (production *fakeProduction) Ready(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	// The port contract: once the process has ended, Ready reports how at once.
+	select {
+	case <-production.done:
+		return production.outcome()
+	default:
 	}
 
+	select {
+	case <-production.segment:
+		return nil
+	case <-production.done:
+		return production.outcome()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// outcome is the result of Ready after the process ended, in the order of the port contract.
+func (production *fakeProduction) outcome() error {
 	production.mutex.Lock()
 	defer production.mutex.Unlock()
 
-	// The port contract: after Stop, Ready reports the stop, not the kill's exit error.
-	if production.stops > 0 {
+	switch {
+	case production.stops > 0:
 		return fmt.Errorf("production killed: %w", appplayback.ErrProductionStopped)
+	case production.exitErr != nil:
+		return production.exitErr
+	case !production.hasSegment():
+		return errNoSegments
+	default:
+		return nil
 	}
+}
 
-	return production.readyErr
+func (production *fakeProduction) hasSegment() bool {
+	select {
+	case <-production.segment:
+		return true
+	default:
+		return false
+	}
 }
 
 func (production *fakeProduction) Stop() {
 	production.mutex.Lock()
 	production.stops++
+
+	if production.jobContext.Err() != nil {
+		production.killedByContext = true
+	}
+
 	production.mutex.Unlock()
+
+	if production.stopGate != nil {
+		<-production.stopGate
+	}
 
 	production.doneOnce.Do(func() { close(production.done) })
 }
@@ -138,6 +192,7 @@ func (production *fakeProduction) Done() <-chan struct{} {
 	return production.done
 }
 
+// stopCount counts the Stop calls, including those still waiting at the stop gate.
 func (production *fakeProduction) stopCount() int {
 	production.mutex.Lock()
 	defer production.mutex.Unlock()
@@ -145,11 +200,26 @@ func (production *fakeProduction) stopCount() int {
 	return production.stops
 }
 
-func (production *fakeProduction) setReadyErr(err error) {
+// stoppedAfterKill reports whether any Stop ran after the job context was cancelled.
+func (production *fakeProduction) stoppedAfterKill() bool {
 	production.mutex.Lock()
 	defer production.mutex.Unlock()
 
-	production.readyErr = err
+	return production.killedByContext
+}
+
+// writeSegment lets the production report its first segment.
+func (production *fakeProduction) writeSegment() {
+	production.segmentOnce.Do(func() { close(production.segment) })
+}
+
+// exit ends the process by itself, with err as its exit error (nil: a clean exit).
+func (production *fakeProduction) exit(err error) {
+	production.mutex.Lock()
+	production.exitErr = err
+	production.mutex.Unlock()
+
+	production.doneOnce.Do(func() { close(production.done) })
 }
 
 // startedJob is one call of the fake producer.
@@ -161,13 +231,16 @@ type startedJob struct {
 }
 
 // fakeProducer records every start. When gate is set, each start signals entered and waits
-// for gate to close, so tests can hold starts in flight.
+// for gate to close, so tests can hold starts in flight. Productions have their first
+// segment at once unless holdSegments is set; stopGate is handed to every production.
 type fakeProducer struct {
-	mutex   sync.Mutex
-	err     error
-	started []startedJob
-	entered chan struct{}
-	gate    chan struct{}
+	mutex        sync.Mutex
+	err          error
+	started      []startedJob
+	entered      chan struct{}
+	gate         chan struct{}
+	holdSegments bool
+	stopGate     chan struct{}
 }
 
 func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (appplayback.Production, error) {
@@ -183,7 +256,11 @@ func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (a
 		return nil, producer.err
 	}
 
-	production := newFakeProduction()
+	production := newFakeProduction(ctx, producer.stopGate)
+	if !producer.holdSegments {
+		production.writeSegment()
+	}
+
 	producer.started = append(producer.started, startedJob{ctx: ctx, job: job, production: production})
 
 	return production, nil
@@ -207,13 +284,42 @@ func (producer *fakeProducer) productionOf(sessionID string) *fakeProduction {
 	return nil
 }
 
-// memoryWorkspace records created and removed session directories.
+// memoryWorkspace records created and removed session directories. Purge reports
+// purgeRemoved leftovers and purgeErr; when purgeGate is set, Purge waits for it to close.
 type memoryWorkspace struct {
-	mutex     sync.Mutex
-	createErr error
-	removeErr error
-	created   []string
-	removed   []string
+	mutex        sync.Mutex
+	createErr    error
+	removeErr    error
+	created      []string
+	removed      []string
+	purges       int
+	purgeRemoved int
+	purgeErr     error
+	purgeGate    chan struct{}
+}
+
+func (workspace *memoryWorkspace) Purge(ctx context.Context) (int, error) {
+	if workspace.purgeGate != nil {
+		<-workspace.purgeGate
+	}
+
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+
+	workspace.mutex.Lock()
+	defer workspace.mutex.Unlock()
+
+	workspace.purges++
+
+	return workspace.purgeRemoved, workspace.purgeErr
+}
+
+func (workspace *memoryWorkspace) purgeCount() int {
+	workspace.mutex.Lock()
+	defer workspace.mutex.Unlock()
+
+	return workspace.purges
 }
 
 func (workspace *memoryWorkspace) Create(ctx context.Context, sessionID string) (string, error) {
@@ -300,10 +406,18 @@ func sessionID(number int) string {
 	return fmt.Sprintf("00000000-0000-4000-8000-%012d", number)
 }
 
-// manualClock is a clock that only moves when the test advances it.
+// clockWaiter is one pending After of the manual clock.
+type clockWaiter struct {
+	deadline time.Time
+	fire     chan time.Time
+}
+
+// manualClock is a clock that only moves when the test advances it; advancing fires every
+// After whose deadline has passed.
 type manualClock struct {
-	mutex sync.Mutex
-	now   time.Time
+	mutex   sync.Mutex
+	now     time.Time
+	waiters []clockWaiter
 }
 
 func (clock *manualClock) Now() time.Time {
@@ -313,11 +427,36 @@ func (clock *manualClock) Now() time.Time {
 	return clock.now
 }
 
+func (clock *manualClock) After(wait time.Duration) <-chan time.Time {
+	clock.mutex.Lock()
+	defer clock.mutex.Unlock()
+
+	// Buffered, so advancing never blocks on a receiver that has gone away.
+	fire := make(chan time.Time, 1)
+	clock.waiters = append(clock.waiters, clockWaiter{deadline: clock.now.Add(wait), fire: fire})
+
+	return fire
+}
+
 func (clock *manualClock) advance(step time.Duration) {
 	clock.mutex.Lock()
 	defer clock.mutex.Unlock()
 
 	clock.now = clock.now.Add(step)
+
+	pending := clock.waiters[:0]
+
+	for _, waiter := range clock.waiters {
+		if waiter.deadline.After(clock.now) {
+			pending = append(pending, waiter)
+
+			continue
+		}
+
+		waiter.fire <- clock.now
+	}
+
+	clock.waiters = pending
 }
 
 // lockedBuffer collects log output written from several goroutines.
