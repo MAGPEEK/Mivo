@@ -8,6 +8,10 @@
 // dependency-cruiser rejects nested quantifiers as unsafe regular expressions.
 const reactModules = "(^|node_modules/)(react|react-[^/]+|@[^/]+/react|@[^/]+/react-[^/]+)(/|$)";
 
+// The API client, whether reached by a relative path, through the workspace link (resolved to
+// packages/api-client) or as an unresolved package name.
+const apiClientModules = "^packages/api-client/|(^|node_modules/)@mivo/api-client(/|$)";
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -46,6 +50,14 @@ module.exports = {
       severity: "error",
       from: { path: "^packages/(player-core|api-client|ui-tokens)/" },
       to: { path: reactModules },
+    },
+    {
+      name: "player-core-not-to-api-client",
+      comment:
+        "player-core mirrors the API types structurally (ADR 0023) so the TV app and DLNA profiles can use it without the HTTP client; the web app checks assignability instead. Imports from apps/ are already forbidden by packages-not-to-apps.",
+      severity: "error",
+      from: { path: "^packages/player-core/" },
+      to: { path: apiClientModules },
     },
     {
       name: "shared-not-to-features-or-app",

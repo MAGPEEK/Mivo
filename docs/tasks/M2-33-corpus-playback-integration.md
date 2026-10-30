@@ -50,3 +50,7 @@ adapters, and every video file gets the expected mode and produces playable outp
   relative to the format start like `-ss`, so 7.1 yields 20.021 s instead of 20 s. Compare relative
   to the first keyframe or allow a tolerance (≥ 0.05 s); never assert exact seconds across FFmpeg
   versions.
+- (from M2-14 test r2) A browser profile can carry HLS delivery `mse`/`native` with empty HLS codec
+  lists (all probes failed or timed out). Add a case proving the engine then plans no HLS
+  (`no_compatible_format` for files that need remux/transcode) instead of producing an unplayable
+  stream.

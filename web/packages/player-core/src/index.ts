@@ -1,13 +1,42 @@
 export type {
-  ClientCapabilities,
-  ContainerCandidate,
-  ContainerFormat,
-  ContainerSupport,
-  SupportLevel,
-} from "./capabilities";
+  ClientProfile,
+  CodecLimit,
+  DirectPlayProfile,
+  HlsDelivery,
+  HlsProfile,
+  MediaIdentifier,
+} from "./profile/clientProfile";
+export type {
+  AudioDecodingConfiguration,
+  ClientProbes,
+  DecodingConfiguration,
+  DecodingResult,
+  DecodingType,
+  MediaCapabilitiesProbe,
+  MediaElementProbe,
+  MediaSourceProbe,
+  StartTimer,
+  VideoDecodingConfiguration,
+} from "./profile/probes";
+export { decodingInfoTimeoutMilliseconds } from "./profile/decodingCheck";
 export {
-  defaultContainerCandidates,
-  detectContainerSupport,
-  toSupportLevel,
-  type MediaTypeProbe,
-} from "./containerSupport";
+  audioCodecIds,
+  audioCodecVariants,
+  containerProbes,
+  hlsPlaylistMimeType,
+  hlsSegmentProbe,
+  videoCodecIds,
+  videoCodecVariants,
+  type AudioCodecId,
+  type CodecVariant,
+  type ContainerProbe,
+  type ProbeContext,
+  type VideoCodecId,
+} from "./profile/probeTables";
+export {
+  detectClientProfile,
+  maxClientNameLength,
+  type DetectClientProfileOptions,
+} from "./profile/detectClientProfile";
+export { codecLabel, containerLabel } from "./labels/formatLabels";
+export { bitDepthLabel, channelLabel, hdrLabel, resolutionLabel } from "./labels/streamLabels";

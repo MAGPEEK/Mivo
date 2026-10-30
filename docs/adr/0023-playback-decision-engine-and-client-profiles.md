@@ -147,3 +147,32 @@ without changing it.
   the `video_downscaled` warning.
 - `Downscaled`, `ScaleRequired`, `Plan.Video()`/`Audio()` and `FailureCodeOf` are internal Go
   helpers, not part of the API contract.
+
+## Notes (M2-14)
+
+How player-core (`web/packages/player-core/src/profile`) fills the client profile:
+
+- Audio codecs are probed with `audio/*` MIME types (`audio/mp4`, `audio/webm`, `audio/ogg`, …),
+  because Media Capabilities rejects a `video/*` type in an audio query. QuickTime has no
+  registered audio type, so `mov` audio is probed as `audio/mp4`.
+- A direct-play container is listed only when its bare video MIME type plays and at least one
+  of its video codecs plays. Chrome answers `video/ogg` but plays no Ogg video codec; its Ogg
+  audio answers alone do not make Ogg a direct-play container.
+- Besides the strings listed above, H.264 is probed as Constrained Baseline `avc1.42E01E`,
+  Baseline `avc1.42001E`, Main `avc1.4D401E`, High `avc1.640028` and High 10 `avc1.6E0028`, and
+  HEVC also as Main `hvc1.1.6.L120.B0`. H.264 and HEVC limits list the playing profiles; AV1
+  and VP9 limits carry only `maxBitDepth`.
+- A codec counts as playable in a context when any of its variants plays there. Its codec limit
+  is the intersection over all contexts (direct-play containers and HLS) where it plays: the
+  strictest context wins, matching the engine's fail-closed rule. A codec whose contexts share
+  no variant is not listed anywhere. Limits follow the order h264, hevc, vp9, av1, like the Go
+  reference profiles.
+- HLS delivery is `mse` whenever `MediaSource.isTypeSupported` reports at least one HLS video
+  codec, even if the media element also answers the playlist type (Chrome/Edge 156 do).
+  `native` is used only when MSE is missing or plays no HLS video codec (iOS Safari), `none`
+  when neither works.
+- Each `decodingInfo` answer is bounded by a 2000 ms timeout through an injected timer (no DOM
+  globals in player-core); a timeout, a rejection or a thrown error counts as unsupported.
+  Answers are remembered per decoding type and content type within one detection.
+- The client name loses its control characters (`\p{Cc}`, which the server rejects) and is then
+  cut to 64 code points.

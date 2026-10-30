@@ -1,0 +1,32 @@
+{
+  "$comment": "Reference profile ChromiumDesktop from the table in docs/adr/0025-playback-verification.md. internal/domain/playback/playbacktest (M2-09) holds the same values in Go, in the same order (codec limits h264, vp9, av1), so a strict comparison works; change both together.",
+  "profile": {
+    "name": "chromium-desktop",
+    "directPlay": [
+      {
+        "container": "mp4",
+        "videoCodecs": ["h264", "av1", "vp9"],
+        "audioCodecs": ["aac", "mp3", "opus", "flac"]
+      },
+      {
+        "container": "webm",
+        "videoCodecs": ["vp8", "vp9", "av1"],
+        "audioCodecs": ["opus", "vorbis"]
+      }
+    ],
+    "hls": {
+      "delivery": "mse",
+      "videoCodecs": ["h264", "av1", "vp9"],
+      "audioCodecs": ["aac", "mp3", "opus", "flac"]
+    },
+    "codecLimits": [
+      {
+        "codec": "h264",
+        "maxBitDepth": 8,
+        "profiles": ["Constrained Baseline", "Baseline", "Main", "High"]
+      },
+      { "codec": "vp9", "maxBitDepth": 10 },
+      { "codec": "av1", "maxBitDepth": 10 }
+    ]
+  }
+}

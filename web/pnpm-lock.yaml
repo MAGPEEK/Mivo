@@ -65,6 +65,9 @@ importers:
       '@mivo/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@mivo/player-core':
+        specifier: workspace:*
+        version: link:../../packages/player-core
       '@mivo/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
