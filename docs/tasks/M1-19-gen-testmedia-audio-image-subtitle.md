@@ -39,3 +39,9 @@ gaps are listed in the manifest instead of being silently missing.
   files later (separate task, licensing to be checked).
 - Keep each case-declaring function under 50 lines. Split by sub-category if needed.
 - Use language tags in ISO 639-2 (`eng`, `deu`) as players and Matroska expect.
+
+## Review carry-over from M1-18 (APPROVE)
+- Add "RealVideo 4 (RMVB)" to the manifest gap entries (ADR 0021); the `.rmvb` case stays an RV20 placeholder.
+- `manifest.go`: chmod the temp manifest to a named 0o640 before rename (readable by group, matching 0750 dirs).
+- Interrupted runs (Ctrl+C / SIGTERM): return a wrapped "interrupted" error, do not mark untouched cases `failed`; handle `syscall.SIGTERM` in `signal.NotifyContext`.
+- Nits: no trailing ": " when stderr is empty; keep the stderr tail on a UTF-8 rune boundary; HDR10 expectation also checks colour matrix `bt2020nc`; summary counts "not selected" separately from capability skips; optionally record the encoder used (schema version bump); remove redundant `gen.jobs = 0` in runner_test.go.
