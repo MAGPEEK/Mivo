@@ -13,7 +13,7 @@ const mainContentId = "main-content";
 /** Frame around every page: sidebar navigation, top bar with search and the page content. */
 export function AppLayout() {
   const { t } = useTranslation();
-  const { collapsed, toggleCollapsed } = useSidebarState();
+  const { collapsed, toggleCollapsed, expandAndFocusToggle, toggleRef } = useSidebarState();
   const searchInputRef = useSearchShortcut();
   return (
     <div className="flex min-h-dvh">
@@ -26,7 +26,10 @@ export function AppLayout() {
       <Sidebar
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
-        footer={<ServerVersion />}
+        toggleRef={toggleRef}
+        footer={
+          collapsed ? <ServerVersion compact onExpand={expandAndFocusToggle} /> : <ServerVersion />
+        }
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar searchInputRef={searchInputRef} />

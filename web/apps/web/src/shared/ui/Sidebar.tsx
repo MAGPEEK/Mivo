@@ -1,6 +1,6 @@
 import { productName } from "@mivo/ui-tokens";
 import { Link } from "@tanstack/react-router";
-import { useId, type ReactNode } from "react";
+import { useId, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import { HomeIcon, SidebarIcon } from "./icons";
@@ -10,7 +10,12 @@ export interface SidebarProps {
   /** Collapsed shows icons only; every label stays available to screen readers. */
   readonly collapsed: boolean;
   readonly onToggleCollapsed: () => void;
-  /** Bottom area, e.g. the server version. */
+  /** Receives the toggle button, e.g. to move focus to it. */
+  readonly toggleRef?: Ref<HTMLButtonElement>;
+  /**
+   * Bottom area, e.g. the server version. Unlike the labels it stays visible while collapsed,
+   * so it can show a warning there; the caller adapts it to the narrow width.
+   */
   readonly footer?: ReactNode;
 }
 
@@ -21,7 +26,7 @@ function labelClass(collapsed: boolean, expandedClass: string): string {
 }
 
 /** Main navigation on the left: brand, page links, libraries and a footer slot. */
-export function Sidebar({ collapsed, onToggleCollapsed, footer }: SidebarProps) {
+export function Sidebar({ collapsed, onToggleCollapsed, toggleRef, footer }: SidebarProps) {
   const { t } = useTranslation();
   const navigationId = useId();
   return (
@@ -33,6 +38,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, footer }: SidebarProps) 
       <div className="flex h-14 shrink-0 items-center gap-2 px-3">
         <button
           type="button"
+          ref={toggleRef}
           aria-expanded={!collapsed}
           aria-controls={navigationId}
           aria-label={t("sidebar.toggle")}
@@ -48,7 +54,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, footer }: SidebarProps) 
       <SidebarLinks collapsed={collapsed} />
       <LibrariesSection collapsed={collapsed} />
       {footer !== undefined && (
-        <div className={labelClass(collapsed, "mt-auto border-t border-divider px-4 py-3")}>
+        <div className={`mt-auto border-t border-divider py-3 ${collapsed ? "px-2" : "px-4"}`}>
           {footer}
         </div>
       )}

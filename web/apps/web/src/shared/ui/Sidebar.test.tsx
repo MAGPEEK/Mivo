@@ -9,14 +9,15 @@ import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it } from "vitest";
 
+import { isVisuallyHidden } from "../../test/visibility";
 import { createI18n } from "../i18n";
 import { Sidebar } from "./Sidebar";
 
 // The sidebar links need a router; a single root route is enough to render it alone.
-async function renderSidebar(footer?: ReactNode): Promise<HTMLElement> {
+async function renderSidebar(footer?: ReactNode, collapsed = false): Promise<HTMLElement> {
   const rootRoute = createRootRoute({
     component: () => (
-      <Sidebar collapsed={false} onToggleCollapsed={() => undefined} footer={footer} />
+      <Sidebar collapsed={collapsed} onToggleCollapsed={() => undefined} footer={footer} />
     ),
   });
   const router = createRouter({
@@ -31,19 +32,32 @@ async function renderSidebar(footer?: ReactNode): Promise<HTMLElement> {
   return screen.findByRole("navigation", { name: "Main navigation" });
 }
 
+function follows(earlier: Node, later: Node): boolean {
+  return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+}
+
 describe("Sidebar footer slot", () => {
-  it("renders the given footer at the bottom of the navigation", async () => {
+  it("renders the given footer inside the navigation, after the libraries", async () => {
     const sidebar = await renderSidebar(<p>Footer content</p>);
+
+    const libraries = within(sidebar).getByText("No libraries yet");
+    const footer = within(sidebar).getByText("Footer content");
+
+    expect(follows(libraries, footer)).toBe(true);
+  });
+
+  it("keeps the footer visible while collapsed, unlike the labels", async () => {
+    const sidebar = await renderSidebar(<p>Footer content</p>, true);
 
     const footer = within(sidebar).getByText("Footer content");
 
-    expect(sidebar.lastElementChild?.contains(footer)).toBe(true);
+    expect(isVisuallyHidden(footer)).toBe(false);
+    expect(isVisuallyHidden(within(sidebar).getByText("No libraries yet"))).toBe(true);
   });
 
-  it("leaves the footer area out when no footer is given", async () => {
+  it("ends with the libraries section when no footer is given", async () => {
     const sidebar = await renderSidebar();
 
-    expect(within(sidebar).getByText("No libraries yet")).toBeTruthy();
-    expect(sidebar.lastElementChild?.textContent).toBe("LibrariesNo libraries yet");
+    expect(sidebar.textContent.endsWith("No libraries yet")).toBe(true);
   });
 });

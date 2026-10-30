@@ -18,7 +18,8 @@ package Mivo by following the docs, and every documented command works as writte
       `go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml`;
       `golangci-lint run` / `golangci-lint fmt`; `go tool -modfile=tools/go.mod govulncheck ./...`;
       `go generate ./...`; the sqlc Docker command (pinned version from M1-08);
-      `pnpm -C web install|lint|test|build|gen|dev|e2e`; Playwright browser install;
+      `pnpm -C web install|lint|test|build|gen|dev|e2e`; Playwright browser install
+      (`pnpm -C web exec playwright install --only-shell chromium`);
       `go run ./cmd/mivo`; `go build -tags webui -o bin/mivo.exe ./cmd/mivo` (after the web
       build); `go run ./scripts/gen-testmedia`;
       `docker build -f packaging/docker/Dockerfile -t mivo:dev .`; lefthook install
@@ -28,8 +29,8 @@ package Mivo by following the docs, and every documented command works as writte
       (`docker run --rm -v "${PWD}:/src" -w /src golang:<ver> go test -race ./...`).
 - [ ] `docs/development.md` lists prerequisites with pinned/minimum versions (Go, Node 24,
       pnpm 10, golangci-lint version from M1-03, FFmpeg, Docker Desktop) and Windows notes
-      (CRLF/LF, sqlc via Docker, Playwright browsers, ports 8460/5173/18460). It also lists
-      the generated-code drift checks from ADR 0017 and the rename checklist pointer
+      (CRLF/LF, sqlc via Docker, Playwright browsers, ports 8460/5173 – E2E picks a free port).
+      It also lists the generated-code drift checks from ADR 0017 and the rename checklist pointer
       (ADR 0002).
 - [ ] `README.md` gets a short "Development" section linking to `docs/development.md`.
 - [ ] Tester check: runs every command from the new `CLAUDE.md` section in PowerShell on the

@@ -1,10 +1,19 @@
+import type { Problem } from "@mivo/api-client";
 import { productName } from "@mivo/ui-tokens";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { fakeSystemInfo } from "../../test/fakeApi";
+import { fakeSystemInfo, respondNever, respondWithProblem } from "../../test/fakeApi";
 import { renderApp } from "../../test/renderApp";
+import { isVisuallyHidden } from "../../test/visibility";
 import { sidebarCollapsedStorageKey } from "./useSidebarState";
+
+const internalError: Problem = {
+  type: "about:blank",
+  title: "Internal Server Error",
+  status: 500,
+  code: "internal",
+};
 
 async function findSidebar(): Promise<HTMLElement> {
   return screen.findByRole("navigation", { name: "Main navigation" });
@@ -109,9 +118,46 @@ describe("Sidebar collapse toggle", () => {
 
     expect(within(sidebar).getByRole("link", { name: "Home" })).toBeTruthy();
     expect(within(sidebar).getByText("No libraries yet")).toBeTruthy();
-    expect(
-      await within(sidebar).findByText(`Server version ${fakeSystemInfo.version}`),
-    ).toBeTruthy();
+    const version = await within(sidebar).findByText(`Server version ${fakeSystemInfo.version}`);
+    expect(isVisuallyHidden(version)).toBe(true);
+  });
+
+  it("keeps a visible, focusable unreachable indicator while collapsed", async () => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
+
+    renderApp("/", { fetch: respondWithProblem(internalError) });
+    const status = within(await findSidebar()).getByRole("status");
+
+    const indicator = await within(status).findByRole("button", { name: "Server unreachable" });
+    expect(isVisuallyHidden(indicator)).toBe(false);
+    indicator.focus();
+    expect(document.activeElement).toBe(indicator);
+  });
+
+  it("expands the sidebar from the unreachable indicator and keeps keyboard focus", async () => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
+    renderApp("/", { fetch: respondWithProblem(internalError) });
+    const status = within(await findSidebar()).getByRole("status");
+    const indicator = await within(status).findByRole("button", { name: "Server unreachable" });
+
+    fireEvent.click(indicator);
+
+    expect(sidebarToggle().getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(sidebarToggle());
+    expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBe("false");
+    const message = within(status).getByText("Server unreachable");
+    expect(isVisuallyHidden(message)).toBe(false);
+    expect(within(status).queryByRole("button")).toBeNull();
+  });
+
+  it("announces the loading version while collapsed", async () => {
+    window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
+
+    renderApp("/", { fetch: respondNever() });
+    const status = within(await findSidebar()).getByRole("status");
+
+    expect(status.textContent).toBe("Loading server version");
+    expect(within(status).queryByTitle("Server unreachable")).toBeNull();
   });
 });
 

@@ -10,7 +10,9 @@ const systemInfoRetries = 1;
 
 /**
  * Query options for the server's system info. The version and identity only change when the
- * server restarts, which reloads the app anyway, so the data never goes stale.
+ * server restarts or is updated. The app does not reload itself then, so it keeps showing the
+ * previous version until the page is reloaded; that is acceptable for a footer label and
+ * saves a request on every mount.
  */
 export function systemInfoQueryOptions(client: ApiClient) {
   return queryOptions({

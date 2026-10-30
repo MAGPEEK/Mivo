@@ -65,6 +65,17 @@ export function SidebarIcon({ className }: IconProps) {
   );
 }
 
+/** Circle with an exclamation mark: something needs attention, e.g. the server is unreachable. */
+export function AlertIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5" />
+      <path d="M12 16.5h.01" />
+    </IconFrame>
+  );
+}
+
 /** Magnifying glass: search. */
 export function SearchIcon({ className }: IconProps) {
   return (
