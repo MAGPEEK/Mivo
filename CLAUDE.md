@@ -55,17 +55,50 @@ docs/                plan.md, adr/, tasks/, reports/
 
 ## Commands (Windows dev machine, PowerShell)
 
-Commands are added here as the tooling lands in milestone 1. Expected:
+Run from the repository root. Prerequisites, explanations and Git Bash/Linux differences:
+`docs/development.md`. PowerShell splits unquoted arguments like `-modfile=tools/go.mod` at
+the dot, so keep the quotes (they work in bash too). [docker] needs Docker Desktop,
+[net] needs network access.
 
 ```
-go test ./...                       # all Go tests
-go test -race -cover ./...          # with race detector and coverage
-golangci-lint run                   # Go lint incl. depguard layer rules
-pnpm -C web install
-pnpm -C web lint                    # ESLint + dependency-cruiser
-pnpm -C web test                    # Vitest
-pnpm -C web e2e                     # Playwright
-go run ./cmd/mivo                   # start server
+# Go gates
+go vet ./...
+go test ./...
+go test -race "-coverprofile=coverage.out" ./...   # needs cgo + C toolchain (LLVM-MinGW), else Docker line below
+go tool "-modfile=tools/go.mod" go-test-coverage "--config=.testcoverage.yml"   # after the coverage run
+golangci-lint run                                  # incl. depguard layer rules
+golangci-lint fmt --diff                           # format check; `golangci-lint fmt` rewrites
+go tool "-modfile=tools/go.mod" govulncheck ./...  # [net]
+go mod tidy -diff
+go -C tools mod tidy -diff
+docker run --rm -v "${PWD}:/src" -v gomodcache:/go/pkg/mod -w /src golang:1.27.3 go test -race ./...   # [docker]
+
+# Code generation; afterwards `git diff --exit-code` must stay clean (ADR 0017)
+go generate ./...                                  # oapi-codegen -> internal/adapters/http/apigen
+pnpm -C web gen                                    # openapi-typescript -> web/packages/api-client
+docker run --rm -v "${PWD}:/src" -w /src sqlc/sqlc:1.31.1 generate -f internal/adapters/sqlite/sqlc.yaml   # [docker]
+
+# Web (Node 24, pnpm 10)
+pnpm -C web install                                # [net]
+pnpm -C web lint                                   # ESLint, dependency-cruiser, Prettier, tsc
+pnpm -C web test                                   # Vitest with coverage thresholds
+pnpm -C web build                                  # -> internal/adapters/http/webui/dist
+pnpm -C web dev                                    # Vite :5173, /api -> $env:MIVO_DEV_API_TARGET (default http://localhost:8460)
+pnpm -C web/apps/web exec playwright install --only-shell chromium   # once, [net]
+pnpm -C web e2e                                    # web build + server binary on a free port + Playwright
+
+# Gates with the embedded web app (after pnpm -C web build)
+go vet -tags webui ./...
+golangci-lint run --build-tags webui
+go build -tags webui -o bin/mivo.exe ./cmd/mivo
+
+# Run
+go run ./cmd/mivo                                  # :8460, placeholder UI; `go run -tags webui` embeds the build
+go run ./scripts/gen-testmedia                     # test corpus -> testdata/media (needs FFmpeg)
+docker build -f packaging/docker/Dockerfile -t mivo:dev .   # [docker][net]; run: packaging/docker/README.md
+
+# Git hooks (lefthook v2.2.2), once per clone; bypass: git commit --no-verify or $env:LEFTHOOK = '0'
+go tool "-modfile=tools/go.mod" lefthook install
 ```
 
 ## Definition of Done

@@ -69,7 +69,8 @@ Added 2026-10-30 with task M1-03b:
   `tools/go.mod`, not in `go.mod`, so their dependencies (AWS SDK, go-github, freetype, …)
   stay out of the production module graph. Run them from the repository root with
   `go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml` and
-  `go tool -modfile=tools/go.mod govulncheck ./...`. Both `go.mod` files pin
+  `go tool -modfile=tools/go.mod govulncheck ./...` (in PowerShell quote the argument:
+  `"-modfile=tools/go.mod"`, see `docs/development.md`). Both `go.mod` files pin
   `toolchain go1.27.3`, so `GOTOOLCHAIN=auto` fetches the patched toolchain.
 - **archtest vs depguard scope**: depguard also lints `_test.go` files and matches
   `**/internal/domain/**` at any depth; archtest checks production files only, anchors
@@ -90,7 +91,8 @@ Added 2026-10-30 with task M1-03b:
 Added 2026-10-30 with task M1-21:
 
 - **lefthook** is a pinned Go tool in `tools/go.mod` (no global or npm install). Install the
-  hooks per clone with `go tool -modfile=tools/go.mod lefthook install`; the `lefthook:` key
+  hooks per clone with `go tool "-modfile=tools/go.mod" lefthook install` (PowerShell needs
+  the quotes, it would split the unquoted argument at the dot); the `lefthook:` key
   in `lefthook.yml` makes the generated `.git/hooks` scripts call the same command, so they
   work from PowerShell and Git Bash. pre-commit lints only the packages that contain staged
   Go files (golangci-lint needs whole packages); breakage in importing packages is caught by

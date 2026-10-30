@@ -54,6 +54,11 @@ func TestCheckMessageAcceptsValidMessages(t *testing.T) {
 		{name: "merge tag", message: "Merge tag 'v0.1.0'\n"},
 		{name: "merge commit", message: "Merge commit 'abc123'\n"},
 		{name: "merge pull request", message: "Merge pull request #12 from user/branch\n"},
+		{name: "merge branch into", message: "Merge branch 'feature/x' into main\n"},
+		{
+			name:    "merge remote-tracking branch into",
+			message: "Merge remote-tracking branch 'origin/main' into feature/x\n",
+		},
 		{
 			name:    "merge with conflict comments",
 			message: "Merge branch 'x'\n\n# Conflicts:\n#\tgo.mod\n",
@@ -63,6 +68,11 @@ func TestCheckMessageAcceptsValidMessages(t *testing.T) {
 			message: "Revert \"feat: add x\"\n\nThis reverts commit 0123456789abcdef.\n",
 		},
 		{name: "reapply", message: "Reapply \"feat: add x\"\n"},
+		{
+			name:    "revert of a revert",
+			message: "Revert \"Revert \"feat: add x\"\"\n\nThis reverts commit 0123456789abcdef.\n",
+		},
+		{name: "reapply of a nested revert", message: "Reapply \"Revert \"feat: add x\"\"\n"},
 		{name: "fixup", message: "fixup! feat: add x\n"},
 		{name: "squash", message: "squash! feat: add x\n"},
 		{name: "amend", message: "amend! feat: add x\n\nfeat: add x properly\n"},
@@ -104,6 +114,7 @@ func TestCheckMessageRejectsInvalidMessages(t *testing.T) {
 		{name: "bang before scope", message: "feat!(x): add x", want: errInvalidHeader},
 		{name: "leading space", message: " feat: add x", want: errInvalidHeader},
 		{name: "free-form merge", message: "Merge stuff", want: errInvalidHeader},
+		{name: "merge into without a source", message: "Merge into main", want: errInvalidHeader},
 		{name: "revert without quotes", message: "Revert feat: add x", want: errInvalidHeader},
 		{name: "fixup without space", message: "fixup!feat: add x", want: errInvalidHeader},
 		{name: "only trailers look like a header", message: "Signed-off-by: A <a@example.com>", want: errInvalidHeader},
@@ -140,6 +151,11 @@ func TestCheckMessageErrorShowsTheExpectedFormat(t *testing.T) {
 		"type(scope)!: subject",
 		conventionalTypes,
 		"feat(playback): add HLS seeking",
+		`Revert "…"`,
+		`Reapply "…"`,
+		"fixup! …",
+		"squash! …",
+		"amend! …",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)

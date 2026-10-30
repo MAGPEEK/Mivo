@@ -23,46 +23,26 @@ func TestParseMessage(t *testing.T) {
 			wantBody:   []string{"", "body"},
 		},
 		{
-			name:       "trailer block is removed",
+			// Only the header and the line below it are checked, so trailers need no special
+			// handling and stay part of the body.
+			name:       "trailers stay in the body",
 			raw:        "feat: x\n\nbody\n\nSigned-off-by: A <a@example.com>\n",
+			wantHeader: "feat: x",
+			wantBody:   []string{"", "body", "", "Signed-off-by: A <a@example.com>"},
+		},
+		{
+			name:       "leading and trailing blank lines are removed",
+			raw:        "\n\nfeat: x\n\nbody\n\n\n",
 			wantHeader: "feat: x",
 			wantBody:   []string{"", "body"},
 		},
 		{
-			name:       "folded trailer value is part of the block",
-			raw:        "feat: x\n\nNote-To-Reviewer: first line\n  continued\nCo-Authored-By: B <b@example.com>\n",
+			// git's core.commentChar is not read: lines with another comment character are
+			// message text.
+			name:       "only the default comment character is stripped",
+			raw:        "feat: x\n\n; comment\n",
 			wantHeader: "feat: x",
-			wantBody:   nil,
-		},
-		{
-			name:       "last paragraph with prose is kept",
-			raw:        "feat: x\n\nSee: the plan\nThis line is prose.\n",
-			wantHeader: "feat: x",
-			wantBody:   []string{"", "See: the plan", "This line is prose."},
-		},
-		{
-			name:       "continuation line cannot start a trailer block",
-			raw:        "feat: x\n\n  indented: text\n",
-			wantHeader: "feat: x",
-			wantBody:   []string{"", "  indented: text"},
-		},
-		{
-			name:       "token with invalid characters is no trailer",
-			raw:        "feat: x\n\nSee the plan: section 3\n",
-			wantHeader: "feat: x",
-			wantBody:   []string{"", "See the plan: section 3"},
-		},
-		{
-			name:       "token without value is no trailer",
-			raw:        "feat: x\n\nNote:\n",
-			wantHeader: "feat: x",
-			wantBody:   []string{"", "Note:"},
-		},
-		{
-			name:       "single paragraph is never a trailer block",
-			raw:        "chore: hook test\n",
-			wantHeader: "chore: hook test",
-			wantBody:   nil,
+			wantBody:   []string{"", "; comment"},
 		},
 		{
 			name:       "comments and scissors section are removed",

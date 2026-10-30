@@ -37,7 +37,8 @@ examples:
   fix: handle empty library roots
   refactor(sqlite)!: rename the media table
 
-git's own "Merge …", "Revert "…"" and "fixup! …" subjects are accepted as they are.`
+git's own subjects are accepted as they are:
+  Merge …, Revert "…", Reapply "…", fixup! …, squash! …, amend! …`
 )
 
 var (

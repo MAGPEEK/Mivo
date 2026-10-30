@@ -16,6 +16,12 @@ adapts every stream to the client: direct play, remux or transcode.
 - Lightweight single Go binary, works on weak ARM NAS
 - Local accounts only, no cloud dependency
 
+## Development
+
+Setting up, building, testing and running the server and the web app on Windows
+(PowerShell) or Linux is described in [docs/development.md](docs/development.md).
+Architecture decisions live in [docs/adr](docs/adr/).
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).

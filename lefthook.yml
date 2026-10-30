@@ -9,7 +9,9 @@
 #
 # The hooks stay fast on purpose: they check staged files, lint only the Go packages that
 # contain them and run the quick test suites. The full gates (`golangci-lint run`,
-# `go test -race ./...`, coverage, `pnpm -C web lint`, `pnpm -C web test`) run in CI.
+# `go test -race ./...`, coverage, `pnpm -C web lint`, `pnpm -C web test`) are listed in
+# docs/development.md and will run in CI. The Go jobs match `*.go` only: a commit that
+# changes just go.mod, go.sum or .golangci.yml skips them, so run the full Go gates for it.
 #
 # lefthook runs every `run` line through Git's sh, also on Windows. Keep them on one line and
 # without double quotes: on Windows lefthook passes the line to `sh -c` inside double quotes.
@@ -60,5 +62,7 @@ pre-commit:
 
 commit-msg:
   jobs:
+    # lefthook inserts git's arguments unescaped. The message file lies in the git directory,
+    # whose path may contain spaces (linked worktrees), so quote it for sh.
     - name: conventional-commits
-      run: go run ./scripts/commitmsg {1}
+      run: go run ./scripts/commitmsg '{1}'
