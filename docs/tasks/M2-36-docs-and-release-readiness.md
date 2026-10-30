@@ -38,3 +38,8 @@ decision (OD-9).
 - `docs/development.md` "Test media corpus": `-only` now takes a comma-separated glob list
   (e.g. `'video-mp4-*,video-webm-vp9-opus'`), and kept files are labelled `kept` in progress and
   summary. Document both.
+- (from M2-12) User docs: absolute symlinks and Windows junctions inside a library are skipped
+  (only relative links that stay inside the root are followed); use relative links or add the
+  target as its own library.
+- (from M2-13) User docs: keep the data directory (`/config` in Docker) on local storage; file
+  locks on SMB/NFS shares may not be honoured.

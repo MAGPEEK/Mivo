@@ -37,3 +37,9 @@ session directory, copying or encoding each stream as planned and starting at a 
   `-strict experimental` for FLAC/Opus in MP4.
 - MPEG-TS input with AAC (ADTS) needs no manual `aac_adtstoasc` for the mp4-based muxer; verify.
 - With `-ss` before `-i` the output timeline starts at 0 (ADR 0024); do not add `-copyts`.
+
+## Orchestrator note (from M2-11 review)
+- Every ffmpeg invocation passes `-protocol_whitelist file` before its input (see ADR 0022
+  "Notes (M2-10 review, orchestrator)", path safety); assert it in the argument tests. Consider
+  packet keyframe flags (`-show_entries packet=pts_time,flags`) instead of decoded frames for seek
+  points.

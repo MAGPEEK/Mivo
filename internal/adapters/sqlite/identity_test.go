@@ -98,14 +98,34 @@ func TestSavingASecondIdentityReturnsConflictAndKeepsTheFirst(t *testing.T) {
 	}
 }
 
-func TestSaveIdentityRejectsAZeroID(t *testing.T) {
+// A zero ID or a zero CreatedAt (the year 1, stored as a large negative number) can only
+// come from a caller bug; neither is stored, so the table stays empty.
+func TestSaveIdentityRejectsZeroValues(t *testing.T) {
 	t.Parallel()
 
-	db, _ := openMigratedTestDB(t)
+	tests := []struct {
+		name     string
+		identity system.Identity
+	}{
+		{name: "zero id", identity: system.Identity{CreatedAt: time.Now()}},
+		{name: "zero created at", identity: system.Identity{ID: mustServerID(t, firstServerID)}},
+	}
 
-	err := sqlite.NewIdentityRepository(db).SaveIdentity(t.Context(), system.Identity{CreatedAt: time.Now()})
-	if !errors.Is(err, domain.ErrInvalid) {
-		t.Errorf("SaveIdentity error = %v, want domain.ErrInvalid", err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			db, _ := openMigratedTestDB(t)
+			repository := sqlite.NewIdentityRepository(db)
+
+			if err := repository.SaveIdentity(t.Context(), test.identity); !errors.Is(err, domain.ErrInvalid) {
+				t.Errorf("SaveIdentity error = %v, want domain.ErrInvalid", err)
+			}
+
+			if _, err := repository.LoadIdentity(t.Context()); !errors.Is(err, domain.ErrNotFound) {
+				t.Errorf("LoadIdentity after the rejected save error = %v, want domain.ErrNotFound", err)
+			}
+		})
 	}
 }
 

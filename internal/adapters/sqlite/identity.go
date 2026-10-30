@@ -49,10 +49,16 @@ func (repository *IdentityRepository) LoadIdentity(ctx context.Context) (system.
 // SaveIdentity inserts the identity. It never overwrites: when an identity is already stored
 // it returns an error wrapping domain.ErrConflict. CreatedAt is stored with millisecond
 // precision (ADR 0004), so a later load returns it truncated to milliseconds, in UTC.
-// A zero ID is rejected with an error wrapping domain.ErrInvalid.
+// A zero ID or a zero CreatedAt is rejected with an error wrapping domain.ErrInvalid.
 func (repository *IdentityRepository) SaveIdentity(ctx context.Context, identity system.Identity) error {
 	if identity.ID.IsZero() {
 		return fmt.Errorf("save server identity: zero server id: %w", domain.ErrInvalid)
+	}
+
+	// A zero time would be stored as a large negative number of milliseconds (year 1) and
+	// could only come from a caller that forgot to set it.
+	if identity.CreatedAt.IsZero() {
+		return fmt.Errorf("save server identity: zero creation time: %w", domain.ErrInvalid)
 	}
 
 	inserted, err := repository.writer.InsertServerIdentity(ctx, sqlcgen.InsertServerIdentityParams{

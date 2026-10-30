@@ -98,3 +98,45 @@ name stays unambiguous: `transcode.max_sessions` → `<PREFIX>_TRANSCODE_MAX_SES
 - Renaming or moving a file creates a new item; nothing is lost because milestone 2 stores no
   user data.
 - `os.Root` requires Go 1.24+; the module uses 1.27.
+
+## Notes (M2-10)
+
+Additions from the schema migration (`00002_media_catalog.sql`, M2-10); they refine the data
+model above without changing the decision.
+
+- `media_streams.codec_tag` (nullable `TEXT`) stores the container FourCC (`media.Stream.CodecTag`,
+  ffprobe `codec_tag_string`, e.g. `hvc1` vs `hev1`), which later remux decisions need. `NULL`
+  means the container stores no tag; an empty string is rejected.
+- `media_streams.frame_rate` is `TEXT` holding the exact fraction (`24000/1001`, `''` when
+  unknown) as written by `media.FrameRate.String()` and read by `media.ParseFrameRate`.
+- `media_files.probe_error` is `NULL` for a successfully probed file; a failed probe stores its
+  code with `container = 'unknown'` and no streams.
+- Closed sets have `CHECK` constraints: library kinds `movies|shows`, item kinds
+  `movie|episode` (`library.ItemKind`), stream kinds `video|audio|subtitle|other`. Sets that
+  grow with later milestones (containers, HDR formats, probe error codes) are only checked for
+  non-empty text, because SQLite cannot change a `CHECK` without rebuilding the table; the
+  adapter validates them with the domain parsers.
+- Every foreign key column leads an index (`items(parent_id)` added), so a cascading delete
+  never scans a whole child table per parent row.
+- In milestone 2 an item's kind follows from its library's kind (`library.ItemKindForLibrary`):
+  when a library's kind changes in the configuration, the startup sync updates its items too.
+
+## Notes (M2-10 review, orchestrator)
+
+- The root path is a library's identity in milestone 2. Changing a root in the config therefore
+  removes the old library (cascade) and creates a new one with a new id and a full re-probe; the
+  catalog does not survive a moved mount point yet. A stable library identity in the config is
+  revisited with milestone 7.
+- `items.kind` has a closed `CHECK (kind IN ('movie','episode'))`. Milestone 3 adds `show` and
+  `season`; since the catalog is rebuildable by a rescan, the migration may drop and recreate the
+  catalog tables instead of rebuilding them in place.
+- Path safety for FFmpeg (M2-11 review): `file:` only stops the *name* from selecting a protocol;
+  the *content* can still select demuxers that open further URLs (DASH, HLS, concat). Every
+  ffprobe/ffmpeg invocation therefore passes `-protocol_whitelist file` before its input (nested
+  opens inherit it), so a hostile media file cannot make the server send network requests.
+  Producers in M2-17/M2-24 must keep this.
+- Symlinks (M2-12): `os.Root` refuses every absolute symlink target and every Windows junction,
+  even when the target lies inside the library root. Walk, Resolve and Open therefore follow only
+  relative links that stay inside the root; absolute links and junctions are skipped and logged
+  (OD-8). NAS users with absolute links should use relative links or add the target folder as its
+  own library.

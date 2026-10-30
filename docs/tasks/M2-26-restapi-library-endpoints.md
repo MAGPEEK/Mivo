@@ -26,3 +26,9 @@ status, scan trigger, paged items and item detail (ADR 0017, ADR 0022).
 ## Notes
 - Mapping functions domain → apigen live next to the handlers; keep each ≤ 50 lines.
 - Do not edit `playback.go` (M2-28) or `api.go` (M2-32 makes services mandatory).
+
+## Orchestrator note (from M2-10 review)
+- A corrupt stored value (e.g. unknown library kind) comes back from the repository as
+  `domain.ErrInvalid`, which `ProblemForError` maps to 400. For `GET /libraries/{id}` and lists this
+  is a server fault: handle stored-data errors like `GetSystemInfo` does (500); only
+  path/query-parameter validation answers 400. Test both.

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -181,5 +182,139 @@ func TestReaderPoolRejectsWrites(t *testing.T) {
 	_, err := db.reader.ExecContext(t.Context(), "CREATE TABLE reader_write_probe (value INTEGER)")
 	if err == nil {
 		t.Fatal("write through the reader pool succeeded, want a query_only error")
+	}
+}
+
+// The reader pool may open one connection per usable CPU (GOMAXPROCS, which respects
+// container CPU limits) and keeps all of them idle instead of closing every connection above
+// database/sql's default of two idle ones after a burst of parallel queries.
+func TestReaderPoolKeepsEveryOpenConnectionIdle(t *testing.T) {
+	t.Parallel()
+
+	db, _ := openInternalTestDB(t)
+	maxOpen := runtime.GOMAXPROCS(0)
+
+	if got := db.reader.Stats().MaxOpenConnections; got != maxOpen {
+		t.Fatalf("reader MaxOpenConnections = %d, want GOMAXPROCS %d", got, maxOpen)
+	}
+
+	connections := make([]*sql.Conn, 0, maxOpen)
+	for range maxOpen {
+		connection, err := db.reader.Conn(t.Context())
+		if err != nil {
+			t.Fatalf("check out connection: %v", err)
+		}
+
+		connections = append(connections, connection)
+	}
+
+	for _, connection := range connections {
+		if err := connection.Close(); err != nil {
+			t.Fatalf("return connection: %v", err)
+		}
+	}
+
+	stats := db.reader.Stats()
+	if stats.Idle != maxOpen || stats.MaxIdleClosed != 0 {
+		t.Errorf("reader idle = %d, closed for exceeding the idle limit = %d, want %d and 0",
+			stats.Idle, stats.MaxIdleClosed, maxOpen)
+	}
+}
+
+// foreign_keys=ON is checked per connection by TestOpenAppliesPragmasOnEveryConnectionOfBothPools;
+// this checks that the catalog schema relies on it: the writer refuses an orphan item.
+func TestWriterEnforcesForeignKeysOfTheCatalog(t *testing.T) {
+	t.Parallel()
+
+	db, _ := openInternalTestDB(t)
+	if err := db.Migrate(t.Context()); err != nil {
+		t.Fatalf("Migrate error = %v", err)
+	}
+
+	_, err := db.writer.ExecContext(t.Context(),
+		`INSERT INTO items (id, library_id, kind, title, sort_title, created_at, updated_at)
+		VALUES ('item-1', 'missing-library', 'movie', 'A', 'a', 0, 0)`)
+	if err == nil || !strings.Contains(strings.ToUpper(err.Error()), "FOREIGN KEY") {
+		t.Errorf("insert of an orphan item error = %v, want a FOREIGN KEY constraint error", err)
+	}
+}
+
+// A ping must start a read transaction on the database file. "SELECT 1", which the driver's
+// own Ping runs, is answered without touching the file, so it reports a database whose file
+// became unreadable as healthy. The VDBE program of a statement that reads the file contains
+// a Transaction opcode; the control case shows the check tells the two apart.
+func TestPingQueryStartsAReadTransaction(t *testing.T) {
+	t.Parallel()
+
+	db, _ := openInternalTestDB(t)
+
+	tests := []struct {
+		name  string
+		query string
+		want  bool
+	}{
+		{name: "ping query", query: pingQuery, want: true},
+		{name: "driver ping (control)", query: "SELECT 1", want: false},
+	}
+
+	for _, test := range tests {
+		if got := programHasOpcode(t, db.reader, test.query, "Transaction"); got != test.want {
+			t.Errorf("%s: %q starts a transaction = %t, want %t", test.name, test.query, got, test.want)
+		}
+	}
+}
+
+func programHasOpcode(t *testing.T, pool *sql.DB, query, opcode string) bool {
+	t.Helper()
+
+	rows, err := pool.QueryContext(t.Context(), "EXPLAIN "+query)
+	if err != nil {
+		t.Fatalf("EXPLAIN %s: %v", query, err)
+	}
+
+	defer func() { _ = rows.Close() }()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("EXPLAIN columns: %v", err)
+	}
+
+	// Columns: addr, opcode, p1 … p5, comment. Only the opcode is read.
+	const opcodeColumn = 1
+
+	values := make([]any, len(columns))
+	targets := make([]any, len(columns))
+
+	for index := range values {
+		targets[index] = &values[index]
+	}
+
+	found := false
+
+	for rows.Next() {
+		if err := rows.Scan(targets...); err != nil {
+			t.Fatalf("scan EXPLAIN row: %v", err)
+		}
+
+		found = found || textValue(values[opcodeColumn]) == opcode
+	}
+
+	if err := rows.Err(); err != nil {
+		t.Fatalf("EXPLAIN %s: %v", query, err)
+	}
+
+	return found
+}
+
+// textValue returns a TEXT column scanned into an any, which drivers deliver as string or
+// []byte; other values yield "".
+func textValue(value any) string {
+	switch text := value.(type) {
+	case string:
+		return text
+	case []byte:
+		return string(text)
+	default:
+		return ""
 	}
 }

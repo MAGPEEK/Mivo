@@ -50,3 +50,6 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
   startup with a clear message otherwise.
 - Name `transcodedir.ErrSessionsNotPlainDirectory` in the startup message if the transcode
   workspace refuses `<transcode>/sessions` (symlink/junction/file).
+- (from M2-11 review) On Windows, reject `tools.ffmpeg` / `tools.ffprobe` that resolve (after
+  `LookPath` with PATHEXT) to a `.bat` or `.cmd` file: `cmd.exe` re-parses such command lines and
+  a media file name like `x&\host\s\evil&.mkv` could inject commands. Test it.

@@ -29,3 +29,16 @@ page through a library's items and open one item with its files and streams (ADR
 - Scan status is not stored here; the HTTP adapter (M2-26) combines `ListLibraries` with the
   scan service's status.
 - Return domain types and the small `ItemDetail` struct; adapters may import it.
+
+## Orchestrator note (from M2-10) – additional Files/areas: `internal/domain/library/summary.go` (+ test), `internal/adapters/sqlite/library.go` (+ test, return types only)
+- M2-10's `ListLibraries` / `GetLibrary` return the adapter type `sqlite.LibrarySummary{Library,
+  ItemCount}`, which a port in `app/library` cannot name. Add `library.Summary{Library, ItemCount}`
+  to the domain, declare the port with it, and switch the sqlite adapter's return types (remove
+  `sqlite.LibrarySummary`).
+- `sqlite.inWriteTransaction` exists and can be reused by M2-15.
+- (from M2-10 review) Removing a library on sync must not be silent: `SyncLibraries` returns the
+  removed libraries (name, root, item count), and the use case logs each at warn level. A config
+  typo or an empty `MIVO_LIBRARIES` then leaves a trace. Test it.
+- (from M2-12) `adapters/fs/libraryfs` has no `RootAvailable(ctx, root) bool` yet. If the
+  catalog port needs it, add it to libraryfs in this task (extra Files/areas:
+  `internal/adapters/fs/libraryfs/available.go` + test), implemented via `os.OpenRoot` + `Stat(".")`.

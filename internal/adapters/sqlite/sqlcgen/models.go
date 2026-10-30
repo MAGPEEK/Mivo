@@ -4,6 +4,73 @@
 
 package sqlcgen
 
+import (
+	"database/sql"
+)
+
+type Item struct {
+	ID        string
+	LibraryID string
+	ParentID  sql.NullString
+	Kind      string
+	Title     string
+	SortTitle string
+	CreatedAt int64
+	UpdatedAt int64
+}
+
+type Library struct {
+	ID        string
+	Name      string
+	Kind      string
+	RootPath  string
+	CreatedAt int64
+	UpdatedAt int64
+}
+
+type MediaFile struct {
+	ID           string
+	ItemID       string
+	LibraryID    string
+	RelativePath string
+	SizeBytes    int64
+	ModifiedAt   int64
+	Container    string
+	FormatName   string
+	DurationMs   int64
+	BitRate      int64
+	ProbedAt     int64
+	ProbeError   sql.NullString
+}
+
+type MediaStream struct {
+	MediaFileID       string
+	StreamIndex       int64
+	Kind              string
+	Codec             string
+	CodecTag          sql.NullString
+	Profile           string
+	Level             int64
+	PixelFormat       string
+	BitDepth          int64
+	Width             int64
+	Height            int64
+	FrameRate         string
+	ColorPrimaries    string
+	ColorTransfer     string
+	ColorSpace        string
+	Hdr               string
+	Channels          int64
+	ChannelLayout     string
+	SampleRate        int64
+	Language          string
+	Title             string
+	IsDefault         int64
+	IsForced          int64
+	IsAttachedPicture int64
+	BitRate           int64
+}
+
 type ServerIdentity struct {
 	ID        int64
 	ServerID  string

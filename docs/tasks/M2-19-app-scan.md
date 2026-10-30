@@ -46,3 +46,7 @@ shutdown (ADR 0022).
   these values (e.g. the `items.kind` CHECK constraint) and derive the kind via `ItemKindForLibrary`.
 - `ParseRelativePath` returns a plain `string` (the input unchanged) and rejects `.` segments and
   drive-relative prefixes such as `C:x`.
+- (from M2-11) Probe error contract of `adapters/ffmpeg`: `context.DeadlineExceeded` →
+  `probe_timed_out`, `domain.ErrUnsupported` → `probe_failed`, `domain.ErrUnavailable` → ffprobe
+  missing (abort the scan with a clear status, do not mark every file failed), `context.Canceled`
+  → shutdown (stop, do not record failures). Error text carries base name, tool and exit code only.

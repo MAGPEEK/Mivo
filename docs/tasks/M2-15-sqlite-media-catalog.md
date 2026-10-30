@@ -33,3 +33,13 @@ grid, per item for the detail page and per file for playback (ADR 0022).
   grows beyond one responsibility (catalog writer vs reader).
 - All writes go through the writer pool, reads through the reader pool (ADR 0004).
 - Store `relative_path` exactly as `library.ParseRelativePath` returned it.
+
+## Orchestrator note (from M2-10 review)
+- Nothing in the schema stops a media file and its item from belonging to different libraries
+  (`media_files.library_id` ≠ `items.library_id`). Enforce the invariant in the repository (same
+  transaction, same library id) and test it; a composite FK is optional.
+- `sqlite.inWriteTransaction` (library.go) is reusable.
+- (from M2-10 test) The rollback tests of `inWriteTransaction` stay green even without a rollback
+  (they read through the reader pool). Add a "write after a failed write succeeds" assertion for
+  both SyncLibraries and the catalog writes, so a leaked writer connection is caught; cover the
+  `sql.ErrTxDone` branch of `rollBack`. Pin that `(*DB).Ping` runs `pingQuery`.

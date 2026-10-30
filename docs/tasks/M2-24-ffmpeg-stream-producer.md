@@ -31,3 +31,9 @@ segment is ready, can be stopped at any time, and surfaces failures with a usefu
 - No `fsnotify` dependency; polling every 100–200 ms is enough for 6 s segments.
 - On Windows `exec.CommandContext` uses `TerminateProcess`; FFmpeg may leave a `.tmp` file, which
   the workspace removal handles.
+
+## Orchestrator note (from M2-11 review)
+- Every ffmpeg invocation passes `-protocol_whitelist file` before its input (see ADR 0022
+  "Notes (M2-10 review, orchestrator)", path safety); assert it in the argument tests. Consider
+  packet keyframe flags (`-show_entries packet=pts_time,flags`) instead of decoded frames for seek
+  points.

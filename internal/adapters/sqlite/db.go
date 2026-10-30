@@ -84,7 +84,11 @@ func openPool(ctx context.Context, databasePath string, role poolRole) (*sql.DB,
 		return nil, fmt.Errorf("open %s: %w", databasePath, err)
 	}
 
-	pool.SetMaxOpenConns(maxOpenConnections(role))
+	maxOpen := maxOpenConnections(role)
+	pool.SetMaxOpenConns(maxOpen)
+	// database/sql keeps only two idle connections by default and closes the rest after each
+	// burst of parallel queries; reopening one repeats the connection pragmas.
+	pool.SetMaxIdleConns(maxOpen)
 
 	err = pool.PingContext(ctx)
 	if err != nil {
@@ -99,9 +103,9 @@ func maxOpenConnections(role poolRole) int {
 		return writerMaxOpenConnections
 	}
 
-	// Readers do not block each other in WAL mode; one per CPU keeps parallel queries busy
-	// without piling up idle connections.
-	return runtime.NumCPU()
+	// Readers do not block each other in WAL mode; one per usable CPU keeps parallel queries
+	// busy. GOMAXPROCS(0) follows a container CPU limit, which NumCPU ignores.
+	return runtime.GOMAXPROCS(0)
 }
 
 func closePool(name string, pool *sql.DB) error {

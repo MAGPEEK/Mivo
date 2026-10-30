@@ -45,3 +45,8 @@ adapters, and every video file gets the expected mode and produces playable outp
   (dispositions); `track.language` is omitted when empty. Seek clips:
   `video-mkv-h264-aac-long` (remux path) and `video-ts-mpeg2-mp2-long` (transcode path), 30 s,
   keyframe every 2 s.
+- (from M2-11) FFmpeg 7.1 (Docker image) reports the format start_time of
+  `h264_aac_long.mkv` as −0.021 s (FFmpeg 9.0.2 on the dev machine: 0). Keyframe positions are
+  relative to the format start like `-ss`, so 7.1 yields 20.021 s instead of 20 s. Compare relative
+  to the first keyframe or allow a tolerance (≥ 0.05 s); never assert exact seconds across FFmpeg
+  versions.

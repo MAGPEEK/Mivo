@@ -43,3 +43,8 @@ and stops sessions on request (ADR 0023, ADR 0024).
 - `Policy.MaxTranscodeHeight` and `MaxSessions` come through the constructor options (values from
   config via `cmd`, ADR 0003).
 - Keep the session registry its own type with a mutex; methods stay ≤ 50 lines.
+
+## Orchestrator note (from M2-11)
+- `KeyframeAtOrBefore` returns an error when ffprobe cannot seek (no format start time). Fall back
+  to position 0 (start of file) instead of failing the session; test it.
+- Keyframe positions are relative to the format start (like `-ss`), not absolute pts.
