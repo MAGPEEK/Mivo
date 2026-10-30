@@ -48,3 +48,8 @@ a search field (Ctrl+K), an empty home page, and the server version loaded live 
 ## Review carry-over from M1-14 (round 2)
 - `web/eslint.config.js`: extend the hex-rule comment – text after `(` or `,` such as "Fixes (#123)" is also flagged and belongs in locale files.
 - `web/apps/web/test/fontFamily.test.ts`: resolve the bare `@fontsource-variable/inter` specifier (as `main.tsx` imports it) instead of `/index.css`.
+
+## Review carry-over from M1-13 (APPROVE) – fix in web/packages/api-client while finishing M1-15
+- `requestData`: a 2xx (except 204) with an empty body (`data === undefined`) throws `ApiError` `unexpected_response` with the HTTP status; add a test.
+- `createApiClient`: validate a non-empty `baseUrl` (`new URL(...)`) so a bad user-entered server URL fails early with a clear error instead of `network_error`; test it.
+- Nits: `toApiError` JSDoc "caller guarantees !response.ok" (or guard); `pnpm-workspace.yaml` comment – correctness under TS 6 is checked by `tsc -b` and typed tests, the drift check only keeps generation reproducible; note that `ErrorOptions.cause` is diagnostics-only (not supported on webOS 6 / Chromium 79).

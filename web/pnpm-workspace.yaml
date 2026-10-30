@@ -7,3 +7,9 @@ allowBuilds:
   # Its postinstall only downloads a native binding when the platform-specific optional
   # dependency is missing. pnpm installs that optional dependency, so the script stays off.
   unrs-resolver: false
+
+peerDependencyRules:
+  allowedVersions:
+    # openapi-typescript 7 declares typescript ^5 but only uses its stable printer API. Its
+    # output under TypeScript 6 is checked by the generated-code drift check (ADR 0017).
+    openapi-typescript>typescript: "6"

@@ -1,0 +1,21 @@
+{
+  "name": "@mivo/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "description": "Typed HTTP client generated from api/openapi.yaml, shared by the web and TV apps.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "gen": "openapi-typescript ../../../api/openapi.yaml --output src/generated/schema.ts"
+  },
+  "dependencies": {
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0"
+  }
+}

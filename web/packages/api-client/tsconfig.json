@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+    // fetch, Request, Response and Headers come from the DOM lib; the web and TV apps both
+    // run in a browser. Node types stay out so no Node-only API slips in.
+    "lib": ["ES2023", "DOM"],
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -3,6 +3,7 @@
   "files": [],
   "references": [
     { "path": "./tsconfig.node.json" },
+    { "path": "./packages/api-client" },
     { "path": "./packages/player-core" },
     { "path": "./packages/ui-tokens" },
     { "path": "./packages/ui-tokens/test" },
