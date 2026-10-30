@@ -1,7 +1,7 @@
 # go-test-coverage configuration (ADR 0019). Run after
 #   go test -coverprofile=coverage.out ./...
 # with
-#   go tool go-test-coverage --config=.testcoverage.yml
+#   go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml
 # Thresholds are never lowered to get a green run; add tests instead.
 profile: coverage.out
 

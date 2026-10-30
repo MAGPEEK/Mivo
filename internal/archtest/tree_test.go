@@ -9,15 +9,7 @@ import (
 func TestRepositoryFollowsLayerMatrix(t *testing.T) {
 	t.Parallel()
 
-	workingDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("working directory: %v", err)
-	}
-
-	moduleRoot, err := findModuleRoot(workingDir)
-	if err != nil {
-		t.Fatalf("find module root: %v", err)
-	}
+	moduleRoot := moduleRootOfTest(t)
 
 	report, err := checkTree(moduleRoot, layerMatrix())
 	if err != nil {
@@ -34,7 +26,7 @@ func TestRepositoryFollowsLayerMatrix(t *testing.T) {
 	}
 }
 
-func TestCheckTreeFindsViolationsAndSkipsTestsAndTestdata(t *testing.T) {
+func TestCheckTreeFindsViolationsAndSkipsTestsAndIgnoredDirectories(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
@@ -42,6 +34,9 @@ func TestCheckTreeFindsViolationsAndSkipsTestsAndTestdata(t *testing.T) {
 	writeFile(t, root, "internal/domain/media/item.go", "package media\nimport \"os\"\n")
 	writeFile(t, root, "internal/domain/media/item_test.go", "package media\nimport \"os\"\n")
 	writeFile(t, root, "internal/domain/media/testdata/fixture.go", "package fixture\nimport \"os\"\n")
+	// The go command ignores directories starting with "_" or "."; so does checkTree.
+	writeFile(t, root, "internal/domain/media/_scratch/draft.go", "package draft\nimport \"os\"\n")
+	writeFile(t, root, "internal/domain/.cache/cached.go", "package cached\nimport \"os\"\n")
 	writeFile(t, root, "internal/domain/media/notes.txt", "import \"os\"\n")
 
 	report, err := checkTree(root, layerMatrix())

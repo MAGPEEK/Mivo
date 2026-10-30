@@ -18,8 +18,9 @@ drift from the server.
   `status`, `detail` and a machine-readable `code` that clients translate (ADR 0012). Domain
   errors are mapped to HTTP status codes only in `internal/adapters/http`.
 - Go: **oapi-codegen v2** (`std-http-server`, `strict-server`, `models`), pinned as a
-  `go tool` dependency in `go.mod`. Output goes to `internal/adapters/http/apigen` through
-  `go generate`.
+  `go tool` dependency in the tool module `tools/go.mod` (ADR 0019, not the main `go.mod`)
+  and invoked through `go tool -modfile=<path to tools/go.mod> oapi-codegen`. Output goes to
+  `internal/adapters/http/apigen` through `go generate`.
 - TypeScript: **openapi-typescript** generates types into `web/packages/api-client`. The
   runtime client is **openapi-fetch**. TanStack Query hooks live in the app's feature
   folders, not in the client package.
@@ -32,5 +33,5 @@ drift from the server.
 ## Consequences
 
 - Server and clients stay in lockstep through compile errors instead of runtime surprises.
-- Generator upgrades are deliberate changes (version pinned in `go.mod` and
+- Generator upgrades are deliberate changes (version pinned in `tools/go.mod` and
   `package.json`).

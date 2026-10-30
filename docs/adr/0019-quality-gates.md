@@ -16,13 +16,14 @@ Rules nobody checks erode, so each one needs a tool and a command that `mivo-tes
   gocognit (15), funlen (50 lines), revive (argument-limit 4, exported doc comments), errcheck,
   errorlint, gosec, govet, staticcheck, unused, ineffassign, contextcheck, noctx, bodyclose,
   sqlclosecheck, rowserrcheck, mnd, gochecknoglobals, gochecknoinits, forbidigo (`panic`
-  outside `cmd/`, package-level `slog` functions inside `internal/`), misspell, exhaustive,
+  outside `cmd/`, package-level `slog` functions inside `internal/`, file system functions of
+  `path/filepath` and package-level `log` functions inside `internal/domain/`), misspell, exhaustive,
   nolintlint (explanation required). Formatters: gofumpt, goimports (local prefix =
   module path). Generated files are excluded. `_test.go` files are exempt from funlen and mnd.
 - **depguard layer matrix** (module prefix `github.com/magpeek/mivo`):
   | Files | May import | Must not import |
   |---|---|---|
-  | `internal/domain/**` | std lib, `internal/domain` | `os`, `os/exec`, `net`, `net/http`, `database/sql`, `syscall`, `internal/app`, `internal/adapters`, `internal/platform`, `cmd` |
+  | `internal/domain/**` | std lib (incl. `net/url`, `net/netip`, `net/mail`), `internal/domain` | `os/...`, `net`, `net/http/...`, `net/rpc/...`, `net/smtp`, `net/textproto`, `crypto/tls`, `database/sql/...`, `syscall/...`, `io/ioutil`, `log/syslog`, `expvar`, `plugin`, `C` (cgo), `internal/app`, `internal/adapters`, `internal/platform`, `cmd`, third party |
   | `internal/app/**` | std lib, `internal/domain`, `internal/app` | `os/exec`, `net/http`, `database/sql`, `internal/adapters`, `internal/platform`, `cmd` |
   | `internal/platform/**` | std lib, third party | `internal/domain`, `internal/app`, `internal/adapters`, `cmd` |
   | `internal/adapters/**` | anything except `cmd` | `cmd` |
@@ -57,3 +58,31 @@ Rules nobody checks erode, so each one needs a tool and a command that `mivo-tes
 - Thresholds are never lowered to get a green run (`mivo-tester` rule).
 - On Windows, `go test -race` needs cgo and a C toolchain. Without one, the race detector
   runs in Docker or CI (see `docs/development.md`, task M1-22).
+
+## Notes
+
+Added 2026-10-30 with task M1-03b:
+
+- **funlen** runs with `ignore-comments: true`: the 50-line limit counts code, so doc
+  comments explaining *why* never push a function over the limit.
+- **Tool modfile**: the pinned Go tools (go-test-coverage, govulncheck) live in
+  `tools/go.mod`, not in `go.mod`, so their dependencies (AWS SDK, go-github, freetype, …)
+  stay out of the production module graph. Run them from the repository root with
+  `go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml` and
+  `go tool -modfile=tools/go.mod govulncheck ./...`. Both `go.mod` files pin
+  `toolchain go1.27.3`, so `GOTOOLCHAIN=auto` fetches the patched toolchain.
+- **archtest vs depguard scope**: depguard also lints `_test.go` files and matches
+  `**/internal/domain/**` at any depth; archtest checks production files only, anchors
+  layers at the module root, skips `testdata`, `_x` and `.x` directories and ignores build
+  constraints. depguard's `$gostd` allow list would win over prefix denies, so
+  `.golangci.yml` denies every standard library package of a forbidden tree exactly
+  (`os`, `os/exec`, `os/signal`, `os/user`, `net/http/...`, `net/rpc/...`,
+  `database/sql/...`, `syscall/...`); archtest matches these trees by prefix and therefore
+  also catches packages a future Go release adds. An archtest test expands the matrix
+  against `go list std` and fails until `.golangci.yml` lists the new package. The domain
+  row forbids every standard library package that does network, file or process I/O
+  (`net/smtp`, `crypto/tls`, `io/ioutil`, `log/syslog`, `expvar`, `plugin`, cgo, …);
+  pure parsers such as `net/url`, `net/netip` and `net/mail` stay allowed. Functions of
+  allowed packages that touch the file system (`filepath.Walk`, `WalkDir`, `Glob`,
+  `EvalSymlinks`, `Abs`) or the standard logger (`log.Print*`, `log.Fatal*`, `log.Panic*`)
+  are forbidden in the domain by forbidigo.

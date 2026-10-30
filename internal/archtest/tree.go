@@ -58,7 +58,8 @@ func checkTree(moduleRoot string, layers []layer) (treeReport, error) {
 	return report, nil
 }
 
-// skipIgnoredDirectory skips the directories the go command ignores as well.
+// skipIgnoredDirectory skips the directories the go command ignores as well: testdata and
+// every directory whose name starts with "." or "_".
 func skipIgnoredDirectory(name string) error {
 	if name == testdataDir || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
 		return filepath.SkipDir

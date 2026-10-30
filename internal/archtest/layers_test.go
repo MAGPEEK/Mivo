@@ -21,7 +21,10 @@ func TestCheckSourceAppliesLayerMatrix(t *testing.T) {
 import (
 	"errors"
 	"net/url"
-	"os/signal"
+	"net/netip"
+	"net/mail"
+	"io"
+	"crypto/sha256"
 	"github.com/magpeek/mivo/internal/domain/library"
 )`,
 		},
@@ -32,10 +35,22 @@ import (
 import (
 	"os"
 	"os/exec"
+	"os/signal"
+	"os/user"
 	"net"
 	"net/http/httptest"
+	"net/rpc"
+	"net/rpc/jsonrpc"
+	"net/smtp"
+	"net/textproto"
 	"database/sql/driver"
 	"syscall"
+	"log/syslog"
+	"plugin"
+	"io/ioutil"
+	"expvar"
+	"crypto/tls"
+	"C"
 	"github.com/magpeek/mivo/internal/app"
 	"github.com/magpeek/mivo/internal/platform/brand"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
@@ -43,7 +58,9 @@ import (
 	"example.com/thirdparty"
 )`,
 			wantForbidden: []string{
-				"os", "os/exec", "net", "net/http/httptest", "database/sql/driver", "syscall",
+				"os", "os/exec", "os/signal", "os/user", "net", "net/http/httptest",
+				"net/rpc", "net/rpc/jsonrpc", "net/smtp", "net/textproto", "database/sql/driver", "syscall",
+				"log/syslog", "plugin", "io/ioutil", "expvar", "crypto/tls", "C",
 				"github.com/magpeek/mivo/internal/app", "github.com/magpeek/mivo/internal/platform/brand",
 				"github.com/magpeek/mivo/internal/adapters/sqlite", "github.com/magpeek/mivo/cmd/tool",
 				"example.com/thirdparty",
@@ -189,6 +206,8 @@ func TestImportRuleMatchesExactOrPathPrefix(t *testing.T) {
 		{rule: prefix("net/http"), importPath: "net/httpx", want: false},
 		{rule: exactly("net"), importPath: "net", want: true},
 		{rule: exactly("net"), importPath: "net/url", want: false},
+		{rule: prefix("os"), importPath: "os/signal", want: true},
+		{rule: prefix("os"), importPath: "osx", want: false},
 	}
 
 	for _, test := range tests {

@@ -38,3 +38,10 @@ Conventional Commits message format (ADR 0019).
 - If you choose `go tool lefthook`, check that the generated hook scripts can find the
   binary on Windows (PowerShell, Git Bash). Otherwise use the npm route.
 - The full gates run in CI later. Hooks must stay fast, or people will skip them.
+
+## Orchestrator note (after M1-03b)
+- Tool dependencies live in `tools/go.mod` (same module path, read via `-modfile`). Add new Go tools
+  there, not to the main `go.mod`. `go generate` runs in the package directory, so a
+  `//go:generate` line must use a `-modfile` path relative to that directory
+  (e.g. `go tool -modfile=../../../tools/go.mod oapi-codegen …`) – verify it from the repo root
+  with `go generate ./...`.

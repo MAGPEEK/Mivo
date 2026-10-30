@@ -14,8 +14,9 @@ package Mivo by following the docs, and every documented command works as writte
       The orchestrator obtains **explicit user approval** for this diff before it is
       committed (`CLAUDE.md` is project configuration).
 - [ ] The command list covers at least:
-      `go test ./...`; coverage run + `go tool go-test-coverage --config=.testcoverage.yml`;
-      `golangci-lint run` / `golangci-lint fmt`; `go tool govulncheck ./...`;
+      `go test ./...`; coverage run +
+      `go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml`;
+      `golangci-lint run` / `golangci-lint fmt`; `go tool -modfile=tools/go.mod govulncheck ./...`;
       `go generate ./...`; the sqlc Docker command (pinned version from M1-08);
       `pnpm -C web install|lint|test|build|gen|dev|e2e`; Playwright browser install;
       `go run ./cmd/mivo`; `go build -tags webui -o bin/mivo.exe ./cmd/mivo` (after the web

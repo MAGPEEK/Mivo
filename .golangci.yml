@@ -44,8 +44,14 @@ linters:
   settings:
     depguard:
       # Layer matrix from ADR 0019. internal/archtest checks the same matrix inside go test.
-      # A trailing "$" makes a deny entry match exactly; otherwise entries are prefixes, so
-      # "net$" forbids net but still allows net/url and net/netip in the domain.
+      # Standard library denies are listed package by package with a trailing "$" (exact
+      # match) on purpose: in strict mode the longer of the matching allow and deny entries
+      # wins, and depguard >= 2.3 expands $gostd to an exact entry per package, which beats
+      # a prefix deny such as "os/". depguard 2.2 additionally compares an import only with
+      # its sorted neighbour entry, so mixing prefix and exact denies of one tree leaks.
+      # Keep each tree complete (`go list std`); archtest's prefix rules catch new packages
+      # and TestDepguardDeniesEveryStandardPackageOfTheMatrix fails until they are listed here.
+      # "net$" forbids net but still allows net/url, net/netip and net/mail in the domain.
       rules:
         domain:
           list-mode: strict
@@ -57,15 +63,55 @@ linters:
           deny:
             - pkg: os$
               desc: the domain is pure; file system access belongs to an adapter
-            - pkg: os/exec
+            - pkg: os/exec$
               desc: the domain is pure; processes belong to an adapter
+            - pkg: os/signal$
+              desc: the domain is pure; signal handling belongs to cmd or platform
+            - pkg: os/user$
+              desc: the domain is pure; OS accounts belong to an adapter
             - pkg: net$
               desc: the domain is pure; networking belongs to an adapter
-            - pkg: net/http
+            - pkg: net/http$
               desc: the domain is pure; HTTP belongs to adapters/http
-            - pkg: database/sql
+            - pkg: net/http/cgi$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/cookiejar$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/fcgi$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/httptest$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/httptrace$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/httputil$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/http/pprof$
+              desc: the domain is pure; HTTP belongs to adapters/http
+            - pkg: net/rpc$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: net/rpc/jsonrpc$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: net/smtp$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: net/textproto$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: crypto/tls$
+              desc: the domain is pure; networking belongs to an adapter
+            - pkg: database/sql$
               desc: the domain is pure; persistence belongs to adapters/sqlite
-            - pkg: syscall
+            - pkg: database/sql/driver$
+              desc: the domain is pure; persistence belongs to adapters/sqlite
+            - pkg: io/ioutil$
+              desc: the domain is pure; file system access belongs to an adapter
+            - pkg: log/syslog$
+              desc: the domain is pure; logging belongs to an adapter
+            - pkg: expvar$
+              desc: the domain is pure; it publishes over HTTP, which belongs to adapters/http
+            - pkg: plugin$
+              desc: the domain is pure; loading code at runtime belongs to an adapter
+            - pkg: syscall$
+              desc: the domain is pure and platform independent
+            - pkg: syscall/js$
               desc: the domain is pure and platform independent
         app:
           list-mode: strict
@@ -76,11 +122,27 @@ linters:
             - github.com/magpeek/mivo/internal/domain
             - github.com/magpeek/mivo/internal/app
           deny:
-            - pkg: os/exec
+            - pkg: os/exec$
               desc: use cases declare a port; processes belong to an adapter
-            - pkg: net/http
+            - pkg: net/http$
               desc: use cases declare a port; HTTP belongs to adapters/http
-            - pkg: database/sql
+            - pkg: net/http/cgi$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/cookiejar$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/fcgi$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/httptest$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/httptrace$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/httputil$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: net/http/pprof$
+              desc: use cases declare a port; HTTP belongs to adapters/http
+            - pkg: database/sql$
+              desc: use cases declare a port; persistence belongs to adapters/sqlite
+            - pkg: database/sql/driver$
               desc: use cases declare a port; persistence belongs to adapters/sqlite
         platform:
           list-mode: lax
@@ -118,6 +180,18 @@ linters:
         - pattern: ^slog\.(Log|LogAttrs|Default|SetDefault)$
           pkg: ^log/slog$
           msg: inject a *slog.Logger instead of using the package-level default logger
+        # path/filepath is allowed in the domain for pure path arithmetic, but these functions
+        # touch the file system. Limited to internal/domain by an exclusion rule below.
+        - pattern: ^filepath\.(Walk|WalkDir|Glob|EvalSymlinks|Abs)$
+          pkg: ^path/filepath$
+          msg: "domain purity: file system access belongs to an adapter"
+        # The package-level log functions write to the process-wide standard logger.
+        - pattern: ^log\.(Print|Fatal|Panic)(f|ln)?$
+          pkg: ^log$
+          msg: "domain purity: return errors or values; logging belongs to the caller"
+        - pattern: ^log\.(Output|SetOutput|SetFlags|SetPrefix|Flags|Prefix|Writer|Default)$
+          pkg: ^log$
+          msg: "domain purity: return errors or values; logging belongs to the caller"
 
     funlen:
       lines: 50
@@ -184,6 +258,11 @@ linters:
         linters:
           - forbidigo
         text: slog
+      # The file system and standard logger restrictions apply to internal/domain only.
+      - path-except: ^internal/domain/
+        linters:
+          - forbidigo
+        text: "domain purity"
 
 formatters:
   enable:

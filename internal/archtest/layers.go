@@ -1,6 +1,23 @@
 // Package archtest enforces the layer matrix of ADR 0019 with go/parser. It duplicates the
 // depguard rules on purpose: a plain `go test ./...` reports layering violations even on
 // machines without golangci-lint.
+//
+// The two gates intentionally differ in scope:
+//   - Test files: archtest checks production files only and skips `_test.go`, testdata,
+//     `_x` and `.x` directories (the go command ignores them as well). depguard also lints
+//     test files, so it is the gate that keeps I/O out of domain tests.
+//   - Subpackages: archtest anchors every layer at the module root, so "internal/domain"
+//     covers internal/domain and all its subpackages, but not a nested directory such as
+//     internal/adapters/x/internal/domain. depguard's "**/internal/domain/**" glob matches
+//     such nested directories too.
+//   - Build constraints: archtest parses every file regardless of GOOS or build tags;
+//     golangci-lint only sees the files of the current build configuration.
+//   - Denied standard library trees: archtest matches path prefixes ("os" also forbids
+//     os/signal and any future os/... package). depguard's $gostd allow list contains every
+//     standard library package exactly and would win over a prefix deny, so .golangci.yml
+//     lists each denied package exactly; a package added in a future Go release is caught
+//     here until it is added there. TestDepguardDeniesEveryStandardPackageOfTheMatrix
+//     expands the matrix against `go list std` and fails until .golangci.yml catches up.
 package archtest
 
 import (
@@ -67,9 +84,12 @@ func layerMatrix() []layer {
 			dir:                 "internal/domain",
 			standardLibraryOnly: true,
 			allowedModule:       []importRule{module("internal/domain")},
+			// Every os/... package does I/O, while net/url, net/netip and net/mail are pure
+			// parsers. "C" is cgo, which escapes every other rule.
 			denied: []importRule{
-				exactly("os"), prefix("os/exec"), exactly("net"), prefix("net/http"),
-				prefix("database/sql"), prefix("syscall"),
+				prefix("os"), exactly("net"), prefix("net/http"), prefix("net/rpc"), exactly("net/smtp"),
+				exactly("net/textproto"), prefix("database/sql"), prefix("syscall"), exactly("log/syslog"),
+				exactly("plugin"), exactly("io/ioutil"), exactly("expvar"), exactly("crypto/tls"), exactly("C"),
 			},
 		},
 		{

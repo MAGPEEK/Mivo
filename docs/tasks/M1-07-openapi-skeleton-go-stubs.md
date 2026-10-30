@@ -21,8 +21,8 @@ operations. Go server interfaces and models are generated from it.
       `application/problem+json`. A reusable `components.responses` entry references it.
 - [ ] `api/spec_test.go` loads and validates the spec with kin-openapi
       (`openapi3.NewLoader` + `Validate`). `go test ./api/...` passes.
-- [ ] oapi-codegen v2 is pinned with `go get -tool`. `internal/adapters/http/apigen/generate.go`
-      holds the `//go:generate go tool oapi-codegen -config ...` line. The config enables
+- [ ] oapi-codegen v2 is pinned in `tools/go.mod` (`go -C tools get -tool …`, ADR 0017/0019). `internal/adapters/http/apigen/generate.go`
+      holds the `//go:generate go tool -modfile=../../../../tools/go.mod oapi-codegen -config ...` line (path relative to the package dir). The config enables
       `std-http-server`, `strict-server` and `models`.
 - [ ] `go generate ./internal/adapters/http/apigen/...` followed by
       `git diff --exit-code internal/adapters/http/apigen` is clean (generated code committed
@@ -41,3 +41,10 @@ operations. Go server interfaces and models are generated from it.
   rely on them.
 - M1-13 (frontend) generates the TypeScript client from this file. After this task is merged,
   spec changes go through new tasks.
+
+## Orchestrator note (after M1-03b)
+- Tool dependencies live in `tools/go.mod` (same module path, read via `-modfile`). Add new Go tools
+  there, not to the main `go.mod`. `go generate` runs in the package directory, so a
+  `//go:generate` line must use a `-modfile` path relative to that directory
+  (e.g. `go tool -modfile=../../../tools/go.mod oapi-codegen …`) – verify it from the repo root
+  with `go generate ./...`.
