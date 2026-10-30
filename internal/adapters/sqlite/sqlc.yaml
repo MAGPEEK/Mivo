@@ -1,0 +1,21 @@
+# sqlc configuration (ADR 0004). sqlc needs cgo, so it runs from a pinned Docker image
+# instead of `go install`. Regenerate from the repository root:
+#
+#   docker run --rm -v "${PWD}:/src" -w /src sqlc/sqlc:1.31.1 generate -f internal/adapters/sqlite/sqlc.yaml
+#
+# Without Docker, the v1.31.1 release binary from github.com/sqlc-dev/sqlc/releases produces
+# identical output: `sqlc generate -f internal/adapters/sqlite/sqlc.yaml`. Check with
+# `sqlc diff -f internal/adapters/sqlite/sqlc.yaml` that the committed code is current.
+#
+# Paths below are relative to this file. The goose migrations are the schema, so the
+# generated code always matches what Migrate applies.
+version: "2"
+sql:
+  - engine: sqlite
+    schema: migrations
+    queries: queries
+    gen:
+      go:
+        package: sqlcgen
+        out: sqlcgen
+        emit_empty_slices: true

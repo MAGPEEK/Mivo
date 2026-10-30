@@ -31,3 +31,4 @@ Resolve the M1-06 review findings before the HTTP and SQLite adapters build on t
 - service_test.go – concurrent test also asserts generator `callCount() == 1`.
 - health.go – after a fired deadline prefer `pingContext.Err()` over the adapter's error to choose "timed out".
 - Nits: check `ctx.Err()` before the semaphore `select`; `t.Cleanup` to release paused savers; distinct error context for the reload.
+- From M1-08: `createIdentity` returns `CreatedAt` with ns precision, storage keeps ms → first start vs. restart differ. Truncate to `time.Millisecond` in app/system and test it.

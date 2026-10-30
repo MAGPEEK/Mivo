@@ -51,3 +51,4 @@ skeleton.
 ## Orchestrator note (from M1-04b)
 - Use `paths.HostEnvironment(lookupEnv)` with the injected lookup (`os.LookupEnv` in production);
   `paths.Directories` and `Environment.HomeDir` no longer exist.
+- Wiring from M1-08: `sqlite.Open(ctx, sqlite.Options{Path, Logger})` → `Migrate` → `NewIdentityRepository(db)`; the db is the `DatabaseChecker`. Fold in the M1-06b deferred `CreatedAt` truncation if app/system is touched.
