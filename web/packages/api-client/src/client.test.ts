@@ -66,6 +66,39 @@ describe("createApiClient", () => {
     expect(fake.requests[0]?.url).toBe(`${pageOrigin}/api/v1/system/info`);
   });
 
+  it.each([
+    ["an origin", "http://192.168.1.10:8460"],
+    ["an https origin with a path prefix", "https://media.example.test/server/"],
+  ])("accepts %s as base URL", (_case, baseUrl) => {
+    expect(() => createApiClient({ baseUrl })).not.toThrow();
+  });
+
+  it.each([
+    ["a host without scheme", "192.168.1.10:8460"],
+    ["a host name read as scheme", "localhost:8460"],
+    ["a relative path", "/api"],
+    ["blank text", "  "],
+    ["a non-http scheme", "ftp://server.test"],
+  ])("rejects %s as base URL with a clear TypeError", (_case, baseUrl) => {
+    expect(() => createApiClient({ baseUrl })).toThrow(
+      new TypeError(
+        `Invalid API base URL "${baseUrl}": expected an absolute http or https URL such as "http://192.168.1.10:8460".`,
+      ),
+    );
+  });
+
+  it("keeps the parser error as cause of an unparsable base URL", () => {
+    let caught: unknown;
+    try {
+      createApiClient({ baseUrl: "not a url" });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(TypeError);
+    expect((caught as TypeError).cause).toBeInstanceOf(TypeError);
+  });
+
   it("uses globalThis.fetch when no fetch is given", async () => {
     const fake = respondWith(() => jsonResponse(systemInfo, 200));
     vi.stubGlobal("fetch", fake.fetch);

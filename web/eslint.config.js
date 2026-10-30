@@ -42,9 +42,11 @@ const reactVersion = createRequire(new URL("apps/web/package.json", import.meta.
 // Trade-off: 3- and 4-digit hex after whitespace ("1px solid #fff") stays unflagged, because
 // it is indistinguishable from text such as "Episode #123" or "Season #12". The reverse cost
 // is that a 6- or 8-digit hex-only word after a space ("Ticket #123456", "#facade") is
-// rejected; such text belongs in the locale files anyway. Fragments such as "/library#add"
-// or "#section-2" stay allowed. "_" may follow a colour ("_#fff_inset"), any other word
-// character or "-" may not.
+// rejected; such text belongs in the locale files anyway. The same holds for a 3- or 4-digit
+// hex-only word after a CSS delimiter such as "(" or ",": "Fixes (#123)" and "#101, #102"
+// look like CSS colours and are flagged; that text belongs in the locale files, too.
+// Fragments such as "/library#add" or "#section-2" stay allowed. "_" may follow a colour
+// ("_#fff_inset"), any other word character or "-" may not.
 const hexDigits = "[0-9A-Fa-f]";
 const anyHexColour = `#(?:${hexDigits}{3,4}|${hexDigits}{6}|${hexDigits}{8})`;
 const longHexColour = `#(?:${hexDigits}{6}|${hexDigits}{8})`;

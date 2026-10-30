@@ -1,7 +1,33 @@
 {
+  "layout": {
+    "skipToContent": "Zum Inhalt springen"
+  },
+  "sidebar": {
+    "label": "Hauptnavigation",
+    "toggle": "Seitenleiste umschalten",
+    "home": "Startseite",
+    "libraries": {
+      "heading": "Bibliotheken",
+      "empty": "Noch keine Bibliotheken"
+    }
+  },
+  "search": {
+    "label": "Suche",
+    "placeholder": "Filme, Serien und Musik durchsuchen"
+  },
   "home": {
     "heading": "Startseite",
-    "placeholder": "Hier erscheinen bald deine Bibliotheken."
+    "empty": {
+      "title": "Deine Bibliothek ist leer",
+      "hint": "Sobald du eine Bibliothek hinzufügst, erscheinen hier deine Filme, Serien und Musik."
+    }
+  },
+  "system": {
+    "version": {
+      "loading": "Serverversion wird geladen",
+      "value": "Serverversion {{version}}"
+    },
+    "unreachable": "Server nicht erreichbar"
   },
   "notFound": {
     "heading": "Seite nicht gefunden",

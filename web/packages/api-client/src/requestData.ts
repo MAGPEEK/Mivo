@@ -1,4 +1,6 @@
-import { toApiError, toApiErrorFromException } from "./apiError";
+import { toApiError, toApiErrorFromException, toEmptyBodyError } from "./apiError";
+
+const noContentStatus = 204;
 
 interface SuccessResult<Data> {
   readonly data: Data;
@@ -17,7 +19,8 @@ export type RequestResult<Data> = SuccessResult<Data> | FailureResult;
 
 /**
  * Awaits an openapi-fetch call and returns its data, or throws an `ApiError` for every
- * failure: non-2xx responses, network errors and unreadable bodies. Abort errors are rethrown
+ * failure: non-2xx responses, network errors, unreadable bodies and a missing body on any 2xx
+ * except 204 No Content (which resolves to `undefined`). Abort errors are rethrown
  * unchanged. Fits TanStack Query's `queryFn`, which expects a rejecting promise.
  *
  * Endpoints that answer a failure status with a typed non-problem body (for example 503 from
@@ -32,6 +35,12 @@ export async function requestData<Data>(request: Promise<RequestResult<Data>>): 
   }
   if (!isSuccess(result)) {
     throw toApiError(result);
+  }
+  // openapi-fetch yields `data: undefined` for an empty body (for example `Content-Length: 0`)
+  // instead of failing. Only 204 promises no body; anywhere else the caller would read the
+  // fields of `undefined`.
+  if (result.data === undefined && result.response.status !== noContentStatus) {
+    throw toEmptyBodyError(result.response);
   }
   return result.data;
 }

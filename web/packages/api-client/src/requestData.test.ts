@@ -153,6 +153,29 @@ describe("requestData", () => {
     expect(error).toBe(abort);
   });
 
+  it.each([
+    [
+      "Content-Length 0",
+      () => new Response(null, { status: 200, headers: { "Content-Length": "0" } }),
+    ],
+    ["an empty body without Content-Length", () => new Response("", { status: 200 })],
+  ])("reports unexpected_response with the status for a 2xx with %s", async (_case, create) => {
+    const error = await captureApiError(respondWith(create));
+
+    expect(error.code).toBe(clientErrorCodes.unexpectedResponse);
+    expect(error.status).toBe(200);
+    expect(error.detail).toBe("HTTP status 200 without a body.");
+  });
+
+  it("resolves to undefined for 204 No Content", async () => {
+    const noContent = Promise.resolve({
+      data: undefined,
+      response: new Response(null, { status: 204 }),
+    });
+
+    await expect(requestData(noContent)).resolves.toBeUndefined();
+  });
+
   it("reports unexpected_response when a 2xx body is not valid JSON", async () => {
     const error = await captureApiError(
       respondWith(

@@ -11,5 +11,6 @@ allowBuilds:
 peerDependencyRules:
   allowedVersions:
     # openapi-typescript 7 declares typescript ^5 but only uses its stable printer API. Its
-    # output under TypeScript 6 is checked by the generated-code drift check (ADR 0017).
+    # output under TypeScript 6 is proven correct by `tsc -b` and the typed api-client tests;
+    # the generated-code drift check (ADR 0017) only keeps the generation reproducible.
     openapi-typescript>typescript: "6"

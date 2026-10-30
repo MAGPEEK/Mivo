@@ -6,7 +6,8 @@ import { afterEach } from "vitest";
 window.scrollTo = () => undefined;
 
 // Testing Library only cleans up automatically with Vitest globals, which this workspace does
-// not enable.
+// not enable. Persisted UI preferences (e.g. the collapsed sidebar) must not leak between tests.
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });

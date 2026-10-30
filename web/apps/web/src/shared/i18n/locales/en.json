@@ -1,7 +1,33 @@
 {
+  "layout": {
+    "skipToContent": "Skip to content"
+  },
+  "sidebar": {
+    "label": "Main navigation",
+    "toggle": "Toggle sidebar",
+    "home": "Home",
+    "libraries": {
+      "heading": "Libraries",
+      "empty": "No libraries yet"
+    }
+  },
+  "search": {
+    "label": "Search",
+    "placeholder": "Search movies, shows and music"
+  },
   "home": {
     "heading": "Home",
-    "placeholder": "Your libraries will appear here."
+    "empty": {
+      "title": "Your library is empty",
+      "hint": "Once you add a library, your movies, shows and music appear here."
+    }
+  },
+  "system": {
+    "version": {
+      "loading": "Loading server version",
+      "value": "Server version {{version}}"
+    },
+    "unreachable": "Server unreachable"
   },
   "notFound": {
     "heading": "Page not found",

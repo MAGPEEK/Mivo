@@ -35,6 +35,10 @@ export class ApiError extends Error implements ApiErrorFields {
   readonly code: string;
   readonly detail: string | undefined;
 
+  /**
+   * @param options `cause` is for diagnostics only: engines without error causes (webOS 6
+   *   runs Chromium 79) ignore it, so no app logic may depend on it.
+   */
   constructor(fields: ApiErrorFields, options?: ErrorOptions) {
     super(fields.title, options);
     this.status = fields.status;
@@ -55,7 +59,8 @@ const unexpectedResponseTitle = "Unexpected response";
 
 /**
  * Converts a non-2xx openapi-fetch result into an {@link ApiError}. Problem details are used
- * when the server sent them; any other body yields `unexpected_response`.
+ * when the server sent them; any other body yields `unexpected_response`. The caller
+ * guarantees `!response.ok`; this function does not check it again.
  */
 export function toApiError(result: ErrorResult): ApiError {
   const { error: body, response } = result;
@@ -73,6 +78,19 @@ export function toApiError(result: ErrorResult): ApiError {
     title: unexpectedResponseTitle,
     code: clientErrorCodes.unexpectedResponse,
     detail: `HTTP status ${String(response.status)} without problem details.`,
+  });
+}
+
+/**
+ * Builds the error for a 2xx response without a body although the contract promises one.
+ * The server answered, so this is `unexpected_response` with the received status.
+ */
+export function toEmptyBodyError(response: Response): ApiError {
+  return new ApiError({
+    status: response.status,
+    title: unexpectedResponseTitle,
+    code: clientErrorCodes.unexpectedResponse,
+    detail: `HTTP status ${String(response.status)} without a body.`,
   });
 }
 

@@ -34,3 +34,10 @@ served with a real SQLite database, rendering the shell with live server data.
 - Requires Go on PATH. If Go is missing, fail with a clear message, not a timeout.
 - Port 18460 avoids clashing with a dev server on 8460. Use a named constant in the config.
 - Keep E2E deterministic: no reliance on the developer's real config directory.
+
+## Review carry-over from M1-15 (APPROVE) – fix while touching web/
+- `useSidebarState`: remove the unused storage parameter (or use `null` for in-memory) and fix the doc.
+- `systemInfoQuery`: reword the `staleTime: Infinity` comment ("a stale version until the page is reloaded is acceptable").
+- Collapsed sidebar: show a small token-coloured error indicator so sighted users see "Server unreachable".
+- `createApiClient`: reject base URLs with credentials, query or hash; tests.
+- Nits: `isComposing` guard and `event.code === "KeyK"` fallback for Ctrl/Cmd+K; less DOM-coupled Sidebar footer test; webOS `cause` note on the TypeError.

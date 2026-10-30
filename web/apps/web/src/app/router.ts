@@ -7,13 +7,13 @@ import {
 
 import { HomePage } from "../features/home";
 import { NotFoundPage } from "./NotFoundPage";
-import { RootLayout } from "./RootLayout";
+import { AppLayout } from "./layout/AppLayout";
 
 // Code-based route tree: no generated file in milestone 1. Switching to file-based routing
 // needs an ADR note (ADR 0005).
 function createRouteTree() {
   const rootRoute = createRootRoute({
-    component: RootLayout,
+    component: AppLayout,
     notFoundComponent: NotFoundPage,
   });
   const homeRoute = createRoute({

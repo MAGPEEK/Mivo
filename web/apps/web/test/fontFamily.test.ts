@@ -4,9 +4,10 @@ import { createRequire } from "node:module";
 import { selfHostedSansFamily } from "@mivo/ui-tokens";
 import { describe, expect, it } from "vitest";
 
-// main.tsx imports this stylesheet. Read from disk instead of importing: Vitest replaces CSS
-// imports with empty modules. Resolved through the package, so it follows the installed version.
-const interCssPath = createRequire(import.meta.url).resolve("@fontsource-variable/inter/index.css");
+// Resolves the bare specifier exactly as main.tsx imports it, so the test reads the stylesheet
+// the package's export map selects, even if a font update points it at another file. Read
+// from disk instead of importing: Vitest replaces CSS imports with empty modules.
+const interCssPath = createRequire(import.meta.url).resolve("@fontsource-variable/inter");
 const interCss = readFileSync(interCssPath, "utf8");
 
 const fontFamilyDeclaration = /font-family:\s*["']?([^"';]+?)["']?\s*;/g;

@@ -1,18 +1,7 @@
-import { QueryClient } from "@tanstack/react-query";
-import { createMemoryHistory } from "@tanstack/react-router";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { createI18n } from "../shared/i18n";
-import { App } from "./App";
-import { createAppRouter } from "./router";
-
-function renderApp(path: string, preferredLanguages: readonly string[] = ["en"]) {
-  const i18n = createI18n(preferredLanguages);
-  const router = createAppRouter({ history: createMemoryHistory({ initialEntries: [path] }) });
-  render(<App i18n={i18n} queryClient={new QueryClient()} router={router} />);
-  return { i18n, router };
-}
+import { renderApp } from "../test/renderApp";
 
 /** Waits for the routed page and returns the text of its single top-level heading. */
 async function pageHeadingText(): Promise<string | null> {
@@ -21,11 +10,10 @@ async function pageHeadingText(): Promise<string | null> {
 }
 
 describe("App routing", () => {
-  it("renders the home placeholder at /", async () => {
+  it("renders the home page at /", async () => {
     renderApp("/");
 
     expect(await pageHeadingText()).toBe("Home");
-    expect(screen.getByRole("main").textContent).toContain("Your libraries will appear here.");
   });
 
   it("renders the not-found view for an unknown path", async () => {
@@ -49,7 +37,7 @@ describe("App routing", () => {
 
 describe("App language", () => {
   it("renders German when the browser prefers German", async () => {
-    renderApp("/", ["de-DE", "en"]);
+    renderApp("/", { languages: ["de-DE", "en"] });
 
     expect(await pageHeadingText()).toBe("Startseite");
     expect(document.documentElement.lang).toBe("de");
