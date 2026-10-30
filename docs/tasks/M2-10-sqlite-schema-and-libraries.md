@@ -48,3 +48,11 @@ libraries can be synced, listed and read.
   these values (e.g. the `items.kind` CHECK constraint) and derive the kind via `ItemKindForLibrary`.
 - `ParseRelativePath` returns a plain `string` (the input unchanged) and rejects `.` segments and
   drive-relative prefixes such as `C:x`.
+
+## Orchestrator note (from M2-02)
+- `media.Stream` has an extra field `CodecTag` (ffprobe `codec_tag_string`) because M2-11's
+  integration test compares it. ADR 0022's schema has no column for it: add a nullable
+  `codec_tag TEXT` column to `streams` (recommended; the remux decision in later milestones needs
+  it, e.g. hvc1 vs hev1) and note the addition under ADR 0022 "Notes (M2)".
+- Store `frame_rate` losslessly as TEXT via `FrameRate.String()` / `media.ParseFrameRate`.
+- `media.ContainerUnknown` is the string `"unknown"` (never empty) – CHECK constraints must allow it.

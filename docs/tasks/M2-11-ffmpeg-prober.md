@@ -45,3 +45,13 @@ the keyframe at or before a position for seeks with stream copy (ADR 0015, ADR 0
 - `bits_per_raw_sample` is often missing for video; use `media`'s pixel-format fallback.
 - Capability detection (M2-16), argument building (M2-17) and the producer (M2-24) reuse the
   runner from this task; keep it unexported-but-shared inside the package with a clear API.
+
+## Orchestrator note (from M2-02)
+- Map ffprobe's `level: -99` (unknown) to 0 – `media.Description.Validate` rejects negative values.
+- Derive bit depth with `media.BitDepth(bits_per_raw_sample, pix_fmt)` and the container with
+  `media.IdentifyContainer(format_name, extension)`; fill `Stream.CodecTag` from
+  `codec_tag_string` (empty for `[0][0][0][0]`).
+- Cross-check the container table against the real corpus manifest here (the domain test cannot
+  read it).
+- A `media.ParseFrameRate` error for one stream (e.g. `r_frame_rate` "25/0") makes that stream's
+  frame rate unknown (zero value) – it must not fail the whole probe. Test it.

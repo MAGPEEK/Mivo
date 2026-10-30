@@ -44,3 +44,10 @@ Direct Play, Remux or Transcode, the action per stream and the reasons the overl
   manifest case names and must agree with these rows.
 - The transcode-height default comes from OD-5 through `Policy`; the engine has no default of
   its own beyond "0 = no cap".
+
+## Orchestrator note (from M2-02)
+- `media.Description.AudioByIndex` returns an error wrapping `domain.ErrNotFound` (as M2-02
+  specifies). Where this task requires `ErrInvalid` for an unknown requested audio index, wrap the
+  lookup error in `playback` as `domain.ErrInvalid` and test it.
+- `media.ContainerUnknown` is `"unknown"`; `media.HDRFormat.IsHDR`, `media.FrameRate` and
+  `media.BitDepth` exist – reuse them, do not re-derive.

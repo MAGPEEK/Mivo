@@ -36,3 +36,7 @@ grid with technical chips, and starts a scan with live status (ADR 0011 design, 
 - Chip text uses the label functions of `@mivo/player-core` (M2-14); the library feature only
   chooses which labels to join.
 - Colours only from ui-tokens; no hex literals (ESLint rule).
+
+## Orchestrator note (from M2-02)
+- The domain stores two probe error codes, `probe_failed` and `probe_timed_out`. Both need en/de
+  strings; unknown codes fall back to a generic text.
