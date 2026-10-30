@@ -34,3 +34,11 @@ cgo for amd64, arm64, armv7 and windows/amd64.
 - Write throughput is bounded by the single writer, which is fine for a media server.
 - Contributors regenerating queries need Docker or the sqlc binary. Building and testing do
   not need sqlc.
+
+## Notes (M2-13)
+
+- `<data>/server.lock` guards the data directory: the server takes an exclusive, non-waiting OS
+  lock (flock / LockFileEx) on it before opening `server.db` and holds it for its whole run, so a
+  second server on the same data directory is refused. The file may stay in place; the OS drops
+  the lock when the process dies. Keep the data directory on local storage – SMB/NFS may not
+  honour the lock.

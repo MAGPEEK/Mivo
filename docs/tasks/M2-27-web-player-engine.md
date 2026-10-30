@@ -52,3 +52,7 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
 - (from M2-07 test) `validatePlayerSearch` accepts any non-negative `t` (also 1e21) and any
   non-empty `fileId` string (no UUID check, no length cap). Treat both as untrusted: clamp `t` to
   the item duration and let the API reject unknown file ids; never build paths from them.
+- (from M2-14) Not verified: newer desktop Chrome may answer `canPlayType('application/vnd.apple.mpegurl')`
+  positively, which makes `detectClientProfile` report HLS delivery `native` instead of the
+  reference `mse`. Check against the real installed Chrome/Edge and decide (prefer `mse` when
+  MediaSource is available) before relying on the reference profile in E2E.

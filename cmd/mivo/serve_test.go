@@ -114,7 +114,45 @@ func TestRunRoutesAPIAndWebUI(t *testing.T) {
 	assertCleanExit(t, exitCodes, stderr)
 }
 
-func TestWithCloseErrorKeepsCloseFailures(t *testing.T) {
+func TestRunRefusesASecondServerOnTheSameDataDirectory(t *testing.T) {
+	t.Parallel()
+
+	environment := isolatedEnvironment(t)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	env, _, stderr := newTestEnv(environment)
+	addresses := make(chan net.Addr, 1)
+	exitCodes := make(chan int, 1)
+	hooks := runHooks{onListening: func(address net.Addr) { addresses <- address }}
+
+	go func() { exitCodes <- run(ctx, nil, env, hooks) }()
+
+	baseURL := "http://" + awaitAddress(t, addresses, exitCodes, stderr).String()
+
+	// The second start shares every directory and fails before it opens the database.
+	secondEnv, secondStdout, secondStderr := newTestEnv(environment)
+	if code := run(t.Context(), nil, secondEnv, runHooks{}); code != exitFailure {
+		t.Fatalf("second start: exit code = %d, want %d (stderr: %q)", code, exitFailure, secondStderr.String())
+	}
+
+	assertStartupError(t, secondStderr.String(), "another server is already using "+environment[envPathsData]+":")
+	assertNoOutput(t, secondStdout)
+
+	// The refused start left the running server alone.
+	assertHealthy(t, baseURL)
+
+	cancel()
+	assertCleanExit(t, exitCodes, stderr)
+
+	// Stopping released the lock, so the next server starts on the same directories. The
+	// helper counts the info-level listening line.
+	environment[envLogLevel] = "info"
+	runAndQueryServer(t, nil, environment)
+}
+
+func TestWithCleanupErrorKeepsCleanupFailures(t *testing.T) {
 	t.Parallel()
 
 	cancelled, cancel := context.WithCancel(t.Context())
@@ -149,13 +187,17 @@ func TestWithCloseErrorKeepsCloseFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := withCloseError(test.ctx, test.result, test.closeErr)
+			got := withCleanupError(test.ctx, test.result, closeDatabaseStep, test.closeErr)
 
 			if (got == nil) != test.wantNil {
-				t.Fatalf("withCloseError = %v, want nil: %t", got, test.wantNil)
+				t.Fatalf("withCleanupError = %v, want nil: %t", got, test.wantNil)
 			}
 
 			assertErrorChain(t, got, test.wantIs, test.wantNotIs)
+
+			if test.closeErr != nil && !strings.Contains(got.Error(), closeDatabaseStep+": "+test.closeErr.Error()) {
+				t.Errorf("error %q does not name the cleanup step %q", got, closeDatabaseStep)
+			}
 
 			if stoppedWhileStarting(test.ctx, got) != test.wantStopped {
 				t.Errorf("stoppedWhileStarting(%v) = %t, want %t", got, !test.wantStopped, test.wantStopped)

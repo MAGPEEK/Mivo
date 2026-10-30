@@ -31,3 +31,7 @@ codes the player can translate (ADR 0023, ADR 0024).
 - Requests are cheap but start FFmpeg: log one info line per session start (mode, reasons, file
   ID, session ID) and per stop; never log the profile body at info.
 - Do not edit `library.go` (M2-26) or `api.go`.
+
+## Orchestrator note (from M2-09 review)
+- Direct-play plans carry nil `Reasons`/`Warnings`; the openapi marks both arrays as required –
+  always serialise them as `[]`, never `null`. Test it.

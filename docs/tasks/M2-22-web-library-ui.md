@@ -48,3 +48,7 @@ grid with technical chips, and starts a scan with live status (ADR 0011 design, 
 - Pages receive route params as props (`LibraryPage {libraryId}`, `ItemPage {itemId}`,
   `PlayerPage {itemId, fileId, startAt}`); `features/player/lib/playerSearch.ts`
   (`validatePlayerSearch`) already exists.
+- (from M2-14) `apps/web` depends on `@mivo/player-core` (workspace) since M2-14; use its
+  `containerLabel`, `codecLabel`, `channelLabel`, `hdrLabel`, `bitDepthLabel`,
+  `resolutionLabel(height, width?)` for chips. Do not change pnpm-lock.yaml in wave 3 (M2-27 owns
+  it in wave 4).

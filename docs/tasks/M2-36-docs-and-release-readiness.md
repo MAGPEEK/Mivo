@@ -43,3 +43,5 @@ decision (OD-9).
   target as its own library.
 - (from M2-13) User docs: keep the data directory (`/config` in Docker) on local storage; file
   locks on SMB/NFS shares may not be honoured.
+- (from M2-08) ADR 0024 "Notes (M2)": requests with a body get a 30 s read deadline
+  (`restapi.RequestBodyReadTimeout`); bodiless requests (stream GETs) never do.

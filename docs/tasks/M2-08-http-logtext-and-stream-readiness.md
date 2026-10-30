@@ -45,3 +45,8 @@ info log (BACKLOG, ADR 0024).
       streaming GET is not.
 - [ ] Bound the post-decode drain locally: `io.Copy(io.Discard, io.LimitReader(body, MaxRequestBodyBytes+1))`.
 - [ ] Log "rejected malformed request" after the 400/413 classification, with the status as an attribute.
+
+## Orchestrator note (2026-10-30)
+- `statuswriter` treats 101 Switching Protocols as final, like net/http (which ignores later
+  `WriteHeader` calls); the BACKLOG wording "treats 101 as final" as a bug was wrong. When
+  WebSockets arrive, record a hijacked connection in `Recorder` (libraries write the 101 themselves).

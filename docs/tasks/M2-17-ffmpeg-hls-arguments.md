@@ -20,10 +20,10 @@ session directory, copying or encoding each stream as planned and starting at a 
 - [ ] Copy: `-c:v copy` (plus `-tag:v hvc1` for HEVC), `-c:a copy`.
 - [ ] Transcode video: `libx264 -preset veryfast -crf 23 -profile:v high -pix_fmt yuv420p`,
       keyframes forced at segment boundaries (`-force_key_frames expr:gte(t,n_forced*6)`),
-      `-sc_threshold 0`, and `-vf scale=-2:<height>` only when the plan downscales. Transcode
+      `-sc_threshold 0`, and `-vf scale=<TargetWidth>:<TargetHeight>` whenever `ScaleRequired` is set (a 0 dimension is written as `-2`; FFmpeg's `0` means "input size"). Transcode
       audio: `aac -ac 2 -b:a 192k`. Values are named constants.
 - [ ] Table tests: one row per plan shape (remux, video-only transcode, audio-only transcode,
-      both, downscale, seek start, no audio, HEVC copy).
+      both, downscale, odd-dimension rounding (720x405 → 720x404), seek start, no audio, HEVC copy).
 - [ ] Integration test (skip without FFmpeg/corpus, `-short`): run the arguments for three corpus
       files (remux MKV H.264, transcode AVI, audio-only transcode M2TS) into `t.TempDir()`; the
       playlist ends with `#EXT-X-ENDLIST`, `init.mp4` + segments concatenated probe as the planned
@@ -43,3 +43,7 @@ session directory, copying or encoding each stream as planned and starting at a 
   "Notes (M2-10 review, orchestrator)", path safety); assert it in the argument tests. Consider
   packet keyframe flags (`-show_entries packet=pts_time,flags`) instead of decoded frames for seek
   points.
+- (from M2-09 review) The decision engine always yields an even transcode size and sets
+  `StreamDecision.ScaleRequired` whenever the output size differs from the source (downscale or
+  odd-dimension rounding). Add the scale filter whenever `ScaleRequired` is set, not only when
+  `Downscaled` is.

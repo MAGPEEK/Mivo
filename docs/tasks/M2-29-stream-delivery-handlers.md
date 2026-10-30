@@ -16,7 +16,7 @@ ready for signed URLs later (ADR 0024).
       direct URL or the `…/hls/index.m3u8` URL for a session ID and delivery).
 - [ ] Both handlers call the playback service's `Access` (records the access time); unknown or
       stopped session → 404 problem; malformed session ID → 400.
-- [ ] Direct file: opened through `libraryfs.Open` (os.Root), served with `http.ServeContent`
+- [ ] Direct file: opened through the port implemented by `libraryfs.FileSystem.Open` (os.Root), served with `http.ServeContent`
       (Range, `If-Range`, HEAD, 206/416) and the ADR 0023 `Content-Type`; tests for full, range,
       suffix range, invalid range (416), HEAD, and that the response writer chain still exposes
       `io.ReaderFrom` (M2-08).

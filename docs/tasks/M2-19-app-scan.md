@@ -50,3 +50,10 @@ shutdown (ADR 0022).
   `probe_timed_out`, `domain.ErrUnsupported` → `probe_failed`, `domain.ErrUnavailable` → ffprobe
   missing (abort the scan with a clear status, do not mark every file failed), `context.Canceled`
   → shutdown (stop, do not record failures). Error text carries base name, tool and exit code only.
+- (from M2-12 review) The walker reports subdirectories it could not read (skipped prefixes, see
+  libraryfs). The scan must NOT delete catalog entries below a skipped prefix, and if the root
+  itself becomes unreadable mid-walk (`ErrUnavailable`) it deletes nothing – a dropped NAS share
+  must never empty the catalog. Test both.
+- (from M2-11 review r2) `app` must not import `adapters/ffmpeg`, so `ffmpeg.ErrorOutput` cannot be
+  used here. Instead M2-32 (or a small follow-up in adapters/ffmpeg) injects a `*slog.Logger` into
+  the prober, which logs the stderr tail at debug level itself; the scan only records the code.

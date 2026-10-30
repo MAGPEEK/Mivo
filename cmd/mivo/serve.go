@@ -20,6 +20,7 @@ import (
 	"github.com/magpeek/mivo/internal/platform/brand"
 	"github.com/magpeek/mivo/internal/platform/buildinfo"
 	"github.com/magpeek/mivo/internal/platform/config"
+	"github.com/magpeek/mivo/internal/platform/instancelock"
 	"github.com/magpeek/mivo/internal/platform/logging"
 	"github.com/magpeek/mivo/internal/platform/paths"
 )
@@ -30,6 +31,13 @@ const (
 
 	// listenNetwork is the network of the HTTP listener.
 	listenNetwork = "tcp"
+
+	// closeDatabaseStep names the cleanup step in the error when closing the database fails.
+	closeDatabaseStep = "close database"
+
+	// releaseLockStep names the cleanup step in the error when releasing the data directory
+	// lock fails.
+	releaseLockStep = "release data directory lock"
 )
 
 // application is the configured server: everything the startup steps after loading the
@@ -42,8 +50,8 @@ type application struct {
 }
 
 // serve loads the configuration, builds the logger and runs the server until ctx is done.
-// The startup order is config → logger → directories → database → identity → HTTP; every
-// step closes what it opened when a later one fails.
+// The startup order is config → logger → directories → data directory lock → database →
+// identity → HTTP; every step closes what it opened when a later one fails.
 func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error {
 	cfg, err := config.Load(config.Options{
 		ConfigDirFlag: opts.configDir,
@@ -63,8 +71,8 @@ func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error 
 	return app.start(ctx)
 }
 
-// start creates the directories, opens the database and serves. The database is closed on
-// every path once it is open; a close error is reported with the result.
+// start creates the directories, locks the data directory and serves from it. The lock is
+// released last, after the database is closed; a release error is reported with the result.
 func (app application) start(ctx context.Context) error {
 	app.logger.InfoContext(ctx, "starting "+brand.DisplayName,
 		slog.String("version", app.build.Summary()),
@@ -78,6 +86,34 @@ func (app application) start(ctx context.Context) error {
 		return fmt.Errorf("prepare directories: %w", err)
 	}
 
+	lock, err := lockDataDirectory(directories.Data)
+	if err != nil {
+		return err
+	}
+
+	serveErr := app.openAndServe(ctx)
+
+	return withCleanupError(ctx, serveErr, releaseLockStep, lock.Release())
+}
+
+// lockDataDirectory keeps a second server off the data directory before it can race the
+// migrations or purge this server's transcode sessions (ADR 0024).
+func lockDataDirectory(dataDir string) (*instancelock.Lock, error) {
+	lock, err := instancelock.Acquire(dataDir)
+	if errors.Is(err, instancelock.ErrLocked) {
+		return nil, fmt.Errorf("another server is already using %s: %w", dataDir, err)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("lock data directory: %w", err)
+	}
+
+	return lock, nil
+}
+
+// openAndServe opens the database and serves. The database is closed on every path once it
+// is open; a close error is reported with the result.
+func (app application) openAndServe(ctx context.Context) error {
 	db, err := app.openDatabase(ctx)
 	if err != nil {
 		return err
@@ -85,7 +121,7 @@ func (app application) start(ctx context.Context) error {
 
 	serveErr := app.serveWith(ctx, db)
 
-	return withCloseError(ctx, serveErr, db.Close())
+	return withCleanupError(ctx, serveErr, closeDatabaseStep, db.Close())
 }
 
 // openDatabase opens and migrates <data>/server.db.
@@ -99,28 +135,28 @@ func (app application) openDatabase(ctx context.Context) (*sqlite.DB, error) {
 
 	err = db.Migrate(ctx)
 	if err != nil {
-		return nil, withCloseError(ctx, fmt.Errorf("start database %s: %w", path, err), db.Close())
+		return nil, withCleanupError(ctx, fmt.Errorf("start database %s: %w", path, err), closeDatabaseStep, db.Close())
 	}
 
 	return db, nil
 }
 
-// withCloseError adds the error of closing the database to result, the outcome of the work
-// before. run treats every error that wraps the shutdown request as a clean stop, so when
-// result is only that request it is dropped and the close error returned alone; joined, the
-// close failure would be swallowed as part of the cancellation.
-func withCloseError(ctx context.Context, result, closeErr error) error {
-	if closeErr == nil {
+// withCleanupError adds the error of a cleanup step, such as closing the database, to result,
+// the outcome of the work before. run treats every error that wraps the shutdown request as a
+// clean stop, so when result is only that request it is dropped and the cleanup error
+// returned alone; joined, the cleanup failure would be swallowed as part of the cancellation.
+func withCleanupError(ctx context.Context, result error, step string, cleanupErr error) error {
+	if cleanupErr == nil {
 		return result
 	}
 
-	closeErr = fmt.Errorf("close database: %w", closeErr)
+	cleanupErr = fmt.Errorf("%s: %w", step, cleanupErr)
 
 	if result == nil || stoppedWhileStarting(ctx, result) {
-		return closeErr
+		return cleanupErr
 	}
 
-	return errors.Join(result, closeErr)
+	return errors.Join(result, cleanupErr)
 }
 
 // serveWith wires the use cases and the HTTP adapter on the open database and serves until

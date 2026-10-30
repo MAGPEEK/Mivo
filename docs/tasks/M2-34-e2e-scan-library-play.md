@@ -34,3 +34,7 @@ installed, in a branded browser with proprietary codecs (ADR 0025, OD-7).
   runs first (serial project dependency or `test.describe.serial`).
 - The backlog flake note (BACKLOG "web/e2e") applies: keep `playwright-report` if a failure
   cannot be reproduced.
+- (from M2-14) Not verified: newer desktop Chrome may answer `canPlayType('application/vnd.apple.mpegurl')`
+  positively, which makes `detectClientProfile` report HLS delivery `native` instead of the
+  reference `mse`. Check against the real installed Chrome/Edge and decide (prefer `mse` when
+  MediaSource is available) before relying on the reference profile in E2E.

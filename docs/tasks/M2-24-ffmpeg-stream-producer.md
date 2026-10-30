@@ -37,3 +37,6 @@ segment is ready, can be stopped at any time, and surfaces failures with a usefu
   "Notes (M2-10 review, orchestrator)", path safety); assert it in the argument tests. Consider
   packet keyframe flags (`-show_entries packet=pts_time,flags`) instead of decoded frames for seek
   points.
+- (from M2-12 review) On Linux/Docker close the Resolve→FFmpeg TOCTOU: open the media file
+  through `libraryfs` (os.Root), pass it via `cmd.ExtraFiles` and give FFmpeg
+  `file:/proc/self/fd/3` (seekable, exactly that inode). Keep `Resolve` on Windows.

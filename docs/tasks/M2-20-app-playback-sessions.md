@@ -48,3 +48,5 @@ and stops sessions on request (ADR 0023, ADR 0024).
 - `KeyframeAtOrBefore` returns an error when ffprobe cannot seek (no format start time). Fall back
   to position 0 (start of file) instead of failing the session; test it.
 - Keyframe positions are relative to the format start (like `-ss`), not absolute pts.
+- (from M2-09 review) Call `playback.Policy.Validate()` in the service constructor so a bad
+  `MaxTranscodeHeight` fails at startup instead of answering clients with 400.

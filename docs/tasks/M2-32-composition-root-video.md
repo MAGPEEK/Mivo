@@ -53,3 +53,14 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
 - (from M2-11 review) On Windows, reject `tools.ffmpeg` / `tools.ffprobe` that resolve (after
   `LookPath` with PATHEXT) to a `.bat` or `.cmd` file: `cmd.exe` re-parses such command lines and
   a media file name like `x&\host\s\evil&.mkv` could inject commands. Test it.
+- (from M2-08) `server.Options.QuietPathPrefixes`: quiet only the stream delivery paths (the file
+  and HLS routes under a session), not `/api/v1/playback/sessions/` as a whole – that would also
+  quiet single-session GET/DELETE. Pick the narrowest prefix the stream routes allow (see the
+  M2-08 review) and test that a session DELETE is still logged at info.
+- (from M2-13 review) Prove the order "instance lock before database": hold the lock with
+  `instancelock.Acquire` on an isolated data dir whose `server.db` path is a directory; the start
+  must fail with "another server is already using" and never log "start database".
+- (from M2-08 review) No path prefix covers only the delivery routes (the session id sits before
+  `/hls/` and `/file`). Quiet them by method + pattern (`GET /api/v1/playback/sessions/{id}/hls/{fileName}`,
+  `GET /api/v1/playback/sessions/{id}/file`, checked via a private ServeMux) or by a quiet flag the
+  stream handler sets; M2-08 round 2 provides the mechanism.
