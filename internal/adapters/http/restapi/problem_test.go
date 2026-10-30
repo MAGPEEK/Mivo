@@ -25,6 +25,20 @@ func TestProblemForError(t *testing.T) {
 		{name: "forbidden", err: domain.ErrForbidden, wantStatus: http.StatusForbidden, wantCode: "forbidden"},
 		{name: "conflict", err: domain.ErrConflict, wantStatus: http.StatusConflict, wantCode: "conflict"},
 		{name: "invalid", err: domain.ErrInvalid, wantStatus: http.StatusBadRequest, wantCode: "invalid"},
+		{name: "unsupported", err: domain.ErrUnsupported, wantStatus: http.StatusUnprocessableEntity, wantCode: "unsupported"},
+		{name: "unavailable", err: domain.ErrUnavailable, wantStatus: http.StatusServiceUnavailable, wantCode: "unavailable"},
+		{
+			name:       "wrapped unsupported",
+			err:        fmt.Errorf("start playback of file 9: %w", domain.ErrUnsupported),
+			wantStatus: http.StatusUnprocessableEntity,
+			wantCode:   "unsupported",
+		},
+		{
+			name:       "not found before unavailable",
+			err:        errors.Join(domain.ErrUnavailable, domain.ErrNotFound),
+			wantStatus: http.StatusNotFound,
+			wantCode:   "not_found",
+		},
 		{
 			name:       "wrapped not found",
 			err:        fmt.Errorf("load library 7: %w", domain.ErrNotFound),
@@ -56,6 +70,41 @@ func TestProblemForError(t *testing.T) {
 				t.Errorf("problem = %+v, want about:blank, the status title and no detail", problem)
 			}
 		})
+	}
+}
+
+// TestPublishedProblemCodes pins the codes of api/openapi.yaml (Problem.code). Clients
+// translate them, so a published code never changes; api/spec_test.go checks the same list
+// against the contract text.
+func TestPublishedProblemCodes(t *testing.T) {
+	t.Parallel()
+
+	codes := map[string]string{
+		restapi.CodeBadRequest:           "bad_request",
+		restapi.CodeInvalid:              "invalid",
+		restapi.CodeForbidden:            "forbidden",
+		restapi.CodeNotFound:             "not_found",
+		restapi.CodeMethodNotAllowed:     "method_not_allowed",
+		restapi.CodeConflict:             "conflict",
+		restapi.CodePayloadTooLarge:      "payload_too_large",
+		restapi.CodeUnsupported:          "unsupported",
+		restapi.CodeNoCompatibleFormat:   "no_compatible_format",
+		restapi.CodeTranscodeUnavailable: "transcode_unavailable",
+		restapi.CodeInternal:             "internal_error",
+		restapi.CodeUnavailable:          "unavailable",
+		restapi.CodeSessionLimitReached:  "session_limit_reached",
+		restapi.CodeStreamNotReady:       "stream_not_ready",
+	}
+
+	const publishedCodeCount = 14
+	if len(codes) != publishedCodeCount {
+		t.Fatalf("%d distinct codes, want %d: two constants share a value", len(codes), publishedCodeCount)
+	}
+
+	for got, want := range codes {
+		if got != want {
+			t.Errorf("code constant = %q, want %q", got, want)
+		}
 	}
 }
 

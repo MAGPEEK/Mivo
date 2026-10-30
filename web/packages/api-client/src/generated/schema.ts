@@ -44,6 +44,241 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/libraries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the configured libraries
+         * @description Returns every library of the server configuration with its availability, item count and the status of its current or last scan, ordered by name. Libraries are defined in the configuration file or the environment, not through the API.
+         */
+        get: operations["listLibraries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Describe one library
+         * @description Returns one library with its availability, item count and scan status. Clients poll it while a scan runs. An unknown ID answers 404 with the problem code "not_found".
+         */
+        get: operations["getLibrary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a scan of a library
+         * @description Starts a background scan of the library folder and returns at once. When a scan of this library already runs, no second one starts and its status is returned. Poll getLibrary for progress. An unknown ID answers 404 "not_found"; a server that is shutting down answers 503 "unavailable".
+         */
+        post: operations["startLibraryScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page through the items of a library
+         * @description Returns one page of the library's items ordered by sort title. Follow nextCursor until it is absent. A limit outside 1–500 or a cursor this server did not issue answers 400 with the problem code "invalid"; an unknown library answers 404 "not_found".
+         */
+        get: operations["listLibraryItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Describe one item with its files and streams
+         * @description Returns the item with every media file and the technical streams of each file. An unknown ID answers 404 with the problem code "not_found".
+         */
+        get: operations["getItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start playing a media file
+         * @description Decides how the client plays the file (direct play, remux or transcode) from its profile and the server's capabilities, starts FFmpeg when needed and returns the session with an opaque streamUrl. Problem codes: "invalid" (400, for example a malformed profile), "not_found" (404, unknown file), "unsupported" (422, the file cannot be played, for example because probing failed), "no_compatible_format" and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and "unavailable" (503, for example the server is shutting down or the library folder is unreachable). Set replacesSessionId when seeking outside the produced range: the old session stops before the limit is checked.
+         */
+        post: operations["createPlaybackSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Describe a playback session
+         * @description Returns the session with its current state. A session that was stopped or reaped after the idle timeout answers 404 "not_found"; the client then creates a new session at its current position.
+         */
+        get: operations["getPlaybackSession"];
+        put?: never;
+        post?: never;
+        /**
+         * Stop a playback session
+         * @description Stops the session, ends its FFmpeg process and removes its files. Idempotent: an unknown or already stopped session also answers 204.
+         */
+        delete: operations["stopPlaybackSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions/{sessionId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download the original file of a direct-play session
+         * @description Serves the original media file of a session in mode direct_play with HTTP range support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients load streamUrl as it is and never build it. Content-Type follows the direct-play container (for example video/mp4 or video/webm). Sessions in another mode answer 404 "not_found".
+         */
+        get: operations["getPlaybackFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        /**
+         * Describe the original file of a direct-play session
+         * @description Like getPlaybackFile without a body, so players can read the size and the range support. The URL is unauthenticated and opaque.
+         */
+        head: operations["headPlaybackFile"];
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/playback/sessions/{sessionId}/hls/{fileName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+                /**
+                 * @description A file of the session's HLS output: the playlist index.m3u8, the fMP4 init segment init.mp4 or a media segment seg-NNNNN.m4s. Any other name answers 404.
+                 * @example index.m3u8
+                 */
+                fileName: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a file of an HLS session
+         * @description Serves the playlist and segments of a session in mode remux or transcode. The URL is unauthenticated and opaque: clients load streamUrl and follow the relative URIs inside the playlist. A playlist request waits up to 20 seconds for the first segment, then answers 503 "stream_not_ready" with Retry-After. The playlist is sent with Cache-Control no-store, init and media segments with private, max-age=3600.
+         */
+        get: operations["getPlaybackHlsFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -100,6 +335,647 @@ export interface components {
              */
             apiVersion: string;
         };
+        /**
+         * @description What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+         * @example movies
+         * @enum {string}
+         */
+        LibraryKind: "movies" | "shows";
+        /** @description The configured libraries. */
+        LibraryList: {
+            /** @description Every configured library, ordered by name. */
+            libraries: components["schemas"]["Library"][];
+        };
+        /** @description A folder of media files defined in the server configuration. */
+        Library: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the library while its folder stays configured.
+             * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+             */
+            id: string;
+            /**
+             * @description Display name from the configuration.
+             * @example Movies
+             */
+            name: string;
+            kind: components["schemas"]["LibraryKind"];
+            /**
+             * @description Whether the library folder is reachable now. False for example while a network share is not mounted; its items stay listed but cannot be played.
+             * @example true
+             */
+            available: boolean;
+            /**
+             * Format: int64
+             * @description Number of items in the library.
+             * @example 42
+             */
+            itemCount: number;
+            scan: components["schemas"]["ScanStatus"];
+        };
+        /**
+         * @description State of the current or last scan of a library: "idle" (no scan runs; the last one, if any, finished), "running" or "failed" (the last scan stopped early, see errorCode). Clients must tolerate values added in later versions.
+         * @example idle
+         * @enum {string}
+         */
+        ScanState: "idle" | "running" | "failed";
+        /** @description File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan. */
+        ScanCounts: {
+            /**
+             * Format: int64
+             * @description New video files that were probed and added.
+             * @example 12
+             */
+            added: number;
+            /**
+             * Format: int64
+             * @description Changed video files that were probed again.
+             * @example 1
+             */
+            updated: number;
+            /**
+             * Format: int64
+             * @description Files that disappeared and were removed.
+             * @example 0
+             */
+            removed: number;
+            /**
+             * Format: int64
+             * @description Files whose size and modification time did not change.
+             * @example 29
+             */
+            unchanged: number;
+            /**
+             * Format: int64
+             * @description Files that could not be probed; they are listed as unavailable.
+             * @example 0
+             */
+            failed: number;
+            /**
+             * Format: int64
+             * @description Files with a video extension but without a video stream.
+             * @example 0
+             */
+            skipped: number;
+        };
+        /** @description Progress and result of the current or last scan of a library. */
+        ScanStatus: {
+            state: components["schemas"]["ScanState"];
+            /**
+             * Format: date-time
+             * @description Start of the current or last scan (UTC); omitted before the first scan.
+             * @example 2026-10-30T18:04:05Z
+             */
+            startedAt?: string;
+            /**
+             * Format: date-time
+             * @description End of the last scan (UTC); omitted before the first scan finished.
+             * @example 2026-10-30T18:04:31Z
+             */
+            finishedAt?: string;
+            counts: components["schemas"]["ScanCounts"];
+            /**
+             * @description Machine-readable reason a scan failed, for example "root_unavailable" (the library folder is missing or unreadable); omitted unless state is "failed". Clients translate it and show a generic text for unknown codes.
+             * @example root_unavailable
+             */
+            errorCode?: string;
+        };
+        /**
+         * @description High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
+         * @example hdr10
+         * @enum {string}
+         */
+        HdrFormat: "hdr10" | "hlg";
+        /** @description Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023. */
+        MediaSummary: {
+            /**
+             * @description Whether the file was probed successfully and can be played. False when probing failed; the item is listed but cannot be played.
+             * @example true
+             */
+            available: boolean;
+            /**
+             * @description Container short name, for example "mkv"; omitted when unknown.
+             * @example mkv
+             */
+            container?: string;
+            /**
+             * Format: double
+             * @description Duration in seconds with millisecond precision; omitted when unknown.
+             * @example 5423.042
+             */
+            durationSeconds?: number;
+            /**
+             * @description Codec of the primary video stream (ffprobe codec_name).
+             * @example h264
+             */
+            videoCodec?: string;
+            /**
+             * @description Codec of the default audio stream; omitted for files without audio.
+             * @example aac
+             */
+            audioCodec?: string;
+            /**
+             * Format: int32
+             * @description Width of the primary video stream in pixels.
+             * @example 1920
+             */
+            width?: number;
+            /**
+             * Format: int32
+             * @description Height of the primary video stream in pixels.
+             * @example 1080
+             */
+            height?: number;
+            /**
+             * Format: int32
+             * @description Bit depth of the primary video stream.
+             * @example 8
+             */
+            bitDepth?: number;
+            hdr?: components["schemas"]["HdrFormat"];
+        };
+        /** @description An item in a library listing. */
+        ItemSummary: {
+            /**
+             * Format: uuid
+             * @description ID of the item.
+             * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the library that contains the item.
+             * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+             */
+            libraryId: string;
+            /**
+             * @description Display title; in milestone 2 derived from the file name.
+             * @example Big Buck Bunny
+             */
+            title: string;
+            media?: components["schemas"]["MediaSummary"];
+        };
+        /** @description One page of a library's items. */
+        ItemPage: {
+            /** @description The items of this page, ordered by sort title. */
+            items: components["schemas"]["ItemSummary"][];
+            /**
+             * @description Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
+             * @example eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
+             */
+            nextCursor?: string;
+        };
+        /** @description An item with its media files and their technical streams. */
+        ItemDetail: {
+            /**
+             * Format: uuid
+             * @description ID of the item.
+             * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the library that contains the item.
+             * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+             */
+            libraryId: string;
+            /**
+             * @description Display title; in milestone 2 derived from the file name.
+             * @example Big Buck Bunny
+             */
+            title: string;
+            /** @description Media files of the item; the first one is the primary file. Milestone 2 has exactly one file per item. */
+            files: components["schemas"]["MediaFile"][];
+        };
+        /** @description One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only. */
+        MediaFile: {
+            /**
+             * Format: uuid
+             * @description ID of the file; PlaybackRequest.fileId refers to it.
+             * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+             */
+            id: string;
+            /**
+             * @description Name of the file without any directory, for example "movie.mkv".
+             * @example Big.Buck.Bunny.mkv
+             */
+            fileName: string;
+            /**
+             * Format: int64
+             * @description File size in bytes.
+             * @example 276134947
+             */
+            sizeBytes: number;
+            /**
+             * Format: date-time
+             * @description Last modification time of the file (UTC).
+             * @example 2026-10-01T09:30:00Z
+             */
+            modifiedAt: string;
+            /**
+             * @description Whether the file was probed successfully and can be played.
+             * @example true
+             */
+            available: boolean;
+            /**
+             * @description Machine-readable reason the file cannot be played, for example "probe_failed"; omitted when available. Clients show a generic text for unknown codes.
+             * @example probe_failed
+             */
+            errorCode?: string;
+            /**
+             * @description Container short name (ADR 0023), for example "mkv"; omitted when unknown.
+             * @example mkv
+             */
+            container?: string;
+            /**
+             * Format: double
+             * @description Duration in seconds with millisecond precision; omitted when unknown.
+             * @example 5423.042
+             */
+            durationSeconds?: number;
+            /**
+             * Format: int64
+             * @description Overall bit rate in bits per second; omitted when unknown.
+             * @example 4073000
+             */
+            bitRate?: number;
+            /** @description Streams in container order; empty when probing failed. */
+            streams: components["schemas"]["MediaStream"][];
+        };
+        /**
+         * @description Kind of a stream inside a media file. Clients must tolerate values added in later versions.
+         * @example video
+         * @enum {string}
+         */
+        MediaStreamKind: "video" | "audio" | "subtitle" | "other";
+        /** @description One stream of a media file as ffprobe reports it. Fields that do not apply to the stream's kind, or that ffprobe did not report, are omitted. */
+        MediaStream: {
+            /**
+             * Format: int32
+             * @description Index of the stream in the container; PlaybackRequest.audioStreamIndex refers to it.
+             * @example 1
+             */
+            index: number;
+            kind: components["schemas"]["MediaStreamKind"];
+            /**
+             * @description ffprobe codec_name, for example "h264", "hevc", "aac" or "subrip".
+             * @example h264
+             */
+            codec?: string;
+            /**
+             * @description Codec profile as ffprobe names it, for example "High" or "Main 10".
+             * @example High
+             */
+            profile?: string;
+            /**
+             * Format: int32
+             * @description Codec level as ffprobe reports it, for example 41 for H.264 level 4.1.
+             * @example 41
+             */
+            level?: number;
+            /**
+             * Format: int32
+             * @description Bits per sample of a video stream.
+             * @example 8
+             */
+            bitDepth?: number;
+            /**
+             * Format: int32
+             * @description Width of a video stream in pixels.
+             * @example 1920
+             */
+            width?: number;
+            /**
+             * Format: int32
+             * @description Height of a video stream in pixels.
+             * @example 1080
+             */
+            height?: number;
+            /**
+             * Format: double
+             * @description Frames per second of a video stream.
+             * @example 23.976
+             */
+            frameRate?: number;
+            hdr?: components["schemas"]["HdrFormat"];
+            /**
+             * Format: int32
+             * @description Number of channels of an audio stream.
+             * @example 6
+             */
+            channels?: number;
+            /**
+             * @description Channel layout of an audio stream, for example "5.1(side)".
+             * @example 5.1(side)
+             */
+            channelLayout?: string;
+            /**
+             * Format: int32
+             * @description Sample rate of an audio stream in Hz.
+             * @example 48000
+             */
+            sampleRate?: number;
+            /**
+             * @description Language tag of the stream as stored in the file, usually ISO 639-2.
+             * @example eng
+             */
+            language?: string;
+            /**
+             * @description Title of the stream as stored in the file.
+             * @example Director's commentary
+             */
+            title?: string;
+            /**
+             * @description Whether the stream carries the default disposition.
+             * @example true
+             */
+            default: boolean;
+            /**
+             * @description Whether the stream carries the forced disposition.
+             * @example false
+             */
+            forced: boolean;
+            /**
+             * @description Whether the stream is cover art (attached picture), not a video track.
+             * @example false
+             */
+            attachedPicture: boolean;
+            /**
+             * Format: int64
+             * @description Bit rate of the stream in bits per second.
+             * @example 3500000
+             */
+            bitRate?: number;
+        };
+        /**
+         * @description Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
+         * @example h264
+         */
+        MediaIdentifier: string;
+        /** @description A container the client plays as a progressive file, with the codecs it plays inside it. */
+        DirectPlayProfile: {
+            container: components["schemas"]["MediaIdentifier"];
+            /**
+             * @description Video codecs the client plays in this container.
+             * @example [
+             *       "h264",
+             *       "av1",
+             *       "vp9"
+             *     ]
+             */
+            videoCodecs: components["schemas"]["MediaIdentifier"][];
+            /**
+             * @description Audio codecs the client plays in this container.
+             * @example [
+             *       "aac",
+             *       "mp3",
+             *       "opus",
+             *       "flac"
+             *     ]
+             */
+            audioCodecs: components["schemas"]["MediaIdentifier"][];
+        };
+        /**
+         * @description How the client plays HLS with fMP4 segments: "mse" (a script player over Media Source Extensions, for example hls.js), "native" (the media element plays HLS itself) or "none" (no HLS; only direct play is possible). Clients must tolerate values added in later versions.
+         * @example mse
+         * @enum {string}
+         */
+        HlsDelivery: "mse" | "native" | "none";
+        /** @description Codecs the client plays inside HLS with fMP4 segments. */
+        HlsProfile: {
+            delivery: components["schemas"]["HlsDelivery"];
+            /**
+             * @description Video codecs the client plays inside HLS.
+             * @example [
+             *       "h264",
+             *       "av1",
+             *       "vp9"
+             *     ]
+             */
+            videoCodecs: components["schemas"]["MediaIdentifier"][];
+            /**
+             * @description Audio codecs the client plays inside HLS.
+             * @example [
+             *       "aac",
+             *       "mp3",
+             *       "opus",
+             *       "flac"
+             *     ]
+             */
+            audioCodecs: components["schemas"]["MediaIdentifier"][];
+        };
+        /** @description Extra limits of the client for one codec; a codec without an entry has none. */
+        CodecLimit: {
+            codec: components["schemas"]["MediaIdentifier"];
+            /**
+             * Format: int32
+             * @description Highest bit depth the client decodes for this codec; omitted when unlimited.
+             * @example 8
+             */
+            maxBitDepth?: number;
+            /**
+             * @description Codec profiles the client decodes, as ffprobe names them; omitted when every profile plays.
+             * @example [
+             *       "Constrained Baseline",
+             *       "Baseline",
+             *       "Main",
+             *       "High"
+             *     ]
+             */
+            profiles?: string[];
+        };
+        /** @description What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded. */
+        ClientProfile: {
+            /**
+             * @description Free text naming the client, for logs and the stream-info overlay.
+             * @example chromium-desktop
+             */
+            name: string;
+            /** @description Containers the client plays as a progressive file. */
+            directPlay: components["schemas"]["DirectPlayProfile"][];
+            hls: components["schemas"]["HlsProfile"];
+            /** @description Per-codec limits; omitted or empty when no codec has extra limits. */
+            codecLimits?: components["schemas"]["CodecLimit"][];
+        };
+        /** @description Asks the server to play one media file for a client. */
+        PlaybackRequest: {
+            /**
+             * Format: uuid
+             * @description ID of the media file (MediaFile.id).
+             * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+             */
+            fileId: string;
+            profile: components["schemas"]["ClientProfile"];
+            /**
+             * Format: double
+             * @description Position to start at, in seconds; omitted or 0 starts at the beginning. A position at or beyond the duration of the file answers 400 "invalid".
+             * @example 600
+             */
+            startPositionSeconds?: number;
+            /**
+             * Format: int32
+             * @description Index of the audio stream to play (MediaStream.index); omitted selects the default audio stream.
+             * @example 1
+             */
+            audioStreamIndex?: number;
+            /**
+             * Format: uuid
+             * @description Session this one replaces, for example after a seek outside the produced range. It is stopped before the session limit is checked; an unknown ID is ignored.
+             * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+             */
+            replacesSessionId?: string;
+        };
+        /**
+         * @description How the file is played, from cheapest to most expensive: "direct_play" (the original file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least one stream re-encoded). Clients must tolerate values added in later versions.
+         * @example remux
+         * @enum {string}
+         */
+        PlaybackMode: "direct_play" | "remux" | "transcode";
+        /**
+         * @description How the client loads streamUrl: "file" (a progressive file with range support) or "hls" (an HLS playlist). Clients must tolerate values added in later versions.
+         * @example hls
+         * @enum {string}
+         */
+        PlaybackDelivery: "file" | "hls";
+        /**
+         * @description Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
+         * @example ready
+         * @enum {string}
+         */
+        PlaybackSessionState: "starting" | "ready" | "ended" | "failed";
+        /**
+         * @description What happens to one source stream: "copy" (passed through unchanged) or "transcode" (re-encoded). Clients must tolerate values added in later versions.
+         * @example copy
+         * @enum {string}
+         */
+        StreamAction: "copy" | "transcode";
+        /** @description What the session does with one selected source stream. */
+        StreamDecision: {
+            kind: components["schemas"]["MediaStreamKind"];
+            /**
+             * Format: int32
+             * @description Index of the source stream (MediaStream.index).
+             * @example 0
+             */
+            sourceIndex: number;
+            action: components["schemas"]["StreamAction"];
+            /**
+             * @description Codec of the source stream (ffprobe codec_name).
+             * @example hevc
+             */
+            sourceCodec: string;
+            /**
+             * @description Codec the client receives; equals sourceCodec when copied.
+             * @example h264
+             */
+            targetCodec: string;
+            /**
+             * Format: int32
+             * @description Width of a video stream the client receives, in pixels.
+             * @example 1920
+             */
+            targetWidth?: number;
+            /**
+             * Format: int32
+             * @description Height of a video stream the client receives, in pixels.
+             * @example 1080
+             */
+            targetHeight?: number;
+            /**
+             * Format: int32
+             * @description Channels of an audio stream the client receives.
+             * @example 2
+             */
+            targetChannels?: number;
+            /**
+             * @description FFmpeg encoder of a transcoded stream, for example "libx264"; omitted when copied.
+             * @example libx264
+             */
+            encoder?: string;
+        };
+        /**
+         * @description Part of the file a reason or warning concerns. Clients must tolerate values added in later versions.
+         * @example audio
+         * @enum {string}
+         */
+        PlaybackReasonScope: "container" | "video" | "audio" | "subtitle";
+        /** @description A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes. */
+        PlaybackReason: {
+            /**
+             * @description Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_track_not_default". Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
+             * @example audio_codec_not_supported
+             */
+            code: string;
+            scope: components["schemas"]["PlaybackReasonScope"];
+        };
+        /** @description A running or finished playback of one media file for one client, with the decision the server made and the URL to load. */
+        PlaybackSession: {
+            /**
+             * Format: uuid
+             * @description ID of the session.
+             * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the media file being played.
+             * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+             */
+            fileId: string;
+            state: components["schemas"]["PlaybackSessionState"];
+            /**
+             * @description Machine-readable reason a session failed, for example "transcode_failed"; omitted unless state is "failed". Clients show a generic text for unknown codes.
+             * @example transcode_failed
+             */
+            failureCode?: string;
+            mode: components["schemas"]["PlaybackMode"];
+            delivery: components["schemas"]["PlaybackDelivery"];
+            /**
+             * Format: uri-reference
+             * @description URI reference the client loads, as a file (delivery "file") or as an HLS playlist (delivery "hls"). Resolve it per RFC 3986 section 5 against the URL of the request that returned it. Clients must treat it as opaque: never parse, build or modify it, and never take IDs or other values out of it, because its shape may change (for example signed, time-limited URLs once accounts exist).
+             * @example /api/v1/playback/sessions/5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a/hls/index.m3u8
+             */
+            streamUrl: string;
+            /**
+             * Format: double
+             * @description Position in the file where the stream actually starts, in seconds. When video is copied it is the keyframe at or before the requested position. The player shows startPositionSeconds plus the media element's current time.
+             * @example 598.5
+             */
+            startPositionSeconds: number;
+            /**
+             * Format: double
+             * @description Probed duration of the whole file in seconds; omitted when unknown.
+             * @example 5423.042
+             */
+            durationSeconds?: number;
+            /**
+             * @description Container short name of the source file, for example "mkv".
+             * @example mkv
+             */
+            sourceContainer: string;
+            /**
+             * @description Container the client receives: the source container for direct play, "mp4" (fMP4 segments) for HLS.
+             * @example mp4
+             */
+            targetContainer: string;
+            /**
+             * Format: int64
+             * @description Overall bit rate of the source file in bits per second; omitted when unknown.
+             * @example 4073000
+             */
+            sourceBitRate?: number;
+            /** @description One decision per selected source stream (video first, then audio). */
+            streams: components["schemas"]["StreamDecision"][];
+            /** @description Why a cheaper mode was not possible; empty for direct play. */
+            reasons: components["schemas"]["PlaybackReason"][];
+            /** @description Degradations of the result, for example a downscaled video. */
+            warnings: components["schemas"]["PlaybackReason"][];
+        };
+        /**
+         * Format: binary
+         * @description Raw bytes of a media file or segment.
+         */
+        MediaBytes: string;
         /** @description Problem details (RFC 9457) with a machine-readable code that clients translate. */
         Problem: {
             /**
@@ -122,7 +998,7 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code, for example "not_found". Clients map it to a translated message.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
@@ -139,9 +1015,33 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /**
+         * @description ID of the library.
+         * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+         */
+        LibraryId: string;
+        /**
+         * @description ID of the item.
+         * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+         */
+        ItemId: string;
+        /**
+         * @description ID of the playback session (PlaybackSession.id).
+         * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+         */
+        SessionId: string;
+        /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
+        Range: string;
+    };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /**
+         * @description Seconds after which the client may retry the request.
+         * @example 5
+         */
+        RetryAfter: number;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -192,6 +1092,344 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLibraries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All configured libraries; an empty list when none is configured. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Library"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startLibraryScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scan runs; the body is its current status. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanStatus"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLibraryItems: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of items in the page. */
+                limit?: number;
+                /** @description Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of items. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPlaybackSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaybackRequest"];
+            };
+        };
+        responses: {
+            /** @description The session was created. */
+            201: {
+                headers: {
+                    /** @description URI reference of the new session resource. Resolve it per RFC 3986 section 5 against the URL of the request that returned it. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSession"];
+                };
+            };
+            /** @description The session limit is reached ("session_limit_reached") or a resource is unavailable ("unavailable", for example the server is shutting down or the library folder is unreachable). Retry-After accompanies session_limit_reached; it may be absent for unavailable. */
+            503: {
+                headers: {
+                    "Retry-After": components["headers"]["RetryAfter"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlaybackSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSession"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    stopPlaybackSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session no longer runs. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlaybackFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
+                Range?: components["parameters"]["Range"];
+            };
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The whole file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/*": components["schemas"]["MediaBytes"];
+                };
+            };
+            /** @description The requested byte range of the file. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/*": components["schemas"]["MediaBytes"];
+                };
+            };
+            /** @description The requested range lies outside the file. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    headPlaybackFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The headers of the whole file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlaybackHlsFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+                /**
+                 * @description A file of the session's HLS output: the playlist index.m3u8, the fMP4 init segment init.mp4 or a media segment seg-NNNNN.m4s. Any other name answers 404.
+                 * @example index.m3u8
+                 */
+                fileName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requested playlist or segment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
+                    "video/mp4": components["schemas"]["MediaBytes"];
+                    "video/iso.segment": components["schemas"]["MediaBytes"];
+                };
+            };
+            /** @description The first segment is not ready yet ("stream_not_ready"). */
+            503: {
+                headers: {
+                    "Retry-After": components["headers"]["RetryAfter"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             default: components["responses"]["Problem"];

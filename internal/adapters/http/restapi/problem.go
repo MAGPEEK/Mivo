@@ -31,9 +31,34 @@ const (
 	CodeMethodNotAllowed = "method_not_allowed"
 	// CodeConflict reports a clash with the current state (domain.ErrConflict).
 	CodeConflict = "conflict"
+	// CodePayloadTooLarge reports a request body above MaxRequestBodyBytes (413).
+	CodePayloadTooLarge = "payload_too_large"
+	// CodeUnsupported reports well-formed input the server cannot handle, for example a
+	// file that could not be probed (domain.ErrUnsupported, 422).
+	CodeUnsupported = "unsupported"
+	// CodeNoCompatibleFormat reports that the client plays no format the server can
+	// produce for the file (422).
+	CodeNoCompatibleFormat = "no_compatible_format"
+	// CodeTranscodeUnavailable reports that playback needs transcoding the server cannot
+	// do (422).
+	CodeTranscodeUnavailable = "transcode_unavailable"
 	// CodeInternal reports a server-side failure. Its details are logged, never sent.
 	CodeInternal = "internal_error"
+	// CodeUnavailable reports a temporarily unavailable resource, for example a server that
+	// is shutting down (domain.ErrUnavailable, 503).
+	CodeUnavailable = "unavailable"
+	// CodeSessionLimitReached reports that no further playback session may start now
+	// (503 with Retry-After).
+	CodeSessionLimitReached = "session_limit_reached"
+	// CodeStreamNotReady reports a stream without its first segment yet (503 with
+	// Retry-After).
+	CodeStreamNotReady = "stream_not_ready"
 )
+
+// codeNotImplemented answers operations whose feature service is not wired yet. It is
+// internal, not part of the published contract, and is removed in M2-32 when every
+// service is wired.
+const codeNotImplemented = "not_implemented"
 
 // errorMapping maps one domain sentinel error to its HTTP status and problem code.
 type errorMapping struct {
@@ -49,6 +74,8 @@ func domainErrorMappings() []errorMapping {
 		{target: domain.ErrForbidden, status: http.StatusForbidden, code: CodeForbidden},
 		{target: domain.ErrConflict, status: http.StatusConflict, code: CodeConflict},
 		{target: domain.ErrInvalid, status: http.StatusBadRequest, code: CodeInvalid},
+		{target: domain.ErrUnsupported, status: http.StatusUnprocessableEntity, code: CodeUnsupported},
+		{target: domain.ErrUnavailable, status: http.StatusServiceUnavailable, code: CodeUnavailable},
 	}
 }
 
@@ -69,8 +96,8 @@ func InternalProblem() apigen.Problem {
 }
 
 // ProblemForError maps a domain error to its problem: ErrNotFound 404, ErrForbidden 403,
-// ErrConflict 409, ErrInvalid 400 and anything else 500. Only this adapter maps domain
-// errors to HTTP (ADR 0017).
+// ErrConflict 409, ErrInvalid 400, ErrUnsupported 422, ErrUnavailable 503 and anything else
+// 500. Only this adapter maps domain errors to HTTP (ADR 0017).
 func ProblemForError(err error) apigen.Problem {
 	for _, mapping := range domainErrorMappings() {
 		if errors.Is(err, mapping.target) {

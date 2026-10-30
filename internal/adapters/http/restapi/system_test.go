@@ -3,7 +3,6 @@ package restapi_test
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
@@ -23,32 +22,6 @@ const (
 
 // The use case cmd/mivo wires in must keep satisfying the port the handlers declare.
 var _ restapi.SystemService = (*appsystem.Service)(nil)
-
-func TestNewHandlerRejectsMissingDependencies(t *testing.T) {
-	t.Parallel()
-
-	logger, _ := newTestLogger()
-
-	tests := []struct {
-		name    string
-		service restapi.SystemService
-		logger  *slog.Logger
-	}{
-		{name: "missing service", service: nil, logger: logger},
-		{name: "missing logger", service: fakeSystemService{}, logger: nil},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler, err := restapi.NewHandler(test.service, test.logger)
-			if !errors.Is(err, domain.ErrInvalid) || handler != nil {
-				t.Errorf("NewHandler = %v, %v, want nil handler and ErrInvalid", handler, err)
-			}
-		})
-	}
-}
 
 func TestGetHealth(t *testing.T) {
 	t.Parallel()

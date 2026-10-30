@@ -103,6 +103,14 @@ describe("createApiClient", () => {
     ["a scheme-less host with a full-width at sign", "admin＠server.test:8460?token=SECRET"],
     ["a huge text", "a".repeat(hugeLength)],
     ["a huge scheme", `${"x".repeat(hugeLength)}://server.test`],
+    // The parser strips leading spaces and reads one slash or a backslash as "//" for
+    // special schemes, so these parse with the protocol "ftp:", but the input does not
+    // literally start with "ftp://".
+    ["a non-http scheme after leading spaces", "  ftp://server.test"],
+    ["a non-http scheme after a tab", "\tftp://server.test"],
+    ["a non-http scheme with one slash", "ftp:/server.test"],
+    ["a non-http scheme with backslashes", "ftp:\\\\server.test"],
+    ["an upper-case non-http scheme with one slash", "FTP:/server.test"],
   ])("rejects %s as base URL without repeating any of it", (_case, baseUrl) => {
     expect(() => createApiClient({ baseUrl })).toThrow(new TypeError(`${expectedHttpUrl}.`));
   });
@@ -110,6 +118,7 @@ describe("createApiClient", () => {
   it.each([
     ["a non-http scheme", "ftp://server.test", "ftp"],
     ["an upper-case scheme", "FTP://server.test", "ftp"],
+    ["a mixed-case scheme", "FtP://server.test", "ftp"],
     ["a non-http scheme with a query", "ftp://server.test/?email=me@x.y&token=SECRET", "ftp"],
     ["a non-http scheme with credentials", "ftp://admin:secret@server.test", "ftp"],
     ["a non-http scheme with a huge host", `ftp://${"a".repeat(hugeLength)}`, "ftp"],

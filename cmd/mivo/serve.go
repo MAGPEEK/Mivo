@@ -171,7 +171,7 @@ func (app application) newHTTPHandlers(ctx context.Context, db *sqlite.DB) (http
 		return httpHandlers{}, err
 	}
 
-	apiHandler, err := restapi.NewHandler(service, app.logger)
+	apiHandler, err := restapi.NewHandler(restapi.Options{System: service, Logger: app.logger})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)
 	}

@@ -101,13 +101,18 @@ func TestGetSystemInfoForCancelledRequestWritesNothing(t *testing.T) {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	api, err := NewAPI(infoFailingService{}, logger)
+	api, err := NewAPI(Options{System: infoFailingService{}, Logger: logger})
 	if err != nil {
 		t.Fatalf("NewAPI: %v", err)
 	}
 
 	counter := &headerCountingWriter{ResponseRecorder: httptest.NewRecorder()}
-	api.Handler().ServeHTTP(counter, cancelledRequest(t))
+	handler, err := api.Handler()
+	if err != nil {
+		t.Fatalf("Handler: %v", err)
+	}
+
+	handler.ServeHTTP(counter, cancelledRequest(t))
 
 	if counter.writeHeaderCalls != 0 || counter.Body.Len() != 0 {
 		t.Errorf("WriteHeader calls = %d, body %q, want nothing written", counter.writeHeaderCalls, counter.Body)

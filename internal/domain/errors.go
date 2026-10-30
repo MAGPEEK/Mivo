@@ -15,4 +15,12 @@ var (
 	ErrInvalid = errors.New("invalid")
 	// ErrForbidden reports that the caller is not allowed to perform the operation.
 	ErrForbidden = errors.New("forbidden")
+	// ErrUnsupported reports well-formed input the server cannot handle, for example a
+	// media file that could not be probed or a format no client profile can play. Unlike
+	// ErrInvalid, the request itself breaks no rule.
+	ErrUnsupported = errors.New("unsupported")
+	// ErrUnavailable reports that a resource the operation needs is temporarily unavailable,
+	// for example an unmounted library folder, a reached session limit or a server that is
+	// shutting down. Retrying later may succeed.
+	ErrUnavailable = errors.New("unavailable")
 )

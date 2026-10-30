@@ -11,7 +11,10 @@ import (
 func TestSentinelErrorsAreDistinctAndSurviveWrapping(t *testing.T) {
 	t.Parallel()
 
-	sentinels := []error{domain.ErrNotFound, domain.ErrConflict, domain.ErrInvalid, domain.ErrForbidden}
+	sentinels := []error{
+		domain.ErrNotFound, domain.ErrConflict, domain.ErrInvalid, domain.ErrForbidden,
+		domain.ErrUnsupported, domain.ErrUnavailable,
+	}
 
 	for index, sentinel := range sentinels {
 		t.Run(sentinel.Error(), func(t *testing.T) {

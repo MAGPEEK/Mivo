@@ -11,7 +11,6 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
-	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/system"
 )
 
@@ -25,48 +24,68 @@ type SystemService interface {
 
 // API implements apigen.StrictServerInterface.
 type API struct {
-	system SystemService
-	logger *slog.Logger
+	system   SystemService
+	library  LibraryService
+	scan     ScanService
+	playback PlaybackService
+	logger   *slog.Logger
+	mounts   []Mount
 }
 
 // Compile-time check that API serves every operation of the contract.
 var _ apigen.StrictServerInterface = (*API)(nil)
 
-// NewAPI returns the API handlers. A nil service or logger is a wiring bug and is reported
-// as an error wrapping domain.ErrInvalid.
-func NewAPI(systemService SystemService, logger *slog.Logger) (*API, error) {
-	if systemService == nil {
-		return nil, fmt.Errorf("new rest api: missing system service: %w", domain.ErrInvalid)
+// NewAPI returns the API handlers. Invalid options are a wiring bug and are reported as an
+// error wrapping domain.ErrInvalid.
+func NewAPI(options Options) (*API, error) {
+	err := options.validate()
+	if err != nil {
+		return nil, fmt.Errorf("new rest api: %w", err)
 	}
 
-	if logger == nil {
-		return nil, fmt.Errorf("new rest api: missing logger: %w", domain.ErrInvalid)
-	}
-
-	return &API{system: systemService, logger: logger}, nil
+	return &API{
+		system:   options.System,
+		library:  options.Library,
+		scan:     options.Scan,
+		playback: options.Playback,
+		logger:   options.Logger,
+		mounts:   options.Mounts,
+	}, nil
 }
 
-// NewHandler returns the routed API: every operation of the contract, plus problem
-// responses for unknown routes (404) and unsupported methods (405).
-func NewHandler(systemService SystemService, logger *slog.Logger) (http.Handler, error) {
-	api, err := NewAPI(systemService, logger)
+// NewHandler returns the routed API: every operation of the contract and the mounts, a
+// request body limit, plus problem responses for unknown routes (404) and unsupported
+// methods (405).
+func NewHandler(options Options) (http.Handler, error) {
+	api, err := NewAPI(options)
 	if err != nil {
 		return nil, err
 	}
 
-	return api.Handler(), nil
+	return api.Handler()
 }
 
-// Handler routes the operations of the contract. The generated constructors are always
-// called with explicit error handlers: their defaults write err.Error() as text/plain,
-// which would leak internals and break the problem contract.
-func (api *API) Handler() http.Handler {
+// Handler routes the operations of the contract and the mounts. The generated constructors
+// are always called with explicit error handlers: their defaults write err.Error() as
+// text/plain, which would leak internals and break the problem contract. A mount whose
+// pattern is malformed or conflicts with another route is reported as an error wrapping
+// domain.ErrInvalid.
+func (api *API) Handler() (http.Handler, error) {
 	strict := apigen.NewStrictHandlerWithOptions(api, nil, api.strictOptions())
 
 	mux := http.NewServeMux()
 	apigen.HandlerWithOptions(strict, api.routerOptions(mux))
 
-	return routeProblems{mux: mux}
+	// The generated routes are registered first, so a conflicting mount fails in
+	// registerMount, which turns the mux's panic into an error.
+	for _, mount := range api.mounts {
+		err := registerMount(mux, mount)
+		if err != nil {
+			return nil, fmt.Errorf("new rest api: %w", err)
+		}
+	}
+
+	return limitRequestBodies(routeProblems{mux: mux}), nil
 }
 
 func (api *API) strictOptions() apigen.StrictHTTPServerOptions {
@@ -85,9 +104,18 @@ func (api *API) routerOptions(mux *http.ServeMux) apigen.StdHTTPServerOptions {
 
 // writeRequestError answers a request the generated code could not parse or bind. The
 // error text describes the client's mistake but may quote internals, so it is only logged.
+// A body above the body limit is answered with 413 instead of 400, also when the decoder
+// failed on its content before it reached the limit.
 func (api *API) writeRequestError(writer http.ResponseWriter, request *http.Request, err error) {
 	api.logger.DebugContext(request.Context(), "rejected malformed request",
 		requestAttributes(request, slog.Any("error", err))...)
+
+	if isBodyTooLarge(err) || remainingBodyTooLarge(request) {
+		WriteProblem(writer, payloadTooLargeProblem())
+
+		return
+	}
+
 	WriteProblem(writer, NewProblem(http.StatusBadRequest, CodeBadRequest))
 }
 
@@ -104,13 +132,44 @@ func (api *API) writeResponseError(writer http.ResponseWriter, request *http.Req
 	}
 
 	problem := ProblemForError(err)
-	if problem.Status >= http.StatusInternalServerError {
+
+	switch {
+	case problem.Status == http.StatusInternalServerError:
 		// The client only sees the generic problem; the cause is in the log.
 		api.logger.ErrorContext(request.Context(), "api request failed",
+			requestAttributes(request, slog.Any("error", err))...)
+	case problem.Status > http.StatusInternalServerError:
+		// For example a shutdown in progress (ErrUnavailable): worth a trace, but no
+		// server fault.
+		api.logger.WarnContext(request.Context(), "api request could not be served",
+			requestAttributes(request, slog.Any("error", err))...)
+	default:
+		// A client mistake such as an unknown ID; the cause helps when debugging a client.
+		api.logger.DebugContext(request.Context(), "api request rejected",
 			requestAttributes(request, slog.Any("error", err))...)
 	}
 
 	WriteProblem(writer, problem)
+}
+
+// notImplemented answers an operation whose feature service is not wired yet. The code
+// "not_implemented" is internal and not published in the contract (removed in M2-32).
+func (api *API) notImplemented(ctx context.Context, operation string) problemResponse {
+	api.logger.DebugContext(ctx, "api operation not implemented",
+		slog.String("operation", operation),
+		slog.String("request_id", requestid.FromContext(ctx)))
+
+	return problemResponse{
+		Body:       NewProblem(http.StatusNotImplemented, codeNotImplemented),
+		StatusCode: http.StatusNotImplemented,
+	}
+}
+
+// problemResponse has the fields of every generated
+// <Operation>defaultApplicationProblemPlusJSONResponse, so it converts to each of them.
+type problemResponse struct {
+	Body       apigen.Problem
+	StatusCode int
 }
 
 // logOperationFailure records a server-side failure of a strict handler, which knows its

@@ -35,3 +35,13 @@ info log (BACKLOG, ADR 0024).
 - Do not touch `restapi/library.go` or `restapi/playback.go` (other tasks).
 - The prefix value for stream routes is passed by `cmd` in M2-32
   (`/api/v1/playback/sessions/`).
+
+## Review carry-over (from M2-01, APPROVE) – additional Files/areas: `internal/adapters/http/restapi/{bodylimit.go,api.go}` and tests
+- [ ] Per-request read deadline for requests WITH a body (promised in M1-09 for "the first endpoint
+      that accepts a body", which is `createPlaybackSession`): set it with
+      `http.NewResponseController(w).SetReadDeadline` (named constant, e.g. 30 s) only when the
+      request has a body; never for stream GETs (net/http's background read would cancel the
+      context of long responses). Test that a trickled chunked body is cut off and that a long
+      streaming GET is not.
+- [ ] Bound the post-decode drain locally: `io.Copy(io.Discard, io.LimitReader(body, MaxRequestBodyBytes+1))`.
+- [ ] Log "rejected malformed request" after the 400/413 classification, with the status as an attribute.

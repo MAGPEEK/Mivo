@@ -2,7 +2,14 @@ import createClient, { type Client } from "openapi-fetch";
 
 import type { paths } from "./generated/schema";
 
-/** HTTP client whose methods, paths and payloads are typed by `api/openapi.yaml`. */
+/**
+ * HTTP client whose methods, paths and payloads are typed by `api/openapi.yaml`.
+ *
+ * The stream routes (tag `stream`: `…/playback/sessions/{sessionId}/file` and `…/hls/…`)
+ * appear in the types but are never called through this client. Players load the session's
+ * opaque `streamUrl` as it is (media element or hls.js) and never build or parse stream URLs
+ * (ADR 0024).
+ */
 export type ApiClient = Client<paths>;
 
 /** Settings for {@link createApiClient}. */
@@ -29,8 +36,11 @@ const exampleServerUrl = "http://192.168.1.10:8460";
 // The messages end up in logs and on screen, and the input may be anything the user pasted,
 // tokens included. They therefore never repeat host, port, path, query, fragment or
 // credentials: the parser reads a password like "4711#pw" as a port and moves the rest into
-// the fragment, so no parsed part except the scheme is known to be free of secrets. The
-// @throws doc of createApiClient spells the limit out; keep it in sync.
+// the fragment, so no parsed part is known to be free of secrets. The scheme is no exception
+// in principle, but echoing it is a bounded trade-off: it is shown only when the input
+// literally starts with "scheme://", only up to 20 characters, and it is what tells the user
+// that they typed "ftp" or "htp" instead of "http". The @throws doc of createApiClient spells
+// the limit out; keep it in sync.
 
 // Longer than the schemes people actually type; a longer "scheme" is more likely pasted text.
 const maxShownSchemeLength = 20;
@@ -43,11 +53,13 @@ const schemeSeparator = ":";
  *   message instead of as a `network_error` later. The message names the problem
  *   ("credentials are not allowed", "a query is not allowed", "a fragment is not allowed" or
  *   "expected an http(s) URL") and repeats nothing of the input except, for a URL with a
- *   scheme other than http or https, that scheme. The scheme is shown only when the input
- *   starts with `scheme://` and the scheme has at most 20 characters. Nothing is shown when
+ *   scheme other than http or https, that scheme. The scheme is shown in lower case, only
+ *   when the input starts with `scheme://` (matched case-insensitively, so `FTP://host`
+ *   shows "ftp") and the scheme has at most 20 characters. Nothing is shown when
  *   - the input does not parse as a URL,
+ *   - the input does not start with the scheme, e.g. `  ftp://host` with leading spaces,
  *   - the scheme is not followed by "//", e.g. `media.local:8460`, `localhost:8460`,
- *     `javascript:…`, `data:…` or `admin:secret@host`,
+ *     `javascript:…`, `data:…`, `ftp:/host` or `admin:secret@host`,
  *   - the scheme is longer than 20 characters,
  *   - the input is an http(s) URL with credentials, a query or a fragment.
  *

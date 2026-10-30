@@ -101,3 +101,14 @@ breaking change. Throttling, bandwidth tiers and hardware encoders arrive in mil
   transcode on weak CPUs).
 - The `EVENT` playlist shows only the produced part to the browser's native controls; the web
   player therefore draws its own scrubber over the full probed duration.
+
+## Notes (M2-01)
+
+Clarifications from the API contract (M2-01); they refine the decision above without changing
+it.
+
+- `streamUrl` and the `Location` header of a new session are URI references, resolved per
+  RFC 3986 section 5 against the URL of the request that returned them. Milestone 2 returns
+  root-relative references (`/api/v1/...`), which break behind a reverse proxy that serves the
+  server under a path prefix. Supporting such a prefix (configured base path or relative
+  references) is a follow-up; decide it before milestone 7b (remote access).

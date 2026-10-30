@@ -9,11 +9,32 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 	"uuid"
+
+	"github.com/oapi-codegen/runtime"
 )
+
+// Defines values for HdrFormat.
+const (
+	HdrFormatHdr10 HdrFormat = "hdr10"
+	HdrFormatHlg   HdrFormat = "hlg"
+)
+
+// Valid indicates whether the value is a known member of the HdrFormat enum.
+func (e HdrFormat) Valid() bool {
+	switch e {
+	case HdrFormatHdr10:
+		return true
+	case HdrFormatHlg:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HealthStatus.
 const (
@@ -32,6 +53,253 @@ func (e HealthStatus) Valid() bool {
 		return false
 	}
 }
+
+// Defines values for HlsDelivery.
+const (
+	HlsDeliveryMse    HlsDelivery = "mse"
+	HlsDeliveryNative HlsDelivery = "native"
+	HlsDeliveryNone   HlsDelivery = "none"
+)
+
+// Valid indicates whether the value is a known member of the HlsDelivery enum.
+func (e HlsDelivery) Valid() bool {
+	switch e {
+	case HlsDeliveryMse:
+		return true
+	case HlsDeliveryNative:
+		return true
+	case HlsDeliveryNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LibraryKind.
+const (
+	LibraryKindMovies LibraryKind = "movies"
+	LibraryKindShows  LibraryKind = "shows"
+)
+
+// Valid indicates whether the value is a known member of the LibraryKind enum.
+func (e LibraryKind) Valid() bool {
+	switch e {
+	case LibraryKindMovies:
+		return true
+	case LibraryKindShows:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MediaStreamKind.
+const (
+	MediaStreamKindAudio    MediaStreamKind = "audio"
+	MediaStreamKindOther    MediaStreamKind = "other"
+	MediaStreamKindSubtitle MediaStreamKind = "subtitle"
+	MediaStreamKindVideo    MediaStreamKind = "video"
+)
+
+// Valid indicates whether the value is a known member of the MediaStreamKind enum.
+func (e MediaStreamKind) Valid() bool {
+	switch e {
+	case MediaStreamKindAudio:
+		return true
+	case MediaStreamKindOther:
+		return true
+	case MediaStreamKindSubtitle:
+		return true
+	case MediaStreamKindVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaybackDelivery.
+const (
+	PlaybackDeliveryFile PlaybackDelivery = "file"
+	PlaybackDeliveryHls  PlaybackDelivery = "hls"
+)
+
+// Valid indicates whether the value is a known member of the PlaybackDelivery enum.
+func (e PlaybackDelivery) Valid() bool {
+	switch e {
+	case PlaybackDeliveryFile:
+		return true
+	case PlaybackDeliveryHls:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaybackMode.
+const (
+	PlaybackModeDirectPlay PlaybackMode = "direct_play"
+	PlaybackModeRemux      PlaybackMode = "remux"
+	PlaybackModeTranscode  PlaybackMode = "transcode"
+)
+
+// Valid indicates whether the value is a known member of the PlaybackMode enum.
+func (e PlaybackMode) Valid() bool {
+	switch e {
+	case PlaybackModeDirectPlay:
+		return true
+	case PlaybackModeRemux:
+		return true
+	case PlaybackModeTranscode:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaybackReasonScope.
+const (
+	PlaybackReasonScopeAudio     PlaybackReasonScope = "audio"
+	PlaybackReasonScopeContainer PlaybackReasonScope = "container"
+	PlaybackReasonScopeSubtitle  PlaybackReasonScope = "subtitle"
+	PlaybackReasonScopeVideo     PlaybackReasonScope = "video"
+)
+
+// Valid indicates whether the value is a known member of the PlaybackReasonScope enum.
+func (e PlaybackReasonScope) Valid() bool {
+	switch e {
+	case PlaybackReasonScopeAudio:
+		return true
+	case PlaybackReasonScopeContainer:
+		return true
+	case PlaybackReasonScopeSubtitle:
+		return true
+	case PlaybackReasonScopeVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlaybackSessionState.
+const (
+	PlaybackSessionStateEnded    PlaybackSessionState = "ended"
+	PlaybackSessionStateFailed   PlaybackSessionState = "failed"
+	PlaybackSessionStateReady    PlaybackSessionState = "ready"
+	PlaybackSessionStateStarting PlaybackSessionState = "starting"
+)
+
+// Valid indicates whether the value is a known member of the PlaybackSessionState enum.
+func (e PlaybackSessionState) Valid() bool {
+	switch e {
+	case PlaybackSessionStateEnded:
+		return true
+	case PlaybackSessionStateFailed:
+		return true
+	case PlaybackSessionStateReady:
+		return true
+	case PlaybackSessionStateStarting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ScanState.
+const (
+	ScanStateFailed  ScanState = "failed"
+	ScanStateIdle    ScanState = "idle"
+	ScanStateRunning ScanState = "running"
+)
+
+// Valid indicates whether the value is a known member of the ScanState enum.
+func (e ScanState) Valid() bool {
+	switch e {
+	case ScanStateFailed:
+		return true
+	case ScanStateIdle:
+		return true
+	case ScanStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StreamAction.
+const (
+	StreamActionCopy      StreamAction = "copy"
+	StreamActionTranscode StreamAction = "transcode"
+)
+
+// Valid indicates whether the value is a known member of the StreamAction enum.
+func (e StreamAction) Valid() bool {
+	switch e {
+	case StreamActionCopy:
+		return true
+	case StreamActionTranscode:
+		return true
+	default:
+		return false
+	}
+}
+
+// ClientProfile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
+type ClientProfile struct {
+	// CodecLimits Per-codec limits; omitted or empty when no codec has extra limits.
+	CodecLimits *[]CodecLimit `json:"codecLimits,omitempty"`
+
+	// DirectPlay Containers the client plays as a progressive file.
+	DirectPlay []DirectPlayProfile `json:"directPlay"`
+
+	// Hls Codecs the client plays inside HLS with fMP4 segments.
+	Hls HlsProfile `json:"hls"`
+
+	// Name Free text naming the client, for logs and the stream-info overlay.
+	//
+	// Example: chromium-desktop
+	Name string `json:"name"`
+}
+
+// CodecLimit Extra limits of the client for one codec; a codec without an entry has none.
+type CodecLimit struct {
+	// Codec Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
+	//
+	// Example: h264
+	Codec MediaIdentifier `json:"codec"`
+
+	// MaxBitDepth Highest bit depth the client decodes for this codec; omitted when unlimited.
+	//
+	// Example: 8
+	MaxBitDepth *int32 `json:"maxBitDepth,omitempty"`
+
+	// Profiles Codec profiles the client decodes, as ffprobe names them; omitted when every profile plays.
+	//
+	// Example: ["Constrained Baseline","Baseline","Main","High"]
+	Profiles *[]string `json:"profiles,omitempty"`
+}
+
+// DirectPlayProfile A container the client plays as a progressive file, with the codecs it plays inside it.
+type DirectPlayProfile struct {
+	// AudioCodecs Audio codecs the client plays in this container.
+	//
+	// Example: ["aac","mp3","opus","flac"]
+	AudioCodecs []MediaIdentifier `json:"audioCodecs"`
+
+	// Container Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
+	//
+	// Example: h264
+	Container MediaIdentifier `json:"container"`
+
+	// VideoCodecs Video codecs the client plays in this container.
+	//
+	// Example: ["h264","av1","vp9"]
+	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
+}
+
+// HdrFormat High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
+//
+// Example: hdr10
+type HdrFormat string
 
 // HealthCheck Result of checking one component.
 type HealthCheck struct {
@@ -59,9 +327,465 @@ type HealthResponse struct {
 // HealthStatus State of the server as a whole or of one health check. Clients must tolerate values added in later versions.
 type HealthStatus string
 
+// HlsDelivery How the client plays HLS with fMP4 segments: "mse" (a script player over Media Source Extensions, for example hls.js), "native" (the media element plays HLS itself) or "none" (no HLS; only direct play is possible). Clients must tolerate values added in later versions.
+//
+// Example: mse
+type HlsDelivery string
+
+// HlsProfile Codecs the client plays inside HLS with fMP4 segments.
+type HlsProfile struct {
+	// AudioCodecs Audio codecs the client plays inside HLS.
+	//
+	// Example: ["aac","mp3","opus","flac"]
+	AudioCodecs []MediaIdentifier `json:"audioCodecs"`
+
+	// Delivery How the client plays HLS with fMP4 segments: "mse" (a script player over Media Source Extensions, for example hls.js), "native" (the media element plays HLS itself) or "none" (no HLS; only direct play is possible). Clients must tolerate values added in later versions.
+	//
+	// Example: mse
+	Delivery HlsDelivery `json:"delivery"`
+
+	// VideoCodecs Video codecs the client plays inside HLS.
+	//
+	// Example: ["h264","av1","vp9"]
+	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
+}
+
+// ItemDetail An item with its media files and their technical streams.
+type ItemDetail struct {
+	// Files Media files of the item; the first one is the primary file. Milestone 2 has exactly one file per item.
+	Files []MediaFile `json:"files"`
+
+	// ID ID of the item.
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	ID uuid.UUID `json:"id"`
+
+	// LibraryID ID of the library that contains the item.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// Title Display title; in milestone 2 derived from the file name.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+}
+
+// ItemPage One page of a library's items.
+type ItemPage struct {
+	// Items The items of this page, ordered by sort title.
+	Items []ItemSummary `json:"items"`
+
+	// NextCursor Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
+	//
+	// Example: eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// ItemSummary An item in a library listing.
+type ItemSummary struct {
+	// ID ID of the item.
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	ID uuid.UUID `json:"id"`
+
+	// LibraryID ID of the library that contains the item.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
+	Media *MediaSummary `json:"media,omitempty"`
+
+	// Title Display title; in milestone 2 derived from the file name.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+}
+
+// Library A folder of media files defined in the server configuration.
+type Library struct {
+	// Available Whether the library folder is reachable now. False for example while a network share is not mounted; its items stay listed but cannot be played.
+	//
+	// Example: true
+	Available bool `json:"available"`
+
+	// ID Stable ID of the library while its folder stays configured.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	ID uuid.UUID `json:"id"`
+
+	// ItemCount Number of items in the library.
+	//
+	// Example: 42
+	ItemCount int64 `json:"itemCount"`
+
+	// Kind What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+	//
+	// Example: movies
+	Kind LibraryKind `json:"kind"`
+
+	// Name Display name from the configuration.
+	//
+	// Example: Movies
+	Name string `json:"name"`
+
+	// Scan Progress and result of the current or last scan of a library.
+	Scan ScanStatus `json:"scan"`
+}
+
+// LibraryKind What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+//
+// Example: movies
+type LibraryKind string
+
+// LibraryList The configured libraries.
+type LibraryList struct {
+	// Libraries Every configured library, ordered by name.
+	Libraries []Library `json:"libraries"`
+}
+
+// MediaFile One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only.
+type MediaFile struct {
+	// Available Whether the file was probed successfully and can be played.
+	//
+	// Example: true
+	Available bool `json:"available"`
+
+	// BitRate Overall bit rate in bits per second; omitted when unknown.
+	//
+	// Example: 4073000
+	BitRate *int64 `json:"bitRate,omitempty"`
+
+	// Container Container short name (ADR 0023), for example "mkv"; omitted when unknown.
+	//
+	// Example: mkv
+	Container *string `json:"container,omitempty"`
+
+	// DurationSeconds Duration in seconds with millisecond precision; omitted when unknown.
+	//
+	// Example: 5423.042
+	DurationSeconds *float64 `json:"durationSeconds,omitempty"`
+
+	// ErrorCode Machine-readable reason the file cannot be played, for example "probe_failed"; omitted when available. Clients show a generic text for unknown codes.
+	//
+	// Example: probe_failed
+	ErrorCode *string `json:"errorCode,omitempty"`
+
+	// FileName Name of the file without any directory, for example "movie.mkv".
+	//
+	// Example: Big.Buck.Bunny.mkv
+	FileName string `json:"fileName"`
+
+	// ID ID of the file; PlaybackRequest.fileId refers to it.
+	//
+	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+	ID uuid.UUID `json:"id"`
+
+	// ModifiedAt Last modification time of the file (UTC).
+	//
+	// Example: 2026-10-01T09:30:00Z
+	ModifiedAt time.Time `json:"modifiedAt"`
+
+	// SizeBytes File size in bytes.
+	//
+	// Example: 276134947
+	SizeBytes int64 `json:"sizeBytes"`
+
+	// Streams Streams in container order; empty when probing failed.
+	Streams []MediaStream `json:"streams"`
+}
+
+// MediaIdentifier Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
+//
+// Example: h264
+type MediaIdentifier = string
+
+// MediaStream One stream of a media file as ffprobe reports it. Fields that do not apply to the stream's kind, or that ffprobe did not report, are omitted.
+type MediaStream struct {
+	// AttachedPicture Whether the stream is cover art (attached picture), not a video track.
+	//
+	// Example: false
+	AttachedPicture bool `json:"attachedPicture"`
+
+	// BitDepth Bits per sample of a video stream.
+	//
+	// Example: 8
+	BitDepth *int32 `json:"bitDepth,omitempty"`
+
+	// BitRate Bit rate of the stream in bits per second.
+	//
+	// Example: 3500000
+	BitRate *int64 `json:"bitRate,omitempty"`
+
+	// ChannelLayout Channel layout of an audio stream, for example "5.1(side)".
+	//
+	// Example: 5.1(side)
+	ChannelLayout *string `json:"channelLayout,omitempty"`
+
+	// Channels Number of channels of an audio stream.
+	//
+	// Example: 6
+	Channels *int32 `json:"channels,omitempty"`
+
+	// Codec ffprobe codec_name, for example "h264", "hevc", "aac" or "subrip".
+	//
+	// Example: h264
+	Codec *string `json:"codec,omitempty"`
+
+	// Default Whether the stream carries the default disposition.
+	//
+	// Example: true
+	Default bool `json:"default"`
+
+	// Forced Whether the stream carries the forced disposition.
+	//
+	// Example: false
+	Forced bool `json:"forced"`
+
+	// FrameRate Frames per second of a video stream.
+	//
+	// Example: 23.976
+	FrameRate *float64 `json:"frameRate,omitempty"`
+
+	// Hdr High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
+	//
+	// Example: hdr10
+	Hdr *HdrFormat `json:"hdr,omitempty"`
+
+	// Height Height of a video stream in pixels.
+	//
+	// Example: 1080
+	Height *int32 `json:"height,omitempty"`
+
+	// Index Index of the stream in the container; PlaybackRequest.audioStreamIndex refers to it.
+	//
+	// Example: 1
+	Index int32 `json:"index"`
+
+	// Kind Kind of a stream inside a media file. Clients must tolerate values added in later versions.
+	//
+	// Example: video
+	Kind MediaStreamKind `json:"kind"`
+
+	// Language Language tag of the stream as stored in the file, usually ISO 639-2.
+	//
+	// Example: eng
+	Language *string `json:"language,omitempty"`
+
+	// Level Codec level as ffprobe reports it, for example 41 for H.264 level 4.1.
+	//
+	// Example: 41
+	Level *int32 `json:"level,omitempty"`
+
+	// Profile Codec profile as ffprobe names it, for example "High" or "Main 10".
+	//
+	// Example: High
+	Profile *string `json:"profile,omitempty"`
+
+	// SampleRate Sample rate of an audio stream in Hz.
+	//
+	// Example: 48000
+	SampleRate *int32 `json:"sampleRate,omitempty"`
+
+	// Title Title of the stream as stored in the file.
+	//
+	// Example: Director's commentary
+	Title *string `json:"title,omitempty"`
+
+	// Width Width of a video stream in pixels.
+	//
+	// Example: 1920
+	Width *int32 `json:"width,omitempty"`
+}
+
+// MediaStreamKind Kind of a stream inside a media file. Clients must tolerate values added in later versions.
+//
+// Example: video
+type MediaStreamKind string
+
+// MediaSummary Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
+type MediaSummary struct {
+	// AudioCodec Codec of the default audio stream; omitted for files without audio.
+	//
+	// Example: aac
+	AudioCodec *string `json:"audioCodec,omitempty"`
+
+	// Available Whether the file was probed successfully and can be played. False when probing failed; the item is listed but cannot be played.
+	//
+	// Example: true
+	Available bool `json:"available"`
+
+	// BitDepth Bit depth of the primary video stream.
+	//
+	// Example: 8
+	BitDepth *int32 `json:"bitDepth,omitempty"`
+
+	// Container Container short name, for example "mkv"; omitted when unknown.
+	//
+	// Example: mkv
+	Container *string `json:"container,omitempty"`
+
+	// DurationSeconds Duration in seconds with millisecond precision; omitted when unknown.
+	//
+	// Example: 5423.042
+	DurationSeconds *float64 `json:"durationSeconds,omitempty"`
+
+	// Hdr High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
+	//
+	// Example: hdr10
+	Hdr *HdrFormat `json:"hdr,omitempty"`
+
+	// Height Height of the primary video stream in pixels.
+	//
+	// Example: 1080
+	Height *int32 `json:"height,omitempty"`
+
+	// VideoCodec Codec of the primary video stream (ffprobe codec_name).
+	//
+	// Example: h264
+	VideoCodec *string `json:"videoCodec,omitempty"`
+
+	// Width Width of the primary video stream in pixels.
+	//
+	// Example: 1920
+	Width *int32 `json:"width,omitempty"`
+}
+
+// PlaybackDelivery How the client loads streamUrl: "file" (a progressive file with range support) or "hls" (an HLS playlist). Clients must tolerate values added in later versions.
+//
+// Example: hls
+type PlaybackDelivery string
+
+// PlaybackMode How the file is played, from cheapest to most expensive: "direct_play" (the original file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least one stream re-encoded). Clients must tolerate values added in later versions.
+//
+// Example: remux
+type PlaybackMode string
+
+// PlaybackReason A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes.
+type PlaybackReason struct {
+	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_track_not_default". Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
+	//
+	// Example: audio_codec_not_supported
+	Code string `json:"code"`
+
+	// Scope Part of the file a reason or warning concerns. Clients must tolerate values added in later versions.
+	//
+	// Example: audio
+	Scope PlaybackReasonScope `json:"scope"`
+}
+
+// PlaybackReasonScope Part of the file a reason or warning concerns. Clients must tolerate values added in later versions.
+//
+// Example: audio
+type PlaybackReasonScope string
+
+// PlaybackRequest Asks the server to play one media file for a client.
+type PlaybackRequest struct {
+	// AudioStreamIndex Index of the audio stream to play (MediaStream.index); omitted selects the default audio stream.
+	//
+	// Example: 1
+	AudioStreamIndex *int32 `json:"audioStreamIndex,omitempty"`
+
+	// FileID ID of the media file (MediaFile.id).
+	//
+	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+	FileID uuid.UUID `json:"fileId"`
+
+	// Profile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
+	Profile ClientProfile `json:"profile"`
+
+	// ReplacesSessionID Session this one replaces, for example after a seek outside the produced range. It is stopped before the session limit is checked; an unknown ID is ignored.
+	//
+	// Example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+	ReplacesSessionID *uuid.UUID `json:"replacesSessionId,omitempty"`
+
+	// StartPositionSeconds Position to start at, in seconds; omitted or 0 starts at the beginning. A position at or beyond the duration of the file answers 400 "invalid".
+	//
+	// Example: 600
+	StartPositionSeconds *float64 `json:"startPositionSeconds,omitempty"`
+}
+
+// PlaybackSession A running or finished playback of one media file for one client, with the decision the server made and the URL to load.
+type PlaybackSession struct {
+	// Delivery How the client loads streamUrl: "file" (a progressive file with range support) or "hls" (an HLS playlist). Clients must tolerate values added in later versions.
+	//
+	// Example: hls
+	Delivery PlaybackDelivery `json:"delivery"`
+
+	// DurationSeconds Probed duration of the whole file in seconds; omitted when unknown.
+	//
+	// Example: 5423.042
+	DurationSeconds *float64 `json:"durationSeconds,omitempty"`
+
+	// FailureCode Machine-readable reason a session failed, for example "transcode_failed"; omitted unless state is "failed". Clients show a generic text for unknown codes.
+	//
+	// Example: transcode_failed
+	FailureCode *string `json:"failureCode,omitempty"`
+
+	// FileID ID of the media file being played.
+	//
+	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+	FileID uuid.UUID `json:"fileId"`
+
+	// ID ID of the session.
+	//
+	// Example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+	ID uuid.UUID `json:"id"`
+
+	// Mode How the file is played, from cheapest to most expensive: "direct_play" (the original file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least one stream re-encoded). Clients must tolerate values added in later versions.
+	//
+	// Example: remux
+	Mode PlaybackMode `json:"mode"`
+
+	// Reasons Why a cheaper mode was not possible; empty for direct play.
+	Reasons []PlaybackReason `json:"reasons"`
+
+	// SourceBitRate Overall bit rate of the source file in bits per second; omitted when unknown.
+	//
+	// Example: 4073000
+	SourceBitRate *int64 `json:"sourceBitRate,omitempty"`
+
+	// SourceContainer Container short name of the source file, for example "mkv".
+	//
+	// Example: mkv
+	SourceContainer string `json:"sourceContainer"`
+
+	// StartPositionSeconds Position in the file where the stream actually starts, in seconds. When video is copied it is the keyframe at or before the requested position. The player shows startPositionSeconds plus the media element's current time.
+	//
+	// Example: 598.5
+	StartPositionSeconds float64 `json:"startPositionSeconds"`
+
+	// State Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
+	//
+	// Example: ready
+	State PlaybackSessionState `json:"state"`
+
+	// StreamURL URI reference the client loads, as a file (delivery "file") or as an HLS playlist (delivery "hls"). Resolve it per RFC 3986 section 5 against the URL of the request that returned it. Clients must treat it as opaque: never parse, build or modify it, and never take IDs or other values out of it, because its shape may change (for example signed, time-limited URLs once accounts exist).
+	//
+	// Example: /api/v1/playback/sessions/5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a/hls/index.m3u8
+	StreamURL string `json:"streamUrl"`
+
+	// Streams One decision per selected source stream (video first, then audio).
+	Streams []StreamDecision `json:"streams"`
+
+	// TargetContainer Container the client receives: the source container for direct play, "mp4" (fMP4 segments) for HLS.
+	//
+	// Example: mp4
+	TargetContainer string `json:"targetContainer"`
+
+	// Warnings Degradations of the result, for example a downscaled video.
+	Warnings []PlaybackReason `json:"warnings"`
+}
+
+// PlaybackSessionState Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
+//
+// Example: ready
+type PlaybackSessionState string
+
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code, for example "not_found". Clients map it to a translated message.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -80,6 +804,123 @@ type Problem struct {
 
 	// Type URI reference identifying the problem type; "about:blank" if none.
 	Type string `json:"type"`
+}
+
+// ScanCounts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
+type ScanCounts struct {
+	// Added New video files that were probed and added.
+	//
+	// Example: 12
+	Added int64 `json:"added"`
+
+	// Failed Files that could not be probed; they are listed as unavailable.
+	//
+	// Example: 0
+	Failed int64 `json:"failed"`
+
+	// Removed Files that disappeared and were removed.
+	//
+	// Example: 0
+	Removed int64 `json:"removed"`
+
+	// Skipped Files with a video extension but without a video stream.
+	//
+	// Example: 0
+	Skipped int64 `json:"skipped"`
+
+	// Unchanged Files whose size and modification time did not change.
+	//
+	// Example: 29
+	Unchanged int64 `json:"unchanged"`
+
+	// Updated Changed video files that were probed again.
+	//
+	// Example: 1
+	Updated int64 `json:"updated"`
+}
+
+// ScanState State of the current or last scan of a library: "idle" (no scan runs; the last one, if any, finished), "running" or "failed" (the last scan stopped early, see errorCode). Clients must tolerate values added in later versions.
+//
+// Example: idle
+type ScanState string
+
+// ScanStatus Progress and result of the current or last scan of a library.
+type ScanStatus struct {
+	// Counts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
+	Counts ScanCounts `json:"counts"`
+
+	// ErrorCode Machine-readable reason a scan failed, for example "root_unavailable" (the library folder is missing or unreadable); omitted unless state is "failed". Clients translate it and show a generic text for unknown codes.
+	//
+	// Example: root_unavailable
+	ErrorCode *string `json:"errorCode,omitempty"`
+
+	// FinishedAt End of the last scan (UTC); omitted before the first scan finished.
+	//
+	// Example: 2026-10-30T18:04:31Z
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+
+	// StartedAt Start of the current or last scan (UTC); omitted before the first scan.
+	//
+	// Example: 2026-10-30T18:04:05Z
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// State State of the current or last scan of a library: "idle" (no scan runs; the last one, if any, finished), "running" or "failed" (the last scan stopped early, see errorCode). Clients must tolerate values added in later versions.
+	//
+	// Example: idle
+	State ScanState `json:"state"`
+}
+
+// StreamAction What happens to one source stream: "copy" (passed through unchanged) or "transcode" (re-encoded). Clients must tolerate values added in later versions.
+//
+// Example: copy
+type StreamAction string
+
+// StreamDecision What the session does with one selected source stream.
+type StreamDecision struct {
+	// Action What happens to one source stream: "copy" (passed through unchanged) or "transcode" (re-encoded). Clients must tolerate values added in later versions.
+	//
+	// Example: copy
+	Action StreamAction `json:"action"`
+
+	// Encoder FFmpeg encoder of a transcoded stream, for example "libx264"; omitted when copied.
+	//
+	// Example: libx264
+	Encoder *string `json:"encoder,omitempty"`
+
+	// Kind Kind of a stream inside a media file. Clients must tolerate values added in later versions.
+	//
+	// Example: video
+	Kind MediaStreamKind `json:"kind"`
+
+	// SourceCodec Codec of the source stream (ffprobe codec_name).
+	//
+	// Example: hevc
+	SourceCodec string `json:"sourceCodec"`
+
+	// SourceIndex Index of the source stream (MediaStream.index).
+	//
+	// Example: 0
+	SourceIndex int32 `json:"sourceIndex"`
+
+	// TargetChannels Channels of an audio stream the client receives.
+	//
+	// Example: 2
+	TargetChannels *int32 `json:"targetChannels,omitempty"`
+
+	// TargetCodec Codec the client receives; equals sourceCodec when copied.
+	//
+	// Example: h264
+	TargetCodec string `json:"targetCodec"`
+
+	// TargetHeight Height of a video stream the client receives, in pixels.
+	//
+	// Example: 1080
+	TargetHeight *int32 `json:"targetHeight,omitempty"`
+
+	// TargetWidth Width of a video stream the client receives, in pixels.
+	//
+	// Example: 1920
+	TargetWidth *int32 `json:"targetWidth,omitempty"`
 }
 
 // SystemInfo Describes the running server.
@@ -109,11 +950,56 @@ type SystemInfo struct {
 	Version string `json:"version"`
 }
 
+// ItemID defines model for ItemId.
+type ItemID = uuid.UUID
+
+// LibraryID defines model for LibraryId.
+type LibraryID = uuid.UUID
+
+// SessionID defines model for SessionId.
+type SessionID = uuid.UUID
+
+// ListLibraryItemsParams defines parameters for ListLibraryItems.
+type ListLibraryItemsParams struct {
+	// Limit Maximum number of items in the page.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// CreatePlaybackSessionJSONRequestBody defines body for CreatePlaybackSession for application/json ContentType.
+type CreatePlaybackSessionJSONRequestBody = PlaybackRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetItem Describe one item with its files and streams
+	// (GET /api/v1/items/{itemId})
+	GetItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// ListLibraries List the configured libraries
+	// (GET /api/v1/libraries)
+	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// GetLibrary Describe one library
+	// (GET /api/v1/libraries/{libraryId})
+	GetLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// ListLibraryItems Page through the items of a library
+	// (GET /api/v1/libraries/{libraryId}/items)
+	ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams)
+	// StartLibraryScan Start a scan of a library
+	// (POST /api/v1/libraries/{libraryId}/scan)
+	StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// CreatePlaybackSession Start playing a media file
+	// (POST /api/v1/playback/sessions)
+	CreatePlaybackSession(w http.ResponseWriter, r *http.Request)
+	// StopPlaybackSession Stop a playback session
+	// (DELETE /api/v1/playback/sessions/{sessionId})
+	StopPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID)
+	// GetPlaybackSession Describe a playback session
+	// (GET /api/v1/playback/sessions/{sessionId})
+	GetPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
@@ -133,6 +1019,219 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetItem operation middleware
+func (siw *ServerInterfaceWrapper) GetItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetItem(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraries operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibrary operation middleware
+func (siw *ServerInterfaceWrapper) GetLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibrary(w, r, libraryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryItems operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryItems(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryItemsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryItems(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartLibraryScan operation middleware
+func (siw *ServerInterfaceWrapper) StartLibraryScan(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartLibraryScan(w, r, libraryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePlaybackSession operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlaybackSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlaybackSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopPlaybackSession operation middleware
+func (siw *ServerInterfaceWrapper) StopPlaybackSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionID SessionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopPlaybackSession(w, r, sessionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlaybackSession operation middleware
+func (siw *ServerInterfaceWrapper) GetPlaybackSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "sessionId" -------------
+	var sessionID SessionID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sessionId", r.PathValue("sessionId"), &sessionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sessionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlaybackSession(w, r, sessionID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -278,6 +1377,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system/info", wrapper.GetSystemInfo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries", wrapper.ListLibraries)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.GetLibrary)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/scan", wrapper.StartLibraryScan)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/items", wrapper.ListLibraryItems)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.CreatePlaybackSession)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.StopPlaybackSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.GetPlaybackSession)
 
 	return m
 }
@@ -336,6 +1443,346 @@ func (response GetHealthdefaultApplicationProblemPlusJSONResponse) VisitGetHealt
 	return err
 }
 
+type GetItemRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type GetItemResponseObject interface {
+	VisitGetItemResponse(w http.ResponseWriter) error
+}
+
+type GetItem200JSONResponse ItemDetail
+
+func (response GetItem200JSONResponse) VisitGetItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetItemdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetItemdefaultApplicationProblemPlusJSONResponse) VisitGetItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibrariesRequestObject struct {
+}
+
+type ListLibrariesResponseObject interface {
+	VisitListLibrariesResponse(w http.ResponseWriter) error
+}
+
+type ListLibraries200JSONResponse LibraryList
+
+func (response ListLibraries200JSONResponse) VisitListLibrariesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibrariesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibrariesdefaultApplicationProblemPlusJSONResponse) VisitListLibrariesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLibraryRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+}
+
+type GetLibraryResponseObject interface {
+	VisitGetLibraryResponse(w http.ResponseWriter) error
+}
+
+type GetLibrary200JSONResponse Library
+
+func (response GetLibrary200JSONResponse) VisitGetLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLibrarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetLibrarydefaultApplicationProblemPlusJSONResponse) VisitGetLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryItemsRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Params    ListLibraryItemsParams
+}
+
+type ListLibraryItemsResponseObject interface {
+	VisitListLibraryItemsResponse(w http.ResponseWriter) error
+}
+
+type ListLibraryItems200JSONResponse ItemPage
+
+func (response ListLibraryItems200JSONResponse) VisitListLibraryItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryItemsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibraryItemsdefaultApplicationProblemPlusJSONResponse) VisitListLibraryItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartLibraryScanRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+}
+
+type StartLibraryScanResponseObject interface {
+	VisitStartLibraryScanResponse(w http.ResponseWriter) error
+}
+
+type StartLibraryScan202JSONResponse ScanStatus
+
+func (response StartLibraryScan202JSONResponse) VisitStartLibraryScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartLibraryScandefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartLibraryScandefaultApplicationProblemPlusJSONResponse) VisitStartLibraryScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlaybackSessionRequestObject struct {
+	Body *CreatePlaybackSessionJSONRequestBody
+}
+
+type CreatePlaybackSessionResponseObject interface {
+	VisitCreatePlaybackSessionResponse(w http.ResponseWriter) error
+}
+
+type CreatePlaybackSession201ResponseHeaders struct {
+	Location *string
+}
+
+type CreatePlaybackSession201JSONResponse struct {
+	Body    PlaybackSession
+	Headers CreatePlaybackSession201ResponseHeaders
+}
+
+func (response CreatePlaybackSession201JSONResponse) VisitCreatePlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlaybackSession503ResponseHeaders struct {
+	RetryAfter *int32
+}
+
+type CreatePlaybackSession503ApplicationProblemPlusJSONResponse struct {
+	Body    Problem
+	Headers CreatePlaybackSession503ResponseHeaders
+}
+
+func (response CreatePlaybackSession503ApplicationProblemPlusJSONResponse) VisitCreatePlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlaybackSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreatePlaybackSessiondefaultApplicationProblemPlusJSONResponse) VisitCreatePlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StopPlaybackSessionRequestObject struct {
+	SessionID SessionID `json:"sessionId"`
+}
+
+type StopPlaybackSessionResponseObject interface {
+	VisitStopPlaybackSessionResponse(w http.ResponseWriter) error
+}
+
+type StopPlaybackSession204Response struct {
+}
+
+func (response StopPlaybackSession204Response) VisitStopPlaybackSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type StopPlaybackSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StopPlaybackSessiondefaultApplicationProblemPlusJSONResponse) VisitStopPlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlaybackSessionRequestObject struct {
+	SessionID SessionID `json:"sessionId"`
+}
+
+type GetPlaybackSessionResponseObject interface {
+	VisitGetPlaybackSessionResponse(w http.ResponseWriter) error
+}
+
+type GetPlaybackSession200JSONResponse PlaybackSession
+
+func (response GetPlaybackSession200JSONResponse) VisitGetPlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlaybackSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPlaybackSessiondefaultApplicationProblemPlusJSONResponse) VisitGetPlaybackSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSystemInfoRequestObject struct {
 }
 
@@ -379,6 +1826,30 @@ type StrictServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetItem Describe one item with its files and streams
+	// (GET /api/v1/items/{itemId})
+	GetItem(ctx context.Context, request GetItemRequestObject) (GetItemResponseObject, error)
+	// ListLibraries List the configured libraries
+	// (GET /api/v1/libraries)
+	ListLibraries(ctx context.Context, request ListLibrariesRequestObject) (ListLibrariesResponseObject, error)
+	// GetLibrary Describe one library
+	// (GET /api/v1/libraries/{libraryId})
+	GetLibrary(ctx context.Context, request GetLibraryRequestObject) (GetLibraryResponseObject, error)
+	// ListLibraryItems Page through the items of a library
+	// (GET /api/v1/libraries/{libraryId}/items)
+	ListLibraryItems(ctx context.Context, request ListLibraryItemsRequestObject) (ListLibraryItemsResponseObject, error)
+	// StartLibraryScan Start a scan of a library
+	// (POST /api/v1/libraries/{libraryId}/scan)
+	StartLibraryScan(ctx context.Context, request StartLibraryScanRequestObject) (StartLibraryScanResponseObject, error)
+	// CreatePlaybackSession Start playing a media file
+	// (POST /api/v1/playback/sessions)
+	CreatePlaybackSession(ctx context.Context, request CreatePlaybackSessionRequestObject) (CreatePlaybackSessionResponseObject, error)
+	// StopPlaybackSession Stop a playback session
+	// (DELETE /api/v1/playback/sessions/{sessionId})
+	StopPlaybackSession(ctx context.Context, request StopPlaybackSessionRequestObject) (StopPlaybackSessionResponseObject, error)
+	// GetPlaybackSession Describe a playback session
+	// (GET /api/v1/playback/sessions/{sessionId})
+	GetPlaybackSession(ctx context.Context, request GetPlaybackSessionRequestObject) (GetPlaybackSessionResponseObject, error)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(ctx context.Context, request GetSystemInfoRequestObject) (GetSystemInfoResponseObject, error)
@@ -440,6 +1911,218 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetItem operation middleware
+func (sh *strictHandler) GetItem(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request GetItemRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetItem(ctx, request.(GetItemRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetItem")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetItemResponseObject); ok {
+		if err := validResponse.VisitGetItemResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLibraries operation middleware
+func (sh *strictHandler) ListLibraries(w http.ResponseWriter, r *http.Request) {
+	var request ListLibrariesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraries(ctx, request.(ListLibrariesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibrariesResponseObject); ok {
+		if err := validResponse.VisitListLibrariesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetLibrary operation middleware
+func (sh *strictHandler) GetLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
+	var request GetLibraryRequestObject
+
+	request.LibraryID = libraryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetLibrary(ctx, request.(GetLibraryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetLibrary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetLibraryResponseObject); ok {
+		if err := validResponse.VisitGetLibraryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLibraryItems operation middleware
+func (sh *strictHandler) ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams) {
+	var request ListLibraryItemsRequestObject
+
+	request.LibraryID = libraryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraryItems(ctx, request.(ListLibraryItemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraryItems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibraryItemsResponseObject); ok {
+		if err := validResponse.VisitListLibraryItemsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartLibraryScan operation middleware
+func (sh *strictHandler) StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
+	var request StartLibraryScanRequestObject
+
+	request.LibraryID = libraryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartLibraryScan(ctx, request.(StartLibraryScanRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartLibraryScan")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartLibraryScanResponseObject); ok {
+		if err := validResponse.VisitStartLibraryScanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePlaybackSession operation middleware
+func (sh *strictHandler) CreatePlaybackSession(w http.ResponseWriter, r *http.Request) {
+	var request CreatePlaybackSessionRequestObject
+
+	var body CreatePlaybackSessionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePlaybackSession(ctx, request.(CreatePlaybackSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePlaybackSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePlaybackSessionResponseObject); ok {
+		if err := validResponse.VisitCreatePlaybackSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StopPlaybackSession operation middleware
+func (sh *strictHandler) StopPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID) {
+	var request StopPlaybackSessionRequestObject
+
+	request.SessionID = sessionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StopPlaybackSession(ctx, request.(StopPlaybackSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StopPlaybackSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StopPlaybackSessionResponseObject); ok {
+		if err := validResponse.VisitStopPlaybackSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlaybackSession operation middleware
+func (sh *strictHandler) GetPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID) {
+	var request GetPlaybackSessionRequestObject
+
+	request.SessionID = sessionID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlaybackSession(ctx, request.(GetPlaybackSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlaybackSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlaybackSessionResponseObject); ok {
+		if err := validResponse.VisitGetPlaybackSessionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

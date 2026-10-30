@@ -8,12 +8,13 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.0.0"
+  version: "1.1.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
     major version changes are additive only: clients must ignore unknown fields and
-    tolerate new enum values.
+    tolerate new enum values. Every request body is limited to 64 KiB; a larger body is
+    rejected with 413 and the problem code "payload_too_large".
   license:
     name: GPL-3.0-or-later
     url: https://www.gnu.org/licenses/gpl-3.0.html
@@ -22,6 +23,20 @@ servers:
 tags:
   - name: system
     description: Server health and identity.
+  - name: libraries
+    description: >-
+      Media libraries defined in the server configuration (ADR 0022) and their scans.
+      Libraries are read-only through the API until accounts exist.
+  - name: items
+    description: Playable items of a library with their files and technical streams.
+  - name: playback
+    description: >-
+      Playback sessions: the server decides between direct play, remux and transcode for a
+      client profile and returns an opaque stream URL (ADR 0023, ADR 0024).
+  - name: stream
+    description: >-
+      Media delivery of a playback session. Clients never build these URLs; they use the
+      streamUrl of the session and the relative URIs inside HLS playlists.
 paths:
   /api/v1/health:
     get:
@@ -68,7 +83,357 @@ paths:
                 $ref: "#/components/schemas/SystemInfo"
         default:
           $ref: "#/components/responses/Problem"
+  /api/v1/libraries:
+    get:
+      operationId: listLibraries
+      summary: List the configured libraries
+      description: >-
+        Returns every library of the server configuration with its availability, item count
+        and the status of its current or last scan, ordered by name. Libraries are defined
+        in the configuration file or the environment, not through the API.
+      tags:
+        - libraries
+      responses:
+        "200":
+          description: All configured libraries; an empty list when none is configured.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryList"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/libraries/{libraryId}:
+    parameters:
+      - $ref: "#/components/parameters/LibraryId"
+    get:
+      operationId: getLibrary
+      summary: Describe one library
+      description: >-
+        Returns one library with its availability, item count and scan status. Clients poll
+        it while a scan runs. An unknown ID answers 404 with the problem code "not_found".
+      tags:
+        - libraries
+      responses:
+        "200":
+          description: The library.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Library"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/libraries/{libraryId}/scan:
+    parameters:
+      - $ref: "#/components/parameters/LibraryId"
+    post:
+      operationId: startLibraryScan
+      summary: Start a scan of a library
+      description: >-
+        Starts a background scan of the library folder and returns at once. When a scan of
+        this library already runs, no second one starts and its status is returned. Poll
+        getLibrary for progress. An unknown ID answers 404 "not_found"; a server that is
+        shutting down answers 503 "unavailable".
+      tags:
+        - libraries
+      responses:
+        "202":
+          description: The scan runs; the body is its current status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/libraries/{libraryId}/items:
+    parameters:
+      - $ref: "#/components/parameters/LibraryId"
+    get:
+      operationId: listLibraryItems
+      summary: Page through the items of a library
+      description: >-
+        Returns one page of the library's items ordered by sort title. Follow nextCursor
+        until it is absent. A limit outside 1–500 or a cursor this server did not issue
+        answers 400 with the problem code "invalid"; an unknown library answers 404
+        "not_found".
+      tags:
+        - items
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of items in the page.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            Opaque position from nextCursor of the previous page. Omit it for the first
+            page. Clients must not parse or build it.
+          schema:
+            type: string
+            maxLength: 512
+      responses:
+        "200":
+          description: One page of items.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPage"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    get:
+      operationId: getItem
+      summary: Describe one item with its files and streams
+      description: >-
+        Returns the item with every media file and the technical streams of each file. An
+        unknown ID answers 404 with the problem code "not_found".
+      tags:
+        - items
+      responses:
+        "200":
+          description: The item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemDetail"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/playback/sessions:
+    post:
+      operationId: createPlaybackSession
+      summary: Start playing a media file
+      description: >-
+        Decides how the client plays the file (direct play, remux or transcode) from its
+        profile and the server's capabilities, starts FFmpeg when needed and returns the
+        session with an opaque streamUrl. Problem codes: "invalid" (400, for example a
+        malformed profile), "not_found" (404, unknown file), "unsupported" (422, the file
+        cannot be played, for example because probing failed), "no_compatible_format" and
+        "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and
+        "unavailable" (503, for example the server is shutting down or the library folder
+        is unreachable). Set replacesSessionId when seeking outside the produced range: the
+        old session stops before the limit is checked.
+      tags:
+        - playback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaybackRequest"
+      responses:
+        "201":
+          description: The session was created.
+          headers:
+            Location:
+              description: >-
+                URI reference of the new session resource. Resolve it per RFC 3986
+                section 5 against the URL of the request that returned it.
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackSession"
+        "503":
+          description: >-
+            The session limit is reached ("session_limit_reached") or a resource is
+            unavailable ("unavailable", for example the server is shutting down or the
+            library folder is unreachable). Retry-After accompanies session_limit_reached;
+            it may be absent for unavailable.
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/playback/sessions/{sessionId}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getPlaybackSession
+      summary: Describe a playback session
+      description: >-
+        Returns the session with its current state. A session that was stopped or reaped
+        after the idle timeout answers 404 "not_found"; the client then creates a new
+        session at its current position.
+      tags:
+        - playback
+      responses:
+        "200":
+          description: The session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybackSession"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: stopPlaybackSession
+      summary: Stop a playback session
+      description: >-
+        Stops the session, ends its FFmpeg process and removes its files. Idempotent: an
+        unknown or already stopped session also answers 204.
+      tags:
+        - playback
+      responses:
+        "204":
+          description: The session no longer runs.
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/playback/sessions/{sessionId}/file:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+    get:
+      operationId: getPlaybackFile
+      summary: Download the original file of a direct-play session
+      description: >-
+        Serves the original media file of a session in mode direct_play with HTTP range
+        support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients
+        load streamUrl as it is and never build it. Content-Type follows the direct-play
+        container (for example video/mp4 or video/webm). Sessions in another mode answer
+        404 "not_found".
+      tags:
+        - stream
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Range"
+      responses:
+        "200":
+          description: The whole file.
+          content:
+            video/*:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+        "206":
+          description: The requested byte range of the file.
+          content:
+            video/*:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+        "416":
+          description: The requested range lies outside the file.
+        default:
+          $ref: "#/components/responses/Problem"
+    head:
+      operationId: headPlaybackFile
+      summary: Describe the original file of a direct-play session
+      description: >-
+        Like getPlaybackFile without a body, so players can read the size and the range
+        support. The URL is unauthenticated and opaque.
+      tags:
+        - stream
+      security: []
+      responses:
+        "200":
+          description: The headers of the whole file.
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/playback/sessions/{sessionId}/hls/{fileName}:
+    parameters:
+      - $ref: "#/components/parameters/SessionId"
+      - name: fileName
+        in: path
+        required: true
+        description: >-
+          A file of the session's HLS output: the playlist index.m3u8, the fMP4 init
+          segment init.mp4 or a media segment seg-NNNNN.m4s. Any other name answers 404.
+        schema:
+          type: string
+          pattern: "^(index\\.m3u8|init\\.mp4|seg-[0-9]{5}\\.m4s)$"
+        example: index.m3u8
+    get:
+      operationId: getPlaybackHlsFile
+      summary: Download a file of an HLS session
+      description: >-
+        Serves the playlist and segments of a session in mode remux or transcode. The URL is
+        unauthenticated and opaque: clients load streamUrl and follow the relative
+        URIs inside the playlist. A playlist request waits up to 20 seconds for the first
+        segment, then answers 503 "stream_not_ready" with Retry-After. The playlist is sent
+        with Cache-Control no-store, init and media segments with private, max-age=3600.
+      tags:
+        - stream
+      security: []
+      responses:
+        "200":
+          description: The requested playlist or segment.
+          content:
+            application/vnd.apple.mpegurl:
+              schema:
+                type: string
+                description: HLS playlist (EVENT type) with relative segment URIs.
+            video/mp4:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+            video/iso.segment:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+        "503":
+          description: The first segment is not ready yet ("stream_not_ready").
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
+  parameters:
+    LibraryId:
+      name: libraryId
+      in: path
+      required: true
+      description: ID of the library.
+      schema:
+        type: string
+        format: uuid
+      example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      description: ID of the item.
+      schema:
+        type: string
+        format: uuid
+      example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: ID of the playback session (PlaybackSession.id).
+      schema:
+        type: string
+        format: uuid
+      example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+    Range:
+      name: Range
+      in: header
+      required: false
+      description: Byte range (RFC 9110), for example "bytes=0-1023".
+      schema:
+        type: string
+  headers:
+    RetryAfter:
+      description: Seconds after which the client may retry the request.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+      example: 5
   responses:
     Problem:
       description: The request failed; the body explains why.
@@ -154,6 +519,845 @@ components:
             Major version of the HTTP API this server speaks. It changes only on breaking
             changes.
           example: "1"
+    LibraryKind:
+      type: string
+      description: >-
+        What a library contains. Milestone 2 lists the items of every kind flat. Clients must
+        tolerate values added in later versions.
+      enum:
+        - movies
+        - shows
+      example: movies
+    LibraryList:
+      type: object
+      description: The configured libraries.
+      required:
+        - libraries
+      properties:
+        libraries:
+          type: array
+          description: Every configured library, ordered by name.
+          items:
+            $ref: "#/components/schemas/Library"
+    Library:
+      type: object
+      description: A folder of media files defined in the server configuration.
+      required:
+        - id
+        - name
+        - kind
+        - available
+        - itemCount
+        - scan
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable ID of the library while its folder stays configured.
+          example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        name:
+          type: string
+          description: Display name from the configuration.
+          example: Movies
+        kind:
+          $ref: "#/components/schemas/LibraryKind"
+        available:
+          type: boolean
+          description: >-
+            Whether the library folder is reachable now. False for example while a network
+            share is not mounted; its items stay listed but cannot be played.
+          example: true
+        itemCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Number of items in the library.
+          example: 42
+        scan:
+          $ref: "#/components/schemas/ScanStatus"
+    ScanState:
+      type: string
+      description: >-
+        State of the current or last scan of a library: "idle" (no scan runs; the last one,
+        if any, finished), "running" or "failed" (the last scan stopped early, see
+        errorCode). Clients must tolerate values added in later versions.
+      enum:
+        - idle
+        - running
+        - failed
+      example: idle
+    ScanCounts:
+      type: object
+      description: >-
+        File counts of the current or last scan. While a scan runs they grow; all are zero
+        before the first scan.
+      required:
+        - added
+        - updated
+        - removed
+        - unchanged
+        - failed
+        - skipped
+      properties:
+        added:
+          type: integer
+          format: int64
+          minimum: 0
+          description: New video files that were probed and added.
+          example: 12
+        updated:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Changed video files that were probed again.
+          example: 1
+        removed:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Files that disappeared and were removed.
+          example: 0
+        unchanged:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Files whose size and modification time did not change.
+          example: 29
+        failed:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Files that could not be probed; they are listed as unavailable.
+          example: 0
+        skipped:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Files with a video extension but without a video stream.
+          example: 0
+    ScanStatus:
+      type: object
+      description: Progress and result of the current or last scan of a library.
+      required:
+        - state
+        - counts
+      properties:
+        state:
+          $ref: "#/components/schemas/ScanState"
+        startedAt:
+          type: string
+          format: date-time
+          description: Start of the current or last scan (UTC); omitted before the first scan.
+          example: "2026-10-30T18:04:05Z"
+        finishedAt:
+          type: string
+          format: date-time
+          description: End of the last scan (UTC); omitted before the first scan finished.
+          example: "2026-10-30T18:04:31Z"
+        counts:
+          $ref: "#/components/schemas/ScanCounts"
+        errorCode:
+          type: string
+          description: >-
+            Machine-readable reason a scan failed, for example "root_unavailable" (the
+            library folder is missing or unreadable); omitted unless state is "failed".
+            Clients translate it and show a generic text for unknown codes.
+          example: root_unavailable
+    HdrFormat:
+      type: string
+      description: >-
+        High dynamic range format of a video stream; absent for SDR video. Clients must
+        tolerate values added in later versions (for example Dolby Vision).
+      enum:
+        - hdr10
+        - hlg
+      example: hdr10
+    MediaSummary:
+      type: object
+      description: >-
+        Technical summary of an item's primary file for list views ("MKV · H.264 · AAC").
+        Codec and container identifiers follow ADR 0023.
+      required:
+        - available
+      properties:
+        available:
+          type: boolean
+          description: >-
+            Whether the file was probed successfully and can be played. False when probing
+            failed; the item is listed but cannot be played.
+          example: true
+        container:
+          type: string
+          description: Container short name, for example "mkv"; omitted when unknown.
+          example: mkv
+        durationSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: Duration in seconds with millisecond precision; omitted when unknown.
+          example: 5423.042
+        videoCodec:
+          type: string
+          description: Codec of the primary video stream (ffprobe codec_name).
+          example: h264
+        audioCodec:
+          type: string
+          description: Codec of the default audio stream; omitted for files without audio.
+          example: aac
+        width:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Width of the primary video stream in pixels.
+          example: 1920
+        height:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Height of the primary video stream in pixels.
+          example: 1080
+        bitDepth:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Bit depth of the primary video stream.
+          example: 8
+        hdr:
+          $ref: "#/components/schemas/HdrFormat"
+    ItemSummary:
+      type: object
+      description: An item in a library listing.
+      required:
+        - id
+        - libraryId
+        - title
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the item.
+          example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+        libraryId:
+          type: string
+          format: uuid
+          description: ID of the library that contains the item.
+          example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        title:
+          type: string
+          description: Display title; in milestone 2 derived from the file name.
+          example: Big Buck Bunny
+        media:
+          $ref: "#/components/schemas/MediaSummary"
+    ItemPage:
+      type: object
+      description: One page of a library's items.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: The items of this page, ordered by sort title.
+          items:
+            $ref: "#/components/schemas/ItemSummary"
+        nextCursor:
+          type: string
+          maxLength: 512
+          description: >-
+            Opaque cursor for the next page; omitted on the last page. Pass it unchanged as
+            the cursor query parameter.
+          example: eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
+    ItemDetail:
+      type: object
+      description: An item with its media files and their technical streams.
+      required:
+        - id
+        - libraryId
+        - title
+        - files
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the item.
+          example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+        libraryId:
+          type: string
+          format: uuid
+          description: ID of the library that contains the item.
+          example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        title:
+          type: string
+          description: Display title; in milestone 2 derived from the file name.
+          example: Big Buck Bunny
+        files:
+          type: array
+          description: >-
+            Media files of the item; the first one is the primary file. Milestone 2 has
+            exactly one file per item.
+          items:
+            $ref: "#/components/schemas/MediaFile"
+    MediaFile:
+      type: object
+      description: >-
+        One media file and what probing found in it. The API never exposes file system
+        paths; files are addressed by ID only.
+      required:
+        - id
+        - fileName
+        - sizeBytes
+        - modifiedAt
+        - available
+        - streams
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the file; PlaybackRequest.fileId refers to it.
+          example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+        fileName:
+          type: string
+          description: Name of the file without any directory, for example "movie.mkv".
+          example: Big.Buck.Bunny.mkv
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: File size in bytes.
+          example: 276134947
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Last modification time of the file (UTC).
+          example: "2026-10-01T09:30:00Z"
+        available:
+          type: boolean
+          description: Whether the file was probed successfully and can be played.
+          example: true
+        errorCode:
+          type: string
+          description: >-
+            Machine-readable reason the file cannot be played, for example "probe_failed";
+            omitted when available. Clients show a generic text for unknown codes.
+          example: probe_failed
+        container:
+          type: string
+          description: Container short name (ADR 0023), for example "mkv"; omitted when unknown.
+          example: mkv
+        durationSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: Duration in seconds with millisecond precision; omitted when unknown.
+          example: 5423.042
+        bitRate:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Overall bit rate in bits per second; omitted when unknown.
+          example: 4073000
+        streams:
+          type: array
+          description: Streams in container order; empty when probing failed.
+          items:
+            $ref: "#/components/schemas/MediaStream"
+    MediaStreamKind:
+      type: string
+      description: >-
+        Kind of a stream inside a media file. Clients must tolerate values added in later
+        versions.
+      enum:
+        - video
+        - audio
+        - subtitle
+        - other
+      example: video
+    MediaStream:
+      type: object
+      description: >-
+        One stream of a media file as ffprobe reports it. Fields that do not apply to the
+        stream's kind, or that ffprobe did not report, are omitted.
+      required:
+        - index
+        - kind
+        - default
+        - forced
+        - attachedPicture
+      properties:
+        index:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Index of the stream in the container; PlaybackRequest.audioStreamIndex refers to it.
+          example: 1
+        kind:
+          $ref: "#/components/schemas/MediaStreamKind"
+        codec:
+          type: string
+          description: ffprobe codec_name, for example "h264", "hevc", "aac" or "subrip".
+          example: h264
+        profile:
+          type: string
+          description: Codec profile as ffprobe names it, for example "High" or "Main 10".
+          example: High
+        level:
+          type: integer
+          format: int32
+          description: Codec level as ffprobe reports it, for example 41 for H.264 level 4.1.
+          example: 41
+        bitDepth:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Bits per sample of a video stream.
+          example: 8
+        width:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Width of a video stream in pixels.
+          example: 1920
+        height:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Height of a video stream in pixels.
+          example: 1080
+        frameRate:
+          type: number
+          format: double
+          minimum: 0
+          description: Frames per second of a video stream.
+          example: 23.976
+        hdr:
+          $ref: "#/components/schemas/HdrFormat"
+        channels:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of channels of an audio stream.
+          example: 6
+        channelLayout:
+          type: string
+          description: Channel layout of an audio stream, for example "5.1(side)".
+          example: 5.1(side)
+        sampleRate:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Sample rate of an audio stream in Hz.
+          example: 48000
+        language:
+          type: string
+          description: Language tag of the stream as stored in the file, usually ISO 639-2.
+          example: eng
+        title:
+          type: string
+          description: Title of the stream as stored in the file.
+          example: Director's commentary
+        default:
+          type: boolean
+          description: Whether the stream carries the default disposition.
+          example: true
+        forced:
+          type: boolean
+          description: Whether the stream carries the forced disposition.
+          example: false
+        attachedPicture:
+          type: boolean
+          description: Whether the stream is cover art (attached picture), not a video track.
+          example: false
+        bitRate:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Bit rate of the stream in bits per second.
+          example: 3500000
+    MediaIdentifier:
+      type: string
+      description: >-
+        Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4")
+        or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
+      pattern: "^[a-z0-9][a-z0-9_.-]{0,31}$"
+      maxLength: 32
+      example: h264
+    DirectPlayProfile:
+      type: object
+      description: A container the client plays as a progressive file, with the codecs it plays inside it.
+      required:
+        - container
+        - videoCodecs
+        - audioCodecs
+      properties:
+        container:
+          $ref: "#/components/schemas/MediaIdentifier"
+        videoCodecs:
+          type: array
+          description: Video codecs the client plays in this container.
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/MediaIdentifier"
+          example: [h264, av1, vp9]
+        audioCodecs:
+          type: array
+          description: Audio codecs the client plays in this container.
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/MediaIdentifier"
+          example: [aac, mp3, opus, flac]
+    HlsDelivery:
+      type: string
+      description: >-
+        How the client plays HLS with fMP4 segments: "mse" (a script player over Media
+        Source Extensions, for example hls.js), "native" (the media element plays HLS
+        itself) or "none" (no HLS; only direct play is possible). Clients must tolerate
+        values added in later versions.
+      enum:
+        - mse
+        - native
+        - none
+      example: mse
+    HlsProfile:
+      type: object
+      description: Codecs the client plays inside HLS with fMP4 segments.
+      required:
+        - delivery
+        - videoCodecs
+        - audioCodecs
+      properties:
+        delivery:
+          $ref: "#/components/schemas/HlsDelivery"
+        videoCodecs:
+          type: array
+          description: Video codecs the client plays inside HLS.
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/MediaIdentifier"
+          example: [h264, av1, vp9]
+        audioCodecs:
+          type: array
+          description: Audio codecs the client plays inside HLS.
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/MediaIdentifier"
+          example: [aac, mp3, opus, flac]
+    CodecLimit:
+      type: object
+      description: >-
+        Extra limits of the client for one codec; a codec without an entry has none.
+      required:
+        - codec
+      properties:
+        codec:
+          $ref: "#/components/schemas/MediaIdentifier"
+        maxBitDepth:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 16
+          description: Highest bit depth the client decodes for this codec; omitted when unlimited.
+          example: 8
+        profiles:
+          type: array
+          description: >-
+            Codec profiles the client decodes, as ffprobe names them; omitted when every
+            profile plays.
+          maxItems: 16
+          items:
+            type: string
+            description: Profile name as ffprobe reports it, for example "Main".
+            maxLength: 64
+          example: [Constrained Baseline, Baseline, Main, High]
+    ClientProfile:
+      type: object
+      description: >-
+        What a client plays (ADR 0023). Browsers fill it from canPlayType,
+        MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
+      required:
+        - name
+        - directPlay
+        - hls
+      properties:
+        name:
+          type: string
+          description: Free text naming the client, for logs and the stream-info overlay.
+          maxLength: 64
+          example: chromium-desktop
+        directPlay:
+          type: array
+          description: Containers the client plays as a progressive file.
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/DirectPlayProfile"
+        hls:
+          $ref: "#/components/schemas/HlsProfile"
+        codecLimits:
+          type: array
+          description: Per-codec limits; omitted or empty when no codec has extra limits.
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/CodecLimit"
+    PlaybackRequest:
+      type: object
+      description: Asks the server to play one media file for a client.
+      required:
+        - fileId
+        - profile
+      properties:
+        fileId:
+          type: string
+          format: uuid
+          description: ID of the media file (MediaFile.id).
+          example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+        profile:
+          $ref: "#/components/schemas/ClientProfile"
+        startPositionSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: >-
+            Position to start at, in seconds; omitted or 0 starts at the beginning. A
+            position at or beyond the duration of the file answers 400 "invalid".
+          example: 600
+        audioStreamIndex:
+          type: integer
+          format: int32
+          minimum: 0
+          description: >-
+            Index of the audio stream to play (MediaStream.index); omitted selects the
+            default audio stream.
+          example: 1
+        replacesSessionId:
+          type: string
+          format: uuid
+          description: >-
+            Session this one replaces, for example after a seek outside the produced range.
+            It is stopped before the session limit is checked; an unknown ID is ignored.
+          example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+    PlaybackMode:
+      type: string
+      description: >-
+        How the file is played, from cheapest to most expensive: "direct_play" (the original
+        file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least
+        one stream re-encoded). Clients must tolerate values added in later versions.
+      enum:
+        - direct_play
+        - remux
+        - transcode
+      example: remux
+    PlaybackDelivery:
+      type: string
+      description: >-
+        How the client loads streamUrl: "file" (a progressive file with range support) or
+        "hls" (an HLS playlist). Clients must tolerate values added in later versions.
+      enum:
+        - file
+        - hls
+      example: hls
+    PlaybackSessionState:
+      type: string
+      description: >-
+        Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet),
+        "ready" (the stream can be loaded), "ended" (production finished or the session was
+        stopped) or "failed" (see failureCode). Direct-play sessions start as "ready".
+        Clients must tolerate values added in later versions.
+      enum:
+        - starting
+        - ready
+        - ended
+        - failed
+      example: ready
+    StreamAction:
+      type: string
+      description: >-
+        What happens to one source stream: "copy" (passed through unchanged) or "transcode"
+        (re-encoded). Clients must tolerate values added in later versions.
+      enum:
+        - copy
+        - transcode
+      example: copy
+    StreamDecision:
+      type: object
+      description: What the session does with one selected source stream.
+      required:
+        - kind
+        - sourceIndex
+        - action
+        - sourceCodec
+        - targetCodec
+      properties:
+        kind:
+          $ref: "#/components/schemas/MediaStreamKind"
+        sourceIndex:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Index of the source stream (MediaStream.index).
+          example: 0
+        action:
+          $ref: "#/components/schemas/StreamAction"
+        sourceCodec:
+          type: string
+          description: Codec of the source stream (ffprobe codec_name).
+          example: hevc
+        targetCodec:
+          type: string
+          description: Codec the client receives; equals sourceCodec when copied.
+          example: h264
+        targetWidth:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Width of a video stream the client receives, in pixels.
+          example: 1920
+        targetHeight:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Height of a video stream the client receives, in pixels.
+          example: 1080
+        targetChannels:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Channels of an audio stream the client receives.
+          example: 2
+        encoder:
+          type: string
+          description: FFmpeg encoder of a transcoded stream, for example "libx264"; omitted when copied.
+          example: libx264
+    PlaybackReasonScope:
+      type: string
+      description: >-
+        Part of the file a reason or warning concerns. Clients must tolerate values added in
+        later versions.
+      enum:
+        - container
+        - video
+        - audio
+        - subtitle
+      example: audio
+    PlaybackReason:
+      type: object
+      description: >-
+        A machine-readable reason why a cheaper mode was not possible, or a warning about a
+        degraded result (ADR 0023). Clients translate the code and show a generic text for
+        unknown codes.
+      required:
+        - code
+        - scope
+      properties:
+        code:
+          type: string
+          description: >-
+            Reasons: "container_not_supported", "video_codec_not_supported",
+            "video_profile_not_supported", "video_bit_depth_not_supported",
+            "audio_codec_not_supported", "audio_track_not_default". Warnings:
+            "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes
+            may be added within API v1.
+          example: audio_codec_not_supported
+        scope:
+          $ref: "#/components/schemas/PlaybackReasonScope"
+    PlaybackSession:
+      type: object
+      description: >-
+        A running or finished playback of one media file for one client, with the decision
+        the server made and the URL to load.
+      required:
+        - id
+        - fileId
+        - state
+        - mode
+        - delivery
+        - streamUrl
+        - startPositionSeconds
+        - sourceContainer
+        - targetContainer
+        - streams
+        - reasons
+        - warnings
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the session.
+          example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+        fileId:
+          type: string
+          format: uuid
+          description: ID of the media file being played.
+          example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+        state:
+          $ref: "#/components/schemas/PlaybackSessionState"
+        failureCode:
+          type: string
+          description: >-
+            Machine-readable reason a session failed, for example "transcode_failed";
+            omitted unless state is "failed". Clients show a generic text for unknown codes.
+          example: transcode_failed
+        mode:
+          $ref: "#/components/schemas/PlaybackMode"
+        delivery:
+          $ref: "#/components/schemas/PlaybackDelivery"
+        streamUrl:
+          type: string
+          format: uri-reference
+          description: >-
+            URI reference the client loads, as a file (delivery "file") or as an HLS
+            playlist (delivery "hls"). Resolve it per RFC 3986 section 5 against the URL of
+            the request that returned it. Clients must treat it as opaque: never parse,
+            build or modify it, and never take IDs or other values out of it, because its
+            shape may change (for example signed, time-limited URLs once accounts exist).
+          example: /api/v1/playback/sessions/5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a/hls/index.m3u8
+        startPositionSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: >-
+            Position in the file where the stream actually starts, in seconds. When video
+            is copied it is the keyframe at or before the requested position. The player
+            shows startPositionSeconds plus the media element's current time.
+          example: 598.5
+        durationSeconds:
+          type: number
+          format: double
+          minimum: 0
+          description: Probed duration of the whole file in seconds; omitted when unknown.
+          example: 5423.042
+        sourceContainer:
+          type: string
+          description: Container short name of the source file, for example "mkv".
+          example: mkv
+        targetContainer:
+          type: string
+          description: >-
+            Container the client receives: the source container for direct play, "mp4"
+            (fMP4 segments) for HLS.
+          example: mp4
+        sourceBitRate:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Overall bit rate of the source file in bits per second; omitted when unknown.
+          example: 4073000
+        streams:
+          type: array
+          description: One decision per selected source stream (video first, then audio).
+          items:
+            $ref: "#/components/schemas/StreamDecision"
+        reasons:
+          type: array
+          description: Why a cheaper mode was not possible; empty for direct play.
+          items:
+            $ref: "#/components/schemas/PlaybackReason"
+        warnings:
+          type: array
+          description: Degradations of the result, for example a downscaled video.
+          items:
+            $ref: "#/components/schemas/PlaybackReason"
+    MediaBytes:
+      type: string
+      format: binary
+      description: Raw bytes of a media file or segment.
     Problem:
       type: object
       description: >-
@@ -187,6 +1391,17 @@ components:
         code:
           type: string
           description: >-
-            Stable machine-readable error code, for example "not_found". Clients map it to
-            a translated message.
+            Stable machine-readable error code that clients map to a translated message.
+            Published codes: "bad_request" (400, the request could not be parsed),
+            "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404,
+            also for unknown routes), "method_not_allowed" (405), "conflict" (409),
+            "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422,
+            the server cannot handle this input, for example an unprobed file),
+            "no_compatible_format" (422, the client plays no format the server can
+            produce), "transcode_unavailable" (422, transcoding is needed but the server
+            cannot encode), "internal_error" (500), "unavailable" (503, for example while
+            the server shuts down), "session_limit_reached" (503, too many playback
+            sessions; see Retry-After) and "stream_not_ready" (503, the stream has no
+            segment yet; see Retry-After). New codes may be added; clients show a generic
+            message for unknown codes.
           example: not_found

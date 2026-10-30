@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -62,9 +63,21 @@ func newTestLogger() (*slog.Logger, *syncBuffer) {
 func newTestHandler(t *testing.T, service restapi.SystemService) (http.Handler, *syncBuffer) {
 	t.Helper()
 
-	logger, logs := newTestLogger()
+	return newTestHandlerWithOptions(t, restapi.Options{System: service})
+}
 
-	handler, err := restapi.NewHandler(service, logger)
+// newTestHandlerWithOptions fills in the logger and, if missing, a healthy system service.
+func newTestHandlerWithOptions(t *testing.T, options restapi.Options) (http.Handler, *syncBuffer) {
+	t.Helper()
+
+	logger, logs := newTestLogger()
+	options.Logger = logger
+
+	if options.System == nil {
+		options.System = fakeSystemService{health: healthyHealth()}
+	}
+
+	handler, err := restapi.NewHandler(options)
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
@@ -93,7 +106,12 @@ type response struct {
 func serve(t *testing.T, handler http.Handler, method, target string) response {
 	t.Helper()
 
-	request := httptest.NewRequestWithContext(t.Context(), method, target, nil)
+	return serveRequest(t, handler, httptest.NewRequestWithContext(t.Context(), method, target, nil))
+}
+
+func serveRequest(t *testing.T, handler http.Handler, request *http.Request) response {
+	t.Helper()
+
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 
@@ -149,4 +167,25 @@ func assertProblem(t *testing.T, got response, wantStatus int, wantCode string) 
 
 func healthyHealth() system.Health {
 	return system.NewHealth(system.PassedCheck(system.HealthCheckDatabase))
+}
+
+// assertLogged checks that logs contain message.
+func assertLogged(t *testing.T, logs, message string) {
+	t.Helper()
+
+	if !strings.Contains(logs, message) {
+		t.Errorf("log %q does not contain %q", logs, message)
+	}
+}
+
+// assertNoInternalText checks that a problem body repeats neither the client's input nor
+// the parser's error text, which may quote internals.
+func assertNoInternalText(t *testing.T, got response, input string) {
+	t.Helper()
+
+	for _, leak := range []string{input, "json", "invalid character", "uuid", "unmarshal", "parameter"} {
+		if strings.Contains(string(got.body), leak) {
+			t.Errorf("body %s contains %q", got.body, leak)
+		}
+	}
 }

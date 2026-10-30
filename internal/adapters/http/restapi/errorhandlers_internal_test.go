@@ -20,10 +20,10 @@ import (
 // internalText stands for error text that must never reach a client.
 const internalText = `sqlite: open C:\ProgramData\mivo\mivo.db`
 
-// The generated routes have no parameters or bodies yet, so no request can reach the
-// generated error handlers today. These tests call the handlers through the option structs
-// Handler passes to the generated constructors, so the first operation with parameters
-// cannot fall back to the generated text/plain defaults unnoticed.
+// These tests call the error handlers through the option structs Handler passes to the
+// generated constructors, so every entry point is covered with exactly the error types the
+// generated code produces, and none can fall back to the generated text/plain defaults
+// unnoticed. binding_test.go and bodylimit_test.go cover the same paths through requests.
 
 func newInternalTestAPI(t *testing.T) (*API, *bytes.Buffer) {
 	t.Helper()
@@ -31,7 +31,7 @@ func newInternalTestAPI(t *testing.T) (*API, *bytes.Buffer) {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	api, err := NewAPI(nilSystemService{}, logger)
+	api, err := NewAPI(Options{System: nilSystemService{}, Logger: logger})
 	if err != nil {
 		t.Fatalf("NewAPI: %v", err)
 	}
@@ -82,17 +82,20 @@ func TestMalformedRequestHandlersWriteProblemsWithoutErrorText(t *testing.T) {
 func TestResponseErrorHandlerMapsErrorsWithoutErrorText(t *testing.T) {
 	t.Parallel()
 
+	// wantLevel is the only level the cause is logged at; empty means debug.
 	tests := []struct {
 		name       string
 		err        error
 		wantStatus int
 		wantCode   string
-		wantLogged bool
+		wantLevel  string
 	}{
-		{name: "unexpected response type", err: fmt.Errorf("unexpected response type: %s", internalText), wantStatus: 500, wantCode: CodeInternal, wantLogged: true},
-		{name: "encoding failure", err: &json.UnsupportedValueError{Str: internalText}, wantStatus: 500, wantCode: CodeInternal, wantLogged: true},
+		{name: "unexpected response type", err: fmt.Errorf("unexpected response type: %s", internalText), wantStatus: 500, wantCode: CodeInternal, wantLevel: "ERROR"},
+		{name: "encoding failure", err: &json.UnsupportedValueError{Str: internalText}, wantStatus: 500, wantCode: CodeInternal, wantLevel: "ERROR"},
 		{name: "domain not found", err: fmt.Errorf("%s: %w", internalText, domain.ErrNotFound), wantStatus: 404, wantCode: CodeNotFound},
 		{name: "domain invalid", err: fmt.Errorf("%s: %w", internalText, domain.ErrInvalid), wantStatus: 400, wantCode: CodeInvalid},
+		{name: "domain unsupported", err: fmt.Errorf("%s: %w", internalText, domain.ErrUnsupported), wantStatus: 422, wantCode: CodeUnsupported},
+		{name: "domain unavailable", err: fmt.Errorf("%s: %w", internalText, domain.ErrUnavailable), wantStatus: 503, wantCode: CodeUnavailable, wantLevel: "WARN"},
 	}
 
 	for _, test := range tests {
@@ -105,12 +108,33 @@ func TestResponseErrorHandlerMapsErrorsWithoutErrorText(t *testing.T) {
 
 			assertInternalProblem(t, recorder, test.wantStatus, test.wantCode)
 
-			logged := strings.Contains(logs.String(), "level=ERROR") && strings.Contains(logs.String(), "mivo.db")
-			if logged != test.wantLogged {
-				t.Errorf("error logged = %v, want %v; log %q", logged, test.wantLogged, logs.String())
+			wantLevel := test.wantLevel
+			if wantLevel == "" {
+				// Client mistakes are traced at debug level only.
+				wantLevel = "DEBUG"
+			}
+
+			for _, level := range []string{"ERROR", "WARN", "DEBUG"} {
+				logged := strings.Contains(logs.String(), "level="+level) && strings.Contains(logs.String(), "mivo.db")
+				if logged != (level == wantLevel) {
+					t.Errorf("cause logged at %s = %v, want level %s; log %q", level, logged, wantLevel, logs.String())
+				}
 			}
 		})
 	}
+}
+
+// TestRequestErrorHandlerAnswersCutOffBodies covers the body limit: the generated code
+// wraps the reader's *http.MaxBytesError in its decode error.
+func TestRequestErrorHandlerAnswersCutOffBodies(t *testing.T) {
+	t.Parallel()
+
+	api, _ := newInternalTestAPI(t)
+	recorder := httptest.NewRecorder()
+	cutOff := fmt.Errorf("can't decode JSON body: %w", &http.MaxBytesError{Limit: MaxRequestBodyBytes})
+	api.strictOptions().RequestErrorHandlerFunc(recorder, requestWithID(t, "req-4"), cutOff)
+
+	assertInternalProblem(t, recorder, http.StatusRequestEntityTooLarge, CodePayloadTooLarge)
 }
 
 func requestWithID(t *testing.T, id string) *http.Request {

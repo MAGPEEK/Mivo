@@ -50,7 +50,7 @@ func newAPIHandler(t *testing.T) http.Handler {
 		ProductName: "Mivo", Version: "1.0.0", ServerID: serverID, APIVersion: system.APIVersion,
 	}}
 
-	handler, err := restapi.NewHandler(service, discardLogger())
+	handler, err := restapi.NewHandler(restapi.Options{System: service, Logger: discardLogger()})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler: %v", err)
 	}

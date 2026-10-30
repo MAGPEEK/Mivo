@@ -15,14 +15,24 @@ compatibility:
   # added later never collide in the shared package namespace.
   always-prefix-enum-values: true
 output-options:
+  # The stream routes (tag "stream", ADR 0024) serve files with Range support and
+  # long-lived writes, which the strict server cannot express. They are plain net/http
+  # handlers in internal/adapters/http/stream, mounted on the REST API mux through
+  # restapi.Options.Mounts. api/spec_test.go checks that this list equals the stream tag.
+  exclude-operation-ids:
+    - getPlaybackFile
+    - headPlaybackFile
+    - getPlaybackHlsFile
   type-mapping:
     string:
       formats:
-        # The standard library uuid package (as in adapters/uuidgen) instead of the
-        # generator's runtime types, which would pull in github.com/google/uuid.
-        # Only JSON bodies use it so far (via encoding.TextMarshaler). When the first uuid
-        # path or query parameter appears, add an HTTP adapter test that binds it, because
-        # parameter binding goes through the oapi-codegen runtime, not encoding/json.
+        # Every uuid field and parameter uses the standard library uuid package, like
+        # adapters/uuidgen, instead of the generator's openapi_types.UUID, so the code has
+        # one UUID type. (github.com/google/uuid is still linked in transitively through
+        # github.com/oapi-codegen/runtime; the mapping is about the types, not the module.)
+        # JSON bodies use it through encoding.TextMarshaler. Path parameters are bound by
+        # the oapi-codegen runtime, not encoding/json; the restapi test
+        # TestUUIDPathParameterBinding proves that the runtime binds this type.
         uuid:
           type: uuid.UUID
           import: uuid
