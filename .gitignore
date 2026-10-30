@@ -12,6 +12,7 @@ coverage.html
 # Node / web
 node_modules/
 web/**/dist/
+/internal/adapters/http/webui/dist/
 web/**/coverage/
 web/**/playwright-report/
 web/**/test-results/

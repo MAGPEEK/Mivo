@@ -11,3 +11,5 @@ ignore ./web
 
 // Development tools live in tools/go.mod so their dependencies stay out of this module
 // graph; run them with `go tool -modfile=tools/go.mod <tool>` (ADR 0019).
+
+require go.yaml.in/yaml/v3 v3.0.5
