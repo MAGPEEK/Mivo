@@ -59,6 +59,8 @@ importers:
 
   packages/player-core: {}
 
+  packages/ui-tokens: {}
+
 packages:
 
   '@babel/code-frame@7.29.7':

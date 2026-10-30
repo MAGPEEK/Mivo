@@ -49,3 +49,9 @@ embed directory (ADR 0020), so the following tasks only add features.
 - `web/eslint.config.js`: left-anchor the hex-colour check so `"#add"` / `"Episode #123"` are not flagged.
 - `web/vitest.config.ts`: exclude `**/*.gen.ts` and the app entry file from coverage.
 - Keep ESLint `settings.react.version` in sync with the installed `react` dependency.
+
+## Review carry-over from M1-12
+- `web/.dependency-cruiser.cjs`: add `packages/ui-tokens` to the framework-free (no React) rule.
+- ESLint guard: the literal `Mivo` (case-sensitive, string and template literals) is an error everywhere except `packages/ui-tokens/src/brand.ts` (ADR 0002). Prove it with a temporary violation.
+- `ui-tokens` tests: add `onAccent` on `accentHover`, and status/accent colours on `surfaceRaised`.
+- `theme.css`: wrap the overlong header comment; state that only colours are drift-checked both ways (or check namespace counts); note that the colour reset also removes `white`/`black`.

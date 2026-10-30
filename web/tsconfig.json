@@ -1,5 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
-  "references": [{ "path": "./tsconfig.node.json" }, { "path": "./packages/player-core" }]
+  "references": [
+    { "path": "./tsconfig.node.json" },
+    { "path": "./packages/player-core" },
+    { "path": "./packages/ui-tokens" },
+    { "path": "./packages/ui-tokens/test" }
+  ]
 }
