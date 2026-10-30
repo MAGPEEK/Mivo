@@ -1,0 +1,192 @@
+# API contract of the server (ADR 0017). This file is the single source of truth: the Go
+# server stubs (internal/adapters/http/apigen) and the TypeScript client
+# (web/packages/api-client) are generated from it. Within /api/v1 only additive changes
+# are allowed; breaking changes need a new API version.
+openapi: 3.0.3
+info:
+  # Product name is a working title (ADR 0002); rename checklist item.
+  title: Mivo API
+  # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
+  # path prefix; minor and patch versions track additive changes and fixes.
+  version: "1.0.0"
+  description: >-
+    REST API of the media server. Paths carry the full version prefix. JSON fields use
+    camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
+    major version changes are additive only: clients must ignore unknown fields and
+    tolerate new enum values.
+  license:
+    name: GPL-3.0-or-later
+    url: https://www.gnu.org/licenses/gpl-3.0.html
+servers:
+  - url: /
+tags:
+  - name: system
+    description: Server health and identity.
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Report whether the server can serve requests
+      description: >-
+        Runs the health checks (for example the database). Container orchestrators and
+        clients use it as a readiness probe. The endpoint is unauthenticated. The overall
+        status is "unavailable" if and only if the HTTP status is 503.
+      tags:
+        - system
+      security: []
+      responses:
+        "200":
+          description: The server and every checked component work.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: At least one checked component is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/system/info:
+    get:
+      operationId: getSystemInfo
+      summary: Describe the running server
+      description: >-
+        Returns the product name, version and persistent server identity. Clients compare
+        apiVersion before they use the API. The endpoint is unauthenticated.
+      tags:
+        - system
+      security: []
+      responses:
+        "200":
+          description: Information about the running server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+        default:
+          $ref: "#/components/responses/Problem"
+components:
+  responses:
+    Problem:
+      description: The request failed; the body explains why.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    HealthStatus:
+      type: string
+      description: >-
+        State of the server as a whole or of one health check. Clients must tolerate values
+        added in later versions.
+      enum:
+        - ok
+        - unavailable
+    HealthCheck:
+      type: object
+      description: Result of checking one component.
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+          description: >-
+            Identifies the checked component, for example "database". The set of checks
+            grows over time; clients must tolerate unknown names.
+          example: database
+        status:
+          $ref: "#/components/schemas/HealthStatus"
+        detail:
+          type: string
+          description: >-
+            Explains a failure; omitted for passed checks. Fixed English text from a closed
+            set; never contains raw error output, because the endpoint is unauthenticated.
+            Not for display translation or parsing.
+    HealthResponse:
+      type: object
+      description: Aggregated health of the server.
+      required:
+        - status
+        - checks
+      properties:
+        status:
+          $ref: "#/components/schemas/HealthStatus"
+        checks:
+          type: array
+          description: Individual check results in the order they were run.
+          items:
+            $ref: "#/components/schemas/HealthCheck"
+    SystemInfo:
+      type: object
+      description: Describes the running server.
+      required:
+        - productName
+        - version
+        - serverId
+        - apiVersion
+      properties:
+        productName:
+          type: string
+          description: Configurable product name of the server.
+          example: Media Server
+        version:
+          type: string
+          description: Release version of the server binary.
+          example: 0.1.0
+        commit:
+          type: string
+          description: VCS revision the binary was built from; omitted when unknown.
+        buildTime:
+          type: string
+          format: date-time
+          description: Commit time of the build; omitted when unknown.
+        serverId:
+          type: string
+          format: uuid
+          description: Persistent identity of this installation; stable across restarts.
+        apiVersion:
+          type: string
+          description: >-
+            Major version of the HTTP API this server speaks. It changes only on breaking
+            changes.
+          example: "1"
+    Problem:
+      type: object
+      description: >-
+        Problem details (RFC 9457) with a machine-readable code that clients translate.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: URI reference identifying the problem type; "about:blank" if none.
+        title:
+          type: string
+          description: Short, human-readable English summary of the problem type.
+        status:
+          type: integer
+          format: int32
+          minimum: 100
+          maximum: 599
+          description: HTTP status code of this occurrence.
+        detail:
+          type: string
+          description: Human-readable English explanation of this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference identifying this occurrence of the problem.
+        code:
+          type: string
+          description: >-
+            Stable machine-readable error code, for example "not_found". Clients map it to
+            a translated message.
+          example: not_found

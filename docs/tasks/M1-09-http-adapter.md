@@ -50,3 +50,11 @@ graceful shutdown.
 - Add a test that ties `system.APIVersion` to the `/api/v<version>` prefix in `api/openapi.yaml`.
 - Errors from `Info`/`EnsureIdentity` are server-side failures: map them to 500 even if they wrap
   `ErrConflict`/`ErrNotFound`/`ErrInvalid` (or ensure M1-06b's deferred fix landed first).
+- Generated default error handlers (`RequestErrorHandlerFunc`, `ResponseErrorHandlerFunc`,
+  `ErrorHandlerFunc`) write `err.Error()` as text/plain. Always construct with
+  `NewStrictHandlerWithOptions` / `HandlerWithOptions` and problem+json handlers; test that a
+  malformed request yields `application/problem+json` without internal error text.
+- `domain/system.Info.BuildTime` is a string, the spec uses `date-time`: parse it with an explicit
+  error path (or change the domain type) and test it.
+- `api/spec_test.go`: replace `apiMajorVersion = "1"` with `system.APIVersion` (closes the APIVersion drift item);
+  print the dereferenced security list in the failure message.

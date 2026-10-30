@@ -1,0 +1,30 @@
+# oapi-codegen v2 configuration (ADR 0017). Run `go generate ./...` from the repository
+# root after changing api/openapi.yaml and commit the regenerated apigen.gen.go.
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+package: apigen
+output: apigen.gen.go
+generate:
+  # Server interfaces and routing on net/http (Go 1.22+ ServeMux patterns).
+  std-http-server: true
+  # Typed request and response objects, so handlers cannot return undeclared responses.
+  strict-server: true
+  # Request and response types from components.schemas.
+  models: true
+compatibility:
+  # Prefix enum constants with their type name (HealthStatusOk instead of Ok), so enums
+  # added later never collide in the shared package namespace.
+  always-prefix-enum-values: true
+output-options:
+  type-mapping:
+    string:
+      formats:
+        # The standard library uuid package (as in adapters/uuidgen) instead of the
+        # generator's runtime types, which would pull in github.com/google/uuid.
+        # Only JSON bodies use it so far (via encoding.TextMarshaler). When the first uuid
+        # path or query parameter appears, add an HTTP adapter test that binds it, because
+        # parameter binding goes through the oapi-codegen runtime, not encoding/json.
+        uuid:
+          type: uuid.UUID
+          import: uuid
+  # Go initialisms (ServerID, APIVersion) as in internal/domain instead of ServerId.
+  name-normalizer: ToCamelCaseWithInitialisms
