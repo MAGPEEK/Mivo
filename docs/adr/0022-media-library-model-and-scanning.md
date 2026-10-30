@@ -172,3 +172,47 @@ model above without changing the decision.
   relative links that stay inside the root; absolute links and junctions are skipped and logged
   (OD-8). NAS users with absolute links should use relative links or add the target folder as its
   own library.
+
+## Notes (M2-18)
+
+- Startup sync: the library use case validates every definition and rejects a root configured
+  twice before the catalog is touched (`invalid`, naming the definition's index). Every library
+  the sync removes, with its catalog, is logged at warn level with its id, name, root and item
+  count, so a typo in the configuration or an empty library list leaves a trace.
+- Availability: listing libraries (and the library detail) checks every root at the same time
+  with a default timeout of 1 s; a root that does not answer in time is reported as
+  unavailable, so a hung NAS mount cannot block the library list.
+- A stat on a hung network mount may ignore cancellation. A check therefore runs in its own
+  goroutine, and while one runs for a root, later requests join it instead of starting another:
+  at most one blocked goroutine per root, however often clients poll. Trade-off: as long as a
+  stuck check does not return, its root stays unavailable. No fresh check is started next to
+  it, because on a hung mount it would block as well; a mount that recovers normally lets the
+  stuck call return too, and the next request checks again.
+- Error contract of the catalog reads: `invalid` from the library store or the item reader
+  means only a bad client value (the page cursor). A stored row the domain cannot read is a
+  server fault; the use case reports it without `invalid`, so the API answers 500, not 400.
+
+## Notes (M2-19)
+
+Additions from the scan use case (`internal/app/scan`, M2-19); they refine "Scanning" above.
+
+- The probe limit of two applies to the whole scan service, not to each scan: all scans share
+  one semaphore, so `StartAll` over several libraries on one NAS still runs at most two
+  ffprobe processes.
+- Catalog entries are deleted only after a complete walk. A root that is missing or
+  lost during the walk fails the scan with `root_unavailable` and deletes nothing. A root lost
+  later, while resolving a file, stops the scan but keeps the removals already justified by the
+  completed walk. Catalog entries at or below a path the walker could not read are kept.
+- A file that cannot be resolved (vanished, or a link leaving the root) or probed is stored
+  with `probe_failed` (`probe_timed_out` for a timeout) and no streams, so it is listed as
+  unavailable and a changed file never keeps its old, playable description.
+- Files without a video stream are remembered in memory (path, size, modification time) and
+  counted as skipped without a new probe while they stay unchanged; after a restart they are
+  probed once more.
+- Scan error codes: `root_unavailable` (library folder missing or unreadable),
+  `prober_unavailable` (ffprobe cannot run; no file is marked failed), `catalog_failed`
+  (catalog read or write failed), `scan_canceled` (stopped by server shutdown; nothing is
+  recorded as failed), `scan_failed` (anything else). The finish log line carries the code and
+  a cause without absolute paths.
+- `finishedAt` is empty while a scan runs; counts, error code and times always describe the
+  same scan.
