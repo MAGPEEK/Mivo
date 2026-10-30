@@ -42,3 +42,6 @@ page through a library's items and open one item with its files and streams (ADR
 - (from M2-12) `adapters/fs/libraryfs` has no `RootAvailable(ctx, root) bool` yet. If the
   catalog port needs it, add it to libraryfs in this task (extra Files/areas:
   `internal/adapters/fs/libraryfs/available.go` + test), implemented via `os.OpenRoot` + `Stat(".")`.
+- (orchestrator, wave 3 start) Do NOT touch `internal/adapters/fs/libraryfs/**` – M2-12 is still in
+  review. If the catalog needs `RootAvailable`, declare the port here and leave the libraryfs
+  implementation to M2-32 (wiring); test with a fake.
