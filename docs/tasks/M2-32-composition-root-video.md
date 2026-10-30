@@ -39,3 +39,14 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
 - Convert `config.LibraryConfig` to `library.Definition` here (platform must not import domain).
 - `app` gets values (limits, capabilities, policy height from OD-5) through constructor options,
   never the config struct (ADR 0003).
+
+## Orchestrator note (from M2-04 and M2-05 reviews)
+- Convert each `config.LibraryConfig` with `library.ParseKind` and validate it with
+  `library.Definition.Validate`; wrap failures as `config: libraries[<i>] (<path>): …` so the
+  message names the entry (the config package cannot check domain limits such as the 128-rune
+  name or NUL bytes). Test that every config kind parses.
+- Resolve `tools.ffmpeg` / `tools.ffprobe` once at startup with `exec.LookPath` (bare names) or a
+  stat check (paths): must exist and be a regular file; log the resolved absolute paths. Fail
+  startup with a clear message otherwise.
+- Name `transcodedir.ErrSessionsNotPlainDirectory` in the startup message if the transcode
+  workspace refuses `<transcode>/sessions` (symlink/junction/file).

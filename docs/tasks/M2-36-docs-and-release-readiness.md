@@ -33,3 +33,8 @@ decision (OD-9).
 - The release itself (version tag, image push) is done by `mivo-release` only after PASS +
   APPROVE and the user's explicit approval (OD-9).
 - Keep the product name out of prose where the brand rule applies (ADR 0002 rename checklist).
+
+## Orchestrator note (from M2-06)
+- `docs/development.md` "Test media corpus": `-only` now takes a comma-separated glob list
+  (e.g. `'video-mp4-*,video-webm-vp9-opus'`), and kept files are labelled `kept` in progress and
+  summary. Document both.

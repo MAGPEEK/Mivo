@@ -40,3 +40,11 @@ grid with technical chips, and starts a scan with live status (ADR 0011 design, 
 ## Orchestrator note (from M2-02)
 - The domain stores two probe error codes, `probe_failed` and `probe_timed_out`. Both need en/de
   strings; unknown codes fall back to a generic text.
+
+## Orchestrator note (from M2-07)
+- Feature translation namespaces are registered in `web/apps/web/src/app/i18n.ts` (one line per
+  feature), not in `shared/i18n/resources.ts`; the i18next type augmentation lives in
+  `src/app/i18next.d.ts`. Features only edit their own `locales/{en,de}.json`.
+- Pages receive route params as props (`LibraryPage {libraryId}`, `ItemPage {itemId}`,
+  `PlayerPage {itemId, fileId, startAt}`); `features/player/lib/playerSearch.ts`
+  (`validatePlayerSearch`) already exists.

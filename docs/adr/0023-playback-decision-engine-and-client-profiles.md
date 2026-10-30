@@ -85,7 +85,7 @@ identifiers)
    so an audio-only transcode is visibly cheap.
 - Transcode targets in milestone 2: video **H.264 High, 8-bit 4:2:0** (software `libx264`),
   audio **AAC LC stereo** (OD for multichannel deferred to milestone 4). The output height is
-  capped (pending OD-5, recommended 1080) and only ever scaled down, keeping the aspect ratio.
+  capped at 1080 (OD-5 B, decided 2026-10-30) and only ever scaled down, keeping the aspect ratio.
 - If transcoding is needed but the server lacks the encoder, or the client cannot play the
   target inside HLS, `Decide` fails with `transcode_unavailable` or `no_compatible_format`.
   With `hls.delivery = none` only `direct_play` is possible.

@@ -27,7 +27,7 @@ breaking change. Throttling, bandwidth tiers and hardware encoders arrive in mil
   stopped: FFmpeg is killed and its directory removed. hls.js reloads an unfinished playlist every
   target duration, which keeps a playing or paused session alive. A client that gets 404 for a
   stopped session creates a new one at its current position.
-- **Limits** (pending OD-4; recommended): at most `transcode.max_sessions` concurrent sessions
+- **Limits** (OD-4 A, decided 2026-10-30): at most `transcode.max_sessions` concurrent sessions
   that re-encode a stream, plus a fixed safety cap of 8 sessions running FFmpeg at all (remux
   included). A request beyond a limit fails with 503,
   problem code `session_limit_reached` and `Retry-After`. `replacesSessionId` stops the old

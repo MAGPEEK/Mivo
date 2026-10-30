@@ -55,3 +55,8 @@ the keyframe at or before a position for seeks with stream copy (ADR 0015, ADR 0
   read it).
 - A `media.ParseFrameRate` error for one stream (e.g. `r_frame_rate` "25/0") makes that stream's
   frame rate unknown (zero value) – it must not fail the whole probe. Test it.
+- (from M2-06) MPEG-TS corpus files start at pts ≈ 1.44 s: measure keyframe spacing relative to the
+  first keyframe, not to 0. The manifest has a new optional field `expected.video.track`
+  (dispositions); `track.language` is omitted when empty. Seek clips:
+  `video-mkv-h264-aac-long` (remux path) and `video-ts-mpeg2-mp2-long` (transcode path), 30 s,
+  keyframe every 2 s.

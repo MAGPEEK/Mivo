@@ -41,3 +41,14 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
 - hls.js config: keep defaults except `enableWorker` (keep true) and a bounded
   `maxBufferLength`; note in the REPORT that a future CSP (BACKLOG) needs `worker-src blob:`.
 - Never build stream URLs on the client; use `streamUrl` from the session (ADR 0024).
+
+## Orchestrator note (from M2-07)
+- Feature translation namespaces are registered in `web/apps/web/src/app/i18n.ts` (one line per
+  feature), not in `shared/i18n/resources.ts`; the i18next type augmentation lives in
+  `src/app/i18next.d.ts`. Features only edit their own `locales/{en,de}.json`.
+- Pages receive route params as props (`LibraryPage {libraryId}`, `ItemPage {itemId}`,
+  `PlayerPage {itemId, fileId, startAt}`); `features/player/lib/playerSearch.ts`
+  (`validatePlayerSearch`) already exists.
+- (from M2-07 test) `validatePlayerSearch` accepts any non-negative `t` (also 1e21) and any
+  non-empty `fileId` string (no UUID check, no length cap). Treat both as untrusted: clamp `t` to
+  the item duration and let the API reject unknown file ids; never build paths from them.

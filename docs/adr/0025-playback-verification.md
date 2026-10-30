@@ -46,7 +46,7 @@ bundled Chromium has no proprietary codecs (H.264, AAC, HEVC).
 - **Smoke test against a running server**: `go run ./scripts/playback-smoke` drives the HTTP API
   of a dev server or the Docker image (scan, sessions, downloads, local ffprobe) with the same
   expectations. It is the release gate for the image's FFmpeg version.
-- **E2E** (pending OD-7): Playwright's bundled Chromium checks scan → library → play with an open
+- **E2E** (OD-7 C, decided 2026-10-30): Playwright's bundled Chromium checks scan → library → play with an open
   codec (VP9/Opus direct play) and the stream-info overlay for a remux and a transcode case; a
   second project on a branded browser channel (`msedge` on Windows, `chrome` elsewhere) checks
   that H.264 remux and transcode actually play. It is skipped with a clear message when the

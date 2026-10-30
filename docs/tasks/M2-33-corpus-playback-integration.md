@@ -40,3 +40,8 @@ adapters, and every video file gets the expected mode and produces playable outp
   probing the `.m3u8` directly may need `-allowed_extensions` options that differ between FFmpeg
   7.1 and 9.0 – avoid it.
 - No `cmd` wiring is used; the test builds the graph itself, like `cmd` would.
+- (from M2-06) MPEG-TS corpus files start at pts ≈ 1.44 s: measure keyframe spacing relative to the
+  first keyframe, not to 0. The manifest has a new optional field `expected.video.track`
+  (dispositions); `track.language` is omitted when empty. Seek clips:
+  `video-mkv-h264-aac-long` (remux path) and `video-ts-mpeg2-mp2-long` (transcode path), 30 s,
+  keyframe every 2 s.

@@ -44,3 +44,8 @@ as the milestone-1 keys (ADR 0018, ADR 0022).
 - The YAML list is a new shape for the node walk: keep the explicit key table approach, add a
   small list-of-mappings handler rather than reflection.
 - Do not wire anything in `cmd` here.
+
+## Orchestrator note (2026-10-30)
+- `transcode.max_sessions` is validated as 1–8 instead of 1–16: ADR 0024 caps all FFmpeg
+  sessions at 8, so larger values would have no effect.
+- The Docker preset `MIVO_LIBRARIES=/media` (OD-1) belongs to M2-35, not to this task.

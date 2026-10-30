@@ -15,7 +15,7 @@ Name parsing (movies/shows), watchers, NFO and artwork arrive in milestone 3.
 
 ## Decision
 
-**Library definitions (pending open decision OD-1 in `docs/tasks/M2-00-overview.md`)**
+**Library definitions (OD-1 A, decided by the project owner on 2026-10-30)**
 - In milestone 2, libraries are defined in the configuration, not through the API:
   YAML key `libraries` is a list of `{name, path, kind}`. The environment variable
   `<PREFIX>_LIBRARIES` holds an OS path list (`filepath.SplitList`: `;` on Windows, `:` on
@@ -87,11 +87,11 @@ Name parsing (movies/shows), watchers, NFO and artwork arrive in milestone 3.
 name stays unambiguous: `transcode.max_sessions` → `<PREFIX>_TRANSCODE_MAX_SESSIONS`)
 - `libraries` (list, see above), `tools.ffmpeg` and `tools.ffprobe` (default `ffmpeg` and
   `ffprobe`; a bare name is looked up on `PATH`, anything with a path separator follows the
-  ADR 0018 path rules), `transcode.max_sessions` (ADR 0024, default pending OD-4).
+  ADR 0018 path rules), `transcode.max_sessions` (ADR 0024, default 2 per OD-4, range 1–8).
 
 ## Consequences
 
-- Docker users get a working library by mounting `/media` (if OD-1's Docker default is
+- Docker users get a working library by mounting `/media` (OD-1: the Docker default is
   accepted) without touching the UI.
 - Library management in the UI waits for milestone 7. Until then, changes need a config edit
   and a restart.

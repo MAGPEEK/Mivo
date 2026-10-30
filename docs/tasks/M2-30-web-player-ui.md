@@ -36,3 +36,18 @@ ADR 0011 status colours).
 - No subtitles, audio-track switching or quality menu yet (milestone 4); the audio track selector
   can come later through `audioStreamIndex`.
 - Colours from ui-tokens only.
+
+## Orchestrator note (from M2-07)
+- Feature translation namespaces are registered in `web/apps/web/src/app/i18n.ts` (one line per
+  feature), not in `shared/i18n/resources.ts`; the i18next type augmentation lives in
+  `src/app/i18next.d.ts`. Features only edit their own `locales/{en,de}.json`.
+- Pages receive route params as props (`LibraryPage {libraryId}`, `ItemPage {itemId}`,
+  `PlayerPage {itemId, fileId, startAt}`); `features/player/lib/playerSearch.ts`
+  (`validatePlayerSearch`) already exists.
+- M2-30 may change `PlayerRoute` in `web/apps/web/src/app/router.ts` to pass the whole validated
+  `PlayerSearch` as one prop (and map `t` → `startAt` inside the feature), so later player search
+  params (e.g. audio stream index in M4) no longer need router edits. Also fix the router comment:
+  the root is the only route with a `notFoundComponent`, so every unmatched path ends there.
+- (from M2-07 test) `validatePlayerSearch` accepts any non-negative `t` (also 1e21) and any
+  non-empty `fileId` string (no UUID check, no length cap). Treat both as untrusted: clamp `t` to
+  the item duration and let the API reject unknown file ids; never build paths from them.
