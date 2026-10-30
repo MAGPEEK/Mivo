@@ -27,6 +27,10 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0019](0019-quality-gates.md) | Quality gates and their enforcement | Accepted |
 | [0020](0020-embedded-web-ui.md) | Embedding the web UI into the Go binary | Accepted |
 | [0021](0021-generated-test-media-corpus.md) | Generated test media corpus | Accepted |
+| [0022](0022-media-library-model-and-scanning.md) | Media library model and scanning (milestone 2) | Accepted |
+| [0023](0023-playback-decision-engine-and-client-profiles.md) | Playback decision engine and client capability profiles | Accepted |
+| [0024](0024-streaming-sessions-and-delivery.md) | Streaming sessions and delivery | Accepted |
+| [0025](0025-playback-verification.md) | Playback verification: reference profiles, expected modes, smoke and E2E | Accepted |
 
 ## Template
 

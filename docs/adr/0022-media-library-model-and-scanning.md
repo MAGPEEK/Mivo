@@ -1,0 +1,100 @@
+# 0022 Media library model and scanning (milestone 2)
+
+- Status: Accepted (2026-10-30, confirmed by project owner)
+- Date: 2026-10-30
+- Refines: "Datenmodell (Kern)" in `docs/plan.md`, ADR 0004 (schema conventions), ADR 0018
+  (new configuration keys)
+
+## Context
+
+Milestone 2 is the first slice that touches user files: scan a folder, probe every video
+with ffprobe, list the result in the web UI. The server still has no login (accounts arrive in
+milestone 7) and runs on the local network. In Docker, `/media` is mounted read-only. NAS shares
+contain system folders (`@eaDir`, `#recycle`) and may be mounted after the server starts.
+Name parsing (movies/shows), watchers, NFO and artwork arrive in milestone 3.
+
+## Decision
+
+**Library definitions (pending open decision OD-1 in `docs/tasks/M2-00-overview.md`)**
+- In milestone 2, libraries are defined in the configuration, not through the API:
+  YAML key `libraries` is a list of `{name, path, kind}`. The environment variable
+  `<PREFIX>_LIBRARIES` holds an OS path list (`filepath.SplitList`: `;` on Windows, `:` on
+  Linux); each entry becomes a library named after its last path element with kind `movies`.
+  When the variable is set it replaces the YAML list (ADR 0018 precedence).
+- Relative paths resolve against the config directory (ADR 0018). After resolution every root
+  must be absolute, unique and not nested in another root. A root must not contain or lie
+  inside the config, data, cache or transcode directory. Comparisons are case-insensitive on
+  Windows. A root that does not exist is **not** a startup error (NAS shares mount late); the
+  library is reported as unavailable and its scan fails with `root_unavailable`.
+- At startup the definitions are synced into the database. A library's identity is its cleaned
+  absolute root path: a new path creates a library with a new UUID, a removed path deletes the
+  library and, by cascade, its items. Nothing user-owned exists yet in milestone 2; milestone 7
+  (watch state) must revisit deletion.
+- The REST API exposes libraries read-only. Creating libraries from the UI comes with the
+  setup wizard in milestone 7, after authentication exists: an unauthenticated "add library"
+  endpoint would let any device on the network expose any server directory.
+- Library kinds are `movies` (default) and `shows`. Milestone 2 lists every item of a library
+  flat, regardless of kind (OD-2). Milestone 3 adds the hierarchy for shows.
+
+**Data model** (goose migration `00002`, all tables `STRICT`, ADR 0004 conventions)
+- `libraries(id, name, kind, root_path UNIQUE, created_at, updated_at)`
+- `items(id, library_id → libraries ON DELETE CASCADE, parent_id → items NULL (reserved for
+  milestone 3), kind, title, sort_title, created_at, updated_at)`
+- `media_files(id, item_id → items CASCADE, library_id → libraries CASCADE, relative_path,
+  size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at,
+  probe_error, UNIQUE(library_id, relative_path))`
+- `media_streams(media_file_id → media_files CASCADE, stream_index, kind, codec, profile,
+  level, pixel_format, bit_depth, width, height, frame_rate, color_primaries,
+  color_transfer, color_space, hdr, channels, channel_layout, sample_rate, language, title,
+  is_default, is_forced, is_attached_picture, bit_rate, PRIMARY KEY(media_file_id,
+  stream_index))`
+- Paths are stored **relative to the library root**, with `/` as separator, never absolute.
+  The absolute path is computed when a file is opened, so a moved mount point only needs a
+  config change.
+- One item per video file in milestone 2. The title is the file name without extension, with
+  `.` and `_` turned into spaces and trimmed; the sort title is its case-folded form.
+  The name parser of milestone 3 replaces this.
+
+**Scanning**
+- The walker opens each library root with `os.Root` and walks inside it, so no `..` or symlink
+  can leave the root. Symlinks that resolve inside the root are followed; symlinks that
+  escape it are skipped and logged at info level (OD-8).
+- Only files with a video extension are considered: `mkv mk3d mp4 m4v mov avi divx ts m2ts mts
+  webm flv wmv asf ogv 3gp 3g2 mpg mpeg vob rm rmvb mxf` (case-insensitive). Hidden entries
+  (leading `.`) and NAS/OS system folders are skipped: `@eaDir`, `#recycle`, `#snapshot`,
+  `.@__thumb`, `$RECYCLE.BIN`, `System Volume Information`, `lost+found`.
+- Change detection uses `(relative path, size, modification time in ms)`. Unchanged files are
+  not probed again. New or changed files are probed with ffprobe with a bounded concurrency of
+  two (NAS disks) and a per-file timeout. A probe failure does not fail the scan: the file is
+  stored with a `probe_error` code and shown as unavailable. Files that disappeared are deleted.
+  A file without a video stream is skipped (it is not a video).
+- One scan per library at a time. Scans run in the background, are owned by the scan use case,
+  stop when the server shuts down, and keep their status (state, counts, last error code) in
+  memory only. Triggers in milestone 2: the API (button in the UI) and server startup (OD-3).
+  Watcher and periodic scans arrive in milestone 3.
+- The server never writes into a library root.
+
+**Path safety**
+- The API never accepts file system paths. Files are addressed by ID only.
+- Every open of a media file goes through `os.Root` of its library root. A path handed to
+  FFmpeg is resolved (symlinks evaluated) and verified to lie inside the evaluated root right
+  before the process starts, and is passed as `file:<absolute path>` so FFmpeg never
+  interprets a file name as a protocol or option. The small time-of-check/time-of-use window
+  between verification and FFmpeg opening the file is accepted: FFmpeg cannot take an open
+  file handle portably, and only someone with write access inside the library could exploit it.
+
+**Configuration keys added in milestone 2** (multi-word keys use snake_case, so the environment
+name stays unambiguous: `transcode.max_sessions` → `<PREFIX>_TRANSCODE_MAX_SESSIONS`)
+- `libraries` (list, see above), `tools.ffmpeg` and `tools.ffprobe` (default `ffmpeg` and
+  `ffprobe`; a bare name is looked up on `PATH`, anything with a path separator follows the
+  ADR 0018 path rules), `transcode.max_sessions` (ADR 0024, default pending OD-4).
+
+## Consequences
+
+- Docker users get a working library by mounting `/media` (if OD-1's Docker default is
+  accepted) without touching the UI.
+- Library management in the UI waits for milestone 7. Until then, changes need a config edit
+  and a restart.
+- Renaming or moving a file creates a new item; nothing is lost because milestone 2 stores no
+  user data.
+- `os.Root` requires Go 1.24+; the module uses 1.27.

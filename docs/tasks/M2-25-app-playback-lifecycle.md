@@ -1,0 +1,32 @@
+# M2-25 Use case: session lifecycle – state, idle timeout, purge and shutdown
+Owner: mivo-media
+Depends on: M2-20
+Files/areas: `internal/app/playback/{lifecycle.go,reaper.go}` (+ tests), small changes to the
+session registry from M2-20
+
+## Goal
+Sessions clean up after themselves: finished or failed productions update the session state,
+forgotten sessions are stopped after the idle timeout, leftovers of a crash are purged at
+startup, and shutdown stops every FFmpeg before the server exits (ADR 0024).
+
+## Acceptance criteria
+- [ ] Session state follows the production: `starting` → `ready` (first segment) → `ended`
+      (clean exit) or `failed` (exit error; the session's `failureCode` is `transcode_failed`,
+      field defined in M2-01); direct play sessions are `ready` immediately.
+- [ ] Idle reaper: a goroutine owned by the service checks every named interval and stops sessions
+      whose last access is older than the 2-minute idle timeout (named constant); uses the clock
+      port so tests run without sleeping.
+- [ ] `PurgeWorkspace(ctx)` calls the workspace port's `Purge` once before the first session
+      (wired at startup in M2-32) and logs the number of removed directories.
+- [ ] `Close(ctx)` stops accepting new sessions (`ErrUnavailable`), stops all sessions in
+      parallel, waits for every production and workspace removal (bounded by ctx), stops the
+      reaper. A second `Close` is a no-op.
+- [ ] Tests with fakes and a fake clock: idle expiry, access keeps alive, ended/failed transitions,
+      close during start, close waits for slow stop, no goroutine left after `Close` (`-race`).
+      Coverage of the package ≥ 90 %.
+- [ ] Gates: lint + layer rules + `go test -race ./internal/app/...` + coverage gate.
+
+## Notes
+- The reaper must not hold the registry lock while stopping a session (stopping waits for
+  FFmpeg).
+- Keep timers injectable (ticker factory or clock with `After`) instead of `time.Sleep`.
