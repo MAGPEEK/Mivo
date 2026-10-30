@@ -407,7 +407,7 @@ export interface components {
             unchanged: number;
             /**
              * Format: int64
-             * @description Files that could not be probed; they are listed as unavailable.
+             * @description Files that could not be probed or resolved (for example a link that leaves the library folder); they are listed as unavailable.
              * @example 0
              */
             failed: number;
@@ -429,13 +429,13 @@ export interface components {
             startedAt?: string;
             /**
              * Format: date-time
-             * @description End of the last scan (UTC); omitted before the first scan finished.
+             * @description End of the last scan (UTC); omitted while a scan runs and before the first scan finished.
              * @example 2026-10-30T18:04:31Z
              */
             finishedAt?: string;
             counts: components["schemas"]["ScanCounts"];
             /**
-             * @description Machine-readable reason a scan failed, for example "root_unavailable" (the library folder is missing or unreadable); omitted unless state is "failed". Clients translate it and show a generic text for unknown codes.
+             * @description Machine-readable reason a scan failed; omitted unless state is "failed". Known codes: "root_unavailable" (the library folder is missing or unreadable), "prober_unavailable" (the probing tool cannot run), "catalog_failed" (the catalog could not be read or written), "scan_canceled" (the server shut down during the scan) and "scan_failed" (any other reason). New codes may be added; clients translate the known codes and show a generic text for unknown ones.
              * @example root_unavailable
              */
             errorCode?: string;

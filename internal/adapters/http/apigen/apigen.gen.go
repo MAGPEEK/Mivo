@@ -813,7 +813,7 @@ type ScanCounts struct {
 	// Example: 12
 	Added int64 `json:"added"`
 
-	// Failed Files that could not be probed; they are listed as unavailable.
+	// Failed Files that could not be probed or resolved (for example a link that leaves the library folder); they are listed as unavailable.
 	//
 	// Example: 0
 	Failed int64 `json:"failed"`
@@ -849,12 +849,12 @@ type ScanStatus struct {
 	// Counts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
 	Counts ScanCounts `json:"counts"`
 
-	// ErrorCode Machine-readable reason a scan failed, for example "root_unavailable" (the library folder is missing or unreadable); omitted unless state is "failed". Clients translate it and show a generic text for unknown codes.
+	// ErrorCode Machine-readable reason a scan failed; omitted unless state is "failed". Known codes: "root_unavailable" (the library folder is missing or unreadable), "prober_unavailable" (the probing tool cannot run), "catalog_failed" (the catalog could not be read or written), "scan_canceled" (the server shut down during the scan) and "scan_failed" (any other reason). New codes may be added; clients translate the known codes and show a generic text for unknown ones.
 	//
 	// Example: root_unavailable
 	ErrorCode *string `json:"errorCode,omitempty"`
 
-	// FinishedAt End of the last scan (UTC); omitted before the first scan finished.
+	// FinishedAt End of the last scan (UTC); omitted while a scan runs and before the first scan finished.
 	//
 	// Example: 2026-10-30T18:04:31Z
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`

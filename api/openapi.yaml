@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.1.0"
+  version: "1.1.1"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -176,7 +176,7 @@ paths:
             page. Clients must not parse or build it.
           schema:
             type: string
-            maxLength: 512
+            maxLength: 2048
       responses:
         "200":
           description: One page of items.
@@ -627,7 +627,9 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Files that could not be probed; they are listed as unavailable.
+          description: >-
+            Files that could not be probed or resolved (for example a link that leaves the
+            library folder); they are listed as unavailable.
           example: 0
         skipped:
           type: integer
@@ -652,16 +654,21 @@ components:
         finishedAt:
           type: string
           format: date-time
-          description: End of the last scan (UTC); omitted before the first scan finished.
+          description: >-
+            End of the last scan (UTC); omitted while a scan runs and before the first scan
+            finished.
           example: "2026-10-30T18:04:31Z"
         counts:
           $ref: "#/components/schemas/ScanCounts"
         errorCode:
           type: string
           description: >-
-            Machine-readable reason a scan failed, for example "root_unavailable" (the
-            library folder is missing or unreadable); omitted unless state is "failed".
-            Clients translate it and show a generic text for unknown codes.
+            Machine-readable reason a scan failed; omitted unless state is "failed". Known
+            codes: "root_unavailable" (the library folder is missing or unreadable),
+            "prober_unavailable" (the probing tool cannot run), "catalog_failed" (the
+            catalog could not be read or written), "scan_canceled" (the server shut down
+            during the scan) and "scan_failed" (any other reason). New codes may be added;
+            clients translate the known codes and show a generic text for unknown ones.
           example: root_unavailable
     HdrFormat:
       type: string
@@ -761,7 +768,7 @@ components:
             $ref: "#/components/schemas/ItemSummary"
         nextCursor:
           type: string
-          maxLength: 512
+          maxLength: 2048
           description: >-
             Opaque cursor for the next page; omitted on the last page. Pass it unchanged as
             the cursor query parameter.
