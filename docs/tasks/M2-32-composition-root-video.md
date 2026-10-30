@@ -74,3 +74,26 @@ video – the walking skeleton of milestone 2 runs end to end (ADR 0022–0024).
   the app/library `RootChecker` port, and inject a `*slog.Logger` into `applibrary.NewService`.
 - (from M2-17) Reject a configured transcode path containing `%` at startup with a clear message
   (FFmpeg treats it as a segment template; HLSArguments returns ErrInvalid otherwise).
+
+## Orchestrator note (from M2-31 review)
+- Wire the LAN guard explicitly: `server.Options.AllowPublicClients: !cfg.Server.LANOnly` (the option
+  is an opt-out, so the zero value keeps the guard on). Test in `cmd/mivo`: default config → a
+  public peer gets 403; `server.lan_only=false` → it passes. Also wire the interface-prefix provider
+  that M2-31 adds for on-link IPv6 prefixes.
+- Add one sentence to `info.description` in api/openapi.yaml: requests from peers outside the local
+  network are refused with 403 `forbidden` while `server.lan_only` is on (regenerate server and
+  client).
+- (from M2-28) `domain.ErrForbidden` (a file outside its library root) answers 403 `forbidden` on
+  `POST /api/v1/playback/sessions` through the generic mapping, but the spec lists no 403 for that
+  operation. Add the 403 response (or a sentence in the operation description) together with the
+  LAN-guard sentence above.
+- (from M2-28 review) Decide the code for a library path escape on session start: 403 `forbidden`
+  now also means "client outside the LAN" (M2-31), so the player cannot tell them apart. Prefer
+  422 `unsupported` (or 404) for the escape, and log the escape at warn in `app/playback` or
+  `libraryfs` (today it reaches only the debug log because the status is < 500).
+- (from M2-26 review) When making the services mandatory, split `Options.Library` into
+  `Options.Libraries LibraryCatalog` and `Options.Items ItemCatalog` and delete the 4-method
+  `LibraryService`. Consolidate the duplicated contract helpers of `items_response.go` and
+  `playback_response.go` into `internal/adapters/http/restapi/contract_values.go` (with
+  `optionalString` from `system.go`): durations rounded to milliseconds, out-of-range values dropped,
+  and an unrepresentable `sourceIndex` answers 500 instead of being clamped.
