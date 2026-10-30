@@ -1,0 +1,42 @@
+{
+  "name": "@mivo/web-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "lint": "pnpm run lint:eslint && pnpm run lint:deps && pnpm run lint:format && pnpm run lint:types",
+    "lint:eslint": "eslint . --max-warnings=0",
+    "lint:deps": "depcruise --config .dependency-cruiser.cjs \"{apps,packages}/*/{src,e2e,test}\"",
+    "lint:format": "prettier --check .",
+    "lint:types": "tsc -b",
+    "test": "vitest run",
+    "build": "pnpm -r --if-present run build",
+    "gen": "pnpm -r --if-present run gen",
+    "dev": "pnpm --filter ./apps/web --if-present run dev",
+    "e2e": "pnpm --filter ./apps/web --if-present run e2e",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^24.19.2",
+    "@vitest/coverage-v8": "^5.0.5",
+    "dependency-cruiser": "^18.7.0",
+    "eslint": "^9.39.5",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}

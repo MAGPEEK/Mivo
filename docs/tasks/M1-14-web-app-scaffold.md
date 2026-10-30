@@ -42,3 +42,10 @@ embed directory (ADR 0020), so the following tasks only add features.
 - The root `package.json` already delegates `dev`, `build` and `e2e` (M1-11). Only add
   scripts to `web/apps/web/package.json`.
 - Product name only through `@mivo/ui-tokens` brand (ADR 0002).
+
+## Review carry-over from M1-11
+- `web/eslint.config.js`: apply `react-hooks` rules to `apps/**/*.{ts,tsx}` (hooks live in `.ts` files), keep react/jsx-a11y on `*.tsx`.
+- `web/.dependency-cruiser.cjs`: generalise the React pattern so scoped React libs (`@radix-ui/react-*`, `@testing-library/react`) are blocked in framework-free packages; prove with a temporary `@radix-ui/react-slot` import.
+- `web/eslint.config.js`: left-anchor the hex-colour check so `"#add"` / `"Episode #123"` are not flagged.
+- `web/vitest.config.ts`: exclude `**/*.gen.ts` and the app entry file from coverage.
+- Keep ESLint `settings.react.version` in sync with the installed `react` dependency.

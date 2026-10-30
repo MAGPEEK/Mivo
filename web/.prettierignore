@@ -1,0 +1,13 @@
+# Dependencies and lockfile (the lockfile changes only through pnpm install)
+node_modules/
+pnpm-lock.yaml
+
+# Generated code
+**/generated/**
+
+# Build, test and coverage output
+**/dist/
+**/coverage/
+**/playwright-report/
+**/test-results/
+*.tsbuildinfo

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+    // No DOM lib and no Node types: player-core must not touch window/document directly so
+    // the TV app can reuse it. Browser APIs arrive through injected interfaces.
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@mivo/player-core",
+  "version": "0.0.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "description": "Framework-free playback logic shared by the web and TV apps.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
