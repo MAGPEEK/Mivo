@@ -6,7 +6,7 @@ const APIVersion = "1"
 
 // Info describes the running server to clients.
 type Info struct {
-	// ProductName is the configurable product name (working title "Mivo").
+	// ProductName is the configurable product name; cmd/mivo takes it from platform/brand.
 	ProductName string
 	// Version is the release version of the binary.
 	Version string

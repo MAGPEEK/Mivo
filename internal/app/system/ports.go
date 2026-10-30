@@ -14,13 +14,17 @@ type IdentityStore interface {
 	// LoadIdentity returns the stored identity or an error wrapping domain.ErrNotFound when
 	// none has been saved yet.
 	LoadIdentity(ctx context.Context) (system.Identity, error)
-	// SaveIdentity stores the identity. It is called at most once per installation.
+	// SaveIdentity stores the identity. It must not overwrite an existing identity: when one
+	// is already stored it returns an error wrapping domain.ErrConflict, and the service then
+	// loads and uses the stored one.
 	SaveIdentity(ctx context.Context, identity system.Identity) error
 }
 
 // DatabaseChecker verifies that the database is reachable. Implemented by adapters/sqlite.
 type DatabaseChecker interface {
 	// Ping returns nil when the database answers. It must return when ctx is done.
+	// Implementations log the cause of a failure themselves: Health reports only a fixed
+	// message to clients and does not pass the error on.
 	Ping(ctx context.Context) error
 }
 

@@ -16,6 +16,13 @@ const (
 	serverIDHyphenGlyph = '-'
 )
 
+// The nil and max UUIDs (RFC 9562) are well-formed but carry no randomness. A generator that
+// returns one is broken, and persisting it would make every such installation share one ID.
+const (
+	nilUUID = "00000000-0000-0000-0000-000000000000"
+	maxUUID = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+)
+
 // ServerID identifies one server installation. It is created once and stays stable, so
 // clients (DLNA, webOS app) can recognise the same server across restarts and IP changes.
 // The zero value is not a valid ID; obtain one through ParseServerID.
@@ -25,11 +32,16 @@ type ServerID struct {
 
 // ParseServerID accepts only the canonical lowercase UUID text form
 // (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). Uppercase, braces, URN prefixes and the
-// hyphen-less form are rejected so that one server never has two textual IDs.
-// The error wraps domain.ErrInvalid.
+// hyphen-less form are rejected so that one server never has two textual IDs. The nil and
+// max UUIDs are rejected as well. The error wraps domain.ErrInvalid.
 func ParseServerID(text string) (ServerID, error) {
 	if !isCanonicalUUID(text) {
 		return ServerID{}, fmt.Errorf("parse server id %q: not a canonical lowercase UUID: %w",
+			text, domain.ErrInvalid)
+	}
+
+	if isReservedUUID(text) {
+		return ServerID{}, fmt.Errorf("parse server id %q: reserved nil or max UUID: %w",
 			text, domain.ErrInvalid)
 	}
 
@@ -67,6 +79,10 @@ func isCanonicalUUID(text string) bool {
 	}
 
 	return true
+}
+
+func isReservedUUID(text string) bool {
+	return text == nilUUID || text == maxUUID
 }
 
 func isHyphenOffset(position int) bool {

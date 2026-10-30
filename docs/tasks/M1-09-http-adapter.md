@@ -48,3 +48,5 @@ graceful shutdown.
 - `/api/v1/health` is unauthenticated: never expose raw adapter error text. M1-06b makes the
   service return fixed detail strings; keep it that way in the HTTP mapping.
 - Add a test that ties `system.APIVersion` to the `/api/v<version>` prefix in `api/openapi.yaml`.
+- Errors from `Info`/`EnsureIdentity` are server-side failures: map them to 500 even if they wrap
+  `ErrConflict`/`ErrNotFound`/`ErrInvalid` (or ensure M1-06b's deferred fix landed first).

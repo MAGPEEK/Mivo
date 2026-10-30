@@ -19,7 +19,8 @@ func TestParseServerIDAcceptsCanonicalLowercaseUUIDs(t *testing.T) {
 	}{
 		{name: "version 4", text: "0b8c6d4e-3f2a-4c1b-9d8e-7f6a5b4c3d2e"},
 		{name: "version 1", text: canonicalServerID},
-		{name: "nil uuid", text: "00000000-0000-0000-0000-000000000000"},
+		{name: "one above nil uuid", text: "00000000-0000-0000-0000-000000000001"},
+		{name: "one below max uuid", text: "ffffffff-ffff-ffff-ffff-fffffffffffe"},
 		{name: "all hex letters", text: "abcdefab-cdef-abcd-efab-cdefabcdefab"},
 	}
 
@@ -63,6 +64,9 @@ func TestParseServerIDRejectsNonCanonicalText(t *testing.T) {
 		{name: "underscore separator", text: "f81d4fae_7dec_11d0_a765_00a0c91e6bf6"},
 		{name: "surrounding space", text: " f81d4fae-7dec-11d0-a765-00a0c91e6bf"},
 		{name: "multibyte character", text: "f81d4fae-7dec-11d0-a765-00a0c91e6bä"},
+		{name: "nil uuid", text: "00000000-0000-0000-0000-000000000000"},
+		{name: "max uuid", text: "ffffffff-ffff-ffff-ffff-ffffffffffff"},
+		{name: "uppercase max uuid", text: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF"},
 	}
 
 	for _, test := range tests {

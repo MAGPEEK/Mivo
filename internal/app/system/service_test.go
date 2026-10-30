@@ -2,6 +2,7 @@ package system_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -16,7 +17,7 @@ const (
 	firstGeneratedID  = "0b8c6d4e-3f2a-4c1b-9d8e-7f6a5b4c3d2e"
 	secondGeneratedID = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d"
 	storedID          = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-	testProductName   = "Mivo"
+	testProductName   = "TestProduct"
 )
 
 var errBoom = errors.New("boom")
@@ -76,10 +77,11 @@ func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 
 	complete := func() appsystem.Dependencies {
 		return appsystem.Dependencies{
-			Identities: &memoryIdentityStore{},
-			Database:   pingFunc(pingSucceeds),
-			IDs:        &sequenceIDGenerator{},
-			Clock:      time.Now,
+			Identities:  &memoryIdentityStore{},
+			Database:    pingFunc(pingSucceeds),
+			IDs:         &sequenceIDGenerator{},
+			Clock:       time.Now,
+			ProductName: testProductName,
 		}
 	}
 
@@ -92,6 +94,8 @@ func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 		{name: "database checker", mutate: func(d *appsystem.Dependencies) { d.Database = nil }, wantText: "database checker"},
 		{name: "id generator", mutate: func(d *appsystem.Dependencies) { d.IDs = nil }, wantText: "id generator"},
 		{name: "clock", mutate: func(d *appsystem.Dependencies) { d.Clock = nil }, wantText: "clock"},
+		{name: "empty product name", mutate: func(d *appsystem.Dependencies) { d.ProductName = "" }, wantText: "product name"},
+		{name: "blank product name", mutate: func(d *appsystem.Dependencies) { d.ProductName = " \t" }, wantText: "product name"},
 	}
 
 	for _, test := range tests {
@@ -125,7 +129,7 @@ func TestNewServiceReportsEveryMissingDependency(t *testing.T) {
 		t.Fatal("NewService(empty) error = nil, want error")
 	}
 
-	for _, name := range []string{"identity store", "database checker", "id generator", "clock"} {
+	for _, name := range []string{"identity store", "database checker", "id generator", "clock", "product name"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("NewService(empty) error = %q, want it to name %q", err, name)
 		}
@@ -151,9 +155,9 @@ func TestEnsureIdentityReturnsStoredIdentity(t *testing.T) {
 		t.Errorf("EnsureIdentity = %+v, want stored %+v", identity, stored)
 	}
 
-	if environment.store.saves() != 0 || environment.generator.calls != 0 {
+	if environment.store.saves() != 0 || environment.generator.callCount() != 0 {
 		t.Errorf("saves = %d, generator calls = %d, want 0 and 0",
-			environment.store.saves(), environment.generator.calls)
+			environment.store.saves(), environment.generator.callCount())
 	}
 }
 
@@ -271,6 +275,22 @@ func TestEnsureIdentityFailures(t *testing.T) {
 			configure: func(environment *testEnvironment) { environment.store.saveErr = errBoom },
 			wantErr:   errBoom,
 			wantText:  "ensure identity: save",
+		},
+		{
+			name: "load after waiting for the create slot fails",
+			configure: func(environment *testEnvironment) {
+				environment.store.scriptedLoadErrs = []error{nil, errBoom}
+			},
+			wantErr:  errBoom,
+			wantText: "ensure identity: load",
+		},
+		{
+			name: "save conflicts but no identity is stored",
+			configure: func(environment *testEnvironment) {
+				environment.store.saveErr = fmt.Errorf("unique constraint: %w", domain.ErrConflict)
+			},
+			wantErr:  domain.ErrConflict,
+			wantText: "load stored identity",
 		},
 	}
 

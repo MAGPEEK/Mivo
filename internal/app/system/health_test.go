@@ -2,6 +2,8 @@ package system_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +41,49 @@ func TestHealthIsUnavailableWhenPingFails(t *testing.T) {
 
 	health := environment.service(t).Health(t.Context())
 
-	assertDatabaseUnavailable(t, health, "database ping failed: boom")
+	assertDatabaseUnavailable(t, health, appsystem.DetailDatabasePingFailed)
+}
+
+func TestHealthDetailNeverContainsAdapterErrorText(t *testing.T) {
+	t.Parallel()
+
+	// Driver errors can reveal file paths; none of this may reach the health detail.
+	const adapterErrorText = `open C:\data\library.db: access denied`
+
+	tests := []struct {
+		name       string
+		pingErr    error
+		wantDetail string
+	}{
+		{name: "plain failure", pingErr: errors.New(adapterErrorText), wantDetail: appsystem.DetailDatabasePingFailed},
+		{
+			name:       "wrapped deadline",
+			pingErr:    fmt.Errorf("%s: %w", adapterErrorText, context.DeadlineExceeded),
+			wantDetail: appsystem.DetailDatabasePingTimedOut,
+		},
+		{
+			name:       "wrapped cancellation",
+			pingErr:    fmt.Errorf("%s: %w", adapterErrorText, context.Canceled),
+			wantDetail: appsystem.DetailDatabasePingFailed,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			environment := newTestEnvironment()
+			environment.ping = func(context.Context) error { return test.pingErr }
+
+			health := environment.service(t).Health(t.Context())
+
+			assertDatabaseUnavailable(t, health, test.wantDetail)
+
+			if detail := health.Checks[0].Detail; strings.Contains(detail, "access denied") {
+				t.Errorf("Detail = %q leaks the adapter error", detail)
+			}
+		})
+	}
 }
 
 func TestHealthBoundsPingWithTimeout(t *testing.T) {
@@ -70,7 +114,7 @@ func TestHealthBoundsPingWithTimeout(t *testing.T) {
 		t.Errorf("ping deadline is %v after the call, want %v +/- %v", remaining, appsystem.DatabasePingTimeout, deadlineSlack)
 	}
 
-	assertDatabaseUnavailable(t, health, "database ping exceeded 2s")
+	assertDatabaseUnavailable(t, health, appsystem.DetailDatabasePingTimedOut)
 }
 
 func TestHealthHonoursContextDeadlineOfBlockingPing(t *testing.T) {
@@ -88,7 +132,7 @@ func TestHealthHonoursContextDeadlineOfBlockingPing(t *testing.T) {
 
 	health := environment.service(t).Health(ctx)
 
-	assertDatabaseUnavailable(t, health, "database ping exceeded")
+	assertDatabaseUnavailable(t, health, appsystem.DetailDatabasePingTimedOut)
 }
 
 func TestHealthTreatsLateAnswerAsUnavailable(t *testing.T) {
@@ -107,7 +151,7 @@ func TestHealthTreatsLateAnswerAsUnavailable(t *testing.T) {
 
 	health := environment.service(t).Health(ctx)
 
-	assertDatabaseUnavailable(t, health, "database ping exceeded")
+	assertDatabaseUnavailable(t, health, appsystem.DetailDatabasePingTimedOut)
 }
 
 func TestHealthReportsCancelledCaller(t *testing.T) {
@@ -120,7 +164,7 @@ func TestHealthReportsCancelledCaller(t *testing.T) {
 
 	health := environment.service(t).Health(ctx)
 
-	assertDatabaseUnavailable(t, health, "database ping failed: context canceled")
+	assertDatabaseUnavailable(t, health, appsystem.DetailDatabasePingFailed)
 }
 
 func assertDatabaseUnavailable(t *testing.T, health system.Health, wantDetail string) {
@@ -139,7 +183,7 @@ func assertDatabaseUnavailable(t *testing.T, health system.Health, wantDetail st
 		t.Errorf("check = %+v, want unavailable %q check", check, system.HealthCheckDatabase)
 	}
 
-	if !strings.Contains(check.Detail, wantDetail) {
-		t.Errorf("Detail = %q, want it to contain %q", check.Detail, wantDetail)
+	if check.Detail != wantDetail {
+		t.Errorf("Detail = %q, want exactly %q", check.Detail, wantDetail)
 	}
 }

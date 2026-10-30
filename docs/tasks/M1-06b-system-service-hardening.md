@@ -25,3 +25,9 @@ Resolve the M1-06 review findings before the HTTP and SQLite adapters build on t
 
 ## Notes
 - Source: M1-06 reviewer (minor 1–3, nits 1–4). The APIVersion ↔ `/api/v1` drift test belongs to M1-09.
+
+## Deferred (from review, APPROVE) – pick up with the next change to internal/app/system
+- identity.go:92 – on reload-after-conflict failure wrap only the load error (`%w`), name the conflict with `%v`, so HTTP maps it to 500 not 409/404.
+- service_test.go – concurrent test also asserts generator `callCount() == 1`.
+- health.go – after a fired deadline prefer `pingContext.Err()` over the adapter's error to choose "timed out".
+- Nits: check `ctx.Err()` before the semaphore `select`; `t.Cleanup` to release paused savers; distinct error context for the reload.

@@ -48,3 +48,10 @@ and persist its identity through sqlc-generated queries. This implements ADR 000
 - Route goose's logger to nothing or to an injected `*slog.Logger`. Never print to stdout.
 - The database file name (`server.db`) and its directory are decided by the caller (M1-10).
   This package only takes a path.
+
+## Orchestrator notes (from M1-06b)
+- `IdentityStore.SaveIdentity` must return `domain.ErrConflict` when an identity already exists
+  (e.g. INSERT with a unique key) – never overwrite. Test it.
+- The `DatabaseChecker` adapter logs the raw ping error itself (injected logger); the service only
+  exposes fixed detail strings.
+- Log ping/context cancellations (`context.Canceled`) at debug level; real failures at warn/error.
