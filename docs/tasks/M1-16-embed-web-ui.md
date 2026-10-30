@@ -46,3 +46,8 @@ without Node. This implements ADR 0020.
 ## Orchestrator note (from M1-14)
 - `pnpm -C web build` already writes to `internal/adapters/http/webui/dist` (emptyOutDir). Add the
   matching `.gitignore` entry (keep a placeholder if `//go:embed` needs the directory to exist).
+
+## Review carry-over from M1-10 (APPROVE) – fix while wiring the web UI fallback in cmd/mivo
+- `serve_test.go`: assert the bound port is not `config.DefaultPort` (proves env overrides the file).
+- `serve.go`/`main.go`: when startup is cancelled and `db.Close()` also fails, report/log the close error (decide "stopped" on the startup error only).
+- Nits: consistent "start database %s" prefix; rename `application.run` (e.g. `start`); count the exact "http server listening" message; after the second run assert the data dir can be removed (DB closed).
