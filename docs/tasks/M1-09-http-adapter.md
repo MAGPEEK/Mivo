@@ -1,7 +1,11 @@
 # M1-09 HTTP adapter: server, middleware, system handlers, problem errors
 Owner: mivo-backend
 Depends on: M1-06, M1-07
-Files/areas: `internal/adapters/http/restapi/**`, `internal/adapters/http/server/**`
+Files/areas: `internal/adapters/http/restapi/**`, `internal/adapters/http/server/**`,
+`internal/adapters/http/requestid/**` (request ID is set by the server chain and read by
+restapi logs; restapi must not import server), `internal/adapters/http/statuswriter/**`
+(response status recorder shared by the server middleware and restapi's error handler, same
+reason), `api/spec_test.go` (orchestrator notes)
 
 ## Goal
 `GET /api/v1/health` and `GET /api/v1/system/info` are served over `net/http` according to
@@ -43,6 +47,8 @@ graceful shutdown.
 - The fallback handler hook is the only extension point M1-16 needs, so it should not have
   to edit routing logic beyond passing the handler.
 - No CORS yet (same origin; webOS in milestone 10).
+- Request body size limit (`http.MaxBytesReader`) and per-request read deadlines: with the
+  first endpoint that accepts a body. No endpoint reads one in M1-09.
 
 ## Orchestrator notes (from M1-06 review)
 - `/api/v1/health` is unauthenticated: never expose raw adapter error text. M1-06b makes the

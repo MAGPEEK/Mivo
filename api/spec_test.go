@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/magpeek/mivo/internal/domain/system"
 	"github.com/magpeek/mivo/internal/platform/brand"
 )
 
@@ -20,10 +22,11 @@ const (
 
 	// problemResponseRef is the shared error response every operation must declare as default.
 	problemResponseRef = "#/components/responses/Problem"
-
-	// apiMajorVersion is the version in the /api/v1 path prefix and in SystemInfo.apiVersion.
-	apiMajorVersion = "1"
 )
+
+// versionedPathPrefix is the path prefix every operation must carry: /api/v<major>/ with the
+// major version the server reports as SystemInfo.apiVersion (system.APIVersion).
+const versionedPathPrefix = "/api/v" + system.APIVersion + "/"
 
 // loadSpec parses the contract without following external references: the spec must be
 // self-contained so both generators (oapi-codegen, openapi-typescript) see the same file.
@@ -64,8 +67,8 @@ func TestSpecHeader(t *testing.T) {
 		t.Errorf("info.title = %q, want %q", spec.Info.Title, wantTitle)
 	}
 
-	if !strings.HasPrefix(spec.Info.Version, apiMajorVersion+".") {
-		t.Errorf("info.version = %q, want major version %s", spec.Info.Version, apiMajorVersion)
+	if !strings.HasPrefix(spec.Info.Version, system.APIVersion+".") {
+		t.Errorf("info.version = %q, want major version %s (system.APIVersion)", spec.Info.Version, system.APIVersion)
 	}
 
 	if len(spec.Servers) != 1 || spec.Servers[0].URL != "/" {
@@ -74,6 +77,23 @@ func TestSpecHeader(t *testing.T) {
 
 	if spec.Tags.Get("system") == nil {
 		t.Error(`tag "system" is not declared`)
+	}
+}
+
+// TestEveryPathCarriesAPIVersion ties the path prefix to system.APIVersion, the value the
+// server reports as SystemInfo.apiVersion: bumping one without the other fails here.
+func TestEveryPathCarriesAPIVersion(t *testing.T) {
+	spec := loadSpec(t)
+
+	paths := spec.Paths.InMatchingOrder()
+	if len(paths) == 0 {
+		t.Fatal("the spec declares no paths")
+	}
+
+	for _, path := range paths {
+		if !strings.HasPrefix(path, versionedPathPrefix) {
+			t.Errorf("path %s does not start with %s (system.APIVersion = %q)", path, versionedPathPrefix, system.APIVersion)
+		}
 	}
 }
 
@@ -138,12 +158,22 @@ func assertUnauthenticated(t *testing.T, operation *openapi3.Operation) {
 	t.Helper()
 
 	if operation.Security == nil || len(*operation.Security) != 0 {
-		t.Errorf("security = %v, want an explicit empty list", operation.Security)
+		t.Errorf("security = %s, want an explicit empty list", describeSecurity(operation.Security))
 	}
 
 	if !strings.Contains(operation.Description, "unauthenticated") {
 		t.Errorf("description %q does not state that the endpoint is unauthenticated", operation.Description)
 	}
+}
+
+// describeSecurity prints the requirements themselves instead of the pointer address that
+// %v would show for *openapi3.SecurityRequirements.
+func describeSecurity(security *openapi3.SecurityRequirements) string {
+	if security == nil {
+		return "absent (inherits the global security)"
+	}
+
+	return fmt.Sprintf("%v", *security)
 }
 
 func assertResponseSchema(t *testing.T, response *openapi3.ResponseRef, mediaType, schema string) {

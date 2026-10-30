@@ -1,0 +1,102 @@
+package restapi
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/domain"
+)
+
+// ProblemMediaType is the content type of every error response (RFC 9457).
+const ProblemMediaType = "application/problem+json"
+
+// problemTypeBlank is the RFC 9457 type for problems that need no more than the status
+// title; clients distinguish them by Problem.Code.
+const problemTypeBlank = "about:blank"
+
+// Stable machine-readable problem codes (api/openapi.yaml, Problem.code). Clients translate
+// them, so a published code never changes its meaning.
+const (
+	// CodeBadRequest reports a request the server could not parse or bind.
+	CodeBadRequest = "bad_request"
+	// CodeInvalid reports input that violates a domain rule (domain.ErrInvalid).
+	CodeInvalid = "invalid"
+	// CodeForbidden reports a caller that may not perform the operation (domain.ErrForbidden).
+	CodeForbidden = "forbidden"
+	// CodeNotFound reports a missing entity or an unknown API route.
+	CodeNotFound = "not_found"
+	// CodeMethodNotAllowed reports a known API route requested with an unsupported method.
+	CodeMethodNotAllowed = "method_not_allowed"
+	// CodeConflict reports a clash with the current state (domain.ErrConflict).
+	CodeConflict = "conflict"
+	// CodeInternal reports a server-side failure. Its details are logged, never sent.
+	CodeInternal = "internal_error"
+)
+
+// errorMapping maps one domain sentinel error to its HTTP status and problem code.
+type errorMapping struct {
+	target error
+	status int32
+	code   string
+}
+
+// domainErrorMappings is checked in order; the first sentinel the error wraps wins.
+func domainErrorMappings() []errorMapping {
+	return []errorMapping{
+		{target: domain.ErrNotFound, status: http.StatusNotFound, code: CodeNotFound},
+		{target: domain.ErrForbidden, status: http.StatusForbidden, code: CodeForbidden},
+		{target: domain.ErrConflict, status: http.StatusConflict, code: CodeConflict},
+		{target: domain.ErrInvalid, status: http.StatusBadRequest, code: CodeInvalid},
+	}
+}
+
+// NewProblem returns a problem with the standard title of status and no detail. A detail
+// is left out on purpose: error texts may carry paths or driver internals.
+func NewProblem(status int32, code string) apigen.Problem {
+	return apigen.Problem{
+		Type:   problemTypeBlank,
+		Title:  http.StatusText(int(status)),
+		Status: status,
+		Code:   code,
+	}
+}
+
+// InternalProblem returns the 500 problem. Callers log the cause themselves.
+func InternalProblem() apigen.Problem {
+	return NewProblem(http.StatusInternalServerError, CodeInternal)
+}
+
+// ProblemForError maps a domain error to its problem: ErrNotFound 404, ErrForbidden 403,
+// ErrConflict 409, ErrInvalid 400 and anything else 500. Only this adapter maps domain
+// errors to HTTP (ADR 0017).
+func ProblemForError(err error) apigen.Problem {
+	for _, mapping := range domainErrorMappings() {
+		if errors.Is(err, mapping.target) {
+			return NewProblem(mapping.status, mapping.code)
+		}
+	}
+
+	return InternalProblem()
+}
+
+// WriteProblem sends problem as application/problem+json with its status.
+func WriteProblem(writer http.ResponseWriter, problem apigen.Problem) {
+	body, err := json.Marshal(problem)
+	if err != nil {
+		// A Problem holds only strings and integers, so this cannot happen; the status
+		// alone still tells the client what went wrong.
+		writer.WriteHeader(int(problem.Status))
+
+		return
+	}
+
+	header := writer.Header()
+	header.Del("Content-Length")
+	header.Set("Content-Type", ProblemMediaType)
+	writer.WriteHeader(int(problem.Status))
+
+	// A failed write means the client has gone away; there is nobody left to tell.
+	_, _ = writer.Write(body)
+}
