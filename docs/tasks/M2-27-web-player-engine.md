@@ -73,3 +73,5 @@ that restart the session when needed and clean teardown (ADR 0023, ADR 0024).
   Add a test that `Hls.ErrorTypes.NETWORK_ERROR === "networkError"`, `ErrorDetails.FRAG_LOAD_ERROR`
   / `FRAG_LOAD_TIMEOUT` match player-core's literals and hls.js `ErrorData` is assignable to
   `HlsErrorData`. Refuse to load a delivery value the app does not know.
+- (from M2-22) You own pnpm-lock.yaml in wave 4: add `axe-core` as a devDependency of apps/web and
+  simplify `src/test/axe.ts` (it currently resolves axe-core through @axe-core/playwright).

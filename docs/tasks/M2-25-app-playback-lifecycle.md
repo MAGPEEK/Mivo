@@ -38,3 +38,13 @@ startup, and shutdown stops every FFmpeg before the server exits (ADR 0024).
 - Production contract: after `Done`, `Ready` returns the exit result → map to ended/failed.
 - Open question recorded: there is no overall cap for direct-play sessions (ADR 0024 does not
   require one); the idle reaper removes them – note this in ADR 0024 Notes.
+- (from M2-20 r2) `Service.activate`'s branch for a pending session that vanished during start
+  (tears down the new production, returns ErrUnavailable) becomes reachable with `Close` – add a
+  test for it. MaxSessions = 256 is the overall cap incl. direct play.
+- (from M2-20 review r2) Union counting during a replacement: a replacement in a lower class
+  (e.g. transcode → remux) frees the old session's higher-class slot while the old one still
+  runs; count a claimed old entry in every category its claimant does not occupy (countExcept),
+  test: transcode replaced by remux whose producer fails with a third transcode in between.
+  Any path that removes a pending entry must clear its claim on the replaced session (reuse
+  release). Fix the stale ReplacesSessionID doc in session.go; add a test that Access(old id)
+  still returns the old workspace during a swap.

@@ -50,3 +50,8 @@ and stops sessions on request (ADR 0023, ADR 0024).
 - Keyframe positions are relative to the format start (like `-ss`), not absolute pts.
 - (from M2-09 review) Call `playback.Policy.Validate()` in the service constructor so a bad
   `MaxTranscodeHeight` fails at startup instead of answering clients with 400.
+
+## Orchestrator note (round 2)
+- Supersedes "stops the old session before the limit is checked": the replacement takes over the
+  slot atomically and the old session is stopped after the new production started (ADR 0024
+  Notes (M2-20)). Overall cap MaxSessions = 256.

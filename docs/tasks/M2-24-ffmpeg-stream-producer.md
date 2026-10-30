@@ -46,3 +46,6 @@ segment is ready, can be stopped at any time, and surfaces failures with a usefu
 - (from M2-20 r2) After `Stop`, `Production.Ready` returns `ErrProductionStopped` (wraps
   domain.ErrNotFound) – answer 404/410-like, never 500; a clean exit without any segment returns
   an error.
+- (from M2-17 review) StartPosition for copied video must be passed UNCHANGED from
+  `KeyframeAtOrBefore` (with `-copypriorss 0` a start even slightly after the keyframe drops it and
+  the video starts a GOP later); HLSArguments already adds -copypriorss 0 and aac_adtstoasc.

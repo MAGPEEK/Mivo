@@ -112,3 +112,13 @@ it.
   root-relative references (`/api/v1/...`), which break behind a reverse proxy that serves the
   server under a path prefix. Supporting such a prefix (configured base path or relative
   references) is a follow-up; decide it before milestone 7b (remote access).
+
+## Notes (M2-20, orchestrator)
+
+- `replacesSessionId` (seeking, track change): the new session takes over the old session's slot
+  atomically when it is reserved; the old session keeps running until the new production has
+  started and is stopped only then, so seeking never trips a limit and a failed restart leaves
+  the old session playable. During a swap the real number of FFmpeg processes can briefly exceed
+  `MaxFFmpegSessions` / the transcode limit by the number of replacements in flight.
+- Overall cap: at most 256 sessions (`MaxSessions`) including direct play, answered with 503
+  `session_limit_reached` – bounds memory while there is no authentication (until M7).
