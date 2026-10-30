@@ -1,4 +1,50 @@
 {
   "heading": "Bibliothek",
-  "placeholder": "Hier erscheinen die Videos der Bibliothek {{libraryId}}."
+  "loading": "Bibliothek wird geladen",
+  "itemCount_one": "{{count, number}} Video",
+  "itemCount_other": "{{count, number}} Videos",
+  "libraryUnavailable": "Ordner nicht erreichbar",
+  "loadFailed": "Die Bibliothek konnte nicht geladen werden.",
+  "retry": "Erneut versuchen",
+  "backHome": "Zur Startseite",
+  "sidebar": {
+    "loading": "Bibliotheken werden geladen",
+    "loadFailed": "Bibliotheken konnten nicht geladen werden",
+    "unavailable": "Nicht erreichbar",
+    "emptyHint": "Trage Ordner unter libraries in der config.yaml ein oder setze {{variable}} und starte {{productName}} neu."
+  },
+  "scan": {
+    "start": "Bibliothek scannen",
+    "running": "Scan läuft…",
+    "progress": "Der Bibliotheksordner wird durchsucht…",
+    "finished": "Letzter Scan: {{added, number}} neu, {{updated, number}} aktualisiert, {{removed, number}} entfernt, {{unchanged, number}} unverändert, {{failed, number}} fehlgeschlagen, {{skipped, number}} übersprungen.",
+    "failed": "Scan fehlgeschlagen: {{reason}}",
+    "startFailed": "Der Scan konnte nicht gestartet werden: {{reason}}"
+  },
+  "items": {
+    "label": "Videos",
+    "loading": "Videos werden geladen",
+    "loadFailed": "Die Videos konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Weitere Videos werden geladen",
+    "loadMoreFailed": "Weitere Videos konnten nicht geladen werden.",
+    "unavailable": "Nicht verfügbar",
+    "empty": {
+      "title": "Noch keine Videos",
+      "hint": "Starte einen Scan, um die Videos im Ordner dieser Bibliothek zu finden."
+    }
+  },
+  "errors": {
+    "rootUnavailable": "Der Bibliotheksordner fehlt oder kann nicht gelesen werden.",
+    "proberUnavailable": "ffprobe wurde nicht gefunden. Installiere FFmpeg oder setze tools.ffprobe in der config.yaml und starte den Server neu.",
+    "catalogFailed": "Die Scan-Ergebnisse konnten nicht gespeichert werden.",
+    "scanCanceled": "Der Scan wurde abgebrochen, zum Beispiel weil der Server beendet wurde.",
+    "scanFailed": "Der Scan wurde wegen eines unerwarteten Fehlers beendet.",
+    "probeFailed": "Die Datei konnte nicht analysiert werden.",
+    "probeTimedOut": "Die Analyse der Datei hat zu lange gedauert.",
+    "notFound": "Diese Bibliothek gibt es nicht.",
+    "unavailable": "Der Server ist gerade nicht verfügbar. Versuche es gleich noch einmal.",
+    "networkError": "Der Server ist nicht erreichbar.",
+    "generic": "Etwas ist schiefgelaufen. Versuche es später noch einmal."
+  }
 }

@@ -19,7 +19,7 @@
     "heading": "Home",
     "empty": {
       "title": "Your library is empty",
-      "hint": "Once you add a library, your movies, shows and music appear here."
+      "hint": "Add folders under libraries in config.yaml, then restart the server. Your movies and shows appear here."
     }
   },
   "system": {

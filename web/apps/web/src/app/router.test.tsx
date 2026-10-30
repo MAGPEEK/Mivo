@@ -12,20 +12,16 @@ describe("feature routes", () => {
     {
       path: "/libraries/lib-1",
       heading: "Library",
-      text: "The videos of library lib-1 will be listed here.",
+      text: "This library does not exist.",
     },
-    {
-      path: "/items/item-1",
-      heading: "Item details",
-      text: "The details of item item-1 will be shown here.",
-    },
+    // "/items/$itemId" is covered by features/item/components/ItemPage.test.tsx ("in the app").
   ])("renders $path inside the app layout", async ({ path, heading, text }) => {
     renderApp(path);
 
     const main = await screen.findByRole("main");
 
     expect(await within(main).findByRole("heading", { level: 1, name: heading })).toBeTruthy();
-    expect(within(main).getByText(text)).toBeTruthy();
+    expect(await within(main).findByText(text)).toBeTruthy();
     expect(sidebar()).not.toBeNull();
     expect(screen.getByRole("banner")).toBeTruthy();
   });
@@ -45,7 +41,7 @@ describe("feature routes", () => {
     renderApp("/libraries/lib-1", { languages: ["de"] });
 
     expect(await screen.findByRole("heading", { level: 1, name: "Bibliothek" })).toBeTruthy();
-    expect(screen.getByText("Hier erscheinen die Videos der Bibliothek lib-1.")).toBeTruthy();
+    expect(await screen.findByText("Diese Bibliothek gibt es nicht.")).toBeTruthy();
   });
 
   it("shows the not-found view in the app layout below a feature route", async () => {

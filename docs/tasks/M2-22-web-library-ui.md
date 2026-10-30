@@ -52,3 +52,8 @@ grid with technical chips, and starts a scan with live status (ADR 0011 design, 
   `containerLabel`, `codecLabel`, `channelLabel`, `hdrLabel`, `bitDepthLabel`,
   `resolutionLabel(height, width?)` for chips. Do not change pnpm-lock.yaml in wave 3 (M2-27 owns
   it in wave 4).
+
+## Orchestrator note (round 2)
+- The scan button and "Load more" use `aria-disabled` (plus `aria-busy`) instead of native
+  `disabled` while busy: native `disabled` dropped keyboard focus to body. Clicks are ignored while
+  busy and the state is announced; this satisfies the intent of "disabled while running".

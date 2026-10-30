@@ -3,11 +3,12 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
+  createFakeServer,
   fakeSystemInfo,
+  jsonResponse,
+  problemResponse,
   respondNever,
-  respondWithJson,
   respondWithProblem,
-  type FakeFetch,
 } from "../../../test/fakeApi";
 import { renderApp } from "../../../test/renderApp";
 
@@ -23,17 +24,7 @@ async function findVersionStatus(): Promise<HTMLElement> {
   return within(sidebar).getByRole("status");
 }
 
-// Counts the requests, so a test can check how often the client asked.
-function counting(fetch: FakeFetch): { fetch: FakeFetch; requests: Request[] } {
-  const requests: Request[] = [];
-  return {
-    requests,
-    fetch: (request) => {
-      requests.push(request);
-      return fetch(request);
-    },
-  };
-}
+const systemInfoPath = "/api/v1/system/info";
 
 describe("ServerVersion in the sidebar footer", () => {
   it("shows an accessible skeleton while the version loads", async () => {
@@ -45,27 +36,31 @@ describe("ServerVersion in the sidebar footer", () => {
   });
 
   it("renders the version from the fake response", async () => {
-    const server = counting(respondWithJson(fakeSystemInfo, 200));
+    const server = createFakeServer([
+      {
+        method: "GET",
+        path: systemInfoPath,
+        respond: () => jsonResponse({ ...fakeSystemInfo, version: "9.8.7" }),
+      },
+    ]);
     renderApp("/", { fetch: server.fetch });
 
     const status = await findVersionStatus();
 
-    expect(
-      await within(status).findByText(`Server version ${fakeSystemInfo.version}`),
-    ).toBeTruthy();
-    expect(server.requests.map((request) => new URL(request.url).pathname)).toEqual([
-      "/api/v1/system/info",
-    ]);
+    expect(await within(status).findByText("Server version 9.8.7")).toBeTruthy();
+    expect(server.countRequests("GET", systemInfoPath)).toBe(1);
   });
 
   it("renders the error state on an ApiError after one retry", async () => {
-    const server = counting(respondWithProblem(internalError));
+    const server = createFakeServer([
+      { method: "GET", path: systemInfoPath, respond: () => problemResponse(500, "internal") },
+    ]);
     renderApp("/", { fetch: server.fetch });
 
     const status = await findVersionStatus();
 
     expect(await within(status).findByText("Server unreachable")).toBeTruthy();
-    expect(server.requests).toHaveLength(2);
+    expect(server.countRequests("GET", systemInfoPath)).toBe(2);
   });
 
   it("renders the error state when the server cannot be reached", async () => {

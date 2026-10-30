@@ -19,7 +19,7 @@
     "heading": "Startseite",
     "empty": {
       "title": "Deine Bibliothek ist leer",
-      "hint": "Sobald du eine Bibliothek hinzufügst, erscheinen hier deine Filme, Serien und Musik."
+      "hint": "Trage Ordner unter libraries in der config.yaml ein und starte den Server neu. Dann erscheinen hier deine Filme und Serien."
     }
   },
   "system": {

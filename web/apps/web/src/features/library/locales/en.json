@@ -1,4 +1,50 @@
 {
   "heading": "Library",
-  "placeholder": "The videos of library {{libraryId}} will be listed here."
+  "loading": "Loading library",
+  "itemCount_one": "{{count, number}} video",
+  "itemCount_other": "{{count, number}} videos",
+  "libraryUnavailable": "Folder unavailable",
+  "loadFailed": "The library could not be loaded.",
+  "retry": "Try again",
+  "backHome": "Back to home",
+  "sidebar": {
+    "loading": "Loading libraries",
+    "loadFailed": "Libraries could not be loaded",
+    "unavailable": "Unavailable",
+    "emptyHint": "Add folders under libraries in config.yaml or set {{variable}}, then restart {{productName}}."
+  },
+  "scan": {
+    "start": "Scan library",
+    "running": "Scanning…",
+    "progress": "Scanning the library folder…",
+    "finished": "Last scan: {{added, number}} added, {{updated, number}} updated, {{removed, number}} removed, {{unchanged, number}} unchanged, {{failed, number}} failed, {{skipped, number}} skipped.",
+    "failed": "Scan failed: {{reason}}",
+    "startFailed": "The scan could not be started: {{reason}}"
+  },
+  "items": {
+    "label": "Videos",
+    "loading": "Loading videos",
+    "loadFailed": "The videos could not be loaded.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more videos",
+    "loadMoreFailed": "More videos could not be loaded.",
+    "unavailable": "Unavailable",
+    "empty": {
+      "title": "No videos yet",
+      "hint": "Run a scan to find the videos in this library's folder."
+    }
+  },
+  "errors": {
+    "rootUnavailable": "The library folder is missing or cannot be read.",
+    "proberUnavailable": "ffprobe was not found. Install FFmpeg or set tools.ffprobe in config.yaml, then restart the server.",
+    "catalogFailed": "The scan results could not be saved.",
+    "scanCanceled": "The scan was stopped, for example because the server shut down.",
+    "scanFailed": "The scan stopped because of an unexpected error.",
+    "probeFailed": "The file could not be analysed.",
+    "probeTimedOut": "Analysing the file took too long.",
+    "notFound": "This library does not exist.",
+    "unavailable": "The server is not available right now. Try again in a moment.",
+    "networkError": "The server cannot be reached.",
+    "generic": "Something went wrong. Try again later."
+  }
 }

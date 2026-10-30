@@ -13,7 +13,9 @@ describe("HomePage", () => {
       await within(main).findByRole("heading", { level: 2, name: "Your library is empty" }),
     ).toBeTruthy();
     expect(
-      within(main).getByText("Once you add a library, your movies, shows and music appear here."),
+      within(main).getByText(
+        "Add folders under libraries in config.yaml, then restart the server. Your movies and shows appear here.",
+      ),
     ).toBeTruthy();
   });
 
@@ -28,7 +30,7 @@ describe("HomePage", () => {
     ).toBeTruthy();
     expect(
       within(main).getByText(
-        "Sobald du eine Bibliothek hinzufügst, erscheinen hier deine Filme, Serien und Musik.",
+        "Trage Ordner unter libraries in der config.yaml ein und starte den Server neu. Dann erscheinen hier deine Filme und Serien.",
       ),
     ).toBeTruthy();
   });

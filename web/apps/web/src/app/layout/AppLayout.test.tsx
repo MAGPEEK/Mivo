@@ -1,9 +1,17 @@
-import type { Problem } from "@mivo/api-client";
-import { productName } from "@mivo/ui-tokens";
+import type { LibraryKind, Problem } from "@mivo/api-client";
+import { productId, productName } from "@mivo/ui-tokens";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { fakeSystemInfo, respondNever, respondWithProblem } from "../../test/fakeApi";
+import {
+  createFakeServer,
+  fakeSystemInfo,
+  respondNever,
+  respondWithJson,
+  respondWithProblem,
+} from "../../test/fakeApi";
+import { fakeLibrary, librariesRoute, libraryRoute } from "../../test/libraryFixtures";
+import { stubMediaQueries } from "../../test/mediaQuery";
 import { renderApp } from "../../test/renderApp";
 import { isVisuallyHidden } from "../../test/visibility";
 import { sidebarCollapsedStorageKey } from "./useSidebarState";
@@ -90,13 +98,69 @@ describe("Sidebar navigation", () => {
     expect(homeLink.hasAttribute("aria-current")).toBe(false);
   });
 
-  it("shows the empty libraries section", async () => {
+  it("shows the empty libraries section with the configuration hint", async () => {
     renderApp("/");
 
     const sidebar = await findSidebar();
 
     expect(within(sidebar).getByRole("heading", { level: 2, name: "Libraries" })).toBeTruthy();
-    expect(within(sidebar).getByText("No libraries yet")).toBeTruthy();
+    expect(await within(sidebar).findByText("No libraries yet")).toBeTruthy();
+    expect(
+      within(sidebar).getByText(
+        `Add folders under libraries in config.yaml or set ${productId.toUpperCase()}_LIBRARIES, then restart ${productName}.`,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("links every configured library with the icon of its kind", async () => {
+    const movies = fakeLibrary({ id: "lib-movies", name: "Movies", kind: "movies" });
+    const shows = fakeLibrary({ id: "lib-shows", name: "Shows", kind: "shows", available: false });
+    renderApp("/", { fetch: createFakeServer([librariesRoute([movies, shows])]).fetch });
+
+    const sidebar = await findSidebar();
+    const moviesLink = await within(sidebar).findByRole("link", { name: "Movies" });
+    const showsLink = within(sidebar).getByRole("link", { name: "Shows, Unavailable" });
+
+    expect(moviesLink.getAttribute("href")).toBe("/libraries/lib-movies");
+    expect(showsLink.getAttribute("href")).toBe("/libraries/lib-shows");
+    expect(moviesLink.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("movies");
+    expect(showsLink.querySelector("[data-icon]")?.getAttribute("data-icon")).toBe("shows");
+  });
+
+  it("shows the generic library icon for a kind this client does not know", async () => {
+    const music = fakeLibrary({ name: "Music", kind: "music" as LibraryKind });
+    renderApp("/", { fetch: createFakeServer([librariesRoute([music])]).fetch });
+
+    const link = await within(await findSidebar()).findByRole("link", { name: "Music" });
+
+    expect(link.querySelector("svg")).not.toBeNull();
+    expect(link.querySelector("[data-icon]")).toBeNull();
+  });
+
+  it("keeps the layout when the library list has the wrong shape", async () => {
+    renderApp("/", { fetch: respondWithJson(fakeSystemInfo, 200) });
+
+    const sidebar = await findSidebar();
+
+    expect(await within(sidebar).findByText("No libraries yet")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Home" })).toBeTruthy();
+  });
+
+  it("says when the libraries cannot be loaded", async () => {
+    renderApp("/", { fetch: respondWithProblem(internalError) });
+
+    const sidebar = await findSidebar();
+
+    expect(await within(sidebar).findByText("Libraries could not be loaded")).toBeTruthy();
+  });
+
+  it("translates the libraries section into German", async () => {
+    renderApp("/", { languages: ["de"] });
+
+    const sidebar = await screen.findByRole("navigation", { name: "Hauptnavigation" });
+
+    expect(within(sidebar).getByText("Bibliotheken werden geladen")).toBeTruthy();
+    expect(await within(sidebar).findByText("Noch keine Bibliotheken")).toBeTruthy();
   });
 });
 
@@ -140,7 +204,7 @@ describe("Sidebar collapse toggle", () => {
     const sidebar = await findSidebar();
 
     expect(within(sidebar).getByRole("link", { name: "Home" })).toBeTruthy();
-    expect(within(sidebar).getByText("No libraries yet")).toBeTruthy();
+    expect(await within(sidebar).findByText("No libraries yet")).toBeTruthy();
     const version = await within(sidebar).findByText(`Server version ${fakeSystemInfo.version}`);
     expect(isVisuallyHidden(version)).toBe(true);
   });
@@ -281,5 +345,166 @@ describe("Search shortcut", () => {
 
     expect(notPrevented).toBe(false);
     expect(router.state.location.pathname).toBe("/");
+  });
+});
+
+describe("Sidebar on a narrow screen", () => {
+  function expanded(): boolean {
+    return sidebarToggle().getAttribute("aria-expanded") === "true";
+  }
+
+  async function renderNarrowWithOpenSidebar(path = "/") {
+    stubMediaQueries(true);
+    const movies = fakeLibrary({ id: "lib-movies", name: "Movies" });
+    const rendered = renderApp(path, {
+      fetch: createFakeServer([librariesRoute([movies]), libraryRoute(movies)]).fetch,
+    });
+    const sidebar = await findSidebar();
+    await within(sidebar).findByRole("link", { name: "Movies" });
+    fireEvent.click(sidebarToggle());
+    expect(expanded()).toBe(true);
+    return { ...rendered, sidebar };
+  }
+
+  it("starts collapsed, even when the wide-screen preference is expanded", async () => {
+    stubMediaQueries(true);
+    window.localStorage.setItem(sidebarCollapsedStorageKey, "false");
+
+    renderApp("/");
+    await findSidebar();
+
+    expect(expanded()).toBe(false);
+  });
+
+  it("opens as an overlay without saving it as the preference", async () => {
+    await renderNarrowWithOpenSidebar();
+
+    expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBeNull();
+    fireEvent.click(sidebarToggle());
+    expect(expanded()).toBe(false);
+    expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBeNull();
+  });
+
+  it("closes on Escape and returns focus to the toggle", async () => {
+    await renderNarrowWithOpenSidebar();
+    act(() => {
+      screen.getByRole("link", { name: "Home" }).focus();
+    });
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    expect(expanded()).toBe(false);
+    expect(document.activeElement).toBe(sidebarToggle());
+  });
+
+  it("leaves an Escape that another control already handled alone", async () => {
+    await renderNarrowWithOpenSidebar();
+    const claimEscape = (event: KeyboardEvent) => {
+      event.preventDefault();
+    };
+    document.body.addEventListener("keydown", claimEscape);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    document.body.removeEventListener("keydown", claimEscape);
+    expect(expanded()).toBe(true);
+  });
+
+  it("closes on a press outside, but not on a press inside", async () => {
+    const { sidebar } = await renderNarrowWithOpenSidebar();
+
+    fireEvent.pointerDown(within(sidebar).getByText("Libraries"));
+    expect(expanded()).toBe(true);
+
+    fireEvent.pointerDown(screen.getByRole("main"));
+    expect(expanded()).toBe(false);
+  });
+
+  it("closes when keyboard focus moves out of the navigation", async () => {
+    const { sidebar } = await renderNarrowWithOpenSidebar();
+    act(() => {
+      within(sidebar).getByRole("link", { name: "Home" }).focus();
+    });
+    act(() => {
+      within(sidebar).getByRole("link", { name: "Movies" }).focus();
+    });
+    expect(expanded()).toBe(true);
+
+    act(() => {
+      screen.getByRole("searchbox", { name: "Search" }).focus();
+    });
+
+    expect(expanded()).toBe(false);
+  });
+
+  it("stays open when the window loses focus", async () => {
+    const { sidebar } = await renderNarrowWithOpenSidebar();
+    const homeLink = within(sidebar).getByRole("link", { name: "Home" });
+    act(() => {
+      homeLink.focus();
+    });
+
+    fireEvent.focusOut(homeLink, { relatedTarget: null });
+
+    expect(expanded()).toBe(true);
+  });
+
+  it("closes when a link in it opens another page", async () => {
+    const { sidebar, router } = await renderNarrowWithOpenSidebar();
+
+    fireEvent.click(within(sidebar).getByRole("link", { name: "Movies" }));
+
+    await screen.findByRole("heading", { level: 1, name: "Movies" });
+    expect(router.state.location.pathname).toBe("/libraries/lib-movies");
+    expect(expanded()).toBe(false);
+  });
+
+  it("does not react to Escape or outside presses on a wide screen", async () => {
+    renderApp("/");
+    await findSidebar();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    fireEvent.pointerDown(screen.getByRole("main"));
+
+    expect(expanded()).toBe(true);
+  });
+
+  it("switches between overlay and preference when the window is resized", async () => {
+    const screenWidth = stubMediaQueries(false);
+    renderApp("/");
+    await findSidebar();
+    expect(expanded()).toBe(true);
+
+    act(() => {
+      screenWidth.setMatches(true);
+    });
+    expect(expanded()).toBe(false);
+    fireEvent.click(sidebarToggle());
+    expect(expanded()).toBe(true);
+
+    act(() => {
+      screenWidth.setMatches(false);
+    });
+    expect(expanded()).toBe(true);
+    act(() => {
+      screenWidth.setMatches(true);
+    });
+    expect(expanded()).toBe(false);
+    expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBeNull();
+  });
+
+  it("opens the overlay from the unreachable indicator without saving it", async () => {
+    stubMediaQueries(true);
+    renderApp("/", { fetch: respondWithProblem(internalError) });
+    const sidebar = await findSidebar();
+    const indicator = await within(within(sidebar).getByRole("status")).findByRole("button", {
+      name: "Server unreachable",
+    });
+
+    fireEvent.click(indicator);
+
+    expect(expanded()).toBe(true);
+    expect(document.activeElement).toBe(sidebarToggle());
+    expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBeNull();
   });
 });

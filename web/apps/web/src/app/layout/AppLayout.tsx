@@ -1,10 +1,13 @@
 import { Outlet } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useSidebarLibraries } from "../../features/library";
 import { ServerVersion } from "../../features/system";
 import { Sidebar, TopBar } from "../../shared/ui";
+import { useNarrowScreen } from "./useNarrowScreen";
 import { useSearchShortcut } from "./useSearchShortcut";
+import { useSidebarOverlay } from "./useSidebarOverlay";
 import { useSidebarState } from "./useSidebarState";
 
 // Fixed rather than useId(): React's generated ids contain characters that are awkward in a
@@ -20,20 +23,27 @@ export interface AppLayoutProps {
 /** Frame around every page: sidebar navigation, top bar with search and the page content. */
 export function AppLayout({ children = <Outlet /> }: AppLayoutProps) {
   const { t } = useTranslation();
-  const { collapsed, toggleCollapsed, expandAndFocusToggle, toggleRef } = useSidebarState();
+  const sidebar = useSidebarState(useNarrowScreen());
+  const { collapsed, toggleCollapsed, expandAndFocusToggle, overlayOpen, closeOverlay, toggleRef } =
+    sidebar;
+  const navigationRef = useRef<HTMLElement>(null);
+  useSidebarOverlay({ open: overlayOpen, close: closeOverlay, navigationRef, toggleRef });
   const searchInputRef = useSearchShortcut();
+  const libraries = useSidebarLibraries();
   return (
     <div className="flex min-h-dvh">
       <a
         href={`#${mainContentId}`}
-        className="sr-only rounded-md bg-accent px-4 py-2 font-medium text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-20"
+        className="sr-only rounded-md bg-accent px-4 py-2 font-medium text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-40"
       >
         {t("layout.skipToContent")}
       </a>
       <Sidebar
         collapsed={collapsed}
         onToggleCollapsed={toggleCollapsed}
+        libraries={libraries}
         toggleRef={toggleRef}
+        navigationRef={navigationRef}
         footer={(navigationId) =>
           collapsed ? (
             <ServerVersion compact onExpand={expandAndFocusToggle} sidebarId={navigationId} />
