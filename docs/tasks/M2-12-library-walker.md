@@ -8,7 +8,8 @@ The scanner sees every video file inside a library root – and nothing outside 
 later open of a media file is confined to its root (ADR 0022 path safety).
 
 ## Acceptance criteria
-- [ ] `Walk(ctx, root, visit func(library.FileState) error) error` opens the root with
+- [ ] `Walk(ctx, root, visit func(library.FileState) error) ([]string, error)` (the `[]string` lists
+      the root-relative paths it could not read, see ADR 0022 notes) opens the root with
       `os.Root` and walks it: only names accepted by `library.IsVideoFileName`, skipping
       `library.IsIgnoredDirectory` / `IsHiddenEntry`; reports relative slash paths
       (`library.ParseRelativePath`), size and mtime; stops with `ctx.Err()` when cancelled

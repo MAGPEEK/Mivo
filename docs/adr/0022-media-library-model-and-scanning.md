@@ -99,6 +99,38 @@ name stays unambiguous: `transcode.max_sessions` → `<PREFIX>_TRANSCODE_MAX_SES
   user data.
 - `os.Root` requires Go 1.24+; the module uses 1.27.
 
+## Notes (M2-12 r2)
+
+Implementation details of the walker in `internal/adapters/fs/libraryfs` that the scan (M2-19)
+relies on. They refine the scanning section; the decision itself is unchanged.
+
+- **One listing per physical directory.** The walk lists the real directory tree first (no
+  links followed), in name order, and follows directory links afterwards in discovery order.
+  Every physical directory is listed once, so a file is reported under its path without links,
+  and loops or cross-linked folders ("by genre", "by year") cannot multiply the walk. A
+  directory reached again through a link is skipped and logged at debug level.
+- **File links** are aliases the user made and are reported under their own path. One file can
+  therefore appear in the catalog under several relative paths; the scan must expect such
+  duplicates.
+- **Refused links.** `os.Root` refuses links with an absolute target, even when the target lies
+  inside the root, and therefore every Windows junction (OD-8 A). They are skipped and logged at
+  info level.
+- **Skipped paths.** `Walk(ctx, root, visit) ([]string, error)` returns the root-relative paths
+  it could not read: unreadable directories and entries, directories below the depth limit and
+  real-tree directories with a colliding identity (below). The scan keeps catalog entries equal
+  to or below these paths. When `Walk` returns an error the result is nil and the scan aborts
+  without deleting anything; a root that is unreadable at the start or becomes unreadable during
+  the walk (a dropped NAS share) returns `ErrUnavailable`.
+- **Depth limit.** Directories deeper than 64 levels below the root are not listed; they are
+  logged at warn level and reported as skipped.
+- **Directory identity.** Unix uses device and inode. Windows uses the volume serial number with
+  the 128-bit file id (`FileIdInfo`), because ReFS (including Dev Drives) does not guarantee a
+  unique 64-bit file index; the 64-bit index is the fallback where `FileIdInfo` is not
+  supported. An all-zero or invalid id is unknown: it is never recorded and such a directory is
+  always listed (the depth limit still bounds the walk). Two directories of the real tree with
+  the same id can only mean the file system reports non-unique ids, so the second one is logged
+  at warn level and reported as skipped instead of being dropped silently.
+
 ## Notes (M2-10)
 
 Additions from the schema migration (`00002_media_catalog.sql`, M2-10); they refine the data
