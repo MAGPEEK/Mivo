@@ -1,0 +1,15 @@
+# Build context filter for the static FFmpeg recipe. BuildKit reads it instead of a
+# .dockerignore because it sits next to the Dockerfile with a matching name.
+#
+# Allow list: the context is the recipe itself, and all of it goes into the source archive, so
+# local build output or editor files must never enter it.
+*
+!Dockerfile
+!Dockerfile.dockerignore
+!README.md
+!sources.list
+!scripts/*.sh
+!verify/*.c
+!verify/*.sh
+!verify/*.txt
+!verify/Dockerfile

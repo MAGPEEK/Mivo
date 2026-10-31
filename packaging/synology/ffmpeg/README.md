@@ -9,8 +9,8 @@ directory pins those builds:
 | `fetch.sh` | `fetch.sh <family> <dest-dir> [lock-file]`: downloads, verifies and extracts one family's build (used by the prebuild stage of SPK-07) |
 
 Measured on 2026-10-31 (task SPK-02). **Owner decision OD-SPK-3 (2026-10-31): an own static
-FFmpeg build for all three families (task SPK-15).** The interim pins below stay until SPK-15
-replaces them.
+FFmpeg build for all three families (task SPK-15).** The interim pins below stay until SPK-16
+switches them to the own build.
 
 ## Result
 
@@ -232,6 +232,35 @@ statmount listmount lsm_get_self_attr lsm_set_self_attr lsm_list_modules mseal s
 getxattrat listxattrat removexattrat open_tree_attr`. After 3.10, add: `sched_setattr
 sched_getattr renameat2 seccomp getrandom memfd_create kexec_file_load bpf execveat userfaultfd
 membarrier mlock2`. Names unknown to libseccomp 2.5.4 are skipped.
+
+## Own build
+
+Owner decision of 2026-10-31 (ADR 0026 Notes): once SPK-16 switches the pins, the packages
+bundle an **own static build**, made by the recipe in [`build/`](build/README.md) (task SPK-15; SPK-16 switches `sources.lock`
+and `fetch.sh` to it). It meets every criterion of ADR 0026 section 4 for all three families:
+
+| Family | Build | Fully static | ELF ABI note | Baseline | ffmpeg / ffprobe (MB) |
+|---|---|---|---|---|---|
+| x86_64 | FFmpeg 9.0.2-static1, musl 1.2.6 | ✓ | none (limit 3.10.108) | x86-64 v1 | 24.26 / 24.04 |
+| armv8 | same | ✓ | none (limit 4.4.302) | armv8-a | 18.68 / 18.42 |
+| armv7 | same | ✓ | none (limit 3.10.108) | armv7-a, VFPv3-D16, hard-float; NEON only at run time; 0 VFPv4 instructions | 15.91 / 15.71 |
+
+- GPL version 3 (`--enable-gpl --enable-version3`), libx264 and the native AAC encoder; no
+  `--enable-nonfree`, no libfdk-aac. Also linked: dav1d (AV1), zlib, musl, libgcc.
+- Reduced configuration: exactly the server's `-format_whitelist` demuxers plus image2 (no
+  concat, hls, dash, imf, vobsub), muxers hls/mp4/null, encoders libx264/aac, all decoders.
+- Every input (FFmpeg, x264, dav1d, zlib, musl, gcc, binutils, gmp, mpc, mpfr, musl-cross-make,
+  NASM) is pinned by SHA-256 in `build/sources.list`; a changed checksum fails the build.
+- The recipe also produces the corresponding source archive
+  (`ffmpeg-9.0.2-static1-source.tar`, 168.6 MB, all sources plus the recipe) to attach to every
+  GitHub Release. Two clean builds gave byte-identical binaries.
+- Verified under the emulation conditions above for x86_64 (Opteron_G1), armv8 (cortex-a53) and
+  armv7 (cortex-a9, cortex-a15, and cortex-a9 without NEON and with 16 double registers, the
+  Armada 385/388 case): capabilities, 48/48 corpus files, hostile inputs refused, HLS transcode
+  to h264 + aac fMP4, and the server's FFmpeg adapter tests all pass.
+
+Build commands, configuration, checksums, build times and the full results:
+[`build/README.md`](build/README.md).
 
 ## Corresponding source (GPL-3.0 section 6)
 
