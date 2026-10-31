@@ -37,9 +37,12 @@ func directoryIdentity(_ *os.File, info fs.FileInfo) (directoryID, error) {
 	return directoryID{device: uint64(stat.Dev), indexLow: stat.Ino}, nil
 }
 
-// videoFileInfo reads the metadata of a regular file found by listing its directory. On unix,
-// DirEntry.Info would lstat a path built from the root's name outside the os.Root, so the
-// confined Lstat is used instead.
+// videoFileInfo reads the metadata of a regular file found by listing its directory. In Go
+// 1.27 the entries of a directory opened through an os.Root already carry metadata read with
+// lstatat on the directory handle, so DirEntry.Info is confined too. That is an
+// implementation detail, though: the documented DirEntry.Info may lstat a path built from the
+// directory's name, outside the root. The root's Lstat is confined by contract and costs one
+// metadata read per video file.
 func videoFileInfo(root *os.Root, relativePath string, _ fs.DirEntry) (fs.FileInfo, error) {
 	info, err := root.Lstat(relativePath)
 	if err != nil {

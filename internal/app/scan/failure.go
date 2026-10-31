@@ -37,15 +37,17 @@ func fail(code ErrorCode, cause string, err error) error {
 	return &failure{code: code, cause: cause, err: err}
 }
 
-// describeEnd maps the error that ended a scan to its code and a loggable cause.
-// Cancellation wins over the code of the step it interrupted, because a shutdown is not the
-// step's fault.
-func describeEnd(err error) (ErrorCode, string) {
+// describeEnd maps the error that ended a scan to its code and a loggable cause; canceled
+// tells whether the scan context was done when the scan ended. Cancellation wins over the
+// code of the step it interrupted, because a shutdown is not the step's fault. The context
+// is consulted besides the error because not every interrupted step wraps context.Canceled:
+// SQLite reports an interrupted statement as a plain "interrupted" error (ADR 0022 notes).
+func describeEnd(err error, canceled bool) (ErrorCode, string) {
 	if err == nil {
 		return ErrorCodeNone, ""
 	}
 
-	if errors.Is(err, context.Canceled) {
+	if canceled || errors.Is(err, context.Canceled) {
 		return ErrorCodeCanceled, ""
 	}
 

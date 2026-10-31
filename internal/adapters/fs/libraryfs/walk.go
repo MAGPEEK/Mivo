@@ -18,9 +18,10 @@ const (
 	readAllEntries = -1
 	// probeEntries is enough to tell a readable root from a lost one.
 	probeEntries = 1
-	// maxDirectoryDepth backstops the walk against pathological trees, including directories
-	// with an unknown identity, which are always listed; real libraries nest a handful of
-	// levels. Deeper directories are logged and reported as skipped.
+	// maxDirectoryDepth backstops the walk against pathological real trees, whose directories
+	// are listed even with an unknown identity; real libraries nest a handful of levels. It
+	// does not bound links: those are listed once by identity, or skipped when the identity is
+	// unknown. Deeper directories are logged and reported as skipped.
 	maxDirectoryDepth = 64
 	// Log keys; paths are always relative to the library root.
 	pathLogKey  = "path"
@@ -28,6 +29,9 @@ const (
 	limitLogKey = "limit"
 	// alreadyWalkedMessage is logged at debug level for a directory reached again through a link.
 	alreadyWalkedMessage = "skipping directory that was already walked"
+	// unknownLinkedDirectoryMessage is logged at info level for a directory reached through a
+	// link whose identity the file system does not report.
+	unknownLinkedDirectoryMessage = "skipping linked directory whose identity is unknown; the file system does not report directory ids"
 	// collisionMessage is logged when two directories of the real tree report the same identity.
 	collisionMessage = "skipping directory whose identity matches another directory; the file system may not report unique ids"
 	// linkModes are the entry types that point elsewhere: symlinks, and on Windows junctions and
@@ -55,17 +59,19 @@ func New(logger *slog.Logger) (*FileSystem, error) {
 //
 // The real directory tree is walked first, directories in name order; directory links are
 // followed afterwards, and every physical directory is listed once, so a file keeps the path
-// without links and cross-linked folders cannot multiply the walk. File links are reported
-// under their own path, so one file may appear under several paths. Hidden entries, NAS and OS
-// system folders (library.IsIgnoredDirectory), non-video files, special files and links that
-// leave the root are skipped. Entries whose path the catalog cannot store are logged and
-// skipped.
+// without links and cross-linked folders cannot multiply the walk. That needs directory ids:
+// a directory reached through a link whose identity the file system does not report is not
+// listed (logged at info), while real-tree directories are listed with any identity. File
+// links are reported under their own path, so one file may appear under several paths. Hidden
+// entries, NAS and OS system folders (library.IsIgnoredDirectory), non-video files, special
+// files and links that leave the root are skipped. Entries whose path the catalog cannot
+// store are logged and skipped.
 //
 // Walk returns the root-relative paths it could not read: unreadable directories and entries,
-// directories below the depth limit and directories of the real tree whose identity collides
-// with another one. The caller must keep catalog entries equal to or below these paths: their
-// files were not seen, but they were not deleted either. On error the result is nil and the
-// caller must not delete anything.
+// directories below the depth limit, directories of the real tree whose identity collides
+// with another one and linked directories with an unknown identity. The caller must keep
+// catalog entries equal to or below these paths: their files were not seen, but they were
+// not deleted either. On error the result is nil and the caller must not delete anything.
 //
 // A root that cannot be opened or listed, or that becomes unreadable during the walk, returns
 // an error wrapping domain.ErrUnavailable. Walk stops with ctx.Err() when ctx ends (checked
@@ -214,10 +220,16 @@ func (w *walk) list(at location) ([]fs.DirEntry, error) {
 
 // admit decides whether a directory is listed. The identity is checked before the depth limit,
 // so a link back to a walked directory stays a harmless duplicate at any depth. Unknown
-// identities are never recorded: such a directory is always listed, bounded by the depth limit.
+// identities are never recorded: such a directory of the real tree is always listed, bounded
+// by the depth limit, while one reached through a link is skipped (ADR 0022 notes M2-40).
 func (w *walk) admit(at location, identity directoryID) bool {
 	if _, seen := w.visited[identity]; seen && identity.known() {
 		w.duplicate(at)
+		return false
+	}
+
+	if at.throughLink && !identity.known() {
+		w.unknownLinkedDirectory(at)
 		return false
 	}
 
@@ -247,6 +259,16 @@ func (w *walk) duplicate(at location) {
 	}
 
 	w.logger.Warn(collisionMessage, pathAttr(at.relativePath))
+	w.skipped = append(w.skipped, at.relativePath)
+}
+
+// unknownLinkedDirectory handles a directory reached through a link whose identity the file
+// system does not report. The walk cannot tell whether the link points back at a walked
+// ancestor: following every such link would list that ancestor, with its links, once more on
+// every level, so the pending links would multiply faster than the depth limit could stop
+// them. The directory is reported as skipped, so the scan keeps catalog entries below it.
+func (w *walk) unknownLinkedDirectory(at location) {
+	w.logger.Info(unknownLinkedDirectoryMessage, pathAttr(at.relativePath))
 	w.skipped = append(w.skipped, at.relativePath)
 }
 

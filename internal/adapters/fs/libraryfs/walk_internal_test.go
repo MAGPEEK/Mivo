@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -60,9 +62,20 @@ type injectedWalkResult struct {
 	records []pathRecord
 }
 
+// walkTimeout bounds a walk of these tests, so a walk that multiplies itself fails the test
+// instead of hanging it.
+const walkTimeout = 10 * time.Second
+
 // walkWithIdentity walks a fresh library with the files below, identifying directories with
 // identify instead of the file system.
 func walkWithIdentity(t *testing.T, identify func(*os.File) (directoryID, error), files ...string) injectedWalkResult {
+	t.Helper()
+
+	return walkRootWithIdentity(t, newInternalLibrary(t, files...), identify)
+}
+
+// newInternalLibrary creates a library root holding the files below.
+func newInternalLibrary(t *testing.T, files ...string) string {
 	t.Helper()
 
 	root := t.TempDir()
@@ -76,6 +89,33 @@ func walkWithIdentity(t *testing.T, identify func(*os.File) (directoryID, error)
 			t.Fatalf("write %s: %v", path, err)
 		}
 	}
+
+	return root
+}
+
+// symlinkInLibraryOrSkip creates the link (a slash-separated path below root) to target, or
+// skips the test where the OS does not allow symlinks (Windows without developer mode).
+func symlinkInLibraryOrSkip(t *testing.T, root, link, target string) {
+	t.Helper()
+
+	path := filepath.Join(root, filepath.FromSlash(link))
+	if err := os.MkdirAll(filepath.Dir(path), internalTestDirMode); err != nil {
+		t.Fatalf("create %s: %v", filepath.Dir(path), err)
+	}
+
+	if err := os.Symlink(filepath.FromSlash(target), path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlinks not permitted on this Windows account: %v", err)
+		}
+
+		t.Fatalf("symlink %s -> %s: %v", link, target, err)
+	}
+}
+
+// walkRootWithIdentity walks root, identifying directories with identify instead of the file
+// system, and fails the test when the walk does not end within walkTimeout.
+func walkRootWithIdentity(t *testing.T, root string, identify func(*os.File) (directoryID, error)) injectedWalkResult {
+	t.Helper()
 
 	libraryRoot, err := os.OpenRoot(root)
 	if err != nil {
@@ -93,8 +133,13 @@ func walkWithIdentity(t *testing.T, identify func(*os.File) (directoryID, error)
 	})
 	walker.identify = identify
 
-	if err := walker.run(t.Context()); err != nil {
-		t.Fatalf("run error = %v", err)
+	// The walk checks its context before every entry, so a walk that multiplies itself ends
+	// with the deadline instead of hanging the test.
+	ctx, cancel := context.WithTimeout(t.Context(), walkTimeout)
+	defer cancel()
+
+	if err := walker.run(ctx); err != nil {
+		t.Fatalf("run error = %v (after %d paths)", err, len(result.paths))
 	}
 
 	result.skipped = walker.skipped
@@ -163,6 +208,111 @@ func TestWalkListsEveryDirectoryWithAnUnknownIdentity(t *testing.T) {
 	}
 }
 
+// Without directory ids the walk cannot tell a link back to an ancestor from a new folder.
+// Following such links would list the ancestor again with every level, multiplying the
+// pending links; link-reached directories with an unknown identity are therefore skipped.
+func TestWalkSkipsLinkedDirectoriesWithAnUnknownIdentity(t *testing.T) {
+	t.Parallel()
+
+	links := []string{"links/up-1", "links/up-2", "links/up-3"}
+
+	root := newInternalLibrary(t, "top.mkv", "a/movie.mkv", "a/b/clip.mp4")
+	for _, link := range links {
+		symlinkInLibraryOrSkip(t, root, link, "..")
+	}
+
+	unknown := func(*os.File) (directoryID, error) { return directoryID{device: 7}, nil }
+
+	result := walkRootWithIdentity(t, root, unknown)
+
+	want := []string{"a/b/clip.mp4", "a/movie.mkv", "top.mkv"}
+	if !slices.Equal(result.paths, want) {
+		const shown = 10
+		t.Errorf("walked %d paths, first %q, want each real-tree file once: %q",
+			len(result.paths), result.paths[:min(len(result.paths), shown)], want)
+	}
+
+	if !slices.Equal(result.skipped, links) {
+		t.Errorf("skipped = %q, want the links %q", result.skipped, links)
+	}
+
+	for _, link := range links {
+		want := pathRecord{level: slog.LevelInfo, message: unknownLinkedDirectoryMessage, path: link}
+		if !slices.Contains(result.records, want) {
+			t.Errorf("records = %+v, want %+v", result.records, want)
+		}
+	}
+}
+
+// The admit rules without a file system, so they also run where symlinks need privileges.
+func TestAdmitListsUnknownIdentitiesOnlyInTheRealTree(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		at          location
+		wantAdmit   bool
+		wantSkipped []string
+		wantLevel   slog.Level
+	}{
+		{name: "real tree", at: location{relativePath: "a", depth: 1}, wantAdmit: true},
+		{
+			name: "through a link", at: location{relativePath: "links/up", depth: 2, throughLink: true},
+			wantSkipped: []string{"links/up"}, wantLevel: slog.LevelInfo,
+		},
+	}
+
+	for _, testCase := range testCases {
+		recorder := pathRecorder{mutex: &sync.Mutex{}, records: &[]pathRecord{}}
+		walker := newWalk(nil, slog.New(recorder), func(library.FileState) error { return nil })
+
+		admitted := walker.admit(testCase.at, directoryID{device: 7})
+
+		if admitted != testCase.wantAdmit || !slices.Equal(walker.skipped, testCase.wantSkipped) {
+			t.Errorf("%s: admit = %t, skipped %q, want %t, %q",
+				testCase.name, admitted, walker.skipped, testCase.wantAdmit, testCase.wantSkipped)
+		}
+
+		wantRecords := []pathRecord{}
+		if !testCase.wantAdmit {
+			wantRecords = []pathRecord{{level: testCase.wantLevel, message: unknownLinkedDirectoryMessage, path: testCase.at.relativePath}}
+		}
+
+		if !slices.Equal(*recorder.records, wantRecords) {
+			t.Errorf("%s: records = %+v, want %+v", testCase.name, *recorder.records, wantRecords)
+		}
+
+		if len(walker.visited) != 0 {
+			t.Errorf("%s: visited = %v, want an unknown identity never recorded", testCase.name, walker.visited)
+		}
+	}
+}
+
+func TestWalkListsALinkedDirectoryWithAKnownIdentityOnce(t *testing.T) {
+	t.Parallel()
+
+	root := newInternalLibrary(t, "a/movie.mkv", "b/clip.mp4")
+	symlinkInLibraryOrSkip(t, root, "b/to-a", "../a")
+	symlinkInLibraryOrSkip(t, root, "b/up", "..")
+
+	result := walkRootWithIdentity(t, root, identifyDirectory)
+
+	if want := []string{"a/movie.mkv", "b/clip.mp4"}; !slices.Equal(result.paths, want) {
+		t.Errorf("walked paths = %q, want %q", result.paths, want)
+	}
+
+	if len(result.skipped) != 0 {
+		t.Errorf("skipped = %q, want none: a walked directory is no gap", result.skipped)
+	}
+
+	for _, link := range []string{"b/to-a", "b/up"} {
+		want := pathRecord{level: slog.LevelDebug, message: alreadyWalkedMessage, path: link}
+		if !slices.Contains(result.records, want) {
+			t.Errorf("records = %+v, want %+v", result.records, want)
+		}
+	}
+}
+
 func TestWalkSkipsDirectoriesItCannotIdentify(t *testing.T) {
 	t.Parallel()
 
@@ -196,7 +346,9 @@ func TestWalkSkipsDirectoriesItCannotIdentify(t *testing.T) {
 func TestWalkRecognisesADuplicateBeforeTheDepthLimit(t *testing.T) {
 	t.Parallel()
 
-	// One directory below the limit shares the root's id: as a link duplicate it is no failure.
+	// The deepest directory, beyond the depth limit, shares the root's id. The identity is
+	// checked first, so the walk reports it as a collision of the real tree, not as too deep;
+	// reached through a link, the same check makes it a harmless duplicate at any depth.
 	deep := strings.Repeat("d/", maxDirectoryDepth+1)
 
 	identify := func(directory *os.File) (directoryID, error) {

@@ -289,20 +289,25 @@ func (prober *recordingProber) stats() (activeNow, maxActive, canceled int) {
 	return prober.active, prober.maxActive, prober.canceledProbes
 }
 
-// memoryCatalog is an in-memory catalog writer keyed by file ID. It enforces the record
-// rules of the sqlite adapter (see scan.ProbedFile) and, like the adapter, ignores unknown
-// or foreign IDs in RemoveFiles. Both kinds of misuse are also recorded as violations,
-// which the harness asserts never happen: the scan must not depend on them.
+// memoryCatalog is an in-memory catalog writer keyed by file ID. It enforces the rules of
+// the sqlite adapter (see scan.CatalogWriter.SaveProbedFile) with the same errors and, like
+// the adapter, ignores unknown or foreign IDs in RemoveFiles. Both kinds of misuse are also
+// recorded as violations, which the harness asserts never happen: the scan must not depend
+// on them.
 type memoryCatalog struct {
 	mutex sync.Mutex
 	files map[string]scan.ProbedFile
-	// libraryKinds maps library IDs to their kinds for the item kind rule.
+	// libraryKinds maps the known library IDs to their kinds; another library is unknown.
 	libraryKinds map[string]library.Kind
 	violations   []string
 	removed      []string
 	statesErr    error
 	saveErr      error
 	removeErr    error
+	// beforeStates and beforeSave, when set, run first in FileStates and SaveProbedFile; a
+	// non-nil error is returned at once.
+	beforeStates func() error
+	beforeSave   func() error
 	saves        int
 }
 
@@ -311,6 +316,12 @@ func newMemoryCatalog() *memoryCatalog {
 }
 
 func (catalog *memoryCatalog) FileStates(_ context.Context, libraryID string) ([]scan.CatalogFile, error) {
+	if catalog.beforeStates != nil {
+		if err := catalog.beforeStates(); err != nil {
+			return nil, err
+		}
+	}
+
 	catalog.mutex.Lock()
 	defer catalog.mutex.Unlock()
 
@@ -340,6 +351,12 @@ func (catalog *memoryCatalog) FileStates(_ context.Context, libraryID string) ([
 }
 
 func (catalog *memoryCatalog) SaveProbedFile(_ context.Context, record scan.ProbedFile) error {
+	if catalog.beforeSave != nil {
+		if err := catalog.beforeSave(); err != nil {
+			return err
+		}
+	}
+
 	catalog.mutex.Lock()
 	defer catalog.mutex.Unlock()
 
@@ -347,10 +364,10 @@ func (catalog *memoryCatalog) SaveProbedFile(_ context.Context, record scan.Prob
 		return catalog.saveErr
 	}
 
-	if violation := catalog.checkRecord(record); violation != "" {
-		catalog.violations = append(catalog.violations, violation)
+	if err := catalog.check(record); err != nil {
+		catalog.violations = append(catalog.violations, err.Error())
 
-		return fmt.Errorf("save %s: %s: %w", record.File.RelativePath, violation, domain.ErrInvalid)
+		return fmt.Errorf("save %s: %w", record.File.RelativePath, err)
 	}
 
 	catalog.saves++
@@ -359,8 +376,23 @@ func (catalog *memoryCatalog) SaveProbedFile(_ context.Context, record scan.Prob
 	return nil
 }
 
-// checkRecord applies the rules of scan.ProbedFile; the empty string means none is broken.
-func (catalog *memoryCatalog) checkRecord(record scan.ProbedFile) string {
+// check applies the rules of scan.CatalogWriter.SaveProbedFile in the order the sqlite
+// adapter checks them and returns the error the adapter returns.
+func (catalog *memoryCatalog) check(record scan.ProbedFile) error {
+	if violation := checkRecord(record); violation != "" {
+		return fmt.Errorf("%s: %w", violation, domain.ErrInvalid)
+	}
+
+	if err := catalog.checkOwners(record); err != nil {
+		return err
+	}
+
+	return catalog.checkPath(record.File)
+}
+
+// checkRecord applies the record rules of scan.ProbedFile that need no stored data; the
+// empty string means none is broken.
+func checkRecord(record scan.ProbedFile) string {
 	item, file := record.Item, record.File
 
 	switch {
@@ -372,36 +404,80 @@ func (catalog *memoryCatalog) checkRecord(record scan.ProbedFile) string {
 		return "item and file belong to different libraries"
 	case item.ID != file.ItemID:
 		return "file does not point at the item"
-	case catalog.hasItem(item.ID):
-		return ""
-	}
-
-	return checkNewItem(item, catalog.libraryKinds[item.LibraryID])
-}
-
-func checkNewItem(item library.Item, libraryKind library.Kind) string {
-	wantKind, err := library.ItemKindForLibrary(libraryKind)
-
-	switch {
-	case item.CreatedAt.IsZero():
-		return "new item without creation time"
-	case strings.TrimSpace(item.Title) == "":
-		return "new item with a blank title"
-	case err != nil || item.Kind != wantKind:
-		return fmt.Sprintf("new item kind %q in a %q library", item.Kind, libraryKind)
 	default:
 		return ""
 	}
 }
 
-func (catalog *memoryCatalog) hasItem(itemID string) bool {
+// checkOwners keeps a stored file in its item and library; a new file needs a stored item
+// of its library or a valid new item.
+func (catalog *memoryCatalog) checkOwners(record scan.ProbedFile) error {
+	file := record.File
+
+	if stored, found := catalog.files[file.ID]; found {
+		if stored.File.ItemID != file.ItemID || stored.File.LibraryID != file.LibraryID {
+			return fmt.Errorf("stored file %s belongs to item %s in library %s: %w",
+				file.ID, stored.File.ItemID, stored.File.LibraryID, domain.ErrInvalid)
+		}
+
+		return nil
+	}
+
+	storedLibrary, found := catalog.itemLibrary(record.Item.ID)
+	if !found {
+		return catalog.checkNewItem(record.Item)
+	}
+
+	if storedLibrary != record.Item.LibraryID {
+		return fmt.Errorf("stored item %s belongs to library %s: %w", record.Item.ID, storedLibrary, domain.ErrInvalid)
+	}
+
+	return nil
+}
+
+func (catalog *memoryCatalog) checkNewItem(item library.Item) error {
+	switch {
+	case strings.TrimSpace(item.Title) == "":
+		return fmt.Errorf("new item with a blank title: %w", domain.ErrInvalid)
+	case item.CreatedAt.IsZero():
+		return fmt.Errorf("new item without creation time: %w", domain.ErrInvalid)
+	}
+
+	libraryKind, known := catalog.libraryKinds[item.LibraryID]
+	if !known {
+		return fmt.Errorf("library %s: %w", item.LibraryID, domain.ErrNotFound)
+	}
+
+	if wantKind, err := library.ItemKindForLibrary(libraryKind); err != nil || item.Kind != wantKind {
+		return fmt.Errorf("new item kind %q in a %q library: %w", item.Kind, libraryKind, domain.ErrInvalid)
+	}
+
+	return nil
+}
+
+// checkPath refuses another file ID at a stored path of the library, like the adapter's
+// UNIQUE(library_id, relative_path).
+func (catalog *memoryCatalog) checkPath(file media.File) error {
 	for _, stored := range catalog.files {
-		if stored.Item.ID == itemID {
-			return true
+		if stored.File.LibraryID == file.LibraryID && stored.File.RelativePath == file.RelativePath &&
+			stored.File.ID != file.ID {
+			return fmt.Errorf("file %s is stored at %s: %w", stored.File.ID, file.RelativePath, domain.ErrConflict)
 		}
 	}
 
-	return false
+	return nil
+}
+
+// itemLibrary returns the library of a stored item; items exist only while they own a file,
+// as in the adapter, which deletes items left without files.
+func (catalog *memoryCatalog) itemLibrary(itemID string) (string, bool) {
+	for _, stored := range catalog.files {
+		if stored.Item.ID == itemID {
+			return stored.Item.LibraryID, true
+		}
+	}
+
+	return "", false
 }
 
 func (catalog *memoryCatalog) RemoveFiles(_ context.Context, libraryID string, fileIDs []string) error {

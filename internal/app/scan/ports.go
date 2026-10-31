@@ -72,8 +72,14 @@ type ProbedFile struct {
 type CatalogWriter interface {
 	// FileStates returns every media file of the library.
 	FileStates(ctx context.Context, libraryID string) ([]CatalogFile, error)
-	// SaveProbedFile creates or updates one file, its item and its streams atomically; see
-	// ProbedFile for the rules a record must meet.
+	// SaveProbedFile creates or updates one file, its item and its streams atomically. It
+	// changes nothing and returns an error wrapping
+	//   - domain.ErrInvalid for a record that breaks the rules of ProbedFile,
+	//   - domain.ErrNotFound for an unknown library,
+	//   - domain.ErrConflict when another file ID is stored at the same relative path of
+	//     the library,
+	//   - domain.ErrInvalid when a stored file ID belongs to another item or library, or a
+	//     stored item to another library.
 	SaveProbedFile(ctx context.Context, record ProbedFile) error
 	// RemoveFiles deletes the files and the items left without files, atomically. It is
 	// idempotent: unknown IDs and IDs of another library are ignored, so callers cannot

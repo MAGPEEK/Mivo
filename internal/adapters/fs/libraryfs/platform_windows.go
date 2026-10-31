@@ -4,6 +4,7 @@ package libraryfs
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
@@ -50,16 +51,49 @@ func transientErrors() []error {
 func directoryIdentity(directory *os.File, _ fs.FileInfo) (directoryID, error) {
 	handle := windows.Handle(directory.Fd())
 
+	return identityWithFallback(
+		func() (fileIDInfo, error) { return queryFileIDInfo(handle) },
+		func() (directoryID, error) { return legacyIdentity(handle) },
+	)
+}
+
+// identityWithFallback reads the 128-bit file id and falls back to the 64-bit file index only
+// when the file system does not support FileIdInfo. Any other error is returned: falling back
+// on it would hand a ReFS volume its non-unique index, and a collision drops a subtree.
+func identityWithFallback(
+	readFileID func() (fileIDInfo, error), readIndex func() (directoryID, error),
+) (directoryID, error) {
+	info, err := readFileID()
+
+	switch {
+	case err == nil:
+		return identityFromFileIDInfo(info), nil
+	case fileIDInfoUnsupported(err):
+		return readIndex()
+	default:
+		return directoryID{}, fmt.Errorf("read file id: %w", err)
+	}
+}
+
+// fileIDInfoUnsupported reports the errors of a file system or redirector without the
+// FileIdInfo class: STATUS_INVALID_INFO_CLASS (ERROR_INVALID_PARAMETER), STATUS_NOT_SUPPORTED
+// and STATUS_NOT_IMPLEMENTED (ERROR_INVALID_FUNCTION).
+func fileIDInfoUnsupported(err error) bool {
+	return errors.Is(err, windows.ERROR_INVALID_PARAMETER) || errors.Is(err, windows.ERROR_NOT_SUPPORTED) ||
+		errors.Is(err, windows.ERROR_INVALID_FUNCTION)
+}
+
+func queryFileIDInfo(handle windows.Handle) (fileIDInfo, error) {
 	var info fileIDInfo
 
 	// The buffer is a Go struct with the exact FILE_ID_INFO layout; its size is passed along.
 	err := windows.GetFileInformationByHandleEx(handle, windows.FileIdInfo,
 		(*byte)(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info))) //nolint:gosec // G103: FILE_ID_INFO buffer for a Win32 call
-	if err == nil {
-		return identityFromFileIDInfo(info), nil
+	if err != nil {
+		return fileIDInfo{}, fmt.Errorf("query FileIdInfo: %w", err)
 	}
 
-	return legacyIdentity(handle)
+	return info, nil
 }
 
 // identityFromFileIDInfo converts FILE_ID_INFO; a zero or all-ones (invalid) id is unknown.

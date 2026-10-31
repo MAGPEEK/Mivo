@@ -765,33 +765,52 @@ func TestFinishedScanIsLoggedWithCountsAndRelativePathsOnly(t *testing.T) {
 	}
 }
 
-func TestTheCatalogFakeEnforcesTheAdapterRules(t *testing.T) {
-	t.Parallel()
-
+// probedRecord returns a valid record of a new movie file.
+func probedRecord(libraryID, itemID, fileID, relativePath string) scan.ProbedFile {
 	moment := time.Date(2026, time.October, 30, 18, 0, 0, 0, time.UTC)
-	valid := scan.ProbedFile{
+
+	return scan.ProbedFile{
 		Item: library.Item{
-			ID: "item", LibraryID: moviesID, Kind: library.ItemKindMovie,
+			ID: itemID, LibraryID: libraryID, Kind: library.ItemKindMovie,
 			Title: "A", SortTitle: "a", CreatedAt: moment,
 		},
 		File: media.File{
-			ID: "file", ItemID: "item", LibraryID: moviesID, RelativePath: "a.mkv",
+			ID: fileID, ItemID: itemID, LibraryID: libraryID, RelativePath: relativePath,
 			Description: videoDescription(),
 		},
 		ProbedAt: moment,
 	}
+}
+
+// Each row breaks one rule of scan.CatalogWriter.SaveProbedFile against a catalog that holds
+// one file; the fake must return the adapter's error, change nothing and record a violation.
+func TestTheCatalogFakeEnforcesTheAdapterRules(t *testing.T) {
+	t.Parallel()
+
+	newRecord := func(change func(*scan.ProbedFile)) scan.ProbedFile {
+		record := probedRecord(moviesID, "item-new", "file-new", "b.mkv")
+		change(&record)
+
+		return record
+	}
 
 	tests := []struct {
-		name   string
-		mutate func(*scan.ProbedFile)
+		name    string
+		record  scan.ProbedFile
+		wantErr error
 	}{
-		{name: "zero probed time", mutate: func(r *scan.ProbedFile) { r.ProbedAt = time.Time{} }},
-		{name: "invalid file", mutate: func(r *scan.ProbedFile) { r.File.Size = -1 }},
-		{name: "libraries differ", mutate: func(r *scan.ProbedFile) { r.Item.LibraryID = showsID }},
-		{name: "file points elsewhere", mutate: func(r *scan.ProbedFile) { r.File.ItemID = "other" }},
-		{name: "new item without creation time", mutate: func(r *scan.ProbedFile) { r.Item.CreatedAt = time.Time{} }},
-		{name: "new item with blank title", mutate: func(r *scan.ProbedFile) { r.Item.Title = " " }},
-		{name: "new item of the wrong kind", mutate: func(r *scan.ProbedFile) { r.Item.Kind = library.ItemKindEpisode }},
+		{name: "zero probed time", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.ProbedAt = time.Time{} })},
+		{name: "invalid file", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.File.Size = -1 })},
+		{name: "libraries differ", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.Item.LibraryID = showsID })},
+		{name: "file points elsewhere", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.File.ItemID = "other" })},
+		{name: "new item without creation time", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.Item.CreatedAt = time.Time{} })},
+		{name: "new item with blank title", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.Item.Title = " " })},
+		{name: "new item of the wrong kind", wantErr: domain.ErrInvalid, record: newRecord(func(r *scan.ProbedFile) { r.Item.Kind = library.ItemKindEpisode })},
+		{name: "unknown library", wantErr: domain.ErrNotFound, record: probedRecord("lib-unknown", "item-new", "file-new", "b.mkv")},
+		{name: "other file id at a stored path", wantErr: domain.ErrConflict, record: probedRecord(moviesID, "item-new", "file-new", "a.mkv")},
+		{name: "stored file moved to another item", wantErr: domain.ErrInvalid, record: probedRecord(moviesID, "item-new", "file", "a.mkv")},
+		{name: "stored file moved to another library", wantErr: domain.ErrInvalid, record: probedRecord(showsID, "item", "file", "a.mkv")},
+		{name: "new file of a stored item in another library", wantErr: domain.ErrInvalid, record: probedRecord(showsID, "item", "file-new", "b.mkv")},
 	}
 
 	for _, test := range tests {
@@ -799,26 +818,128 @@ func TestTheCatalogFakeEnforcesTheAdapterRules(t *testing.T) {
 			t.Parallel()
 
 			catalog := newHarness(t).catalog
-			record := valid
-			test.mutate(&record)
+			if err := catalog.SaveProbedFile(context.Background(), probedRecord(moviesID, "item", "file", "a.mkv")); err != nil {
+				t.Fatalf("SaveProbedFile(stored) error = %v", err)
+			}
 
-			if err := catalog.SaveProbedFile(context.Background(), record); !errors.Is(err, domain.ErrInvalid) {
-				t.Errorf("SaveProbedFile() error = %v, want ErrInvalid", err)
+			if err := catalog.SaveProbedFile(context.Background(), test.record); !errors.Is(err, test.wantErr) {
+				t.Errorf("SaveProbedFile() error = %v, want %v", err, test.wantErr)
+			}
+
+			if paths, saves := catalog.paths(), catalog.saveCount(); !slices.Equal(paths, []string{"a.mkv"}) || saves != 1 {
+				t.Errorf("after the refused save: paths %q, %d saves, want [a.mkv] and 1", paths, saves)
+			}
+
+			if violations := catalog.violationList(); len(violations) != 1 {
+				t.Errorf("violations = %q, want exactly one", violations)
 			}
 		})
 	}
+}
+
+func TestTheCatalogFakeAcceptsValidSavesAndIgnoresForeignRemoves(t *testing.T) {
+	t.Parallel()
 
 	catalog := newHarness(t).catalog
-	if err := catalog.SaveProbedFile(context.Background(), valid); err != nil {
-		t.Fatalf("SaveProbedFile(valid) error = %v", err)
+	valid := []scan.ProbedFile{
+		probedRecord(moviesID, "item", "file", "a.mkv"),
+		probedRecord(moviesID, "item", "file-2", "b.mkv"),
+		probedRecord(moviesID, "item", "file", "c.mkv"),
+		probedRecord(showsID, "show-item", "show-file", "a.mkv"),
+	}
+	valid[3].Item.Kind = library.ItemKindEpisode
+
+	for _, record := range valid {
+		if err := catalog.SaveProbedFile(context.Background(), record); err != nil {
+			t.Fatalf("SaveProbedFile(%s at %s) error = %v", record.File.ID, record.File.RelativePath, err)
+		}
 	}
 
 	if err := catalog.RemoveFiles(context.Background(), showsID, []string{"file", "unknown"}); err != nil {
 		t.Errorf("RemoveFiles() of foreign and unknown ids error = %v, want nil (ignored)", err)
 	}
 
-	if paths := catalog.paths(); len(paths) != 1 || len(catalog.violationList()) != 2 {
-		t.Errorf("after a foreign remove: paths %q, violations %q, want the file kept and 2 violations",
+	if paths := catalog.paths(); len(paths) != 3 || len(catalog.violationList()) != 2 {
+		t.Errorf("after a foreign remove: paths %q, violations %q, want 3 paths kept and 2 violations",
 			paths, catalog.violationList())
+	}
+}
+
+// A scan stopped by Close ends with scan_canceled even when the interrupted catalog call
+// returns a plain error, as SQLite does for an interrupted statement; while the scan context
+// is alive the same error is a catalog failure.
+func TestAScanStoppedDuringACatalogCallIsCanceled(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		close     bool
+		intercept func(*memoryCatalog, func() error)
+		wantCode  scan.ErrorCode
+	}{
+		{
+			name: "file states interrupted", close: true, wantCode: scan.ErrorCodeCanceled,
+			intercept: func(c *memoryCatalog, hook func() error) { c.beforeStates = hook },
+		},
+		{
+			name: "save interrupted", close: true, wantCode: scan.ErrorCodeCanceled,
+			intercept: func(c *memoryCatalog, hook func() error) { c.beforeSave = hook },
+		},
+		{
+			name: "save failed while alive", close: false, wantCode: scan.ErrorCodeCatalogFailed,
+			intercept: func(c *memoryCatalog, hook func() error) { c.beforeSave = hook },
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			h := newHarness(t)
+			h.walker.set(moviesRoot, walkResult{files: []library.FileState{fileAt("a.mkv", 1)}})
+			test.intercept(h.catalog, func() error {
+				if test.close {
+					closeWithoutWaiting(h.service)
+				}
+
+				return errors.New("interrupted (9)")
+			})
+			h.start(t)
+
+			status := h.scan(t, moviesID)
+
+			assertState(t, status, scan.StateFailed, test.wantCode)
+			assertFinishLine(t, h.logs.String(), test.wantCode == scan.ErrorCodeCanceled)
+		})
+	}
+}
+
+// closeWithoutWaiting cancels the scans from inside one: Close would wait for the calling
+// scan forever, so its context is already done and it returns right after cancelling.
+func closeWithoutWaiting(service *scan.Service) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_ = service.Close(ctx)
+}
+
+func assertFinishLine(t *testing.T, logs string, canceled bool) {
+	t.Helper()
+
+	finishLine := ""
+
+	for line := range strings.Lines(logs) {
+		if strings.Contains(line, "library scan finished") {
+			finishLine = line
+		}
+	}
+
+	wantLevel, wantCause := "level=WARN", true
+	if canceled {
+		wantLevel, wantCause = "level=INFO", false
+	}
+
+	if !strings.Contains(finishLine, wantLevel) || strings.Contains(finishLine, "cause=") != wantCause {
+		t.Errorf("finish line = %q, want %s and cause logged = %t", finishLine, wantLevel, wantCause)
 	}
 }

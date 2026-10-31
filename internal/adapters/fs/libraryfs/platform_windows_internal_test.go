@@ -3,6 +3,8 @@
 package libraryfs
 
 import (
+	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -34,6 +36,64 @@ func TestIdentityFromFileIDInfo(t *testing.T) {
 		if got != testCase.want || got.known() != testCase.want.known() {
 			t.Errorf("%s: identityFromFileIDInfo = %+v, want %+v", testCase.name, got, testCase.want)
 		}
+	}
+}
+
+// The 64-bit file index is only a fallback for file systems without FileIdInfo; any other
+// error must not silently downgrade the identity (ReFS indexes are not unique).
+func TestIdentityWithFallback(t *testing.T) {
+	t.Parallel()
+
+	fileID := fileIDInfo{VolumeSerialNumber: 9, FileID: [fileID128Bytes]byte{5}}
+	legacy := directoryID{device: 9, indexLow: 77}
+	accessDenied := fmt.Errorf("query: %w", windows.ERROR_ACCESS_DENIED)
+
+	testCases := []struct {
+		name       string
+		fileIDErr  error
+		want       directoryID
+		wantErr    error
+		wantLegacy bool
+	}{
+		{name: "file id", want: directoryID{device: 9, indexLow: 5}},
+		{name: "invalid parameter", fileIDErr: windows.ERROR_INVALID_PARAMETER, want: legacy, wantLegacy: true},
+		{name: "not supported", fileIDErr: windows.ERROR_NOT_SUPPORTED, want: legacy, wantLegacy: true},
+		{name: "invalid function", fileIDErr: windows.ERROR_INVALID_FUNCTION, want: legacy, wantLegacy: true},
+		{name: "other error", fileIDErr: accessDenied, wantErr: windows.ERROR_ACCESS_DENIED},
+	}
+
+	for _, testCase := range testCases {
+		legacyCalled := false
+
+		got, err := identityWithFallback(
+			func() (fileIDInfo, error) { return fileID, testCase.fileIDErr },
+			func() (directoryID, error) {
+				legacyCalled = true
+				return legacy, nil
+			},
+		)
+
+		if got != testCase.want || !errors.Is(err, testCase.wantErr) || (testCase.wantErr == nil) != (err == nil) {
+			t.Errorf("%s: identityWithFallback = (%+v, %v), want (%+v, %v)", testCase.name, got, err, testCase.want, testCase.wantErr)
+		}
+
+		if legacyCalled != testCase.wantLegacy {
+			t.Errorf("%s: legacy index read = %t, want %t", testCase.name, legacyCalled, testCase.wantLegacy)
+		}
+	}
+}
+
+func TestQueryFileIDInfo(t *testing.T) {
+	t.Parallel()
+
+	directory := openDirectory(t, t.TempDir())
+
+	if info, err := queryFileIDInfo(windows.Handle(directory.Fd())); err != nil || !identityFromFileIDInfo(info).known() {
+		t.Errorf("queryFileIDInfo = (%+v, %v), want a known identity", info, err)
+	}
+
+	if _, err := queryFileIDInfo(windows.InvalidHandle); err == nil {
+		t.Error("queryFileIDInfo(invalid handle) error = nil, want an error")
 	}
 }
 

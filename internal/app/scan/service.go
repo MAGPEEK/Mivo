@@ -241,7 +241,7 @@ func (service *Service) launch(scanned library.Library) (Status, error) {
 // this goroutine.
 func (service *Service) runScan(scanned library.Library, scanTracker *tracker) {
 	err := service.newRun(scanned, scanTracker).execute(service.scanContext)
-	code, cause := describeEnd(err)
+	code, cause := describeEnd(err, service.scanContext.Err() != nil)
 	status := scanTracker.final(code, service.clock())
 
 	service.logFinished(scanned, status, cause)

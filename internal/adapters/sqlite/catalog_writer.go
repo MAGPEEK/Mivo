@@ -72,12 +72,16 @@ func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) (
 // and no streams. probed_at is record.ProbedAt. Times are stored in Unix milliseconds
 // (ADR 0004). IDs come from the caller.
 //
-// Errors wrap domain.ErrInvalid for an invalid record (including a zero ProbedAt, or a zero
-// CreatedAt of a new item), a file or item that would end up in another item or library
-// than stored, and an item whose kind does not follow from its library's kind
-// (library.ItemKindForLibrary); domain.ErrNotFound for an unknown library;
-// domain.ErrConflict when another file ID is stored at the same relative path of the
-// library (UNIQUE(library_id, relative_path)). Nothing is changed then.
+// It changes nothing and returns an error wrapping (the contract of
+// scan.CatalogWriter.SaveProbedFile)
+//   - domain.ErrInvalid for a record that breaks the rules of scan.ProbedFile (including a
+//     zero ProbedAt, a zero CreatedAt of a new item, and a new item whose kind does not
+//     follow from its library's kind, library.ItemKindForLibrary),
+//   - domain.ErrNotFound for an unknown library,
+//   - domain.ErrConflict when another file ID is stored at the same relative path of the
+//     library (UNIQUE(library_id, relative_path)),
+//   - domain.ErrInvalid when a stored file ID belongs to another item or library, or a
+//     stored item to another library.
 func (writer *CatalogWriter) SaveProbedFile(ctx context.Context, record scan.ProbedFile) error {
 	if err := checkProbedFile(record); err != nil {
 		return fmt.Errorf("save probed file %q: %w", record.File.ID, err)

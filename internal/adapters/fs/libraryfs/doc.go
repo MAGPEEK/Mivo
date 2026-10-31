@@ -13,8 +13,11 @@
 //     as domain.ErrForbidden.
 //   - Walk lists every physical directory once and follows directory links only after the
 //     real tree, so a file is reported under its path without links, and loops or
-//     cross-linked folders cannot multiply the walk. A file link is an alias the user made and
-//     is reported under its own path.
+//     cross-linked folders cannot multiply the walk. This rests on directory ids: where the
+//     file system reports none (some network, FUSE and pooling file systems), a directory
+//     reached through a link is not listed but logged at info and reported as skipped, so
+//     the scan keeps its catalog entries. A file link is an alias the user made and is
+//     reported under its own path.
 //
 // Walk never fails because of one unreadable folder: it logs it and returns its path, so the
 // scan keeps the catalog entries below it. Only a root that cannot be read, also when it
