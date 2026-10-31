@@ -1,6 +1,6 @@
 # SPK-09 Synology documentation and manual test protocol
 Owner: mivo-synology
-Depends on: SPK-07
+Depends on: SPK-07 (FFmpeg section finalised after SPK-16)
 Files/areas: `packaging/synology/README.md` (new), `packaging/synology/TESTING.md` (new);
 minimal touches elsewhere: `README.md` (one "Synology" line in the installation part),
 `docs/development.md` (one subsection "Synology package"). **`CLAUDE.md` is not changed** (owner
@@ -19,17 +19,25 @@ step-by-step protocol for the hardware test.
       the third-party/unsigned warning (SPK-01 Q12), the wizard, granting more shared folders
       (Control Panel path, package system user, "Read"), editing `config.yaml` over SSH (path,
       example, restart), which settings the package fixes (paths, tools, port 8460) and why, the
-      "Open" button and firewall service, the LAN-only guard and the warning about DSM's reverse
-      proxy / application portal before milestone 7, logs (location, Package Center view per
-      SPK-01), upgrade and uninstall data behaviour, downgrades unsupported, the Package Center
-      version number (`0.1.0-1020` = `0.1.0-alpha.2`), limits (software transcoding only, 1 GB
-      RAM, armv7 Direct Play/Remux, armv7/armv8 "tested under emulation only" where it applies),
-      FFmpeg licence and where its source is, troubleshooting (port in use, share permission
-      denied, status "broken", start failure message).
+      "Open" button and firewall service, the LAN-only guard and the warning that **DSM's reverse
+      proxy and QuickConnect defeat it** (every client looks local) before milestone 7, logs
+      (server log `/var/packages/<id>/var/<id>.log` over SSH; script output in
+      `/var/log/packages/<id>.log`; Package Center has no log view unless SPK-12 found one),
+      upgrade and uninstall data behaviour (DSM keeps `var`; the checkbox deletes it), downgrades
+      unsupported, the Package Center version number (`0.1.0-1020` = `0.1.0-alpha.2`), which SPK
+      fits which model (armv7 SPK covers alpine, armada38x and monaco; the latter two untested),
+      limits (software transcoding only, 1 GB RAM recommended although armv8 models start at
+      256 MB, armv7 Direct Play/Remux, armv7/armv8 "tested under emulation only" where it applies),
+      FFmpeg licence and where its full corresponding source is (release asset), troubleshooting
+      (port in use, share permission denied, status "broken", start failure message, a typo in the
+      share name refused by the installer).
 - [ ] The README has a "Build" section: prerequisites (Docker Desktop, privileged containers
       allowed), `build.ps1` / `build.sh` usage, the two steps (prebuild, toolkit packing), the
-      named volume with the platform environments (size, how to reset it), build inputs and
-      outputs, the pinned `pkgscripts-ng` commit and how to update it.
+      named volume `spk-toolkit` (about 24 GB, how to reset it or drop `toolkit_tarballs/`),
+      `--privileged` versus `--cap-add SYS_ADMIN` and AppArmor hosts, build inputs and outputs, the
+      own FFmpeg build (SPK-15) and its cache, the pinned `pkgscripts-ng` commit and how to update
+      it, and the toolkit pitfalls (ASCII-only `SynoBuildConf/depends`, log-grep success check,
+      no signing option).
 - [ ] `docs/development.md` gets a "Synology package" subsection with the build command (PowerShell
       and bash), the script tests, shellcheck and the SPK inspection command (SPK-10).
 - [ ] `packaging/synology/TESTING.md`: the manual protocol of SPK-12 as numbered steps, each with

@@ -1,6 +1,7 @@
 # SPK-11 Emulated install and playback smoke of every SPK
 Owner: mivo-synology (writes and runs the harness; `mivo-tester` re-runs it as the gate)
-Depends on: SPK-07, M2-32 (wired server), M2-35 (`scripts/playback-smoke`)
+Depends on: SPK-07, SPK-10, SPK-16 (gate run with the own FFmpeg; earlier runs with interim
+FFmpeg count as pipeline checks only), M2-32 (wired server), M2-35 (`scripts/playback-smoke`)
 Files/areas: `packaging/synology/test/smoke/**` (new: harness script and container definition)
 
 ## Goal
@@ -13,11 +14,18 @@ before release even though the owner only has an x86_64 Synology (OD-9 rule, OD-
 - [ ] One documented command per family (`x86_64` → `linux/amd64`, `armv8` → `linux/arm64`,
       `armv7` → `linux/arm/v7`) starts a `debian:stable-slim` container of that platform (QEMU via
       Docker Desktop), unpacks the SPK into `/var/packages/<id>/target`, creates `var`, `tmp` and
-      `shares/<share>` (the corpus `testdata/media` mounted **read-only**), sets the `SYNOPKG_*`
-      variables SPK-01 documents, runs `postinst` with `wizard_media_share=<share>`, then
-      `start-stop-status start`, as a non-root user.
-- [ ] Before installing, `packaging/synology/test/inspect/inspect-spk.sh` (SPK-10) passes for the
-      SPK under test (if SPK-10 is not done yet, run it once SPK-10 lands and add the result).
+      `home` and `shares/<share>` (the corpus `testdata/media` mounted **read-only**), sets the
+      `SYNOPKG_*` variables of `DSM-NOTES.md` §5 (`SYNOPKG_PKG_STATUS=INSTALL`), runs `preinst` and
+      `postinst` with `wizard_media_share=<share>`, then `start-stop-status prestart` and `start`
+      (DSM's order), as a non-root user.
+- [ ] Before installing, `packaging/synology/test/inspect/inspect-spk.sh --release` (SPK-10) passes
+      for the SPK under test.
+- [ ] Kernel surface: the server and FFmpeg run under SPK-02's `kernelsim` wrapper with the family's
+      old-kernel syscall list (3.10 for x86_64 and armv7, 4.4 for armv8) and `uname` reporting the
+      DSM kernel, so a syscall DSM 7.2 lacks fails the smoke run (the Go runtime and the server must
+      cope with `ENOSYS`).
+- [ ] armv7 runs twice, with `QEMU_CPU=cortex-a9` and `cortex-a15` (armada38x/monaco versus
+      alpine), so a VFPv4 dependency would show up as `SIGILL`.
 - [ ] Per family: `bin/<id> --version` prints the build's version; `bin/ffmpeg -version` and
       `bin/ffprobe -version` exit 0; `start` exits 0; `status` exits 0; port 8460 is published to
       the host.

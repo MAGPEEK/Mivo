@@ -31,3 +31,19 @@ mix FFmpeg's build-time licensing into the binary.
 - A crashing FFmpeg cannot crash the server.
 - Process start overhead per stream is accepted.
 - The image is larger because of FFmpeg's dependencies.
+
+## Notes (2026-10-31, from SPK-02)
+
+- **Licence problem of jellyfin-ffmpeg's GPL build**: jellyfin-ffmpeg's `gpl` builds link
+  `libfdk-aac`. jellyfin patches FFmpeg's `configure`
+  (`debian/patches/0026-remove-fdk-aac-from-nonfree.patch`) so it no longer counts libfdk_aac as
+  non-free; upstream FFmpeg refuses that combination without `--enable-nonfree`, because the
+  FDK-AAC licence is not GPL-compatible. Such a binary is not redistributable under the GPL, so a
+  GPL-3.0 project must not bundle it. This affects the plan above to switch the Docker image and
+  the Windows installer to jellyfin-ffmpeg in milestone 4 or 9: that switch needs a jellyfin build
+  without libfdk-aac, an own build, or another decision. The current Docker image is not affected
+  (it uses Debian's FFmpeg).
+- The Synology packages use an own static FFmpeg build instead (ADR 0026 Notes, tasks SPK-15 and
+  SPK-16); that recipe is a candidate for the Docker image and Windows later.
+- jellyfin-ffmpeg and BtbN builds are glibc-dynamic and need Linux ≥ 4.18, and neither has a
+  32-bit ARM build, which also matters for the "check armv7" point above.

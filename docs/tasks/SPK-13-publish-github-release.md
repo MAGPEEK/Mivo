@@ -1,6 +1,6 @@
 # SPK-13 Attach the SPKs to the GitHub Release
 Owner: mivo-release
-Depends on: SPK-12 PASS, SPK-11 PASS per published family, M2-36 PASS + APPROVE, the release
+Depends on: SPK-16, SPK-12 PASS, SPK-11 PASS per published family, M2-36 PASS + APPROVE, the release
 decision for 0.1.0-alpha.2 (OD-9) and the existing tag/GitHub Release `v0.1.0-alpha.2`
 Files/areas: `docs/reports/release-0.1.0-alpha.2.md` (append a "Synology packages" section)
 
@@ -15,9 +15,13 @@ Synology users can download the media-server SPK for their family, verify it and
       (same SHA-256 as recorded there). The toolkit's packing is not byte-reproducible, so a
       rebuild means re-running `inspect-spk.sh` and SPK-11 for every family and steps 3–8 of
       SPK-12 for x86_64 before upload.
+- [ ] **Interim refusal**: the task stops with FAIL if
+      `grep -q '^[^#][^ ]* interim ' packaging/synology/ffmpeg/sources.lock` succeeds at the release
+      commit, or if `inspect-spk.sh --release` fails on any SPK (a packed `SOURCE.txt` with status
+      `interim`). No release ever contains an interim FFmpeg build (ADR 0026 Notes).
 - [ ] Uploaded to the GitHub Release `v0.1.0-alpha.2`: the SPK of every family allowed by OD-SPK-4,
-      `SHA256SUMS` covering them, and the FFmpeg corresponding source archive(s) from
-      `sources.lock` (OD-SPK-3 sub-question) with their checksums.
+      `SHA256SUMS` covering them, and the FFmpeg corresponding source archive of SPK-15 (FFmpeg and
+      every linked library, OD-SPK-3) with its checksum.
       `gh release view v0.1.0-alpha.2 --json assets` lists them; a downloaded SPK matches
       `SHA256SUMS`.
 - [ ] Release notes gain a "Synology (DSM 7.2+)" section: which file for which family, manual

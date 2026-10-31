@@ -3,6 +3,16 @@ Owner: mivo-synology
 Depends on: none (uses SPK-01's kernel list if available, otherwise records its own sources)
 Files/areas: `packaging/synology/ffmpeg/**` (new): `README.md`, `sources.lock`, `fetch.sh`
 
+## Outcome (2026-10-31, wave 1)
+- Implemented. No prebuilt meets ADR 0026 §4 for any family; `sources.lock` pins **interim**
+  builds (jellyfin-ffmpeg 8.1.3-1 for x86_64 and armv8, johnvansickle 7.0.2 for armv7) that are
+  good for pipeline development and emulated tests only.
+- The owner revised OD-SPK-3: an own static build for all three families (SPK-15), wired into the
+  SPK build by SPK-16, which removes the interim entries. **A release must refuse any `interim`
+  entry**: SPK-10's `--release` mode and SPK-13 check
+  `grep -q '^[^#][^ ]* interim ' packaging/synology/ffmpeg/sources.lock` and the packed
+  `SOURCE.txt`.
+
 ## Goal
 Each SPK can bundle an FFmpeg and ffprobe that run on DSM 7.2 for its family, are pinned by
 checksum, and come with their licence and corresponding source, so the package plays the same

@@ -3,6 +3,12 @@ Owner: mivo-synology
 Depends on: none
 Files/areas: `packaging/synology/DSM-NOTES.md` (new) only
 
+## Outcome (2026-10-31, wave 1)
+Implemented: 15 questions answered, 22 "Impact on ADR 0026" items. The accepted ones and the
+orchestrator decisions on them (armv7 `arch` list, classic JSON wizard, upgrade test for the
+version scheme) are recorded in ADR 0026 "Notes (SPK-01, SPK-02, SPK-04)" and folded into SPK-03,
+SPK-05, SPK-06, SPK-07, SPK-10, SPK-12 and SPK-14.
+
 ## Goal
 Every DSM behaviour that ADR 0026 marks *(verify, SPK-01)* is answered from Synology's DSM 7.2.2
 Package Developer Guide or the `pkgscripts-ng` sources, so the tasks that package the media

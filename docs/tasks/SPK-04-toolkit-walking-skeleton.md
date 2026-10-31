@@ -6,6 +6,21 @@ Files/areas: `packaging/synology/toolkit/**` (new: container definition, run scr
 `packaging/synology/package/SynoBuildConf/{depends,build,install}` (new),
 `packaging/synology/package/INFO.sh` (new)
 
+## Outcome (2026-10-31, wave 1)
+Implemented (`packaging/synology/toolkit/README.md`): the toolkit runs in Docker Desktop with
+`--privileged` or `--cap-add SYS_ADMIN`; platforms v1000 / rtd1619b / alpine; no signing and no
+`--no-sign` at the pinned commit; `run.sh` interface `spk-toolkit-run <family> [project] [output]`
+is the stable entry point for SPK-07 and SPK-14. Facts are in ADR 0026 Notes.
+
+## Rework (from the wave-1 review)
+- [ ] `INFO.sh` no longer writes `adminurl` (ADR 0026 Notes, decision "adminurl is omitted"); INFO
+      keeps `adminport` and `adminprotocol="http"`. The fixture INFO example in
+      `toolkit/README.md` ("INFO keys") and its key list are updated; `toolkit/test.sh` asserts
+      that the packed INFO has no `adminurl` line and still passes for all three families.
+- [ ] `toolkit/README.md` "Toolkit facts": the tar flavour of the SPK and `package.tgz` is stated as
+      unconfirmed (only `tar cf`/`tar cJf` are known; SPK-10 records it).
+- Follow-up elsewhere: CI hosts with AppArmor (SPK-07).
+
 ## Goal
 Synology's official Package Toolkit (`pkgscripts-ng`, branch `DSM7.2`) runs on the Windows dev
 machine inside Docker Desktop and packs one SPK per family from prebuilt files, proving the

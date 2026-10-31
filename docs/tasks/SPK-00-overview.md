@@ -34,9 +34,13 @@ time (SPK-09 after M2-36, or M2-36 rebased on SPK-09).
   recommended own assembler. The own assembler and spksrc are rejected alternatives (ADR 0026
   §2). The former SPK-04 "own deterministic archive writer" is replaced by the toolkit walking
   skeleton; SPK-10 now verifies the toolkit's output; staging moved into the new SPK-14.
-- OD-SPK-3 **A**: one prebuilt static GPL FFmpeg source for all families if possible, an own
-  build for a missing family as follow-up; the exact corresponding source is attached to each
-  GitHub Release with SPKs.
+- OD-SPK-3 **revised (owner, 2026-10-31, after SPK-02)**: no prebuilt meets ADR 0026 §4
+  (jellyfin/BtbN are glibc-dynamic, need Linux ≥ 4.18, have no armv7; jellyfin's GPL build links
+  libfdk-aac through a patched `configure`, which is non-free upstream; johnvansickle is 7.0.2,
+  has no source and needs VFPv4). Decision: **own static FFmpeg build for all three families**
+  (SPK-15, wired in by SPK-16). The exact corresponding source of FFmpeg and every linked library
+  is attached to each GitHub Release with SPKs. Until SPK-16, `sources.lock` holds `interim`
+  pins for pipeline work only; **SPK-13 refuses while any `interim` entry exists**.
 - OD-SPK-4 **A**: armv7 is published only if its emulated smoke run passes, labelled "tested
   under emulation only".
 - OD-SPK-5 **A**: `0.1.0-alpha.2` → `0.1.0-1020`, final → `0.1.0-9000`, beta flag for
@@ -46,6 +50,28 @@ time (SPK-09 after M2-36, or M2-36 rebased on SPK-09).
 - OD-SPK-7 **A**: `$SYNOPKG_PKGTMP/transcode`, if SPK-01 confirms.
 - OD-SPK-8 **A**: uninstall wizard checkbox, unchecked keeps the data.
 - OD-SPK-9 **A**: package name `brand.ID` (`mivo`) for now.
+- Orchestrator decisions on the wave-1 findings (ADR 0026 Notes):
+  - (a) the armv7 SPK uses **`arch="armv7 armada38x monaco"`** and targets ARMv7 hard-float with
+    VFPv3(-D16), NEON only through run-time detection, no VFPv4 assumption;
+  - (b) wizards use the **classic JSON `WIZARD_UIFILES`** (community practice on DSM 7.2); the Vue
+    wizard is the fallback only (needs `os_min_ver` `7.2-72806`); SPK-12 verifies on the owner's
+    device;
+  - (c) OD-SPK-5 stays; SPK-12 adds an upgrade test with dummy SPKs (`0.1.0-9000` → `0.1.1-1010`,
+    `0.1.0-1020` → `0.1.0-1030`); if DSM refuses, the owner gets the alternative of a globally
+    monotonic build number.
+- From the wave-1 review: **`adminurl` is omitted** (decision in ADR 0026 Notes; `INFO.sh` is
+  aligned in an SPK-04 rework round before SPK-14); **NEON on armada38x/monaco is unconfirmed** –
+  the conservative armv7 target (VFPv3-D16, NEON only run-time detected) is binding, and SPK-15
+  corrects the unsourced NEON claim in `ffmpeg/README.md`; **the toolkit's tar flavour is
+  unconfirmed** (only `tar cf` known) – SPK-10 records it.
+- Facts from wave 1 that change tasks: `prestart`/`prestop` must exit 0;
+  `data-share` creates missing shares (`preinst` must reject them); `.sc` needs `desc` and lives at
+  `port_conf/<id>.sc`; DSM never deletes `var` (OD-SPK-8 A works) and keeps `tmp` until upgrade
+  (OD-SPK-7 A confirmed); script output goes to `/var/log/packages/<id>.log`; no `--no-sign`
+  (no signing at all); toolkit success is decided by log grepping; `SynoBuildConf/depends` must be
+  ASCII; toolkit needs `--privileged` or `--cap-add SYS_ADMIN` (plus `apparmor=unconfined` on
+  AppArmor hosts, unverified); platforms v1000 / rtd1619b / alpine; oldest DSM 7.2 kernels x86_64
+  3.10.108, armv8 4.4.302, armv7 3.10.108.
 - Approvals: network downloads (FFmpeg builds and sources, Docker images, the `pkgscripts-ng`
   clone and the platform environments EnvDeploy downloads, QEMU binfmt) are **approved**. The
   `CLAUDE.md` "Commands" line is **not** approved: SPK-09 documents the build command in
@@ -56,48 +82,56 @@ time (SPK-09 after M2-36, or M2-36 rebased on SPK-09).
 
 | ID | Title | Owner | Depends on | Wave |
 |---|---|---|---|---|
-| [SPK-01](SPK-01-dsm-package-facts.md) | Verify the DSM 7.2 package facts | mivo-synology | – | 1 |
-| [SPK-02](SPK-02-ffmpeg-builds-per-arch.md) | Select and pin static FFmpeg builds per family | mivo-synology | – | 1 |
-| [SPK-04](SPK-04-toolkit-walking-skeleton.md) | Package Toolkit in Docker: walking skeleton | mivo-synology | – | 1 |
-| [SPK-08](SPK-08-package-icons.md) | Generated, name-free package icons | mivo-synology | – | 1 |
-| [SPK-03](SPK-03-package-metadata.md) | Version mapping, families, templates and env files (Go) | mivo-synology | 01, 04 | 2 |
-| [SPK-05](SPK-05-service-control-script.md) | Server service control (`start-stop-status`), runtime environment, script tests | mivo-synology | 01 | 2 |
-| [SPK-06](SPK-06-wizard-lifecycle-resources.md) | Wizard, lifecycle scripts, privilege and resources | mivo-synology | 01, 05 | 3 |
-| [SPK-14](SPK-14-stage-toolkit-project.md) | `spkstage`: stage the toolkit project | mivo-synology | 02, 03, 04, 06, 08 | 4 |
-| [SPK-07](SPK-07-build-pipeline.md) | CI-ready build: prebuild + toolkit in Docker | mivo-synology | 02, 04, 14 | 5 |
-| [SPK-09](SPK-09-docs-and-test-protocol.md) | User/build docs and manual test protocol | mivo-synology | 07 | 6 |
-| [SPK-10](SPK-10-verify-toolkit-output.md) | Verify the toolkit output | mivo-synology | 07 | 6 |
-| [SPK-11](SPK-11-emulated-smoke.md) | Emulated install + playback smoke per family | mivo-synology | 07, M2-32, M2-35 | 6 |
-| [SPK-12](SPK-12-owner-dsm-install-test.md) | Manual install test on the owner's Synology | mivo-tester | 09, 10, 11 | 7 |
-| [SPK-13](SPK-13-publish-github-release.md) | Attach SPKs to the GitHub Release | mivo-release | 12, M2-36, release decision | 8 |
+| ID | Title | Owner | Depends on | Wave | Status |
+|---|---|---|---|---|---|
+| [SPK-01](SPK-01-dsm-package-facts.md) | Verify the DSM 7.2 package facts | mivo-synology | – | 1 | implemented |
+| [SPK-02](SPK-02-ffmpeg-builds-per-arch.md) | Select and pin FFmpeg builds per family (interim pins) | mivo-synology | – | 1 | implemented |
+| [SPK-04](SPK-04-toolkit-walking-skeleton.md) | Package Toolkit in Docker: walking skeleton | mivo-synology | – | 1 | implemented; rework (`adminurl`, tar-flavour note) in wave 2 |
+| [SPK-08](SPK-08-package-icons.md) | Generated, name-free package icons | mivo-synology | – | 1 | implemented |
+| [SPK-03](SPK-03-package-metadata.md) | Version mapping, families, templates and env files (Go) | mivo-synology | 01, 04 | 2 | |
+| [SPK-05](SPK-05-service-control-script.md) | Server service control (`start-stop-status`), runtime environment, script tests | mivo-synology | 01 | 2 | |
+| [SPK-15](SPK-15-own-static-ffmpeg-build.md) | Own static FFmpeg build for x86_64, armv8, armv7 | mivo-media | – | 2 (long; runs alongside 2–5) | |
+| [SPK-06](SPK-06-wizard-lifecycle-resources.md) | Wizard, lifecycle scripts, privilege and resources | mivo-synology | 01, 05 | 3 | |
+| [SPK-14](SPK-14-stage-toolkit-project.md) | `spkstage`: stage the toolkit project | mivo-synology | 02, 03, 04, 06, 08 | 4 | |
+| [SPK-07](SPK-07-build-pipeline.md) | CI-ready build: prebuild + toolkit in Docker | mivo-synology | 02, 04, 14 | 5 | |
+| [SPK-16](SPK-16-use-own-ffmpeg-in-spk-build.md) | Switch the SPK build to the own FFmpeg build | mivo-synology | 07, 15 | 6 | |
+| [SPK-09](SPK-09-docs-and-test-protocol.md) | User/build docs and manual test protocol | mivo-synology | 07 | 6 | |
+| [SPK-10](SPK-10-verify-toolkit-output.md) | Verify the toolkit output | mivo-synology | 07 | 6 | |
+| [SPK-11](SPK-11-emulated-smoke.md) | Emulated install + playback smoke per family | mivo-synology | 07, 10, 16, M2-32, M2-35 | 7 | |
+| [SPK-12](SPK-12-owner-dsm-install-test.md) | Manual install test on the owner's Synology | mivo-tester | 09, 10, 11, 16 | 8 | |
+| [SPK-13](SPK-13-publish-github-release.md) | Attach SPKs to the GitHub Release | mivo-release | 12, 16, M2-36, release decision | 9 | |
 
-Task ids are stable identifiers, not the order: SPK-14 runs before SPK-07.
+Task ids are stable identifiers, not the order: SPK-14 runs before SPK-07, SPK-15 starts in
+wave 2.
 
 ## Waves (parallel within a wave; no two tasks of a wave share a file)
 
-1. SPK-01 ‖ SPK-02 ‖ SPK-04 ‖ SPK-08 – start now; disjoint paths (`DSM-NOTES.md`, `ffmpeg/**`,
-   `toolkit/**` + `package/SynoBuildConf/**` + `package/INFO.sh`, `internal/spkicon/**`).
-2. SPK-03 ‖ SPK-05 (`internal/spkmeta/**` vs `package/scripts/` + `test/**`)
+1. SPK-01 ‖ SPK-02 ‖ SPK-04 ‖ SPK-08 – **implemented** (results in ADR 0026 Notes).
+2. SPK-03 ‖ SPK-05 ‖ SPK-15 ‖ SPK-04 rework (`internal/spkmeta/**` vs `package/scripts/` +
+   `test/**` vs `ffmpeg/build/**` + `ffmpeg/README.md` vs `package/INFO.sh` + `toolkit/**`).
+   SPK-15 is long and may run on through waves 3–5; it shares no file with them.
 3. SPK-06 (extends the script harness of SPK-05)
-4. SPK-14 (`cmd/spkstage/**`)
-5. SPK-07 – first complete server SPKs from one command; checkpoint: the x86_64 SPK installs
-   into an emulated layout and the server binary prints its version.
-6. SPK-09 ‖ SPK-10 ‖ SPK-11 (`README.md`/`TESTING.md` vs `test/inspect/**` + `toolkit/README.md`
-   section vs `test/smoke/**`)
-7. SPK-12 (owner's hardware) – fixes, if any, as `SPK-12b…`
-8. SPK-13 (publishing)
+4. SPK-14 (`cmd/spkstage/**`, `package/INFO.sh`)
+5. SPK-07 – first complete server SPKs from one command (interim FFmpeg); checkpoint: the x86_64
+   SPK unpacks, INFO is right and the server binary prints its version.
+6. SPK-16 ‖ SPK-09 ‖ SPK-10 (`ffmpeg/sources.lock`, `fetch.sh`, `ffmpeg/README.md`, build
+   scripts vs `README.md`/`TESTING.md`/`docs/development.md` vs `test/inspect/**` +
+   `toolkit/README.md` section). SPK-16 waits for SPK-15.
+7. SPK-11 (emulated smoke with the own FFmpeg and the old-kernel syscall surface)
+8. SPK-12 (owner's hardware, including the version-scheme and wizard checks) – fixes, if any, as
+   `SPK-12b…`
+9. SPK-13 (publishing; refuses interim FFmpeg)
 
-Walking skeleton first: SPK-04 proves in wave 1 that EnvDeploy and PkgCreate.py run in Docker
-Desktop and pack a placeholder payload for all three families – the riskiest part of OD-SPK-2 B.
-The first SPK that runs the real server needs scripts (SPK-05/06) and staging (SPK-14), so the
-end-to-end checkpoint is after SPK-07. Only SPK-11 (wired server M2-32, smoke script M2-35) and
-the release gates depend on unfinished milestone-2 work.
+The toolkit risk of OD-SPK-2 B is retired: SPK-04 packed placeholder SPKs for all three families
+in Docker Desktop. The biggest remaining risks are the own FFmpeg build (SPK-15) and the
+unconfirmed DSM behaviour that only SPK-12 can check. Only SPK-11 (M2-32, M2-35) and the release
+gates depend on unfinished milestone-2 work.
 
 ## How the track lines up with 0.1.0-alpha.2
 
 | Milestone-2 step | SPK step |
 |---|---|
-| waves 5–6 (M2-30, M2-32, M2-33, M2-34, M2-35) in progress | SPK waves 1–5 |
+| waves 5–6 (M2-30, M2-32, M2-33, M2-34, M2-35) in progress | SPK waves 2–6 |
 | M2-35 smoke script exists, Docker smoke green | SPK-11 runs `scripts/playback-smoke` against the server installed from each SPK under emulation |
 | M2-36 release readiness on a clean checkout | SPK-12 tests SPKs built from the **same commit** (release candidate); the readiness report lists the SPK status (orchestrator note in M2-36) |
 | release decision (OD-9), tag `v0.1.0-alpha.2`, GitHub Release by `mivo-release` | SPK-13 attaches the SPKs to that GitHub Release, possibly after the Docker release (OD-SPK-1 A) |
@@ -107,18 +141,21 @@ version.
 
 ## Risks and notes
 
-- EnvDeploy needs a chroot: SPK-04 must show that it runs in Docker Desktop (privileged
-  container, toolkit in a named volume). If it cannot, SPK-04 reports BLOCKED and the owner
-  decides between a Linux VM/WSL distribution as build host and revisiting OD-SPK-2.
-- Platform environments are large downloads (several GB in total); they are cached in a Docker
-  volume and, later in CI, in an actions cache.
-- The toolkit's packing is not byte-reproducible; SPK-10 records what is (members, modes,
-  checksums of members). Release assets are the files that were tested (SPK-13).
-- Several DSM facts are unconfirmed (ADR 0026 "To verify"); SPK-01 and SPK-04 run first, and
-  their findings may change details of later tasks. Implementers report contradictions instead
-  of guessing; the architect adds them as Notes to ADR 0026 after wave 1.
-- A static FFmpeg for armv7 that runs on DSM 7.2's kernels may not exist as a prebuilt; an own
-  build would add a task and build time (OD-SPK-3 A).
+- The toolkit runs in Docker Desktop with `--privileged` (or `--cap-add SYS_ADMIN`); on CI hosts
+  with AppArmor the narrow set probably also needs `apparmor=unconfined` (unverified until the CI
+  task). The volume `spk-toolkit` grows to about 24 GB for three families.
+- The toolkit's packing is not byte-reproducible (`create_time`, tar times); SPK-10 records what
+  is (members, modes, checksums of members). Release assets are the files that were tested
+  (SPK-13).
+- The own FFmpeg build (SPK-15) adds cold build time (cross-compiling FFmpeg and x264 for three
+  families) and maintenance (pin updates, security fixes). It is the critical path for the first
+  release SPKs; SPK-07…10 proceed with interim pins meanwhile.
+- Still unconfirmed and checked only on the owner's device (SPK-12): classic wizard format on
+  DSM 7.2.2, `data-share` templating, extra files in `scripts/`, version comparison, Open-button
+  URL, start/stop timeouts. armada38x/monaco installs and every armv7/armv8 device behaviour stay
+  unconfirmed (emulation only).
+- The fdk-aac problem of jellyfin-ffmpeg also affects the Docker/Windows plan of ADR 0015 (Notes
+  2026-10-31); the current Docker image (Debian FFmpeg) is not affected.
 - Emulation (QEMU) proves instruction set and behaviour, not the DSM kernel version or real
   performance; kernel compatibility is checked through the ELF ABI note and on the owner's
   x86_64 device only.

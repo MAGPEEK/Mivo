@@ -5,37 +5,47 @@ Files/areas: `packaging/synology/cmd/spkstage/**` (new Go command + tests)
 
 ## Goal
 One Go command turns the repository's package templates and the prebuilt server binary and
-FFmpeg of a family into a complete `source/<project>/` directory that `PkgCreate.py` packs into
-the server SPK without further edits.
+FFmpeg of a family into a complete toolkit project that SPK-04's `run.sh` packs into the server
+SPK without further edits.
 
 ## Acceptance criteria
 - [ ] `go run ./packaging/synology/cmd/spkstage -family <x86_64|armv8|armv7> -version <semver>
       -binary <path> -ffmpeg-dir <dir> -out <dir> [-package-revision N] [-source-date-epoch N]`
-      writes `<out>/<id>/` with: rendered templates of `packaging/synology/package/`
-      (`SynoBuildConf/`, `INFO.sh`, `scripts/`, `conf/`, `WIZARD_UIFILES/`, the `.sc` file),
-      `build.env` and `package.env` (SPK-03), `PACKAGE_ICON.PNG` and `PACKAGE_ICON_256.PNG`
-      (SPK-08), the repository `LICENSE`, the server binary, `ffmpeg`, `ffprobe`, the FFmpeg
-      licence files and a source notice built from `sources.lock` (version, URLs, SHA-256), in the
-      places `SynoBuildConf/install` expects (SPK-04).
+      writes the project layout of `packaging/synology/toolkit/README.md` ("staged project"):
+      `build.env` (SPK-03), `INFO.sh`, `SynoBuildConf/{depends,build,install}`, `scripts/` (the
+      seven scripts plus `common.sh` and the rendered `package.env`), `conf/{privilege,resource}`,
+      `WIZARD_UIFILES/`, `LICENSE` (repository), `PACKAGE_ICON.PNG` (64 × 64) and
+      `PACKAGE_ICON_256.PNG` (256 × 256) from SPK-08, `prebuilt/bin/<id>`, `prebuilt/bin/ffmpeg`,
+      `prebuilt/bin/ffprobe`, `prebuilt/share/licenses/ffmpeg/*` (licence files and `SOURCE.txt`
+      from the FFmpeg directory), and the rendered `.sc` at the payload path that becomes
+      `port_conf/<id>.sc` in `package.tgz` (coordinate the exact `prebuilt/` path with
+      `SynoBuildConf/install`).
+- [ ] The packed INFO of the toolkit check below has no `adminurl` line (aligned by the SPK-04
+      rework; if it is not done yet, report it instead of editing `INFO.sh` here).
 - [ ] Modes are set explicitly (executables and scripts 0755, everything else 0644, directories
-      0755) and every file gets the same modification time from `-source-date-epoch`, independent
-      of the host file system.
-- [ ] Errors (exit 1, message naming the input) for: unknown family, missing or non-executable
-      inputs, a binary for the wrong machine (ELF header check), leftover `@NAME@` tokens, an
-      existing non-empty `<out>/<id>/` (no silent overwrite unless `-force`).
-- [ ] Go tests with a fake binary and fake FFmpeg files: the staged tree's file list and modes
-      equal a golden list; every JSON file parses; `build.env` holds the expected `ARCH`,
-      `DSM_VERSION`, `BETA`; no staged file contains an unreplaced token; two runs give identical
-      trees (content and modes). `main` stays thin (`run(args, stdout, stderr) error`); coverage of
-      the command ≥ 80 % excluding `main`.
-- [ ] Toolkit check: staging with the real linux/amd64 server binary (`go build` with
-      `GOOS=linux GOARCH=amd64 CGO_ENABLED=0`) plus SPK-02's x86_64 FFmpeg, then SPK-04's run
-      script for x86_64 → one SPK; `tar -tvf` output and INFO in the REPORT.
+      0755); every file gets the modification time of `-source-date-epoch`.
+- [ ] Refusals (exit 1, message naming the input): unknown family; missing or non-executable inputs;
+      a binary for the wrong ELF machine; leftover `@NAME@` tokens; non-ASCII bytes or CRLF in
+      `SynoBuildConf/*` or scripts; INFO-unsafe values (SPK-03); an existing non-empty project
+      directory (unless `-force`). An FFmpeg `SOURCE.txt` with status `interim` is staged but
+      reported as a warning on stderr.
+- [ ] Go tests with a fake binary and fake FFmpeg files: the staged tree's file list and modes equal a
+      golden list per family; the armv7 `build.env` has `ARCH="armv7 armada38x monaco"`; every
+      JSON file parses; `build.env` has the expected `DSM_VERSION` and `BETA`; no staged file
+      contains an unreplaced token; two runs give identical trees. `main` stays thin
+      (`run(args, stdout, stderr) error`); coverage ≥ 80 % excluding `main`.
+- [ ] Toolkit check: staging with the real linux/amd64 server binary (`GOOS=linux GOARCH=amd64
+      CGO_ENABLED=0 go build -tags webui …` after `pnpm -C web build`, or without `webui` for this
+      check) plus the interim x86_64 FFmpeg from `fetch.sh`, then `run.sh x86_64` → one SPK;
+      `tar -tvf` output and INFO in the REPORT.
 - [ ] Gates: `go vet ./...`, `golangci-lint run`, `golangci-lint fmt --diff`, `go test ./...`,
-      coverage gate, `go mod tidy -diff`; shellcheck and script tests of SPK-05/06 still green.
+      coverage gate, `go mod tidy -diff`; shellcheck, script tests (SPK-05/06) and
+      `packaging/synology/toolkit/test.sh` still green.
 
 ## Notes
 - Standard library only; reuse `internal/spkmeta` and `internal/spkicon`, no own rendering logic.
-- The command stages exactly one family per call; SPK-07 calls it three times.
-- What is staged is the server package; descriptions and wizard texts speak of the media server
-  running on the NAS.
+- One family per call; SPK-07 calls it three times.
+- If SPK-12 later shows that DSM does not keep `common.sh`/`package.env` in `scripts/`, this
+  command gets an option to inline them into every script (follow-up task).
+- Docker Desktop shows bind-mounted files as 0777; modes in the staged tree carry no information on
+  Windows hosts, which is why `SynoBuildConf/install` sets them again.
