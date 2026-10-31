@@ -71,3 +71,11 @@ firewall, and upgrades and uninstalls keep the user's data unless the user asks 
   `os_min_ver` `7.2-72806` – a separate task.
 - The wizard text must not promise remote access (`server.lan_only` until milestone 7) and names
   the product only through `@DISPLAY_NAME@`.
+
+## Orchestrator note (from the SPK wave-2 review)
+- Harden `start-stop-status` while you touch the scripts (in scope for this task): a concurrent
+  `status` in the fork→exec gap must not delete a fresh PID file (delete only if the process is
+  dead, or wait in `launch_server` until `/proc/<pid>/exe` is the binary before writing the file);
+  a failed PID-file write kills the just-started server and exits 1; `rm`/`mv` failures in
+  clear_transcode_dir/rotate_log log an error; tests: a running server's transcode dir survives a
+  second `start`, an upper bound for the SIGKILL wait; add dash to the default bats matrix.

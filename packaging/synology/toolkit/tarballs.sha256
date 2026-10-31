@@ -1,0 +1,13 @@
+# SHA-256 of the DSM 7.2 Package Toolkit tarballs that run.sh deploys (sha256sum format).
+# Synology publishes no checksums: these were taken from the downloads of 2026-10-31 over HTTPS
+# from global.synologydownload.com/download/ToolChain/toolkit/7.2/ (Last-Modified 2024-06-06,
+# DSM 7.2.2 build 72723; the CDN's ETag "<size>-<mtime>" matched the file sizes). run.sh refuses
+# to deploy a tarball whose hash differs or is missing here. When Synology republishes a
+# tarball, check the new file and update its line deliberately (README "Pinned tarballs").
+ff93a4126e4720359b5026efdefc662171b58828825fe63139fce320ada3626e  base_env-7.2.txz
+2d81182d7693612f555f7dc81a5c829d864620d3d11abe204b3d2693b6d951a7  ds.v1000-7.2.dev.txz
+f69b9e74b6fe8261eecf1a847aa6f43d021b1c4cde62d65b24acb0255ed076a3  ds.v1000-7.2.env.txz
+2d7ba7869ce6e9c91ae1e8ae036e589d8ffec19ee03dae342434347a83bf0872  ds.rtd1619b-7.2.dev.txz
+9075fb70ca59e2ce229b0fb41427377d88512953fb74f048c8aa26e42b88f0e7  ds.rtd1619b-7.2.env.txz
+44dd92b8c8786cdc87452e4fedb022d2992bc6ba8effe197b2947b00762b14aa  ds.alpine-7.2.dev.txz
+11b2f0f01b51537047904e76e654656cf5a20be1471506aab4bfa59561f546af  ds.alpine-7.2.env.txz

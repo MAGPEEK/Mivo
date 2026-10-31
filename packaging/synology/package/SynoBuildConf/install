@@ -1,0 +1,107 @@
+#!/bin/bash
+# shellcheck shell=bash
+# Pack stage of the toolkit project (ADR 0026 section 2): copies the prebuilt files into the
+# package layout, writes INFO with INFO.sh and packs package.tgz and the SPK with the toolkit's
+# helpers from include/pkg_util.sh (pkg_make_package, pkg_make_spk, pkg_get_spk_family_name).
+#
+# How the toolkit runs this file (pkgscripts-ng include/install, InstallProject): sourced by
+# bash in a subshell with the project directory as working directory. As in the build stage
+# the exit status is ignored and the log decides (include/errors.py; the install log also fails
+# on "No such file or directory"), so failures print "Error: ..." and `exit 1`.
+#
+# Layout inside package.tgz (extracted to the package target, ADR 0026 section 6):
+#   bin/<ID>, bin/ffmpeg, bin/ffprobe   0755
+#   share/licenses/**                   files 0644, directories 0755
+# SPK members next to package.tgz: INFO, LICENSE, PACKAGE_ICON*.PNG, conf/, scripts/,
+# WIZARD_UIFILES/ (whatever of the optional ones the staged project contains).
+
+readonly SPK_PAYLOAD_DIR=/tmp/_spk_payload
+readonly SPK_PACKAGE_DIR=/tmp/_spk_package
+# The toolkit's collect stage picks the SPK up from here (pkguniform.py, chroot_packages_dir).
+readonly SPK_RESULT_DIR=/image/packages
+
+spk_install_fail() {
+	echo "Error: $*" >&2
+	exit 1
+}
+
+spk_build_env() {
+	# shellcheck source=/dev/null
+	(. ./build.env && printf '%s' "${!1:-}")
+}
+
+# Copies a directory tree with explicit modes: directories 0755, files 0644, or 0755 for files
+# matching the optional executable pattern. Modes of the staged files are not trusted (a
+# Windows bind mount shows every file as 0777). The loops read from process substitutions, not
+# pipes, so spk_install_fail leaves the install script and not just a pipeline subshell; every
+# copy is checked because a "Permission denied" or "No space left on device" would not match
+# the toolkit's log patterns.
+spk_copy_tree() {
+	local source="$1" dest="$2" executable_pattern="${3:-}" file mode
+	[ -d "$source" ] || spk_install_fail "$source/ missing in the staged project"
+	install -d -m 0755 "$dest" || spk_install_fail "cannot create $dest"
+	while IFS= read -r file; do
+		install -d -m 0755 "$dest/$file" || spk_install_fail "cannot create $dest/$file"
+	done < <(cd "$source" && find . -mindepth 1 -type d)
+	while IFS= read -r file; do
+		mode=0644
+		# shellcheck disable=SC2053 # the pattern is meant to glob
+		if [ -n "$executable_pattern" ] && [[ "$(basename "$file")" == $executable_pattern ]]; then
+			mode=0755
+		fi
+		install -m "$mode" "$source/$file" "$dest/$file" || spk_install_fail "cannot copy $source/$file"
+	done < <(cd "$source" && find . -type f)
+}
+
+spk_create_package_tgz() {
+	local id="$1" binary
+	rm -rf "$SPK_PAYLOAD_DIR" || spk_install_fail "cannot clear $SPK_PAYLOAD_DIR"
+	install -d -m 0755 "$SPK_PAYLOAD_DIR/bin" || spk_install_fail "cannot create $SPK_PAYLOAD_DIR/bin"
+	for binary in "$id" ffmpeg ffprobe; do
+		install -m 0755 "prebuilt/bin/$binary" "$SPK_PAYLOAD_DIR/bin/$binary" ||
+			spk_install_fail "cannot copy prebuilt/bin/$binary"
+	done
+	spk_copy_tree prebuilt/share/licenses "$SPK_PAYLOAD_DIR/share/licenses"
+	pkg_make_package "$SPK_PAYLOAD_DIR" "$SPK_PACKAGE_DIR" || spk_install_fail "pkg_make_package failed"
+}
+
+spk_create_spk() {
+	local icon spk_name
+	bash ./INFO.sh >INFO || spk_install_fail "INFO.sh failed"
+	install -m 0644 INFO "$SPK_PACKAGE_DIR/INFO" || spk_install_fail "cannot copy INFO"
+	spk_copy_tree scripts "$SPK_PACKAGE_DIR/scripts" '*'
+	spk_copy_tree conf "$SPK_PACKAGE_DIR/conf"
+	if [ -d WIZARD_UIFILES ]; then
+		spk_copy_tree WIZARD_UIFILES "$SPK_PACKAGE_DIR/WIZARD_UIFILES" '*.sh'
+	fi
+	for icon in LICENSE PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG; do
+		if [ -f "$icon" ]; then
+			install -m 0644 "$icon" "$SPK_PACKAGE_DIR/$icon" || spk_install_fail "cannot copy $icon"
+		else
+			echo "note: $icon not staged, the SPK has none"
+		fi
+	done
+	spk_name="$(pkg_get_spk_family_name "$SPK_PACKAGE_DIR/INFO")" || spk_install_fail "cannot derive the SPK name"
+	install -d -m 0755 "$SPK_RESULT_DIR" || spk_install_fail "cannot create $SPK_RESULT_DIR"
+	pkg_make_spk "$SPK_PACKAGE_DIR" "$SPK_RESULT_DIR" "$spk_name" || spk_install_fail "pkg_make_spk failed"
+}
+
+spk_install() {
+	local id
+	# PkgCreate.py runs the install stage twice, first with --with-debug (NOSTRIP=NOSTRIP,
+	# PkgCreate.py:161-167). Prebuilt binaries have no debug variant, so that pass packs nothing.
+	if [ "${NOSTRIP:-}" = NOSTRIP ]; then
+		echo "debug install pass skipped: the binaries are prebuilt"
+		exit 0
+	fi
+	# shellcheck source=/dev/null
+	. /pkgscripts-ng/include/pkg_util.sh || spk_install_fail "cannot load the toolkit's pkg_util.sh"
+	id="$(spk_build_env ID)"
+	[ -n "$id" ] || spk_install_fail "build.env sets no ID"
+	rm -rf "$SPK_PACKAGE_DIR" || spk_install_fail "cannot clear $SPK_PACKAGE_DIR"
+	install -d -m 0755 "$SPK_PACKAGE_DIR" || spk_install_fail "cannot create $SPK_PACKAGE_DIR"
+	spk_create_package_tgz "$id"
+	spk_create_spk
+}
+
+spk_install

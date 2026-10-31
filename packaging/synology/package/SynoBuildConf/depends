@@ -1,0 +1,13 @@
+# Project dependencies for Synology's Package Toolkit (ADR 0026 section 2). Parsed by the
+# toolkit's config_parser.py (Python 3.4 inside the chroot, ASCII locale), not by a shell:
+# this file must stay ASCII, or the dependency list is empty and nothing is built or packed.
+# The package depends on no other toolkit project; the binaries are prebuilt outside the
+# chroot. [default] names the environment version: every platform uses the DSM 7.2
+# environment (PkgCreate.py -v 7.2 passes the same value).
+
+[BuildDependent]
+
+[ReferenceOnly]
+
+[default]
+all="7.2"

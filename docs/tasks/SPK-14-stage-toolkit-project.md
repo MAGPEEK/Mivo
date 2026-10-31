@@ -49,3 +49,11 @@ SPK without further edits.
   command gets an option to inline them into every script (follow-up task).
 - Docker Desktop shows bind-mounted files as 0777; modes in the staged tree carry no information on
   Windows hosts, which is why `SynoBuildConf/install` sets them again.
+
+## Orchestrator note (from the SPK wave-2 review)
+- package.env has one source of truth: `spkmeta.Package.PackageEnv()`. SPK-14 writes the file from
+  it and deletes the `@TOKEN@` template `packaging/synology/package/scripts/package.env`; add a
+  contract test that feeds spkmeta's output to `common.sh` (bats fixture or Go test).
+- Extend the CRLF refusal in `toolkit/run.sh` to `scripts/*`, `conf/*` and the wizard `.sh` files
+  (today only INFO.sh, build.env and SynoBuildConf/* are checked although README, ADR 0026 Notes and
+  the SPK-05 notes claim more), with a test; accept only the 12 known build.env field names.

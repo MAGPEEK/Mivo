@@ -1,0 +1,2 @@
+Placeholder for the FFmpeg source notice (version, upstream URL, SHA-256, build
+configuration). The real package stages it from sources.lock (SPK-02, SPK-14).

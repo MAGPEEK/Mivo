@@ -1,0 +1,367 @@
+#!/bin/sh
+# shellcheck source-path=SCRIPTDIR
+# Service control script of the media server package (ADR 0026 section 9, task SPK-05).
+#
+# DSM runs it as the package user (conf/privilege "run-as": "package") with one argument:
+#   prestart, prestop  exit 0. DSM calls them before start and stop by default
+#                      (precheckstartstop), prestart also at boot (DSM-NOTES section 5).
+#   start              starts the server in the background and waits for its health check.
+#                      0 when healthy, or alive but not yet healthy after the start budget;
+#                      1 when the server exits during start or cannot be started.
+#   stop               SIGTERM, waits for the graceful shutdown, then SIGKILL. 0, also when
+#                      nothing runs.
+#   status             0 running, 3 not running, 150 package broken (binary or package files
+#                      missing), 4 unknown (DSM variables missing).
+#   log                legacy (DSM before 6): prints the path of the server log, exits 0.
+# Any other argument prints a usage line on stderr and exits 1.
+#
+# DSM appends this script's stdout and stderr to /var/log/packages/<id>.log, so it prints at
+# most a few lines per action and status prints nothing while things are fine. The server's
+# own output goes only to $SYNOPKG_PKGVAR/<id>.log. Why a start failed is written for the
+# Package Center dialog to $SYNOPKG_TEMP_LOGFILE.
+#
+# Test-only variables (packaging/synology/test; DSM never sets them), timeouts in whole seconds:
+#   PKG_TEST_START_TIMEOUT_SECONDS  replaces START_TIMEOUT_SECONDS
+#   PKG_TEST_STOP_TIMEOUT_SECONDS   replaces STOP_TIMEOUT_SECONDS
+#   PKG_TEST_UPTIME_FILE            replaces UPTIME_FILE (a path)
+set -eu
+
+# Seconds start waits for a healthy server. A server that is alive but not healthy after that
+# counts as started (slow first start, database migration; ADR 0026 section 9).
+readonly START_TIMEOUT_SECONDS=30
+readonly START_POLL_INTERVAL_SECONDS=1
+# Clock of the start budget: seconds since boot, which wall clock changes do not move.
+readonly UPTIME_FILE=/proc/uptime
+# Seconds stop waits after SIGTERM before SIGKILL: the server waits up to 10 s for open requests
+# (server.ShutdownTimeout) and then closes the database. Docker gets the same budget
+# (--stop-timeout 20, packaging/docker/README.md).
+readonly STOP_TIMEOUT_SECONDS=20
+readonly STOP_POLL_INTERVAL_SECONDS=1
+# Seconds stop waits for the process to vanish after SIGKILL.
+readonly KILL_WAIT_SECONDS=5
+# The server log is rotated at start when it is larger than this (10 MiB); one old file stays.
+readonly LOG_ROTATE_BYTES=10485760
+# Lines of the server log shown in Package Center when the server exits during start.
+readonly LOG_TAIL_LINES=20
+# Files the server creates are not readable by others, matching the 0750 directories.
+readonly SERVER_UMASK=027
+
+# Exit codes of the guide ("scripts" - "start-stop-status").
+readonly EXIT_OK=0 EXIT_FAILURE=1 EXIT_NOT_RUNNING=3 EXIT_UNKNOWN=4 EXIT_BROKEN=150
+
+usage() {
+	printf 'usage: %s {start|stop|status|prestart|prestop|log}\n' "$0" >&2
+}
+
+# exit_for_action leaves with the exit code that fits the action when the package cannot be
+# used: $1 for status, 0 for log (which never fails), 1 for everything else.
+exit_for_action() {
+	case "$ACTION" in
+	status) exit "$1" ;;
+	log) exit "$EXIT_OK" ;;
+	*) exit "$EXIT_FAILURE" ;;
+	esac
+}
+
+# without_leading_zeros prints the digits $1 without leading zeros ("0" stays), because shell
+# arithmetic reads 010 as octal and 08 as an error, which would end the script under set -e.
+without_leading_zeros() {
+	number_digits=$1
+	while :; do
+		case "$number_digits" in
+		0?*) number_digits=${number_digits#0} ;;
+		*) break ;;
+		esac
+	done
+	printf '%s\n' "$number_digits"
+}
+
+# seconds_setting prints the test override $1 when it is a whole number of at most nine digits
+# (no overflow in 32-bit shell arithmetic), else the default $2.
+seconds_setting() {
+	case "$1" in
+	'' | *[!0-9]* | ??????????*) printf '%s\n' "$2" ;;
+	*) without_leading_zeros "$1" ;;
+	esac
+}
+
+# is_server_process succeeds when $1 is the PID of a live process running the package binary.
+# -ef compares device and inode, so the symlinked target directory does not matter; a zombie,
+# a PID reused by another program and a process of another user (exe unreadable) do not match.
+is_server_process() {
+	case "$1" in
+	'' | *[!0-9]*) return 1 ;;
+	esac
+	# shellcheck disable=SC3013 # -ef is supported by BusyBox ash, bash and dash
+	[ "/proc/$1/exe" -ef "$PKG_BINARY" ]
+}
+
+# process_alive succeeds while process $1 has not exited. Unlike is_server_process it also
+# accepts the forked shell before exec, so start can watch its own child from the first moment.
+process_alive() {
+	read -r process_stat 2>/dev/null <"/proc/$1/stat" || return 1
+	process_state=${process_stat##*) }
+	case "${process_state%% *}" in
+	Z | X) return 1 ;;
+	esac
+}
+
+# running_pid prints the PID of the running server from the PID file. A PID file that names no
+# server process (dead, reused PID, garbage) is removed.
+running_pid() {
+	pid_from_file=
+	if [ -f "$PKG_PID_FILE" ]; then
+		read -r pid_from_file <"$PKG_PID_FILE" || :
+	fi
+	if is_server_process "$pid_from_file"; then
+		printf '%s\n' "$pid_from_file"
+		return 0
+	fi
+	if [ -e "$PKG_PID_FILE" ]; then
+		rm -f "$PKG_PID_FILE"
+		pkg_error "removed stale PID file (pid '$pid_from_file' is not $DISPLAY_NAME)"
+	fi
+	return 1
+}
+
+require_binary() {
+	if [ -f "$PKG_BINARY" ] && [ -x "$PKG_BINARY" ]; then
+		return 0
+	fi
+	pkg_error "$PKG_BINARY is missing or not executable; reinstall the package"
+	return 1
+}
+
+# clear_transcode_dir removes everything below the transcode directory. Only a stopped server
+# gets here, and tmp survives reboots and crashes, so every entry is stale output.
+clear_transcode_dir() {
+	for transcode_entry in "$PKG_TRANSCODE_DIR"/* "$PKG_TRANSCODE_DIR"/.[!.]* "$PKG_TRANSCODE_DIR"/..?*; do
+		if [ -e "$transcode_entry" ] || [ -L "$transcode_entry" ]; then
+			rm -rf -- "$transcode_entry"
+		fi
+	done
+}
+
+rotate_log() {
+	if [ ! -f "$PKG_LOG_FILE" ]; then
+		return 0
+	fi
+	log_bytes=$(wc -c <"$PKG_LOG_FILE")
+	# Arithmetic drops the padding some wc implementations print.
+	if [ "$((log_bytes))" -gt "$LOG_ROTATE_BYTES" ]; then
+		mv -f "$PKG_LOG_FILE" "$PKG_LOG_FILE.1"
+	fi
+}
+
+# launch_server starts the server in the background and sets server_pid. Which descriptors
+# Package Center passes to the script is not documented; 3 to 9 are closed as well, so the
+# long-running server keeps no pipe of the caller open.
+launch_server() {
+	umask "$SERVER_UMASK"
+	"$PKG_BINARY" </dev/null >>"$PKG_LOG_FILE" 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
+	server_pid=$!
+	printf '%s\n' "$server_pid" >"$PKG_PID_FILE"
+}
+
+# uptime_seconds prints the whole seconds since boot from /proc/uptime, rounded up when $1 is
+# "up", else down. It fails when /proc/uptime is unreadable or not in the expected format.
+uptime_seconds() {
+	read -r uptime_value _ 2>/dev/null <"$uptime_file" || return 1
+	uptime_whole=${uptime_value%%.*}
+	uptime_fraction=${uptime_value#"$uptime_whole"}
+	uptime_fraction=${uptime_fraction#.}
+	case "$uptime_whole" in
+	'' | *[!0-9]*) return 1 ;;
+	esac
+	case "$uptime_fraction" in
+	*[!0-9]*) return 1 ;;
+	esac
+	uptime_whole=$(without_leading_zeros "$uptime_whole")
+	case "$1:$uptime_fraction" in
+	up:*[1-9]*) uptime_whole=$((uptime_whole + 1)) ;;
+	esac
+	printf '%s\n' "$uptime_whole"
+}
+
+# date_seconds prints the wall clock in whole seconds, one more when $1 is "up" (the fraction is
+# unknown). `date +%s` is not POSIX, but GNU and BusyBox date have it. A shell with 32-bit
+# arithmetic overflows here in 2038; this is only the fallback for an unreadable /proc/uptime,
+# and the poll limit of start_budget_left still ends the budget.
+date_seconds() {
+	date_now=$(date +%s) || return 1
+	case "$1" in
+	up) date_now=$((date_now + 1)) ;;
+	esac
+	printf '%s\n' "$date_now"
+}
+
+# clock_seconds prints the time of clock $1 (boot: /proc/uptime, wall: date) in whole seconds,
+# rounded as $2 (up or down).
+clock_seconds() {
+	case "$1" in
+	boot) uptime_seconds "$2" ;;
+	*) date_seconds "$2" ;;
+	esac
+}
+
+# start_budget_begin sets the clock, deadline and poll limit of the start budget.
+start_budget_begin() {
+	# /proc/uptime does not jump when NTP or the user sets the wall clock, so it is preferred;
+	# the clock is picked once, as the two count from different origins. The start is rounded
+	# up, so the clock never ends the budget early.
+	health_clock=wall
+	if uptime_seconds down >/dev/null; then
+		health_clock=boot
+	fi
+	health_deadline=
+	if health_start=$(clock_seconds "$health_clock" up); then
+		health_deadline=$((health_start + start_timeout_seconds))
+	fi
+	# Backstop for a clock that stalls, jumps back or cannot be read: the sleeps between these
+	# polls alone last the whole budget.
+	health_polls_left=$((start_timeout_seconds / START_POLL_INTERVAL_SECONDS + 1))
+}
+
+# start_budget_left counts one poll and succeeds while both the clock and the poll limit allow
+# another one. A clock that cannot be read leaves the decision to the poll limit.
+start_budget_left() {
+	health_polls_left=$((health_polls_left - 1))
+	if [ "$health_polls_left" -le 0 ]; then
+		return 1
+	fi
+	if [ -z "$health_deadline" ] || ! health_now=$(clock_seconds "$health_clock" down); then
+		return 0
+	fi
+	[ "$health_now" -lt "$health_deadline" ]
+}
+
+# wait_for_health polls the health check of process $1: 0 healthy, 1 the process exited,
+# 2 the start budget ran out with the process still alive. The budget is a deadline rather than
+# a count of polls alone, because each health check may take seconds itself.
+wait_for_health() {
+	start_budget_begin
+	while process_alive "$1"; do
+		if "$PKG_BINARY" healthcheck </dev/null >/dev/null 2>&1; then
+			return 0
+		fi
+		start_budget_left || return 2
+		sleep "$START_POLL_INTERVAL_SECONDS"
+	done
+	return 1
+}
+
+# report_failed_start reaps the exited server $1 and tells the user why the start failed.
+report_failed_start() {
+	server_status=0
+	wait "$1" || server_status=$?
+	rm -f "$PKG_PID_FILE"
+	failure="$DISPLAY_NAME stopped during start (exit status $server_status)"
+	pkg_error "$failure; see $PKG_LOG_FILE"
+	if [ -n "${SYNOPKG_TEMP_LOGFILE:-}" ]; then
+		{
+			printf '%s\n' "$failure. Last lines of $PKG_LOG_FILE:"
+			tail -n "$LOG_TAIL_LINES" "$PKG_LOG_FILE"
+		} >>"$SYNOPKG_TEMP_LOGFILE" 2>/dev/null || :
+	fi
+}
+
+action_start() {
+	require_binary || exit "$EXIT_FAILURE"
+	if existing_pid=$(running_pid); then
+		echo "$DISPLAY_NAME is already running (pid $existing_pid)"
+		exit "$EXIT_OK"
+	fi
+	pkg_create_server_dirs || exit "$EXIT_FAILURE"
+	clear_transcode_dir
+	rotate_log
+	pkg_export_server_environment
+	launch_server
+	echo "starting $DISPLAY_NAME (pid $server_pid)"
+	health=0
+	wait_for_health "$server_pid" || health=$?
+	case "$health" in
+	0) echo "$DISPLAY_NAME is running" ;;
+	2) echo "$DISPLAY_NAME is not healthy after $start_timeout_seconds s but keeps running; see $PKG_LOG_FILE" ;;
+	*)
+		report_failed_start "$server_pid"
+		exit "$EXIT_FAILURE"
+		;;
+	esac
+	exit "$EXIT_OK"
+}
+
+# wait_for_exit waits up to $2 seconds for the server process $1 to end.
+wait_for_exit() {
+	exit_waited=0
+	while is_server_process "$1"; do
+		if [ "$exit_waited" -ge "$2" ]; then
+			return 1
+		fi
+		sleep "$STOP_POLL_INTERVAL_SECONDS"
+		exit_waited=$((exit_waited + STOP_POLL_INTERVAL_SECONDS))
+	done
+}
+
+action_stop() {
+	if ! stop_pid=$(running_pid); then
+		echo "$DISPLAY_NAME is not running"
+		exit "$EXIT_OK"
+	fi
+	echo "stopping $DISPLAY_NAME (pid $stop_pid)"
+	kill -TERM "$stop_pid" 2>/dev/null || :
+	if ! wait_for_exit "$stop_pid" "$stop_timeout_seconds"; then
+		echo "$DISPLAY_NAME did not stop within $stop_timeout_seconds s; sending SIGKILL"
+		kill -KILL "$stop_pid" 2>/dev/null || :
+		if ! wait_for_exit "$stop_pid" "$KILL_WAIT_SECONDS"; then
+			pkg_error "$DISPLAY_NAME (pid $stop_pid) is still running after SIGKILL"
+			exit "$EXIT_FAILURE"
+		fi
+	fi
+	rm -f "$PKG_PID_FILE"
+	exit "$EXIT_OK"
+}
+
+action_status() {
+	require_binary || exit "$EXIT_BROKEN"
+	if running_pid >/dev/null; then
+		exit "$EXIT_OK"
+	fi
+	exit "$EXIT_NOT_RUNNING"
+}
+
+ACTION=${1:-}
+case "$ACTION" in
+prestart | prestop) exit "$EXIT_OK" ;;
+start | stop | status | log) ;;
+*)
+	usage
+	exit "$EXIT_FAILURE"
+	;;
+esac
+
+# The shared files live next to this script, wherever DSM keeps it.
+case "$0" in
+*/*) PKG_SCRIPT_DIR=${0%/*} ;;
+*) PKG_SCRIPT_DIR=. ;;
+esac
+if [ ! -r "$PKG_SCRIPT_DIR/common.sh" ]; then
+	printf '%s\n' "$PKG_SCRIPT_DIR/common.sh is missing; reinstall the package" >&2
+	exit_for_action "$EXIT_BROKEN"
+fi
+# shellcheck source=common.sh
+. "$PKG_SCRIPT_DIR/common.sh"
+pkg_load_package_env || exit_for_action "$EXIT_BROKEN"
+pkg_require_dsm_environment || exit_for_action "$EXIT_UNKNOWN"
+pkg_derive_paths
+
+start_timeout_seconds=$(seconds_setting "${PKG_TEST_START_TIMEOUT_SECONDS:-}" "$START_TIMEOUT_SECONDS")
+stop_timeout_seconds=$(seconds_setting "${PKG_TEST_STOP_TIMEOUT_SECONDS:-}" "$STOP_TIMEOUT_SECONDS")
+uptime_file=${PKG_TEST_UPTIME_FILE:-$UPTIME_FILE}
+
+case "$ACTION" in
+start) action_start ;;
+stop) action_stop ;;
+status) action_status ;;
+log) printf '%s\n' "$PKG_LOG_FILE" ;;
+esac
+exit "$EXIT_OK"

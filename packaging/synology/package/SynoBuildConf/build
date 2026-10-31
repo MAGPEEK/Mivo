@@ -1,0 +1,64 @@
+#!/bin/bash
+# shellcheck shell=bash
+# Build stage of the toolkit project (ADR 0026 section 2): compiles nothing. The server binary
+# and FFmpeg are prebuilt outside the chroot and staged into prebuilt/; this stage only checks
+# that the files of the family are there, executable and built for the family's machine.
+#
+# How the toolkit runs this file (pkgscripts-ng include/build, RunBuildScript): sourced by bash
+# in a subshell with the project directory as working directory, `( . $buildScript )`. The exit
+# status is ignored; include/errors.py decides success by searching the build log for patterns
+# such as "Error". Every failure therefore prints a line starting with "Error:" and leaves the
+# subshell with `exit 1`.
+
+spk_build_fail() {
+	echo "Error: $*" >&2
+	exit 1
+}
+
+# Reads one variable of build.env in a subshell so it cannot change the toolkit's variables
+# (build.env defines ARCH, which the toolkit's platform files also define).
+spk_build_env() {
+	# shellcheck source=/dev/null
+	(. ./build.env && printf '%s' "${!1:-}")
+}
+
+# ELF class (1 = 32-bit, 2 = 64-bit) and e_machine expected for each family.
+spk_expected_elf() {
+	case "$1" in
+		x86_64) echo "2 62" ;;  # EM_X86_64
+		armv8) echo "2 183" ;;  # EM_AARCH64
+		armv7) echo "1 40" ;;   # EM_ARM
+		*) return 1 ;;
+	esac
+}
+
+# Prints "<class> <machine>" of an ELF file, or nothing if the file is not ELF.
+spk_elf_identity() {
+	local magic
+	magic="$(od -An -tx1 -N4 "$1" | tr -d ' \n')"
+	[ "$magic" = "7f454c46" ] || return 0
+	echo "$(od -An -tu1 -j4 -N1 "$1" | tr -d ' ') $(od -An -tu2 -j18 -N2 "$1" | tr -d ' ')"
+}
+
+spk_check_prebuilt() {
+	local id arch expected file
+	[ -f ./build.env ] || spk_build_fail "build.env missing in $(pwd); stage the project first"
+	id="$(spk_build_env ID)"
+	# ARCH is the INFO arch value; its first word is the family (INFO.sh, README "Platforms").
+	arch="$(spk_build_env ARCH)"
+	arch="${arch%% *}"
+	[ -n "$id" ] || spk_build_fail "build.env sets no ID"
+	expected="$(spk_expected_elf "$arch")" || spk_build_fail "build.env ARCH '$arch' is not a family (x86_64, armv8, armv7)"
+
+	for file in "prebuilt/bin/$id" prebuilt/bin/ffmpeg prebuilt/bin/ffprobe; do
+		[ -f "$file" ] || spk_build_fail "prebuilt file $file for $arch is missing"
+		[ -x "$file" ] || spk_build_fail "prebuilt file $file for $arch is not executable"
+		[ "$(spk_elf_identity "$file")" = "$expected" ] ||
+			spk_build_fail "prebuilt file $file is not an ELF executable for $arch (class and machine '$expected')"
+	done
+	[ -n "$(find prebuilt/share/licenses -type f 2>/dev/null)" ] ||
+		spk_build_fail "prebuilt/share/licenses holds no licence files"
+	echo "prebuilt files for $arch present: $id, ffmpeg, ffprobe, licences"
+}
+
+spk_check_prebuilt
