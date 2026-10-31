@@ -1,0 +1,18 @@
+[
+  {
+    "step_title": "Daten von @DISPLAY_NAME@",
+    "items": [
+      {
+        "type": "multiselect",
+        "desc": "Nicht angehakt (Standard): Die Datenbank, die Einstellungen (config.yaml) und die Protokolle von @DISPLAY_NAME@ bleiben auf dem NAS, und eine neue Installation macht mit ihnen weiter. Angehakt: Sie werden gelöscht. Ihre Mediendateien und freigegebenen Ordner werden nie angetastet.",
+        "subitems": [
+          {
+            "key": "wizard_delete_data",
+            "desc": "Auch die Datenbank, Einstellungen und Protokolle löschen",
+            "defaultValue": false
+          }
+        ]
+      }
+    ]
+  }
+]

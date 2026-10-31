@@ -1,0 +1,63 @@
+#!/bin/sh
+# shellcheck source-path=SCRIPTDIR
+# Runs before package.tgz is extracted (ADR 0026 section 10, task SPK-06), as the package user.
+#
+# On INSTALL it checks the shared folder of the install wizard (wizard_media_share): the name
+# must follow DSM's naming rules and /volume*/<share> must exist. The data-share resource would
+# otherwise create a new, empty share for a mistyped name (DSM-NOTES section 7). A refusal
+# writes the reason to $SYNOPKG_TEMP_LOGFILE, which Package Center shows, and exits 1, which
+# aborts the installation. Every other status (UPGRADE: no wizard keys, the share was checked
+# at install) exits 0 without a check.
+#
+# Test-only variable (packaging/synology/test; DSM never sets it):
+#   PKG_TEST_VOLUMES_ROOT  directory that holds the volume* directories instead of /
+set -eu
+
+if [ "${SYNOPKG_PKG_STATUS:-}" != INSTALL ]; then
+	exit 0
+fi
+
+# The shared files live next to this script, wherever DSM keeps it.
+case "$0" in
+*/*) PKG_SCRIPT_DIR=${0%/*} ;;
+*) PKG_SCRIPT_DIR=. ;;
+esac
+if [ ! -r "$PKG_SCRIPT_DIR/common.sh" ]; then
+	printf '%s\n' "$PKG_SCRIPT_DIR/common.sh is missing; the package file is damaged" >&2
+	exit 1
+fi
+# shellcheck source=common.sh
+. "$PKG_SCRIPT_DIR/common.sh"
+pkg_load_package_env || exit 1
+
+# share_exists succeeds when a volume holds a directory named $1. Only reached with a name
+# pkg_check_share_name accepted: no "/", no "..", no glob characters.
+share_exists() {
+	for share_dir in "${PKG_TEST_VOLUMES_ROOT:-}"/volume*/"$1"; do
+		if [ -d "$share_dir" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+media_share=${wizard_media_share:-}
+if [ -z "$media_share" ]; then
+	pkg_tell_user "$(pkg_localized \
+		"Enter the name of the shared folder that holds your videos." \
+		"Geben Sie den Namen des freigegebenen Ordners mit Ihren Videos ein.")"
+	exit 1
+fi
+if ! pkg_check_share_name "$media_share"; then
+	pkg_tell_user "$(pkg_localized \
+		"\"$media_share\" is not a valid shared folder name. Enter the name of an existing shared folder, without a path." \
+		"\"$media_share\" ist kein gültiger Name für einen freigegebenen Ordner. Geben Sie den Namen eines vorhandenen freigegebenen Ordners ohne Pfad ein.")"
+	exit 1
+fi
+if ! share_exists "$media_share"; then
+	pkg_tell_user "$(pkg_localized \
+		"The shared folder \"$media_share\" does not exist. Create it in Control Panel > Shared Folder first, or enter the name of an existing shared folder." \
+		"Der freigegebene Ordner \"$media_share\" existiert nicht. Legen Sie ihn zuerst unter Systemsteuerung > Freigegebener Ordner an oder geben Sie den Namen eines vorhandenen freigegebenen Ordners ein.")"
+	exit 1
+fi
+exit 0

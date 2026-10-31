@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs before the package files are removed (ADR 0026 section 10, task SPK-06), as the package
+# user; also during an upgrade, as the old version's preuninst. DSM has stopped the server
+# already. Nothing to do: config.yaml, data/ and the log stay in var, and whether they are
+# deleted is decided by postuninst alone. A non-zero exit would abort the uninstall.
+exit 0

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Runs last in an upgrade, after the new version's postinst (ADR 0026 section 10, task SPK-06),
+# as the package user. Nothing to do: postinst has created the directories again and left
+# config.yaml, data/ and the log as they were. A non-zero exit would mark the package as damaged.
+exit 0

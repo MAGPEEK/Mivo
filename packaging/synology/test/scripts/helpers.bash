@@ -11,12 +11,13 @@ PACKAGE_SCRIPTS=$REPO_ROOT/packaging/synology/package/scripts
 TEST_DIR=$REPO_ROOT/packaging/synology/test
 
 # Shells every case runs under. DSM's /bin/sh is unconfirmed (DSM-NOTES section 5): BusyBox
-# ash stands for a minimal POSIX shell, "bash --posix" for /bin/sh being a link to bash.
-# SCRIPT_TEST_SHELLS replaces the list for a one-off run (comma-separated, e.g. "dash").
+# ash stands for a minimal POSIX shell, "bash --posix" for /bin/sh being a link to bash, dash
+# for a strict POSIX shell without bash or BusyBox extensions. SCRIPT_TEST_SHELLS replaces the
+# list for a one-off run (comma-separated, e.g. "dash").
 if [[ -n ${SCRIPT_TEST_SHELLS:-} ]]; then
 	IFS=, read -ra SCRIPT_SHELLS <<<"$SCRIPT_TEST_SHELLS"
 else
-	SCRIPT_SHELLS=("busybox sh" "bash --posix" "bash")
+	SCRIPT_SHELLS=("busybox sh" "bash --posix" "bash" "dash")
 fi
 
 # Name of the package in the fixture package.env (fixtures/package.env).
@@ -33,10 +34,17 @@ readonly EVENTUALLY_SECONDS=5
 # Lines a script may print per action on stdout and stderr together.
 readonly SHORT_OUTPUT_MAX_LINES=3
 
-# register_cases registers each case function case_<name> once per shell of SCRIPT_SHELLS.
+# register_cases registers each case function case_<name> once per shell of SCRIPT_SHELLS. A
+# shell that is not installed gets one failing test instead of its cases, so a run in an image
+# without it cannot pass silently.
 register_cases() {
 	local script_shell case_name
 	for script_shell in "${SCRIPT_SHELLS[@]}"; do
+		if ! command -v "${script_shell%% *}" >/dev/null; then
+			bats_test_function --description "shell ${script_shell%% *} is installed" -- \
+				fail "${script_shell%% *} is missing; run the tests in the image of ../Dockerfile"
+			continue
+		fi
 		for case_name in "$@"; do
 			bats_test_function --description "${case_name//_/ } [$script_shell]" -- \
 				run_case "$script_shell" "case_$case_name"
@@ -50,14 +58,16 @@ run_case() {
 }
 
 # setup_package_tree builds what DSM gives a package (DSM-NOTES section 8): target is a link
-# into @appstore as on DSM, var, tmp and home are directories, scripts holds the scripts under
-# test with the fixture package.env. The package binary is the fake server (fake-server.bash).
+# into @appstore as on DSM, var, tmp and home are directories, scripts holds every package
+# script with the fixture package.env. The package binary is the fake server
+# (fake-server.bash). $BATS_TEST_TMPDIR stands for / of the NAS: it holds volume1, and the
+# scripts look for shared folders below it (PKG_TEST_VOLUMES_ROOT).
 setup_package_tree() {
 	local volume=$BATS_TEST_TMPDIR/volume1
 	PKG_ROOT=$BATS_TEST_TMPDIR/packages/$FIXTURE_ID
 	mkdir -p "$volume/@appstore/$FIXTURE_ID/bin" "$PKG_ROOT"/{scripts,var,tmp,home}
 	ln -s "$volume/@appstore/$FIXTURE_ID" "$PKG_ROOT/target"
-	cp "$PACKAGE_SCRIPTS/start-stop-status" "$PACKAGE_SCRIPTS/common.sh" "$PKG_ROOT/scripts/"
+	cp "$PACKAGE_SCRIPTS"/* "$PKG_ROOT/scripts/"
 	cp "$TEST_DIR/fixtures/package.env" "$PKG_ROOT/scripts/"
 	cp "$(command -v bash)" "$PKG_ROOT/target/bin/$FIXTURE_ID"
 	printf '#!/bin/sh\nexit 0\n' >"$PKG_ROOT/target/bin/ffmpeg"
@@ -75,7 +85,10 @@ setup_package_tree() {
 	export SYNOPKG_PKGDEST=$PKG_ROOT/target SYNOPKG_PKGVAR=$PKG_ROOT/var
 	export SYNOPKG_PKGTMP=$PKG_ROOT/tmp SYNOPKG_PKGHOME=$PKG_ROOT/home
 	export SYNOPKG_TEMP_LOGFILE=$TEMP_LOGFILE
+	export PKG_TEST_VOLUMES_ROOT=$BATS_TEST_TMPDIR
 	export BASH_ENV=$TEST_DIR/fake-server.bash FAKE_BINARY_NAME=$FIXTURE_ID FAKE_STATE_DIR
+	# Wizard keys and the DSM language are set by the cases that need them.
+	unset wizard_media_share wizard_delete_data SYNOPKG_DSM_LANGUAGE
 }
 
 # stop_leftover_processes kills every fake server and foreign process a test started.
@@ -85,6 +98,12 @@ stop_leftover_processes() {
 		while read -r pid; do
 			kill -KILL "$pid" 2>/dev/null || :
 		done <"$FAKE_STATE_DIR/server.starts"
+	fi
+	# A child that never became the server is not in server.starts; a faulty script may still
+	# have recorded it.
+	if [[ -f $PKG_PID ]] && read -r pid <"$PKG_PID" && [[ $pid =~ ^[0-9]+$ ]] &&
+		[[ " ${FOREIGN_PIDS[*]} " != *" $pid "* ]]; then
+		kill -KILL "$pid" 2>/dev/null || :
 	fi
 	# Foreign processes end on SIGTERM; SIGKILL would make bash report them as killed.
 	for pid in "${FOREIGN_PIDS[@]}"; do
@@ -103,6 +122,37 @@ run_script() {
 # run_sss runs start-stop-status of the package tree with the given arguments.
 run_sss() {
 	run_script "$PKG_ROOT/scripts/start-stop-status" "$@"
+}
+
+# run_common runs the common.sh function $1 with the remaining arguments under the shell of the
+# current case, after loading common.sh and the fixture package.env as the scripts do.
+run_common() {
+	local -a shell_command
+	read -ra shell_command <<<"$CASE_SHELL"
+	# shellcheck disable=SC2016 # expanded by the shell under test
+	run --separate-stderr "${shell_command[@]}" -c \
+		'PKG_SCRIPT_DIR=$1; shift; . "$PKG_SCRIPT_DIR/common.sh" && pkg_load_package_env && "$@"' \
+		_ "$PKG_ROOT/scripts" "$@"
+}
+
+# fake_failing_command puts a command $1 first in PATH that fails when one of its arguments
+# matches the shell pattern $2 and runs the real command otherwise. As root in the container,
+# rm and mv cannot be made to fail through file permissions.
+fake_failing_command() {
+	local name=$1 pattern=$2 real fake_dir=$BATS_TEST_TMPDIR/fake-bin
+	real=$(command -v "$name")
+	mkdir -p "$fake_dir"
+	cat >"$fake_dir/$name" <<EOF
+#!/bin/sh
+for argument in "\$@"; do
+	case "\$argument" in
+	$pattern) echo "$name: refused \$argument (test)" >&2; exit 1 ;;
+	esac
+done
+exec "$real" "\$@"
+EOF
+	chmod 0755 "$fake_dir/$name"
+	export PATH=$fake_dir:$PATH
 }
 
 fake_mode() {
@@ -130,7 +180,12 @@ process_running() {
 start_foreign_process() {
 	bash -c 'trap "exit 0" TERM; while :; do sleep 0.2; done' </dev/null >/dev/null 2>&1 3>&- &
 	FOREIGN_PID=$!
-	FOREIGN_PIDS+=("$FOREIGN_PID")
+	track_foreign_process "$FOREIGN_PID"
+}
+
+# track_foreign_process makes stop_leftover_processes end process $1 after the test.
+track_foreign_process() {
+	FOREIGN_PIDS+=("$1")
 }
 
 # dead_pid prints the PID of a process that has already exited and been reaped.
@@ -144,8 +199,14 @@ dead_pid() {
 
 # eventually retries the command for up to EVENTUALLY_SECONDS.
 eventually() {
-	local attempt
-	for ((attempt = 0; attempt < EVENTUALLY_SECONDS * 10; attempt++)); do
+	eventually_within "$EVENTUALLY_SECONDS" "$@"
+}
+
+# eventually_within retries the command (from $2 on) for up to $1 seconds.
+eventually_within() {
+	local seconds=$1 attempt
+	shift
+	for ((attempt = 0; attempt < seconds * 10; attempt++)); do
 		if "$@"; then
 			return 0
 		fi
@@ -206,6 +267,15 @@ refute_file_line() {
 	local file=$1 unexpected=$2
 	if grep -qxF -- "$unexpected" "$file"; then
 		fail "$file has the line '$unexpected'"
+	fi
+}
+
+# refute_error_words fails when the last run printed words that the toolkit's log check and a
+# reader of DSM's package log take for a failure.
+# shellcheck disable=SC2154 # output and stderr are set by bats' run
+refute_error_words() {
+	if grep -qE 'Error|error:|fatal error' <<<"$output"$'\n'"$stderr"; then
+		fail "the script printed an error word:"$'\n'"$output"$'\n'"$stderr"
 	fi
 }
 

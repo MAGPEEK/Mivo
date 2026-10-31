@@ -244,6 +244,131 @@ case_start_twice_keeps_one_server() {
 	assert_equal "$(pid_from_file)" "$pid"
 }
 
+case_start_keeps_transcode_output_of_running_server() {
+	run_sss start
+	assert_success
+	local transcode=$SYNOPKG_PKGTMP/transcode
+	mkdir -p "$transcode/sessions/live"
+	touch "$transcode/sessions/live/segment-1.m4s"
+
+	run_sss start
+	assert_success
+	assert_output --partial "already running"
+	[[ -f $transcode/sessions/live/segment-1.m4s ]] || fail "a second start removed the output of the running server"
+}
+
+process_gone() {
+	! process_running "$1"
+}
+
+# has_child_process succeeds while process $1 has a child process.
+has_child_process() {
+	local stat_file stat
+	for stat_file in /proc/[0-9]*/stat; do
+		read -r stat 2>/dev/null <"$stat_file" || continue
+		stat=${stat##*) }
+		read -r _ parent _ <<<"$stat"
+		[[ $parent == "$1" ]] && return 0
+	done
+	return 1
+}
+
+# A log that is a FIFO holds the forked shell in the redirection, before exec, until a reader
+# opens it: the window in which a concurrent status used to take the fresh PID file for stale.
+case_start_records_pid_only_after_exec() {
+	mkfifo "$PKG_LOG"
+	local -a shell_command
+	read -ra shell_command <<<"$CASE_SHELL"
+	"${shell_command[@]}" "$PKG_ROOT/scripts/start-stop-status" start \
+		>"$BATS_TEST_TMPDIR/start.out" 2>"$BATS_TEST_TMPDIR/start.err" 3>&- &
+	local start_pid=$!
+	eventually has_child_process "$start_pid"
+	sleep 0.5
+	for _ in 1 2 3; do
+		run_sss status
+		assert_failure 3
+		[[ ! -e $PKG_PID ]] || fail "the PID file exists before the server binary runs"
+	done
+
+	cat "$PKG_LOG" >/dev/null 3>&- &
+	track_foreign_process "$!"
+	local start_status=0
+	wait "$start_pid" || start_status=$?
+	assert_equal "$start_status" 0
+	assert_equal "$(pid_from_file)" "$(cat "$FAKE_STATE_DIR/server.starts")"
+	run_sss status
+	assert_success
+}
+
+# start runs with its output in files, not under `run`: a child left blocked in the FIFO would
+# keep run's output pipe open and hang the test instead of failing it.
+case_start_kills_child_that_never_runs_the_binary() {
+	# Nobody reads the FIFO, so the forked shell never gets to exec.
+	mkfifo "$PKG_LOG"
+	local -a shell_command
+	read -ra shell_command <<<"$CASE_SHELL"
+	local started start_pid start_status=0
+	started=$(monotonic_centiseconds)
+	"${shell_command[@]}" "$PKG_ROOT/scripts/start-stop-status" start \
+		>"$BATS_TEST_TMPDIR/start.out" 2>"$BATS_TEST_TMPDIR/start.err" 3>&- &
+	start_pid=$!
+	eventually_within 15 process_gone "$start_pid" || {
+		kill -KILL "$start_pid" 2>/dev/null || :
+		fail "start did not give up on a child that never runs the binary"
+	}
+	wait "$start_pid" || start_status=$?
+	assert_equal "$start_status" 1
+	assert_elapsed_at_least "$started" 5 "start gave up before the exec wait"
+	local stderr
+	stderr=$(cat "$BATS_TEST_TMPDIR/start.err")
+	assert_stderr_contains "$FIXTURE_DISPLAY_NAME did not start within 5 s"
+	assert_file_line "$TEMP_LOGFILE" "$(head -n 1 <<<"$stderr")"
+	[[ ! -e $PKG_PID ]] || fail "a PID file names a process that never became the server"
+	assert_equal "$(server_starts)" 0
+}
+
+case_start_fails_and_stops_server_when_pid_file_cannot_be_written() {
+	# A directory in the way of the temporary PID file fails the write, also for root.
+	mkdir "$PKG_PID.new"
+	run_sss start
+	assert_failure 1
+	assert_stderr_contains "cannot write $PKG_PID; stopped $FIXTURE_DISPLAY_NAME again"
+	assert_file_line "$TEMP_LOGFILE" "cannot write $PKG_PID; stopped $FIXTURE_DISPLAY_NAME again"
+	local pid
+	pid=$(cat "$FAKE_STATE_DIR/server.starts")
+	eventually process_gone "$pid"
+	[[ ! -e $PKG_PID ]] || fail "a PID file is left"
+	run_sss status
+	assert_failure 3
+}
+
+case_start_names_transcode_output_it_cannot_remove() {
+	local transcode=$SYNOPKG_PKGTMP/transcode
+	mkdir -p "$transcode/session-1"
+	touch "$transcode/session-2"
+	fake_failing_command rm '*/session-1'
+
+	run_sss start
+	assert_success
+	assert_stderr_contains "cannot remove $transcode/session-1"
+	assert_stderr_contains "stale transcode output is left in $transcode"
+	[[ ! -e $transcode/session-2 ]] || fail "the removable entry was kept"
+	process_running "$(pid_from_file)"
+}
+
+case_start_names_log_it_cannot_rotate() {
+	echo "previous log" >"$PKG_LOG"
+	truncate -s 10485761 "$PKG_LOG"
+	fake_failing_command mv '*.log'
+
+	run_sss start
+	assert_success
+	assert_stderr_contains "cannot rotate $PKG_LOG; the server keeps appending to it"
+	[[ ! -e $PKG_LOG.1 ]] || fail "the log was rotated although mv failed"
+	assert_file_line "$PKG_LOG" "fake server: starting in mode healthy"
+	process_running "$(pid_from_file)"
+}
+
 case_start_at_boot_with_empty_package_status() {
 	export SYNOPKG_PKG_STATUS=
 	run_sss prestart
@@ -301,6 +426,9 @@ case_stop_kills_server_that_ignores_sigterm() {
 	assert_output --partial "did not stop within 2 s; sending SIGKILL"
 	assert_short_output
 	assert_elapsed_at_least "$started" 2 "SIGKILL came before the stop timeout"
+	# Stop budget plus the 5 s SIGKILL wait is the most stop may take; SIGKILL ends the fake at
+	# once, so stop returns well before that.
+	assert_elapsed_below "$started" 7 "stop waited too long after SIGKILL"
 	assert_equal "$(cat "$FAKE_STATE_DIR/server.signal")" term
 	! process_running "$pid" || fail "the server survived SIGKILL"
 	[[ ! -e $PKG_PID ]] || fail "the PID file is left"
@@ -424,7 +552,8 @@ case_missing_package_env_marks_package_broken() {
 
 case_invalid_package_env_marks_package_broken() {
 	local line
-	for line in "ENV_PREFIX='demo'" "ENV_PREFIX='DEMO-X'" "ID='../demo'" "ID=''" "DISPLAY_NAME=''"; do
+	for line in "ENV_PREFIX='demo'" "ENV_PREFIX='DEMO-X'" "ID='../demo'" "ID=''" "ID='de_mo'" \
+		"ID='Demo'" "DISPLAY_NAME=''"; do
 		cp "$TEST_DIR/fixtures/package.env" "$PKG_ROOT/scripts/package.env"
 		echo "$line" >>"$PKG_ROOT/scripts/package.env"
 		run_sss status
@@ -504,6 +633,12 @@ register_cases \
 	start_budget_survives_stalled_clock \
 	start_budget_falls_back_to_wall_clock \
 	start_twice_keeps_one_server \
+	start_keeps_transcode_output_of_running_server \
+	start_records_pid_only_after_exec \
+	start_kills_child_that_never_runs_the_binary \
+	start_fails_and_stops_server_when_pid_file_cannot_be_written \
+	start_names_transcode_output_it_cannot_remove \
+	start_names_log_it_cannot_rotate \
 	start_at_boot_with_empty_package_status \
 	start_fails_without_binary \
 	stop_terminates_gracefully \

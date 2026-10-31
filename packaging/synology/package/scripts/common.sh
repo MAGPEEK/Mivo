@@ -17,11 +17,42 @@
 
 # Mode of the directories the package creates for the server (ADR 0026 section 6).
 PKG_DIR_MODE=0750
+# Files the package and the server create are not readable by others, matching PKG_DIR_MODE.
+PKG_FILE_UMASK=027
+# Name of the server's configuration file in its config directory (config.FileName).
+PKG_CONFIG_FILE_NAME=config.yaml
+# DSM's directory of the installed packages; /var/packages/<id>/shares/<share> is the link
+# Package Center creates for each share of the data-share resource (DSM-NOTES section 7).
+PKG_DSM_PACKAGES_DIR=/var/packages
+# Longest shared-folder name DSM accepts, in characters (DSM-NOTES section 9).
+PKG_SHARE_NAME_MAX_CHARACTERS=32
+# Characters DSM forbids in shared-folder names, as a grep bracket expression (DSM-NOTES
+# section 9). Inside brackets "]" must come first and "\" is literal.
+PKG_SHARE_NAME_FORBIDDEN='[]!"#%&'\''()*+,/:;<=>?@[\^`{}|~]'
 
 # pkg_error prints a message on stderr. DSM appends the script output to
 # /var/log/packages/<id>.log.
 pkg_error() {
 	printf '%s\n' "$*" >&2
+}
+
+# pkg_localized prints $2 (German) when DSM runs in German, else $1 (English). DSM passes its
+# language as SYNOPKG_DSM_LANGUAGE (DSM-NOTES section 5).
+pkg_localized() {
+	case "${SYNOPKG_DSM_LANGUAGE:-}" in
+	ger) printf '%s\n' "$2" ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+# pkg_tell_user shows a message in Package Center's dialog: DSM reads $SYNOPKG_TEMP_LOGFILE
+# after a script exits non-zero (DSM-NOTES section 5). The message also goes to stderr, so the
+# package log keeps it.
+pkg_tell_user() {
+	pkg_error "$*"
+	if [ -n "${SYNOPKG_TEMP_LOGFILE:-}" ]; then
+		printf '%s\n' "$*" >>"$SYNOPKG_TEMP_LOGFILE" 2>/dev/null || :
+	fi
 }
 
 # pkg_load_package_env reads ID, DISPLAY_NAME, ENV_PREFIX and PORT from package.env next to the
@@ -38,11 +69,13 @@ pkg_load_package_env() {
 	pkg_check_package_env
 }
 
-# pkg_check_package_env rejects values that would break a path (ID) or an environment variable
-# name (ENV_PREFIX); the staging step renders them from internal/platform/brand.
+# pkg_check_package_env rejects values that would break a path, the package user or the
+# firewall section name (ID: the pattern of spkmeta's Package.Validate, no underscore because
+# the .sc section allows none) or an environment variable name (ENV_PREFIX); the staging step
+# renders them from internal/platform/brand.
 pkg_check_package_env() {
 	case "${ID:-}" in
-	'' | [!A-Za-z0-9]* | *[!A-Za-z0-9._-]*)
+	'' | [!a-z0-9]* | *[!a-z0-9.-]*)
 		pkg_error "package.env: invalid ID '${ID:-}'"
 		return 1
 		;;
@@ -87,6 +120,7 @@ pkg_derive_paths() {
 	PKG_FFMPEG=$SYNOPKG_PKGDEST/bin/ffmpeg
 	PKG_FFPROBE=$SYNOPKG_PKGDEST/bin/ffprobe
 	PKG_CONFIG_DIR=$SYNOPKG_PKGVAR
+	PKG_CONFIG_FILE=$PKG_CONFIG_DIR/$PKG_CONFIG_FILE_NAME
 	PKG_DATA_DIR=$SYNOPKG_PKGVAR/data
 	PKG_CACHE_DIR=$SYNOPKG_PKGVAR/cache
 	PKG_TRANSCODE_DIR=$SYNOPKG_PKGTMP/transcode
@@ -117,4 +151,65 @@ pkg_create_server_dirs() {
 			mkdir -m "$PKG_DIR_MODE" "$pkg_server_dir" || return 1
 		fi
 	done
+}
+
+# pkg_remove_directory_contents removes every entry of directory $1, hidden ones included, and
+# keeps the directory. rm -r does not follow symbolic links, so nothing outside $1 is removed.
+# Each entry that cannot be removed is named on stderr; the function then fails.
+pkg_remove_directory_contents() {
+	pkg_remove_status=0
+	for pkg_remove_entry in "$1"/* "$1"/.[!.]* "$1"/..?*; do
+		if [ -e "$pkg_remove_entry" ] || [ -L "$pkg_remove_entry" ]; then
+			if ! rm -rf -- "$pkg_remove_entry"; then
+				pkg_error "cannot remove $pkg_remove_entry"
+				pkg_remove_status=1
+			fi
+		fi
+	done
+	return "$pkg_remove_status"
+}
+
+# pkg_is_package_directory succeeds when $1 is an existing directory that belongs to this
+# package: an absolute path with the package ID as one of its elements, as both
+# /var/packages/<id>/var and its target /volumeN/@appdata/<id> have. It guards every deletion.
+pkg_is_package_directory() {
+	case "$1" in
+	/*/"$ID" | /*/"$ID"/*) ;;
+	*) return 1 ;;
+	esac
+	case "/$1/" in
+	*/../* | */./*) return 1 ;;
+	esac
+	[ -d "$1" ]
+}
+
+# pkg_character_count prints the number of characters of the UTF-8 text $1: the bytes that are
+# not UTF-8 continuation bytes, independent of the locale DSM runs the script in.
+pkg_character_count() {
+	printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '
+}
+
+# pkg_check_share_name succeeds when $1 follows DSM's shared-folder naming rules (DSM-NOTES
+# section 9), the rules the install wizard's validator implements. A name that passes contains
+# no path separator and no control character, so it is safe in a path and in config.yaml.
+pkg_check_share_name() {
+	case "$1" in
+	'' | . | .. | [-\ ]* | *' ' | \$* | *\$?* | *[[:cntrl:]]*) return 1 ;;
+	esac
+	if printf '%s' "$1" | LC_ALL=C grep -q -- "$PKG_SHARE_NAME_FORBIDDEN"; then
+		return 1
+	fi
+	[ "$(pkg_character_count "$1")" -le "$PKG_SHARE_NAME_MAX_CHARACTERS" ]
+}
+
+# pkg_share_link prints the path of DSM's link to share $1 (DSM-NOTES section 7). It is the
+# library root: it survives moving the share to another volume (ADR 0026 section 7).
+pkg_share_link() {
+	printf '%s\n' "$PKG_DSM_PACKAGES_DIR/$ID/shares/$1"
+}
+
+# pkg_yaml_quote prints $1 as a YAML double-quoted scalar. Only "\" and """ need an escape there;
+# callers reject control characters first, which double quotes would carry as raw bytes.
+pkg_yaml_quote() {
+	printf '"%s"\n' "$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
 }

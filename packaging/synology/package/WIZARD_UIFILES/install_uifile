@@ -1,0 +1,29 @@
+[
+  {
+    "step_title": "Media folder",
+    "invalid_next_disabled_v2": true,
+    "items": [
+      {
+        "desc": "@DISPLAY_NAME@ is a media server that runs on this NAS. After the installation, open it in a web browser on another device at port @PORT@ of this NAS, for example http://NAS-address:@PORT@. Until user accounts exist, it accepts connections from the local network only."
+      },
+      {
+        "type": "textfield",
+        "desc": "Choose the existing shared folder that holds your videos. The package gets read-only access to it and adds it as a movie library. More folders can be added later: in Control Panel > Shared Folder > Edit > Permissions, give the system internal user @ID@ read access, then add the folder to config.yaml in /var/packages/@ID@/var and restart the package.",
+        "subitems": [
+          {
+            "key": "wizard_media_share",
+            "desc": "Shared folder",
+            "defaultValue": "video",
+            "validator": {
+              "allowBlank": false,
+              "regex": {
+                "expr": "/^(?!\\.\\.?$)(?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20\\-](?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f]{0,30}[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20])?|[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20\\-](?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f]{0,29}[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20])?\\$)$/",
+                "errorText": "Enter the name of a shared folder: 1 to 32 characters, no path, none of the special characters DSM does not allow in shared folder names, no space at the start or end, $ only at the end."
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

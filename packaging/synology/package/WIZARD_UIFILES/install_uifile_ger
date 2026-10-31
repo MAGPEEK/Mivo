@@ -1,0 +1,29 @@
+[
+  {
+    "step_title": "Medienordner",
+    "invalid_next_disabled_v2": true,
+    "items": [
+      {
+        "desc": "@DISPLAY_NAME@ ist ein Medienserver, der auf diesem NAS läuft. Öffnen Sie ihn nach der Installation in einem Webbrowser auf einem anderen Gerät über Port @PORT@ dieses NAS, zum Beispiel http://NAS-Adresse:@PORT@. Solange es keine Benutzerkonten gibt, nimmt er nur Verbindungen aus dem lokalen Netzwerk an."
+      },
+      {
+        "type": "textfield",
+        "desc": "Wählen Sie den vorhandenen freigegebenen Ordner mit Ihren Videos. Das Paket erhält nur Lesezugriff darauf und richtet ihn als Filmbibliothek ein. Weitere Ordner lassen sich später hinzufügen: Unter Systemsteuerung > Freigegebener Ordner > Bearbeiten > Berechtigungen dem internen Systembenutzer @ID@ Lesezugriff geben, den Ordner in config.yaml unter /var/packages/@ID@/var eintragen und das Paket neu starten.",
+        "subitems": [
+          {
+            "key": "wizard_media_share",
+            "desc": "Freigegebener Ordner",
+            "defaultValue": "video",
+            "validator": {
+              "allowBlank": false,
+              "regex": {
+                "expr": "/^(?!\\.\\.?$)(?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20\\-](?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f]{0,30}[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20])?|[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20\\-](?:[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f]{0,29}[^!\"#$%&'()*+,\\/:;<=>?@\\[\\\\\\]\\^`{}|~\\x00-\\x1f\\x7f\\x20])?\\$)$/",
+                "errorText": "Geben Sie den Namen eines freigegebenen Ordners ein: 1 bis 32 Zeichen, kein Pfad, keines der Sonderzeichen, die DSM in Ordnernamen nicht erlaubt, kein Leerzeichen am Anfang oder Ende, $ nur am Ende."
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

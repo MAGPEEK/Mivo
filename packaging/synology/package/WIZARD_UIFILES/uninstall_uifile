@@ -1,0 +1,18 @@
+[
+  {
+    "step_title": "Data of @DISPLAY_NAME@",
+    "items": [
+      {
+        "type": "multiselect",
+        "desc": "Unchecked (default): the database, the settings (config.yaml) and the logs of @DISPLAY_NAME@ stay on the NAS, and a new installation continues with them. Checked: they are deleted. Your media files and shared folders are never touched.",
+        "subitems": [
+          {
+            "key": "wizard_delete_data",
+            "desc": "Also delete the database, settings and logs",
+            "defaultValue": false
+          }
+        ]
+      }
+    ]
+  }
+]

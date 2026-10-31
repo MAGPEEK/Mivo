@@ -7,7 +7,8 @@
 #                      (precheckstartstop), prestart also at boot (DSM-NOTES section 5).
 #   start              starts the server in the background and waits for its health check.
 #                      0 when healthy, or alive but not yet healthy after the start budget;
-#                      1 when the server exits during start or cannot be started.
+#                      1 when the server exits during start or cannot be started (also when
+#                      the PID file cannot be written: the new server is killed then).
 #   stop               SIGTERM, waits for the graceful shutdown, then SIGKILL. 0, also when
 #                      nothing runs.
 #   status             0 running, 3 not running, 150 package broken (binary or package files
@@ -32,8 +33,13 @@ readonly START_TIMEOUT_SECONDS=30
 readonly START_POLL_INTERVAL_SECONDS=1
 # Clock of the start budget: seconds since boot, which wall clock changes do not move.
 readonly UPTIME_FILE=/proc/uptime
-# Seconds stop waits after SIGTERM before SIGKILL: the server waits up to 10 s for open requests
-# (server.ShutdownTimeout) and then closes the database. Docker gets the same budget
+# Tenths of a second start waits for the forked shell to become the server binary (exec)
+# before it writes the PID file. exec takes milliseconds; a child that is still no server after
+# this is killed.
+readonly EXEC_WAIT_TENTHS=50
+# Seconds stop waits after SIGTERM before SIGKILL: the server bounds its whole graceful
+# shutdown (HTTP requests, playback, scans, closing the database) to 18 s (shutdownBudget,
+# ADR 0024 Notes M2-32), two seconds below this. Docker gets the same budget
 # (--stop-timeout 20, packaging/docker/README.md).
 readonly STOP_TIMEOUT_SECONDS=20
 readonly STOP_POLL_INTERVAL_SECONDS=1
@@ -43,8 +49,6 @@ readonly KILL_WAIT_SECONDS=5
 readonly LOG_ROTATE_BYTES=10485760
 # Lines of the server log shown in Package Center when the server exits during start.
 readonly LOG_TAIL_LINES=20
-# Files the server creates are not readable by others, matching the 0750 directories.
-readonly SERVER_UMASK=027
 
 # Exit codes of the guide ("scripts" - "start-stop-status").
 readonly EXIT_OK=0 EXIT_FAILURE=1 EXIT_NOT_RUNNING=3 EXIT_UNKNOWN=4 EXIT_BROKEN=150
@@ -106,18 +110,27 @@ process_alive() {
 	esac
 }
 
-# running_pid prints the PID of the running server from the PID file. A PID file that names no
-# server process (dead, reused PID, garbage) is removed.
-running_pid() {
-	pid_from_file=
+# read_pid_file prints the first line of the PID file, or nothing when there is none.
+read_pid_file() {
+	pid_line=
 	if [ -f "$PKG_PID_FILE" ]; then
-		read -r pid_from_file <"$PKG_PID_FILE" || :
+		read -r pid_line <"$PKG_PID_FILE" 2>/dev/null || :
 	fi
+	printf '%s\n' "$pid_line"
+}
+
+# running_pid prints the PID of the running server from the PID file. A PID file that names no
+# server process (dead, reused PID, garbage) is removed. start writes the file only once the
+# server binary runs (wait_for_exec) and replaces it in one rename, so a concurrent start's
+# fresh file is never taken for stale; the content is read again right before the removal for
+# the same reason.
+running_pid() {
+	pid_from_file=$(read_pid_file)
 	if is_server_process "$pid_from_file"; then
 		printf '%s\n' "$pid_from_file"
 		return 0
 	fi
-	if [ -e "$PKG_PID_FILE" ]; then
+	if [ -e "$PKG_PID_FILE" ] && [ "$(read_pid_file)" = "$pid_from_file" ]; then
 		rm -f "$PKG_PID_FILE"
 		pkg_error "removed stale PID file (pid '$pid_from_file' is not $DISPLAY_NAME)"
 	fi
@@ -133,23 +146,25 @@ require_binary() {
 }
 
 # clear_transcode_dir removes everything below the transcode directory. Only a stopped server
-# gets here, and tmp survives reboots and crashes, so every entry is stale output.
+# gets here, and tmp survives reboots and crashes, so every entry is stale output. Leftovers
+# cost disk space, not correctness (the server purges its sessions directory itself), so the
+# start goes on after naming them.
 clear_transcode_dir() {
-	for transcode_entry in "$PKG_TRANSCODE_DIR"/* "$PKG_TRANSCODE_DIR"/.[!.]* "$PKG_TRANSCODE_DIR"/..?*; do
-		if [ -e "$transcode_entry" ] || [ -L "$transcode_entry" ]; then
-			rm -rf -- "$transcode_entry"
-		fi
-	done
+	if ! pkg_remove_directory_contents "$PKG_TRANSCODE_DIR"; then
+		pkg_error "stale transcode output is left in $PKG_TRANSCODE_DIR"
+	fi
 }
 
+# rotate_log keeps one old log when the log has grown past LOG_ROTATE_BYTES. A failed rotation
+# is named and the server appends to the old file.
 rotate_log() {
 	if [ ! -f "$PKG_LOG_FILE" ]; then
 		return 0
 	fi
-	log_bytes=$(wc -c <"$PKG_LOG_FILE")
+	log_bytes=$(wc -c <"$PKG_LOG_FILE") || log_bytes=0
 	# Arithmetic drops the padding some wc implementations print.
-	if [ "$((log_bytes))" -gt "$LOG_ROTATE_BYTES" ]; then
-		mv -f "$PKG_LOG_FILE" "$PKG_LOG_FILE.1"
+	if [ "$((log_bytes))" -gt "$LOG_ROTATE_BYTES" ] && ! mv -f "$PKG_LOG_FILE" "$PKG_LOG_FILE.1"; then
+		pkg_error "cannot rotate $PKG_LOG_FILE; the server keeps appending to it"
 	fi
 }
 
@@ -157,10 +172,55 @@ rotate_log() {
 # Package Center passes to the script is not documented; 3 to 9 are closed as well, so the
 # long-running server keeps no pipe of the caller open.
 launch_server() {
-	umask "$SERVER_UMASK"
+	umask "$PKG_FILE_UMASK"
 	"$PKG_BINARY" </dev/null >>"$PKG_LOG_FILE" 2>&1 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- &
 	server_pid=$!
-	printf '%s\n' "$server_pid" >"$PKG_PID_FILE"
+}
+
+# pause_briefly sleeps a tenth of a second where sleep takes fractions (GNU, BusyBox with
+# float support), else a second; brief_pause_tenths says which.
+pause_briefly() {
+	if sleep 0.1 2>/dev/null; then
+		brief_pause_tenths=1
+	else
+		sleep 1
+		brief_pause_tenths=10
+	fi
+}
+
+# wait_for_exec waits until the forked child $1 runs the package binary: 0 it does, 1 it exited,
+# 2 it is still something else after EXEC_WAIT_TENTHS. Until then /proc/<pid>/exe names the
+# shell, and a PID file written earlier would look stale to a concurrent status, which would
+# remove it.
+wait_for_exec() {
+	exec_waited_tenths=0
+	while ! is_server_process "$1"; do
+		process_alive "$1" || return 1
+		if [ "$exec_waited_tenths" -ge "$EXEC_WAIT_TENTHS" ]; then
+			return 2
+		fi
+		pause_briefly
+		exec_waited_tenths=$((exec_waited_tenths + brief_pause_tenths))
+	done
+}
+
+# write_pid_file writes PID $1 to a temporary file and renames it into place, so a reader sees
+# either no PID file or a complete one, never an empty file that looks stale.
+write_pid_file() {
+	pid_temp_file=$PKG_PID_FILE.new
+	if (printf '%s\n' "$1" >"$pid_temp_file") 2>/dev/null &&
+		mv -f "$pid_temp_file" "$PKG_PID_FILE" 2>/dev/null; then
+		return 0
+	fi
+	rm -f "$pid_temp_file" 2>/dev/null || :
+	return 1
+}
+
+# abort_start kills the just-started server $1, reaps it and tells the user why ($2).
+abort_start() {
+	kill -KILL "$1" 2>/dev/null || :
+	wait "$1" 2>/dev/null || :
+	pkg_tell_user "$2"
 }
 
 # uptime_seconds prints the whole seconds since boot from /proc/uptime, rounded up when $1 is
@@ -218,8 +278,9 @@ start_budget_begin() {
 		health_deadline=$((health_start + start_timeout_seconds))
 	fi
 	# Backstop for a clock that stalls, jumps back or cannot be read: the sleeps between these
-	# polls alone last the whole budget.
-	health_polls_left=$((start_timeout_seconds / START_POLL_INTERVAL_SECONDS + 1))
+	# polls alone last the whole budget. Rounded up, so an interval that does not divide the
+	# budget never shortens it.
+	health_polls_left=$(((start_timeout_seconds + START_POLL_INTERVAL_SECONDS - 1) / START_POLL_INTERVAL_SECONDS + 1))
 }
 
 # start_budget_left counts one poll and succeeds while both the clock and the poll limit allow
@@ -254,7 +315,9 @@ wait_for_health() {
 report_failed_start() {
 	server_status=0
 	wait "$1" || server_status=$?
-	rm -f "$PKG_PID_FILE"
+	if [ "$(read_pid_file)" = "$1" ]; then
+		rm -f "$PKG_PID_FILE"
+	fi
 	failure="$DISPLAY_NAME stopped during start (exit status $server_status)"
 	pkg_error "$failure; see $PKG_LOG_FILE"
 	if [ -n "${SYNOPKG_TEMP_LOGFILE:-}" ]; then
@@ -262,6 +325,30 @@ report_failed_start() {
 			printf '%s\n' "$failure. Last lines of $PKG_LOG_FILE:"
 			tail -n "$LOG_TAIL_LINES" "$PKG_LOG_FILE"
 		} >>"$SYNOPKG_TEMP_LOGFILE" 2>/dev/null || :
+	fi
+}
+
+# start_server launches the server, waits until the binary runs and records its PID; it sets
+# server_pid and leaves the script with exit 1 when the server cannot be recorded as running.
+start_server() {
+	launch_server
+	exec_state=0
+	wait_for_exec "$server_pid" || exec_state=$?
+	case "$exec_state" in
+	0) ;;
+	1)
+		# Exited before the binary ran or right after: the reaped status says why.
+		report_failed_start "$server_pid"
+		exit "$EXIT_FAILURE"
+		;;
+	*)
+		abort_start "$server_pid" "$DISPLAY_NAME did not start within $((EXEC_WAIT_TENTHS / 10)) s (pid $server_pid is not $PKG_BINARY)"
+		exit "$EXIT_FAILURE"
+		;;
+	esac
+	if ! write_pid_file "$server_pid"; then
+		abort_start "$server_pid" "cannot write $PKG_PID_FILE; stopped $DISPLAY_NAME again"
+		exit "$EXIT_FAILURE"
 	fi
 }
 
@@ -275,7 +362,7 @@ action_start() {
 	clear_transcode_dir
 	rotate_log
 	pkg_export_server_environment
-	launch_server
+	start_server
 	echo "starting $DISPLAY_NAME (pid $server_pid)"
 	health=0
 	wait_for_health "$server_pid" || health=$?

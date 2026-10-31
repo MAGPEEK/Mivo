@@ -1,0 +1,73 @@
+#!/bin/sh
+# shellcheck source-path=SCRIPTDIR
+# Runs after package.tgz is extracted (ADR 0026 section 10, task SPK-06), as the package user.
+#
+# Always creates the server's data, cache and transcode directories that are missing (0750).
+# On INSTALL, and only when no config.yaml exists, it writes config.yaml with the shared folder
+# of the install wizard (wizard_media_share) as the one library. An existing config.yaml is
+# never touched, and on UPGRADE nothing is written: DSM keeps var, and with it the user's file.
+#
+# The library path is DSM's link /var/packages/<id>/shares/<share>. It does not exist yet:
+# Package Center creates it when it acquires the data-share resource, after postinst and before
+# the first start (DSM-NOTES section 7), so it is written without a check. A non-zero exit
+# marks the package as damaged in Package Center; the reason goes to $SYNOPKG_TEMP_LOGFILE.
+set -eu
+
+# The shared files live next to this script, wherever DSM keeps it.
+case "$0" in
+*/*) PKG_SCRIPT_DIR=${0%/*} ;;
+*) PKG_SCRIPT_DIR=. ;;
+esac
+if [ ! -r "$PKG_SCRIPT_DIR/common.sh" ]; then
+	printf '%s\n' "$PKG_SCRIPT_DIR/common.sh is missing; the package file is damaged" >&2
+	exit 1
+fi
+# shellcheck source=common.sh
+. "$PKG_SCRIPT_DIR/common.sh"
+pkg_load_package_env || exit 1
+pkg_require_dsm_environment || exit 1
+pkg_derive_paths
+
+# write_config writes config.yaml for library share $1 through a temporary file, so the server
+# never reads a half-written file. Keys are fixed text; only values come from the wizard.
+write_config() {
+	config_temp_file=$PKG_CONFIG_FILE.new
+	{
+		printf '%s\n' "# Settings of $DISPLAY_NAME, written once at installation; later installs and upgrades keep this file."
+		printf '%s\n' "# More libraries: grant the package user read access to the shared folder in Control Panel,"
+		printf '%s\n' "# add an entry below and restart the package."
+		printf '%s\n' "libraries:"
+		printf '  - name: %s\n' "$(pkg_yaml_quote "$1")"
+		printf '    path: %s\n' "$(pkg_yaml_quote "$(pkg_share_link "$1")")"
+		printf '    kind: %s\n' "$(pkg_yaml_quote movies)"
+	} >"$config_temp_file" && mv -f "$config_temp_file" "$PKG_CONFIG_FILE" && return 0
+	rm -f "$config_temp_file" 2>/dev/null || :
+	return 1
+}
+
+umask "$PKG_FILE_UMASK"
+if ! pkg_create_server_dirs; then
+	pkg_tell_user "cannot create the directories of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGTMP"
+	exit 1
+fi
+if [ "${SYNOPKG_PKG_STATUS:-}" != INSTALL ]; then
+	exit 0
+fi
+if [ -e "$PKG_CONFIG_FILE" ] || [ -L "$PKG_CONFIG_FILE" ]; then
+	echo "keeping the existing $PKG_CONFIG_FILE"
+	exit 0
+fi
+media_share=${wizard_media_share:-}
+# preinst has checked the name already; this guards config.yaml against anything else.
+if ! pkg_check_share_name "$media_share"; then
+	pkg_tell_user "$(pkg_localized \
+		"\"$media_share\" is not a valid shared folder name; $PKG_CONFIG_FILE was not written." \
+		"\"$media_share\" ist kein gültiger Name für einen freigegebenen Ordner; $PKG_CONFIG_FILE wurde nicht geschrieben.")"
+	exit 1
+fi
+if ! write_config "$media_share"; then
+	pkg_tell_user "cannot write $PKG_CONFIG_FILE"
+	exit 1
+fi
+echo "wrote $PKG_CONFIG_FILE with the library \"$media_share\" ($(pkg_share_link "$media_share"))"
+exit 0

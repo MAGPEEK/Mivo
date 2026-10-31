@@ -1,0 +1,6 @@
+#!/bin/sh
+# Runs first in an upgrade, as the new version's preupgrade (ADR 0026 section 10, task SPK-06),
+# as the package user. Nothing to do: DSM keeps var (config.yaml, data/, the log) and replaces
+# only target and tmp; the new server migrates the database at its first start. A non-zero exit
+# would abort the upgrade.
+exit 0
