@@ -398,6 +398,19 @@ func mustAPI(t *testing.T, logger *slog.Logger, mounts []restapi.Mount) http.Han
 	return api
 }
 
+// apiWithOutput returns the REST API with stream handlers of the environment's service that
+// read HLS output through output; it logs into env.logs like the environment's own API.
+func (env *environment) apiWithOutput(t *testing.T, output stream.SessionFiles) http.Handler {
+	t.Helper()
+
+	logger := slog.New(slog.NewTextHandler(env.logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	handlers := mustHandlers(t, stream.Options{
+		Sessions: env.service, Library: mustLibraryFS(t, logger), Output: output, Logger: logger,
+	})
+
+	return mustAPI(t, logger, handlers.Mounts())
+}
+
 func writeFile(t *testing.T, path string, content []byte) {
 	t.Helper()
 

@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -152,6 +153,8 @@ type outputFile struct {
 
 // serveOutputFile opens the file through os.Root of the session directory and serves it. A
 // file FFmpeg has not written (yet) answers 404; the playlist only lists finished segments.
+// Init and media segments are streamed from their files, which FFmpeg never rewrites once
+// listed; the playlist, which it replaces while it runs, is served from memory.
 func (handlers *Handlers) serveOutputFile(response *statuswriter.Recorder, request *http.Request, output outputFile) {
 	file, err := handlers.output.OpenFile(output.sessionID, output.name)
 	if errors.Is(err, domain.ErrNotFound) {
@@ -168,9 +171,40 @@ func (handlers *Handlers) serveOutputFile(response *statuswriter.Recorder, reque
 		return
 	}
 
-	defer closeFile(file)
-
 	served := output.served
 	served.file = file
+
+	if output.name == playlistName {
+		handlers.servePlaylist(response, request, output.sessionID, served)
+
+		return
+	}
+
+	defer closeFile(file)
+
 	handlers.serveContent(response, request, output.sessionID, served)
+}
+
+// servePlaylist reads the opened playlist into memory, closing it before the first response
+// byte, and serves it with the start tag of withStartAtZero (ADR 0024 note M2-37). A
+// playlist beyond maxPlaylistBytes is a server fault: 500, logged at error.
+func (handlers *Handlers) servePlaylist(response *statuswriter.Recorder, request *http.Request, sessionID string, served content) {
+	body, err := loadPlaylist(served.file)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeProblem(response, notFoundProblem())
+
+		return
+	}
+
+	if err != nil {
+		handlers.logger.ErrorContext(request.Context(), "load stream playlist",
+			logtext.RequestAttributes(request, slog.String(sessionAttribute, sessionID), logtext.Error(err))...)
+		writeProblem(response, restapi.InternalProblem())
+
+		return
+	}
+
+	handlers.send(response, request, sessionID, payload{
+		body: bytes.NewReader(withStartAtZero(body)), contentType: served.contentType, cacheControl: served.cacheControl,
+	})
 }

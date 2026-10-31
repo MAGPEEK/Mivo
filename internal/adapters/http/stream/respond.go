@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -31,8 +32,17 @@ type content struct {
 	lastModified bool
 }
 
-// serveContent sends file with http.ServeContent: Range, If-Range, HEAD, 206 and 416. The
-// response writer chain keeps io.ReaderFrom, so net/http can use sendfile. No ETag is sent.
+// payload is one response body and how to describe it.
+type payload struct {
+	body         io.ReadSeeker
+	contentType  string
+	cacheControl string
+	// modified is sent as Last-Modified and answers conditional requests; zero sends none.
+	modified time.Time
+}
+
+// serveContent sends file with http.ServeContent. The response writer chain keeps
+// io.ReaderFrom, so net/http can use sendfile for it.
 func (handlers *Handlers) serveContent(response *statuswriter.Recorder, request *http.Request, sessionID string, served content) {
 	info, err := served.file.Stat()
 	if err != nil {
@@ -49,19 +59,25 @@ func (handlers *Handlers) serveContent(response *statuswriter.Recorder, request 
 		return
 	}
 
-	var modified time.Time
+	sent := payload{body: served.file, contentType: served.contentType, cacheControl: served.cacheControl}
 	if served.lastModified {
-		modified = info.ModTime()
+		sent.modified = info.ModTime()
 	}
 
+	handlers.send(response, request, sessionID, sent)
+}
+
+// send answers with sent through http.ServeContent: Range, If-Range, HEAD, 206 and 416 work
+// on files and in-memory bodies alike. No ETag is sent.
+func (handlers *Handlers) send(response *statuswriter.Recorder, request *http.Request, sessionID string, sent payload) {
 	header := response.Header()
-	header.Set(headerContentType, served.contentType)
+	header.Set(headerContentType, sent.contentType)
 
-	if served.cacheControl != "" {
-		header.Set(headerCacheControl, served.cacheControl)
+	if sent.cacheControl != "" {
+		header.Set(headerCacheControl, sent.cacheControl)
 	}
 
-	http.ServeContent(response, request, "", modified, served.file)
+	http.ServeContent(response, request, "", sent.modified, sent.body)
 	handlers.reportIncomplete(response, request, sessionID)
 }
 

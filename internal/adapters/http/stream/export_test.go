@@ -9,3 +9,6 @@ func SetReadyTimeout(handlers *Handlers, timeout time.Duration) {
 
 // ReadyTimeout exposes the production wait for the test that pins it to ADR 0024.
 const ReadyTimeout = readyTimeout
+
+// MaxPlaylistBytes exposes the playlist read bound for the tests at and beyond it.
+const MaxPlaylistBytes = maxPlaylistBytes

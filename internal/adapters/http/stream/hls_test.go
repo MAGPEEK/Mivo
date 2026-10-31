@@ -3,24 +3,31 @@ package stream_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
+	"github.com/magpeek/mivo/internal/domain"
 )
 
 const (
 	playlistBody = "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:6.0,\nseg-00000.m4s\n"
-	initBody     = "init segment"
-	segmentBody  = "media segment"
+	// servedPlaylist is playlistBody as clients get it: with the start tag after #EXTM3U.
+	servedPlaylist = "#EXTM3U\n#EXT-X-START:TIME-OFFSET=0\n#EXT-X-VERSION:7\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:6.0,\nseg-00000.m4s\n"
+	initBody       = "init segment"
+	segmentBody    = "media segment"
 	// shortReadyTimeout replaces the 20 s readiness wait in tests that time out.
 	shortReadyTimeout = 50 * time.Millisecond
 	// promptAnswer is how soon a cancelled request must be answered: far below the 20 s
@@ -43,7 +50,7 @@ func TestHLSServesItsFilesWithTypesAndCaching(t *testing.T) {
 		wantBody, wantType, wantCaching string
 		wantLastModified                bool
 	}{
-		"index.m3u8":    {wantBody: playlistBody, wantType: "application/vnd.apple.mpegurl", wantCaching: "no-store"},
+		"index.m3u8":    {wantBody: servedPlaylist, wantType: "application/vnd.apple.mpegurl", wantCaching: "no-store"},
 		"init.mp4":      {wantBody: initBody, wantType: "video/mp4", wantCaching: "private, max-age=3600", wantLastModified: true},
 		"seg-00000.m4s": {wantBody: segmentBody, wantType: "video/iso.segment", wantCaching: "private, max-age=3600", wantLastModified: true},
 		"seg-99999.m4s": {wantBody: segmentBody, wantType: "video/iso.segment", wantCaching: "private, max-age=3600", wantLastModified: true},
@@ -200,13 +207,255 @@ func TestHLSOutputThatCannotBeOpenedAnswersInternalError(t *testing.T) {
 	handlers := mustHandlers(t, stream.Options{
 		Sessions: env.service, Library: mustLibraryFS(t, logger), Output: brokenOutput{}, Logger: logger,
 	})
-	recorder := httptest.NewRecorder()
-	mustAPI(t, logger, handlers.Mounts()).ServeHTTP(recorder, newRequest(t, http.MethodGet, hlsURL(session.ID, "init.mp4")))
+	api := mustAPI(t, logger, handlers.Mounts())
 
-	assertProblem(t, recorder, http.StatusInternalServerError, restapi.CodeInternal)
+	for _, name := range []string{"index.m3u8", "init.mp4"} {
+		recorder := httptest.NewRecorder()
+		api.ServeHTTP(recorder, newRequest(t, http.MethodGet, hlsURL(session.ID, name)))
 
-	if logs := env.logs.String(); !strings.Contains(logs, errOutputStorage.Error()) || !strings.Contains(logs, "session="+session.ID) {
-		t.Errorf("logs lack the failure with the session:\n%s", logs)
+		assertProblem(t, recorder, http.StatusInternalServerError, restapi.CodeInternal)
+	}
+
+	logs := env.logs.String()
+	if strings.Count(logs, errOutputStorage.Error()) != 2 || !strings.Contains(logs, "session="+session.ID) {
+		t.Errorf("logs lack the two failures with the session:\n%s", logs)
+	}
+}
+
+func TestPlaylistMissingOrDirectoryAnswersNotFound(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	missing, missingProduction := env.startHLS(t)
+	missingProduction.markReady()
+
+	assertProblem(t, env.get(t, missing.StreamURL), http.StatusNotFound, restapi.CodeNotFound)
+
+	directory, directoryProduction := env.startHLS(t)
+	directoryProduction.markReady()
+
+	if err := os.Mkdir(filepath.Join(directoryProduction.job.OutputDir, "index.m3u8"), 0o750); err != nil {
+		t.Fatalf("create directory: %v", err)
+	}
+
+	assertProblem(t, env.get(t, directory.StreamURL), http.StatusNotFound, restapi.CodeNotFound)
+
+	if logs := env.logs.String(); strings.Contains(logs, "level=ERROR") {
+		t.Errorf("a missing playlist was logged as an error:\n%s", logs)
+	}
+}
+
+// TestPlaylistIsClosedBeforeTheResponse pins the point of the in-memory playlist (ADR 0024
+// note M2-37): a slow client must not hold index.m3u8 open while it downloads, so the file is
+// closed before the status line or any body byte goes out.
+func TestPlaylistIsClosedBeforeTheResponse(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session, production := env.startHLS(t)
+	writeOutput(t, production, "index.m3u8", []byte(playlistBody))
+	production.markReady()
+
+	output := &recordingOutput{directory: production.job.OutputDir}
+	writer := &closedCheckWriter{ResponseRecorder: httptest.NewRecorder(), output: output}
+	env.apiWithOutput(t, output).ServeHTTP(writer, newRequest(t, http.MethodGet, session.StreamURL))
+
+	if writer.Code != http.StatusOK || writer.Body.String() != servedPlaylist {
+		t.Fatalf("playlist = %d %q, want 200 %q", writer.Code, writer.Body.String(), servedPlaylist)
+	}
+
+	if output.opened() != 1 {
+		t.Fatalf("playlist opened %d times, want once", output.opened())
+	}
+
+	if writer.checks == 0 || len(writer.openWhileWriting) > 0 {
+		t.Errorf("writes = %d, writes with the playlist still open: %v", writer.checks, writer.openWhileWriting)
+	}
+}
+
+// recordingOutput opens files of one session directory and remembers every opened file.
+type recordingOutput struct {
+	directory string
+	mutex     sync.Mutex
+	files     []*os.File
+}
+
+func (output *recordingOutput) OpenFile(_, name string) (*os.File, error) {
+	file, err := os.OpenInRoot(output.directory, name)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w: %w", name, domain.ErrNotFound, err)
+	}
+
+	output.mutex.Lock()
+	defer output.mutex.Unlock()
+
+	output.files = append(output.files, file)
+
+	return file, nil
+}
+
+func (output *recordingOutput) opened() int {
+	output.mutex.Lock()
+	defer output.mutex.Unlock()
+
+	return len(output.files)
+}
+
+// stillOpen returns the names of the opened files that are not closed yet. It asks with a
+// Seek that keeps the position: on Windows, Stat of a closed file reports an invalid handle
+// instead of os.ErrClosed.
+func (output *recordingOutput) stillOpen() []string {
+	output.mutex.Lock()
+	defer output.mutex.Unlock()
+
+	var open []string
+
+	for _, file := range output.files {
+		if _, err := file.Seek(0, io.SeekCurrent); !errors.Is(err, os.ErrClosed) {
+			open = append(open, file.Name())
+		}
+	}
+
+	return open
+}
+
+// closedCheckWriter records, on every WriteHeader and Write, which opened files are still open.
+type closedCheckWriter struct {
+	*httptest.ResponseRecorder
+	output           *recordingOutput
+	checks           int
+	openWhileWriting []string
+}
+
+func (writer *closedCheckWriter) check() {
+	writer.checks++
+	writer.openWhileWriting = append(writer.openWhileWriting, writer.output.stillOpen()...)
+}
+
+func (writer *closedCheckWriter) WriteHeader(status int) {
+	writer.check()
+	writer.ResponseRecorder.WriteHeader(status)
+}
+
+func (writer *closedCheckWriter) Write(body []byte) (int, error) {
+	writer.check()
+
+	return writer.ResponseRecorder.Write(body)
+}
+
+func TestPlaylistOverTheBoundAnswersInternalError(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session, production := env.startHLS(t)
+	oversized := []byte(playlistBody + strings.Repeat("#", stream.MaxPlaylistBytes+1-len(playlistBody)))
+	writeOutput(t, production, "index.m3u8", oversized)
+	production.markReady()
+
+	assertProblem(t, env.get(t, session.StreamURL), http.StatusInternalServerError, restapi.CodeInternal)
+
+	logs := env.logs.String()
+	if strings.Count(logs, "level=ERROR") != 1 || !strings.Contains(logs, "session="+session.ID) {
+		t.Errorf("want one error record with the session:\n%s", logs)
+	}
+}
+
+func TestPlaylistAtTheBoundIsServed(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session, production := env.startHLS(t)
+	atBound := playlistBody + strings.Repeat("#", stream.MaxPlaylistBytes-len(playlistBody))
+	writeOutput(t, production, "index.m3u8", []byte(atBound))
+	production.markReady()
+
+	recorder := env.get(t, session.StreamURL)
+	if recorder.Code != http.StatusOK || recorder.Body.Len() != stream.MaxPlaylistBytes+len(servedPlaylist)-len(playlistBody) {
+		t.Errorf("playlist at the bound = %d with %d bytes, want 200 with the start tag", recorder.Code, recorder.Body.Len())
+	}
+}
+
+// TestPlaylistRangesWorkOnTheServedBody checks HEAD, Range and If-Range against the rewritten
+// body, not the file on disk.
+func TestPlaylistRangesWorkOnTheServedBody(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session, production := env.startHLS(t)
+	writeOutput(t, production, "index.m3u8", []byte(playlistBody))
+	production.markReady()
+
+	servedLength := strconv.Itoa(len(servedPlaylist))
+	pastTheEnd := "bytes=" + servedLength + "-"
+
+	tests := map[string]struct {
+		method, rangeHeader, ifRange string
+		wantStatus                   int
+		wantBody, wantLength         string
+	}{
+		"get":              {method: http.MethodGet, wantStatus: http.StatusOK, wantBody: servedPlaylist, wantLength: servedLength},
+		"head":             {method: http.MethodHead, wantStatus: http.StatusOK, wantLength: servedLength},
+		"first seven":      {method: http.MethodGet, rangeHeader: "bytes=0-6", wantStatus: http.StatusPartialContent, wantBody: "#EXTM3U", wantLength: "7"},
+		"start tag":        {method: http.MethodGet, rangeHeader: "bytes=8-33", wantStatus: http.StatusPartialContent, wantBody: "#EXT-X-START:TIME-OFFSET=0", wantLength: "26"},
+		"beyond the body":  {method: http.MethodGet, rangeHeader: pastTheEnd, wantStatus: http.StatusRequestedRangeNotSatisfiable},
+		"if-range by date": {method: http.MethodGet, rangeHeader: "bytes=0-6", ifRange: "Sat, 31 Oct 2026 12:00:00 GMT", wantStatus: http.StatusOK, wantBody: servedPlaylist, wantLength: servedLength},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			request := newRequest(t, test.method, session.StreamURL)
+			setHeaderIfPresent(request.Header, "Range", test.rangeHeader)
+			setHeaderIfPresent(request.Header, "If-Range", test.ifRange)
+
+			recorder := env.serve(request)
+
+			// http.ServeContent answers a 416 as a plain-text error with its own headers (the
+			// BACKLOG row "M2-29 review leftovers" covers them); only its status matters here.
+			if recorder.Code == http.StatusRequestedRangeNotSatisfiable && test.wantStatus == recorder.Code {
+				return
+			}
+
+			if recorder.Code != test.wantStatus || recorder.Body.String() != test.wantBody {
+				t.Fatalf("%s %s = %d %q, want %d %q", test.method, name, recorder.Code, recorder.Body.String(), test.wantStatus, test.wantBody)
+			}
+
+			assertHeader(t, recorder.Header(), "Content-Length", test.wantLength)
+			assertHeader(t, recorder.Header(), "Content-Type", "application/vnd.apple.mpegurl")
+			assertHeader(t, recorder.Header(), "Cache-Control", "no-store")
+			assertHeader(t, recorder.Header(), "Last-Modified", "")
+		})
+	}
+}
+
+func setHeaderIfPresent(header http.Header, name, value string) {
+	if value != "" {
+		header.Set(name, value)
+	}
+}
+
+func TestPlaylistOnDiskStaysUnchanged(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session, production := env.startHLS(t)
+	writeOutput(t, production, "index.m3u8", []byte(playlistBody))
+	production.markReady()
+
+	for range 2 {
+		if recorder := env.get(t, session.StreamURL); recorder.Body.String() != servedPlaylist {
+			t.Fatalf("playlist = %q, want %q", recorder.Body.String(), servedPlaylist)
+		}
+	}
+
+	onDisk, err := os.ReadFile(filepath.Join(production.job.OutputDir, "index.m3u8"))
+	if err != nil {
+		t.Fatalf("read playlist: %v", err)
+	}
+
+	if string(onDisk) != playlistBody {
+		t.Errorf("playlist on disk = %q, want unchanged %q", onDisk, playlistBody)
 	}
 }
 
@@ -225,8 +474,8 @@ func TestPlaylistWaitsForTheFirstSegment(t *testing.T) {
 	writeOutput(t, production, "index.m3u8", []byte(playlistBody))
 	production.markReady()
 
-	if recorder := <-responses; recorder.Code != http.StatusOK || recorder.Body.String() != playlistBody {
-		t.Errorf("playlist = %d %q, want 200 %q", recorder.Code, recorder.Body.String(), playlistBody)
+	if recorder := <-responses; recorder.Code != http.StatusOK || recorder.Body.String() != servedPlaylist {
+		t.Errorf("playlist = %d %q, want 200 %q", recorder.Code, recorder.Body.String(), servedPlaylist)
 	}
 }
 
