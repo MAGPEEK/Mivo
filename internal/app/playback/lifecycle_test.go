@@ -3,6 +3,7 @@ package playback_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -592,4 +593,112 @@ func TestNoSessionStartsWhileTheWorkspaceIsPurged(t *testing.T) {
 
 		mustStart(t, service, request(directFileID))
 	})
+}
+
+func TestAFinishedTranscodeFreesItsReencodingSlot(t *testing.T) {
+	t.Parallel()
+
+	inBubble(t, func(t *testing.T, env *environment) {
+		env.options.MaxTranscodeSessions = 1
+		service := env.service(t)
+		finished := mustStart(t, service, request(transcodeFileID))
+
+		if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+			t.Fatalf("second transcode while the first runs error = %v, want ErrSessionLimitReached", err)
+		}
+
+		env.producer.productionOf(finished.ID).exit(nil)
+		synctest.Wait()
+		assertState(t, service, finished.ID, appplayback.StateEnded)
+
+		// The viewer still watches the ended session; another viewer gets the slot.
+		mustStart(t, service, request(audioTranscodeFileID))
+		mustGet(t, service, finished.ID)
+	})
+}
+
+// openRequestsMessage is the debug record of a teardown with stream requests still open.
+const openRequestsMessage = "playback session torn down with stream requests open"
+
+// teardownWithOpenRequests starts a session, opens openAccesses stream requests on it and
+// ends it the way end does; it returns the session ID. The accesses are released at cleanup.
+func teardownWithOpenRequests(t *testing.T, env *environment, openAccesses int, end func(*appplayback.Service, string)) string {
+	t.Helper()
+
+	service := env.service(t)
+	started := mustStart(t, service, request(remuxFileID))
+
+	for range openAccesses {
+		t.Cleanup(mustAccess(t, service, started.ID).Release)
+	}
+
+	// A released access is no open request.
+	mustAccess(t, service, started.ID).Release()
+
+	end(service, started.ID)
+
+	return started.ID
+}
+
+func TestTeardownLogsTheOpenStreamRequests(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		end  func(t *testing.T, service *appplayback.Service, id string)
+	}{
+		{"stop", func(t *testing.T, service *appplayback.Service, id string) {
+			if err := service.Stop(t.Context(), id); err != nil {
+				t.Fatalf("Stop error = %v", err)
+			}
+		}},
+		{"replacement", func(t *testing.T, service *appplayback.Service, id string) {
+			seek := request(remuxFileID)
+			seek.ReplacesSessionID = id
+			mustStart(t, service, seek)
+		}},
+		{"close", func(t *testing.T, service *appplayback.Service, _ string) {
+			if err := service.Close(t.Context()); err != nil {
+				t.Fatalf("Close error = %v", err)
+			}
+		}},
+	}
+
+	const openAccesses = 2
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newEnvironment()
+			id := teardownWithOpenRequests(t, env, openAccesses, func(service *appplayback.Service, id string) {
+				test.end(t, service, id)
+			})
+
+			records := env.records.withMessage(openRequestsMessage)
+			if len(records) != 1 {
+				t.Fatalf("open-request records = %+v, want exactly one", records)
+			}
+
+			record := records[0]
+			if record.level != slog.LevelDebug || record.attrs["session"] != id || record.attrs["open_requests"] != "2" {
+				t.Errorf("record = %+v, want debug with session %s and open_requests 2", record, id)
+			}
+		})
+	}
+}
+
+func TestTeardownWithoutOpenStreamRequestsLogsNoOpenRequests(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment()
+	teardownWithOpenRequests(t, env, 0, func(service *appplayback.Service, id string) {
+		if err := service.Stop(t.Context(), id); err != nil {
+			t.Fatalf("Stop error = %v", err)
+		}
+	})
+
+	if records := env.records.withMessage(openRequestsMessage); len(records) != 0 {
+		t.Errorf("open-request records = %+v, want none without open requests", records)
+	}
 }

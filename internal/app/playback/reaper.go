@@ -44,13 +44,17 @@ func (s *Service) reap(ctx context.Context) {
 // stopIdle stops every session idle for IdleTimeout or longer. The sessions leave the
 // registry first, so the lock is not held while their FFmpeg is waited for.
 func (s *Service) stopIdle(ctx context.Context) {
-	now := s.clock()
-	idle := s.sessions.removeIdle(now.Add(-IdleTimeout))
+	idle := s.sessions.removeIdle(s.clock(), IdleTimeout)
+	entries := make([]*sessionEntry, 0, len(idle))
 
-	for _, entry := range idle {
+	for _, removed := range idle {
+		// The session ID never changes, so reading it outside the lock is safe; the idle time
+		// was computed under it.
 		s.logger.InfoContext(ctx, "stopping idle playback session",
-			"session", entry.session.ID, "idle", now.Sub(entry.session.LastAccessedAt))
+			"session", removed.entry.session.ID, "idle", removed.idleFor)
+
+		entries = append(entries, removed.entry)
 	}
 
-	s.teardownAll(ctx, idle)
+	s.teardownAll(ctx, entries)
 }

@@ -200,6 +200,13 @@ func (s *Service) teardownAll(ctx context.Context, entries []*sessionEntry) {
 // teardown stops a session that is no longer in the registry. Only the caller that took the
 // record out of the registry calls it, so every production is stopped once.
 func (s *Service) teardown(ctx context.Context, entry *sessionEntry) {
+	// The delivery adapter's deferred Release is the only guarantee that a request ends
+	// (ADR 0024, Notes M2-38); requests still open here make a leaked grant visible.
+	if open := s.sessions.openRequests(entry); open > 0 {
+		s.logger.DebugContext(ctx, "playback session torn down with stream requests open",
+			"session", entry.session.ID, "open_requests", open)
+	}
+
 	if entry.production != nil {
 		entry.production.Stop()
 	}

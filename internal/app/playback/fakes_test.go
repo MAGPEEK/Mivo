@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -477,4 +478,59 @@ func (buffer *lockedBuffer) String() string {
 	defer buffer.mutex.Unlock()
 
 	return buffer.buffer.String()
+}
+
+// capturedRecord is one log record a capturingHandler received, attributes resolved to
+// strings.
+type capturedRecord struct {
+	level   slog.Level
+	message string
+	attrs   map[string]string
+}
+
+// capturingHandler records every log record at every level, debug included, so tests can
+// assert on records the text handler at its default level drops.
+type capturingHandler struct {
+	mutex   sync.Mutex
+	records []capturedRecord
+}
+
+func (handler *capturingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (handler *capturingHandler) Handle(_ context.Context, record slog.Record) error {
+	captured := capturedRecord{level: record.Level, message: record.Message, attrs: make(map[string]string)}
+
+	record.Attrs(func(attr slog.Attr) bool {
+		captured.attrs[attr.Key] = attr.Value.String()
+
+		return true
+	})
+
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	handler.records = append(handler.records, captured)
+
+	return nil
+}
+
+// WithAttrs and WithGroup are unused by the service; returning the handler keeps it simple.
+func (handler *capturingHandler) WithAttrs([]slog.Attr) slog.Handler { return handler }
+
+func (handler *capturingHandler) WithGroup(string) slog.Handler { return handler }
+
+// withMessage returns the captured records with message.
+func (handler *capturingHandler) withMessage(message string) []capturedRecord {
+	handler.mutex.Lock()
+	defer handler.mutex.Unlock()
+
+	var matching []capturedRecord
+
+	for _, record := range handler.records {
+		if record.message == message {
+			matching = append(matching, record)
+		}
+	}
+
+	return matching
 }

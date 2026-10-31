@@ -95,7 +95,8 @@ type environment struct {
 	workspace *memoryWorkspace
 	ids       *sequenceIDs
 	clock     *manualClock
-	logs      *lockedBuffer
+	logs      *lockedBuffer     // text output at the default level (info)
+	records   *capturingHandler // every record, debug included
 	options   appplayback.Options
 }
 
@@ -109,6 +110,7 @@ func newEnvironment() *environment {
 		ids:       &sequenceIDs{},
 		clock:     &manualClock{now: time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)},
 		logs:      &lockedBuffer{},
+		records:   &capturingHandler{},
 		options: appplayback.Options{
 			Capabilities:         playbacktest.FullCapabilities(),
 			Policy:               playback.Policy{MaxTranscodeHeight: 1080},
@@ -128,7 +130,7 @@ func (env *environment) dependencies() appplayback.Dependencies {
 		IDs:       env.ids,
 		Clock:     env.clock.Now,
 		After:     env.clock.After,
-		Logger:    slog.New(slog.NewTextHandler(env.logs, nil)),
+		Logger:    slog.New(slog.NewMultiHandler(slog.NewTextHandler(env.logs, nil), env.records)),
 	}
 }
 

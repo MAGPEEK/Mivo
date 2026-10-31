@@ -3,6 +3,7 @@ package playback_test
 import (
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -193,6 +194,71 @@ func TestReleasingAnAccessTwiceCountsOnce(t *testing.T) {
 		second.Release()
 		env.passTime(idleTimeout)
 		assertGone(t, service, started.ID)
+	})
+}
+
+func TestConcurrentReleaseOfCopiesCountsOnce(t *testing.T) {
+	t.Parallel()
+
+	const releasingGoroutines = 8
+
+	inBubble(t, func(t *testing.T, env *environment) {
+		service := env.service(t)
+		started := mustStart(t, service, request(remuxFileID))
+		first := mustAccess(t, service, started.ID)
+		second := mustAccess(t, service, started.ID)
+
+		var group sync.WaitGroup
+		for range releasingGoroutines {
+			copied := first
+			group.Go(copied.Release)
+		}
+
+		group.Wait()
+
+		// Had the copies released more than once, the second request would no longer hold
+		// the session.
+		env.passTime(2 * idleTimeout)
+		mustGet(t, service, started.ID)
+
+		second.Release()
+		env.passTime(idleTimeout)
+		assertGone(t, service, started.ID)
+	})
+}
+
+func TestReleaseRacingTheReaperAndStopTearsDownOnce(t *testing.T) {
+	t.Parallel()
+
+	inBubble(t, func(t *testing.T, env *environment) {
+		service := env.service(t)
+		started := mustStart(t, service, request(remuxFileID))
+		access := mustAccess(t, service, started.ID)
+
+		// Idle long enough that the next reaper check stops it once the request ends.
+		env.passTime(idleTimeout)
+		mustGet(t, service, started.ID)
+
+		var group sync.WaitGroup
+		group.Go(access.Release)
+		group.Go(func() { env.clock.advance(appplayback.IdleCheckInterval) })
+		group.Go(func() {
+			if err := service.Stop(t.Context(), started.ID); err != nil {
+				t.Errorf("Stop error = %v", err)
+			}
+		})
+		group.Wait()
+		synctest.Wait()
+
+		assertGone(t, service, started.ID)
+
+		if stops := env.producer.productionOf(started.ID).stopCount(); stops != 1 {
+			t.Errorf("production stops = %d, want 1", stops)
+		}
+
+		if removed := env.workspace.removedIDs(); len(removed) != 1 || removed[0] != started.ID {
+			t.Errorf("removed workspaces = %v, want [%s]", removed, started.ID)
+		}
 	})
 }
 

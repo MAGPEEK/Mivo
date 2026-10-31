@@ -39,14 +39,30 @@ func canTransition(from, to State) bool {
 	}
 }
 
-// removeIdle takes every visible session last accessed at or before cutoff out of the
-// registry and returns their records for teardown. Starting sessions are kept (their clients
-// do not know them yet), and so are sessions with a stream request still being served.
-func (sessions *registry) removeIdle(cutoff time.Time) []*sessionEntry {
+// isFinal tells whether state is a final state: the production has ended or failed and runs
+// no FFmpeg any more.
+func isFinal(state State) bool {
+	return state == StateEnded || state == StateFailed
+}
+
+// idleSession is a session removeIdle took out of the registry, with its idle time computed
+// under the lock.
+type idleSession struct {
+	entry   *sessionEntry
+	idleFor time.Duration
+}
+
+// removeIdle takes every visible session not accessed for timeout or longer at now out of
+// the registry and returns their records for teardown. Starting sessions are kept (their
+// clients do not know them yet), and so are sessions with a stream request still being
+// served.
+func (sessions *registry) removeIdle(now time.Time, timeout time.Duration) []idleSession {
 	sessions.mutex.Lock()
 	defer sessions.mutex.Unlock()
 
-	var idle []*sessionEntry
+	cutoff := now.Add(-timeout)
+
+	var idle []idleSession
 
 	for id, entry := range sessions.entries {
 		if entry.pending || entry.inFlight > 0 || entry.session.LastAccessedAt.After(cutoff) {
@@ -54,10 +70,19 @@ func (sessions *registry) removeIdle(cutoff time.Time) []*sessionEntry {
 		}
 
 		delete(sessions.entries, id)
-		idle = append(idle, entry)
+		idle = append(idle, idleSession{entry: entry, idleFor: now.Sub(entry.session.LastAccessedAt)})
 	}
 
 	return idle
+}
+
+// openRequests returns the number of stream requests of entry still being served. It reads
+// under the lock because endAccess may still end a request of a removed record.
+func (sessions *registry) openRequests(entry *sessionEntry) int {
+	sessions.mutex.Lock()
+	defer sessions.mutex.Unlock()
+
+	return entry.inFlight
 }
 
 // close refuses new sessions from now on and takes every session out of the registry. It

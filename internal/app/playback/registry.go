@@ -34,8 +34,12 @@ var ErrServiceClosed = fmt.Errorf("playback service is shut down: %w", domain.Er
 // their directories.
 var errWorkspacePurging = fmt.Errorf("playback workspace is being purged: %w", domain.ErrUnavailable)
 
-// sessionEntry is the registry's record of one session. The registry guards every field;
-// callers only ever receive copies.
+// sessionEntry is the registry's record of one session. Snapshots handed out (Session) are
+// copies, but touch, remove, removeIdle, close and activate (the replaced session) hand out
+// the record itself. Its mutable fields (the session's state and access time, pending,
+// replacedBy, inFlight) are only read or written under the registry lock; the session ID and
+// the fields fixed once the session is activated (production, directory, file location) may
+// be read without it.
 type sessionEntry struct {
 	session Session
 	// pending marks a session that is still being set up. It holds its slot but is
@@ -85,10 +89,16 @@ type sessionCounts struct {
 // add counts existing, which claimant is about to replace (nil when no one claimed it). The
 // slots of a claimed session belong to its claimant, except in the categories the claimant
 // does not occupy: a transcode being replaced by a remux keeps re-encoding until the remux
-// has started and stopped it.
+// has started and stopped it. A finished session (ended or failed) runs no FFmpeg, so it
+// only counts toward the overall cap (ADR 0024, Notes M2-38); a production that has exited
+// but whose state has not changed yet still counts.
 func (counts *sessionCounts) add(existing, claimant *sessionEntry) {
 	if claimant == nil {
 		counts.all++
+	}
+
+	if isFinal(existing.session.State) {
+		return
 	}
 
 	if existing.reencodes && (claimant == nil || !claimant.reencodes) {
