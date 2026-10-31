@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
@@ -169,7 +170,7 @@ func checkToolFile(path, goos string) error {
 
 // detectCapabilities asks ffmpeg what it can do. Without a usable ffmpeg the capabilities
 // stay zero, so the decision engine offers direct play only and answers transcode_unavailable
-// for everything else. Only a shutdown during the detection is an error.
+// for everything else. Only a shutdown during the detection and a wiring error are errors.
 func (app application) detectCapabilities(ctx context.Context, ffmpegPath string, found bool) (playback.ServerCapabilities, error) {
 	if !found {
 		app.logger.WarnContext(ctx, "ffmpeg not found: only direct play available",
@@ -178,29 +179,21 @@ func (app application) detectCapabilities(ctx context.Context, ffmpegPath string
 		return playback.ServerCapabilities{}, nil
 	}
 
-	capabilities, err := ffmpeg.DetectCapabilities(ctx, ffmpegPath)
-	if err != nil && ctx.Err() != nil {
+	capabilities, err := ffmpeg.DetectCapabilities(ctx, ffmpegPath, app.logger)
+	// A shutdown, or ErrInvalid for a wiring mistake such as a nil logger, fails the start;
+	// only an FFmpeg that cannot answer degrades the server.
+	if err != nil && (ctx.Err() != nil || errors.Is(err, domain.ErrInvalid)) {
 		return playback.ServerCapabilities{}, fmt.Errorf("detect ffmpeg capabilities: %w", err)
 	}
 
+	// The adapter has logged the failure with FFmpeg's error output (ADR 0024 Notes M2-39).
 	if err != nil {
-		app.logCapabilityFailure(ctx, err)
-
 		return playback.ServerCapabilities{}, nil
 	}
 
 	app.logCapabilities(ctx, capabilities)
 
 	return capabilities, nil
-}
-
-func (app application) logCapabilityFailure(ctx context.Context, err error) {
-	attributes := []any{slog.Any("error", err)}
-	if output, ok := ffmpeg.ErrorOutput(err); ok {
-		attributes = append(attributes, slog.String("stderr", output))
-	}
-
-	app.logger.WarnContext(ctx, "ffmpeg capability detection failed: only direct play available", attributes...)
 }
 
 // logCapabilities writes one line with the version and the transcode encoders, at warn when

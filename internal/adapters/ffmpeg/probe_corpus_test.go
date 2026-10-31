@@ -1,7 +1,13 @@
 package ffmpeg_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,7 +21,7 @@ const durationTolerance = 100 * time.Millisecond
 
 func TestProbeCorpusMatchesManifest(t *testing.T) {
 	ffprobePath, manifest := requireCorpus(t)
-	prober := ffmpeg.NewProber(ffprobePath)
+	prober := newCorpusProber(t, ffprobePath)
 	t.Logf("corpus generated with FFmpeg %s", manifest.FFmpegVersion)
 
 	probed := 0
@@ -225,7 +231,7 @@ func streamsOfKind(description media.Description, kind media.StreamKind) []media
 func TestProbeHostileFileNames(t *testing.T) {
 	ffprobePath, manifest := requireCorpus(t)
 	source := corpusPath(t, corpusCaseByName(t, manifest, "video-mkv-h264-aac").File)
-	prober := ffmpeg.NewProber(ffprobePath)
+	prober := newCorpusProber(t, ffprobePath)
 
 	names := []string{"-dash.mkv", "-i.mkv", "Ümlaut ñ 日本.mkv", "100% #hash;x.mkv"}
 	if runtime.GOOS != "windows" {
@@ -256,4 +262,76 @@ func TestProbeHostileFileNames(t *testing.T) {
 			}
 		})
 	}
+}
+
+// newCorpusProber returns a prober for ffprobePath that logs to the test output, debug
+// included, so a failing test shows ffprobe's error output.
+func newCorpusProber(t *testing.T, ffprobePath string) *ffmpeg.Prober {
+	t.Helper()
+
+	logger := slog.New(slog.NewTextHandler(t.Output(), &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	return newCorpusProberWithLogger(t, ffprobePath, logger)
+}
+
+func newCorpusProberWithLogger(t *testing.T, ffprobePath string, logger *slog.Logger) *ffmpeg.Prober {
+	t.Helper()
+
+	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{FFprobePath: ffprobePath, Logger: logger})
+	if err != nil {
+		t.Fatalf("NewProber: %v", err)
+	}
+
+	return prober
+}
+
+// logCapture collects the JSON log records of an adapter, debug included; FFmpeg's error
+// output reaches tests only through them (ADR 0024 Notes M2-39). It is safe for concurrent
+// use, because the producer logs from its supervising goroutine.
+type logCapture struct {
+	mutex  sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (c *logCapture) Write(data []byte) (int, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	written, err := c.buffer.Write(data)
+	if err != nil {
+		return written, fmt.Errorf("capture log: %w", err)
+	}
+
+	return written, nil
+}
+
+func (c *logCapture) logger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(c, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// exitTails returns the stderr tails of the records that report an unsuccessful exit: those
+// with a non-zero exit code (the producer logs code 0 for a clean exit without segments).
+func (c *logCapture) exitTails(t *testing.T) []string {
+	t.Helper()
+
+	c.mutex.Lock()
+	text := c.buffer.String()
+	c.mutex.Unlock()
+
+	var tails []string
+
+	for line := range strings.Lines(text) {
+		record := map[string]any{}
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("decode log line %q: %v", line, err)
+		}
+
+		// JSON numbers decode as float64.
+		if code, exited := record["exit_code"].(float64); exited && code != 0 {
+			tail, _ := record["stderr"].(string)
+			tails = append(tails, tail)
+		}
+	}
+
+	return tails
 }

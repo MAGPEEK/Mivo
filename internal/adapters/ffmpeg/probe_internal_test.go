@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -232,7 +233,7 @@ func TestProbeRunsFFprobeWithSafeArguments(t *testing.T) {
 	})
 	path := filepath.Join(t.TempDir(), "-dash clip.webm")
 
-	got, err := NewProber(fake.executable).Probe(t.Context(), path)
+	got, err := newTestProber(t, fake.executable).Probe(t.Context(), path)
 	if err != nil {
 		t.Fatalf("Probe: %v", err)
 	}
@@ -316,9 +317,73 @@ func TestAllowedDemuxersExcludeDemuxersThatOpenOtherFiles(t *testing.T) {
 func TestProbeRejectsRelativePath(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewProber("ffprobe-that-is-never-started").Probe(t.Context(), filepath.Join("video", "clip.mkv"))
+	_, err := newTestProber(t, "ffprobe-that-is-never-started").Probe(t.Context(), filepath.Join("video", "clip.mkv"))
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("error = %v, want ErrInvalid", err)
+	}
+}
+
+// devicePathCase is one row of the classification table of refusesDevicePath.
+type devicePathCase struct {
+	path   string
+	refuse bool
+}
+
+// devicePathCases are the classification table of refusesDevicePath (ADR 0022 Notes M2-39).
+func devicePathCases() []devicePathCase {
+	return []devicePathCase{
+		// A drive or a UNC share after the prefix names a file.
+		{path: `\\?\C:\m\a.mkv`},
+		{path: `//?/c:/m/a.mkv`},
+		{path: `\\?\UNC\nas\share\a.mkv`},
+		{path: `\\?\unc\nas\share\a.mkv`},
+		{path: `\\.\C:\a.mkv`},
+		{path: `\\.\z:\a.mkv`},
+		// Outside the device namespace.
+		{path: `C:\m\a.mkv`},
+		{path: `\\nas\share\a.mkv`},
+		{path: `/media/a.mkv`},
+		// Devices, pipes, object manager paths, volume GUIDs and incomplete prefixes.
+		{path: `\\.\COM1`, refuse: true},
+		{path: `\\.\pipe\x`, refuse: true},
+		{path: `\\.\PhysicalDrive0`, refuse: true},
+		{path: `//./nul`, refuse: true},
+		{path: `\\?\GLOBALROOT\Device\HarddiskVolume1\a.mkv`, refuse: true},
+		{path: `\\?\globalroot\Device\Null`, refuse: true},
+		{path: `\\?\Volume{0}\a.mkv`, refuse: true},
+		{path: `\??\C:\a.mkv`, refuse: true},
+		{path: `/??/C:/a.mkv`, refuse: true},
+		{path: `\\?\`, refuse: true},
+		{path: `\\?\C:`, refuse: true},
+		{path: `\\?\C:a.mkv`, refuse: true},
+		{path: `\\?\1:\a.mkv`, refuse: true},
+		{path: `\\?\UNCX\a.mkv`, refuse: true},
+		// Mixed slash directions normalise like the plain forms.
+		{path: `\/?\C:/a.mkv`},
+		{path: `\\?/GLOBALROOT/x`, refuse: true},
+		// Win32 resolves dot segments after the prefix, so they could leave the drive or share.
+		{path: `\\.\C:\..\COM1`, refuse: true},
+		{path: `\\.\UNC\..\pipe\x`, refuse: true},
+		{path: `//./unc/../pipe/x`, refuse: true},
+		{path: `\\.\C:\.\..\nul`, refuse: true},
+		{path: `\\?\C:\m\.\a.mkv`, refuse: true},
+		{path: `\\?\UNC\nas\share\..\a.mkv`, refuse: true},
+		// A UNC share needs a server.
+		{path: `\\?\UNC\`, refuse: true},
+		{path: `\\?\UNC\\share\a.mkv`, refuse: true},
+		// Dots inside a name are no dot segments.
+		{path: `\\?\C:\m\..a.mkv`},
+		{path: `\\?\UNC\nas\share\a..mkv`},
+	}
+}
+
+func TestRefusesDevicePath(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range devicePathCases() {
+		if got := refusesDevicePath(test.path); got != test.refuse {
+			t.Errorf("refusesDevicePath(%q) = %t, want %t", test.path, got, test.refuse)
+		}
 	}
 }
 
@@ -329,24 +394,64 @@ func TestProbeRejectsWindowsDevicePaths(t *testing.T) {
 		t.Skip("device namespace paths exist on Windows only")
 	}
 
-	for _, path := range []string{`\\.\COM1`, `\\.\PhysicalDrive0`, `//./nul`, `\\?\GLOBALROOT\Device\Null`, `\\?\globalroot\Device\Null`} {
-		if _, err := NewProber("ffprobe-that-is-never-started").Probe(t.Context(), path); !errors.Is(err, domain.ErrInvalid) {
-			t.Errorf("Probe(%q) error = %v, want ErrInvalid", path, err)
+	prober := newTestProber(t, "ffprobe-that-is-never-started")
+
+	for _, test := range devicePathCases() {
+		if !test.refuse {
+			// Long paths and UNC shares are ordinary files; /media/a.mkv is not absolute here.
+			if _, err := inputArguments(test.path); err != nil && filepath.IsAbs(test.path) {
+				t.Errorf("inputArguments(%q) = %v, want no error", test.path, err)
+			}
+
+			continue
+		}
+
+		_, probeErr := prober.Probe(t.Context(), test.path)
+		_, keyframeErr := prober.KeyframeAtOrBefore(t.Context(), test.path, time.Second)
+
+		for name, err := range map[string]error{"Probe": probeErr, "KeyframeAtOrBefore": keyframeErr} {
+			if !errors.Is(err, domain.ErrInvalid) {
+				t.Errorf("%s(%q) error = %v, want ErrInvalid", name, test.path, err)
+			}
 		}
 	}
+}
 
-	// Long paths and UNC shares are ordinary files.
-	for _, path := range []string{`\\?\C:\media\clip.mkv`, `\\nas\media\clip.mkv`} {
-		if _, err := inputArguments(path); err != nil {
-			t.Errorf("inputArguments(%q) = %v, want no error", path, err)
-		}
+func TestNewProberRequiresEveryOption(t *testing.T) {
+	t.Parallel()
+
+	valid := ProberOptions{FFprobePath: "ffprobe", Logger: slog.New(slog.DiscardHandler)}
+
+	tests := []struct {
+		name   string
+		modify func(*ProberOptions)
+	}{
+		{name: "ffprobe path", modify: func(options *ProberOptions) { options.FFprobePath = "" }},
+		{name: "logger", modify: func(options *ProberOptions) { options.Logger = nil }},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			options := valid
+			test.modify(&options)
+
+			if prober, err := NewProber(options); !errors.Is(err, domain.ErrInvalid) || prober != nil {
+				t.Errorf("NewProber without %s = %v, %v, want nil, ErrInvalid", test.name, prober, err)
+			}
+		})
+	}
+
+	if _, err := NewProber(valid); err != nil {
+		t.Errorf("NewProber(%+v) = %v", valid, err)
 	}
 }
 
 func TestProbeErrorsNameOnlyTheBaseName(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "secret library root")
 	path := filepath.Join(directory, "clip.mkv")
-	prober := NewProber(fakeTool(t, fakeModeFail).executable)
+	prober := newTestProber(t, fakeTool(t, fakeModeFail).executable)
 
 	_, probeErr := prober.Probe(t.Context(), path)
 	_, keyframeErr := prober.KeyframeAtOrBefore(t.Context(), path, 21*time.Second)
@@ -360,11 +465,104 @@ func TestProbeErrorsNameOnlyTheBaseName(t *testing.T) {
 			t.Errorf("error %q must name clip.mkv but not %q", message, directory)
 		}
 
-		// The debug output is reachable on purpose and may contain the full path.
-		if output, ok := ErrorOutput(err); !ok || output == "" {
-			t.Errorf("ErrorOutput(%v) = %q, %t, want the stderr tail", err, output, ok)
+		// The stderr tail stays in the prober's log (ADR 0024 Notes M2-39).
+		if message := err.Error(); strings.Contains(message, "Invalid data") {
+			t.Errorf("error %q carries ffprobe's error output", message)
 		}
 	}
+}
+
+// TestProberLogsFailedRunsAtDebug: a failed ffprobe run leaves one debug record with the base
+// name, the exit code and the stderr tail, and nothing at info or above.
+func TestProberLogsFailedRunsAtDebug(t *testing.T) {
+	tests := []struct {
+		operation string
+		run       func(context.Context, *Prober, string) error
+	}{
+		{operation: probeOperation, run: func(ctx context.Context, prober *Prober, path string) error {
+			_, err := prober.Probe(ctx, path)
+
+			return err
+		}},
+		{operation: keyframeOperation, run: func(ctx context.Context, prober *Prober, path string) error {
+			_, err := prober.KeyframeAtOrBefore(ctx, path, 21*time.Second)
+
+			return err
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.operation, func(t *testing.T) {
+			logger, logs := capturingLogger()
+			prober := newTestProberWithLogger(t, fakeTool(t, fakeModeFail).executable, logger)
+
+			err := test.run(t.Context(), prober, filepath.Join(t.TempDir(), "secret root", "clip.mkv"))
+			if !errors.Is(err, domain.ErrUnsupported) || strings.Contains(err.Error(), "Invalid data") {
+				t.Fatalf("error = %v, want ErrUnsupported without the stderr tail", err)
+			}
+
+			records := logs.records(t)
+			if len(records) != 1 {
+				t.Fatalf("got %d log records, want exactly 1: %v", len(records), records)
+			}
+
+			record := records[0]
+			stderr, _ := record["stderr"].(string)
+
+			// JSON numbers decode as float64.
+			if record[slog.LevelKey] != slog.LevelDebug.String() || record["operation"] != test.operation ||
+				record["file"] != "clip.mkv" || record["exit_code"] != float64(fakeFailExitCode) ||
+				!strings.Contains(stderr, "Invalid data") {
+				t.Errorf("record = %v, want a debug record with file, exit code and stderr tail", record)
+			}
+		})
+	}
+}
+
+// TestProberLogsNothingForFailuresThatAreNoExit: a tool that cannot start has no error output.
+func TestProberLogsNothingForFailuresThatAreNoExit(t *testing.T) {
+	t.Parallel()
+
+	logger, logs := capturingLogger()
+	prober := newTestProberWithLogger(t, filepath.Join(t.TempDir(), "no-such-ffprobe"), logger)
+	path := filepath.Join(t.TempDir(), "clip.mkv")
+
+	_, probeErr := prober.Probe(t.Context(), path)
+	_, keyframeErr := prober.KeyframeAtOrBefore(t.Context(), path, time.Second)
+
+	if !errors.Is(probeErr, domain.ErrUnavailable) || !errors.Is(keyframeErr, domain.ErrUnavailable) {
+		t.Fatalf("errors = %v, %v, want ErrUnavailable", probeErr, keyframeErr)
+	}
+
+	if records := logs.records(t); len(records) > 0 {
+		t.Errorf("unexpected log records: %v", records)
+	}
+}
+
+// newTestProber returns a prober for ffprobePath that discards its log.
+func newTestProber(t *testing.T, ffprobePath string) *Prober {
+	t.Helper()
+
+	return newTestProberWithLogger(t, ffprobePath, slog.New(slog.DiscardHandler))
+}
+
+func newTestProberWithLogger(t *testing.T, ffprobePath string, logger *slog.Logger) *Prober {
+	t.Helper()
+
+	prober, err := NewProber(ProberOptions{FFprobePath: ffprobePath, Logger: logger})
+	if err != nil {
+		t.Fatalf("NewProber: %v", err)
+	}
+
+	return prober
+}
+
+// capturingLogger returns a logger that writes every record, debug included, as JSON to the
+// returned buffer.
+func capturingLogger() (*slog.Logger, *syncBuffer) {
+	logs := &syncBuffer{}
+
+	return slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})), logs
 }
 
 func TestProbeClassifiesFailures(t *testing.T) {
@@ -376,7 +574,7 @@ func TestProbeClassifiesFailures(t *testing.T) {
 		{
 			name: "ffprobe fails",
 			setup: func(t *testing.T) *Prober {
-				return NewProber(fakeTool(t, fakeModeFail).executable)
+				return newTestProber(t, fakeTool(t, fakeModeFail).executable)
 			},
 			want: domain.ErrUnsupported,
 		},
@@ -385,14 +583,14 @@ func TestProbeClassifiesFailures(t *testing.T) {
 			setup: func(t *testing.T) *Prober {
 				fake, _ := fakeResponder(t, map[string]string{fakeDefaultResponse: "{"})
 
-				return NewProber(fake.executable)
+				return newTestProber(t, fake.executable)
 			},
 			want: domain.ErrUnsupported,
 		},
 		{
 			name: "timeout",
 			setup: func(t *testing.T) *Prober {
-				prober := NewProber(fakeTool(t, fakeModeHang).executable)
+				prober := newTestProber(t, fakeTool(t, fakeModeHang).executable)
 				prober.probeTimeout = 200 * time.Millisecond
 
 				return prober
@@ -402,7 +600,7 @@ func TestProbeClassifiesFailures(t *testing.T) {
 		{
 			name: "missing executable",
 			setup: func(t *testing.T) *Prober {
-				return NewProber(filepath.Join(t.TempDir(), "no-such-ffprobe"))
+				return newTestProber(t, filepath.Join(t.TempDir(), "no-such-ffprobe"))
 			},
 			want: domain.ErrUnavailable,
 		},

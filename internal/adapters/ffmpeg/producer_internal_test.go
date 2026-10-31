@@ -87,6 +87,21 @@ func (b *syncBuffer) Write(data []byte) (int, error) {
 func (b *syncBuffer) warnings(t *testing.T) []map[string]any {
 	t.Helper()
 
+	var warnings []map[string]any
+
+	for _, record := range b.records(t) {
+		if record[slog.LevelKey] == warnLevel {
+			warnings = append(warnings, record)
+		}
+	}
+
+	return warnings
+}
+
+// records returns every decoded JSON log record written so far.
+func (b *syncBuffer) records(t *testing.T) []map[string]any {
+	t.Helper()
+
 	b.mutex.Lock()
 	text := b.buffer.String()
 	b.mutex.Unlock()
@@ -99,9 +114,7 @@ func (b *syncBuffer) warnings(t *testing.T) []map[string]any {
 			t.Fatalf("decode log line %q: %v", line, err)
 		}
 
-		if record[slog.LevelKey] == warnLevel {
-			records = append(records, record)
-		}
+		records = append(records, record)
 	}
 
 	return records
@@ -231,7 +244,7 @@ func assertStopped(t *testing.T, err error) {
 		t.Fatalf("Ready = %v, want ErrProductionStopped", err)
 	}
 
-	if _, isExit := ErrorOutput(err); isExit {
+	if _, isExit := stderrOf(err); isExit {
 		t.Errorf("Ready after a stop carries the kill's exit error: %v", err)
 	}
 }
@@ -374,8 +387,8 @@ func TestProducerReportsAnExitBeforeTheFirstSegment(t *testing.T) {
 		t.Errorf("a failure is reported as a stop: %v", err)
 	}
 
-	if tail, ok := ErrorOutput(err); !ok || !strings.Contains(tail, "Invalid data") {
-		t.Errorf("ErrorOutput = %q, %t, want the stderr tail", tail, ok)
+	if tail, ok := stderrOf(err); !ok || !strings.Contains(tail, "Invalid data") {
+		t.Errorf("stderr tail = %q, %t, want the stderr tail", tail, ok)
 	}
 
 	if !isDone(production) {

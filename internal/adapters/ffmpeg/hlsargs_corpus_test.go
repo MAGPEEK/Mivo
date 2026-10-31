@@ -183,7 +183,7 @@ func requireHLSTools(t *testing.T) (hlsTools, corpusManifest) {
 			"(install FFmpeg, see docs/development.md)")
 	}
 
-	return hlsTools{ffmpegPath: ffmpegPath, ffprobePath: ffprobePath, prober: ffmpeg.NewProber(ffprobePath)}, manifest
+	return hlsTools{ffmpegPath: ffmpegPath, ffprobePath: ffprobePath, prober: newCorpusProber(t, ffprobePath)}, manifest
 }
 
 // hlsDecide probes the clip and decides it like the playback service does.

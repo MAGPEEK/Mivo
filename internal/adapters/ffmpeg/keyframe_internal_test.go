@@ -151,7 +151,7 @@ func TestKeyframeAtOrBeforeSearchesWindowsThenFallsBackToZero(t *testing.T) {
 			fake, calls := fakeResponder(t, test.responses)
 			path := filepath.Join(t.TempDir(), "clip.ts")
 
-			got, err := NewProber(fake.executable).KeyframeAtOrBefore(t.Context(), path, test.position)
+			got, err := newTestProber(t, fake.executable).KeyframeAtOrBefore(t.Context(), path, test.position)
 			if err != nil {
 				t.Fatalf("KeyframeAtOrBefore: %v", err)
 			}
@@ -188,7 +188,7 @@ func assertKeyframeCalls(t *testing.T, recorded [][]string, path string, interva
 func TestKeyframeAtOrBeforeStartReturnsZeroWithoutFFprobe(t *testing.T) {
 	t.Parallel()
 
-	prober := NewProber(filepath.Join(t.TempDir(), "no-such-ffprobe"))
+	prober := newTestProber(t, filepath.Join(t.TempDir(), "no-such-ffprobe"))
 	path := filepath.Join(t.TempDir(), "clip.mkv")
 
 	for _, position := range []time.Duration{0, -time.Second} {
@@ -208,13 +208,13 @@ func TestKeyframeAtOrBeforeReportsFailures(t *testing.T) {
 	}{
 		{
 			name:  "relative path",
-			setup: func(*testing.T) *Prober { return NewProber("ffprobe-that-is-never-started") },
+			setup: func(t *testing.T) *Prober { return newTestProber(t, "ffprobe-that-is-never-started") },
 			path:  func(*testing.T) string { return "clip.mkv" },
 			want:  domain.ErrInvalid,
 		},
 		{
 			name:  "ffprobe fails",
-			setup: func(t *testing.T) *Prober { return NewProber(fakeTool(t, fakeModeFail).executable) },
+			setup: func(t *testing.T) *Prober { return newTestProber(t, fakeTool(t, fakeModeFail).executable) },
 			want:  domain.ErrUnsupported,
 		},
 		{
@@ -222,14 +222,14 @@ func TestKeyframeAtOrBeforeReportsFailures(t *testing.T) {
 			setup: func(t *testing.T) *Prober {
 				fake, _ := fakeResponder(t, map[string]string{fakeDefaultResponse: "["})
 
-				return NewProber(fake.executable)
+				return newTestProber(t, fake.executable)
 			},
 			want: domain.ErrUnsupported,
 		},
 		{
 			name: "timeout",
 			setup: func(t *testing.T) *Prober {
-				prober := NewProber(fakeTool(t, fakeModeHang).executable)
+				prober := newTestProber(t, fakeTool(t, fakeModeHang).executable)
 				prober.keyframeTimeout = 200 * time.Millisecond
 
 				return prober

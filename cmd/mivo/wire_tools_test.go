@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/playback"
 	"github.com/magpeek/mivo/internal/platform/config"
 )
@@ -216,7 +217,29 @@ func TestRunStartsWithAnFFmpegThatCannotAnswer(t *testing.T) {
 	assertHealthy(t, server.baseURL)
 	server.stop(t)
 
-	assertLogLine(t, server.stderr.String(), "level=WARN", "ffmpeg capability detection failed: only direct play available")
+	const failure = "ffmpeg capability detection failed: only direct play available"
+
+	logs := server.stderr.String()
+	assertLogLine(t, logs, "level=WARN", failure)
+
+	// The adapter logs the failure; the composition root must not repeat it (M2-39).
+	if count := strings.Count(logs, failure); count != 1 {
+		t.Errorf("the capability failure is logged %d times, want once:\n%s", count, logs)
+	}
+}
+
+// TestDetectCapabilitiesFailsTheStartOnAWiringError: ErrInvalid from the adapter is a
+// programming error (here a missing logger), not an FFmpeg that cannot answer, so it must not
+// degrade the server silently to direct play.
+func TestDetectCapabilitiesFailsTheStartOnAWiringError(t *testing.T) {
+	t.Parallel()
+
+	app := application{}
+
+	_, err := app.detectCapabilities(t.Context(), filepath.Join(t.TempDir(), "ffmpeg.exe"), true)
+	if !errors.Is(err, domain.ErrInvalid) {
+		t.Errorf("detectCapabilities error = %v, want ErrInvalid", err)
+	}
 }
 
 // writeBrokenTool writes an executable that fails at once: a script exiting with an error on

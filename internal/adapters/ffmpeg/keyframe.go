@@ -39,7 +39,8 @@ func keyframeSearchWindows() []time.Duration {
 // measured like position from the start of the file (the format start time, which is
 // ≈ 1.4 s for MPEG-TS). A stream-copy session started with -ss at the returned position
 // begins exactly there (ADR 0024). When no keyframe is found within the search windows the
-// result is 0, the start of the file. Errors wrap domain.ErrInvalid for a relative path,
+// result is 0, the start of the file. Errors wrap domain.ErrInvalid for a relative path or a
+// refused Windows device path,
 // context errors on timeout or cancellation, domain.ErrUnavailable when ffprobe cannot be
 // started and domain.ErrUnsupported when it failed on the file. A file without a format
 // start time also fails with domain.ErrUnsupported: ffprobe rejects the relative
@@ -61,6 +62,8 @@ func (p *Prober) KeyframeAtOrBefore(ctx context.Context, absolutePath string, po
 	for _, window := range keyframeSearchWindows() {
 		keyframe, found, err := p.searchKeyframe(searchContext, input, position, window)
 		if err != nil {
+			p.logRunFailure(ctx, keyframeOperation, absolutePath, err)
+
 			return 0, fmt.Errorf("find keyframe before %s in %s: %w", position, filepath.Base(absolutePath), err)
 		}
 

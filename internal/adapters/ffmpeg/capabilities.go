@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -69,13 +70,32 @@ type commandOutput func(ctx context.Context, arguments []string) ([]byte, error)
 // without FFmpeg that can only direct-play. Errors wrap
 //   - domain.ErrUnavailable when FFmpeg cannot be started, fails, does not answer within the
 //     detection timeout or prints output this package does not understand,
-//   - the caller's context error when ctx ended; it says nothing about FFmpeg.
+//   - the caller's context error when ctx ended; it says nothing about FFmpeg,
+//   - domain.ErrInvalid for a nil logger, before FFmpeg runs.
 //
-// The caller logs the error and continues; ErrorOutput returns FFmpeg's error output.
-func DetectCapabilities(ctx context.Context, ffmpegPath string) (playback.ServerCapabilities, error) {
+// A failed detection is logged here, once at warn level with FFmpeg's error output, which
+// stays inside this package (ADR 0024 Notes M2-39); the caller only continues without
+// FFmpeg. A detection ended by ctx is not logged.
+func DetectCapabilities(ctx context.Context, ffmpegPath string, logger *slog.Logger) (playback.ServerCapabilities, error) {
+	if logger == nil {
+		return playback.ServerCapabilities{}, fmt.Errorf("detect ffmpeg capabilities: logger is nil: %w", domain.ErrInvalid)
+	}
+
 	ffmpeg := tool{name: ffmpegToolName, executable: ffmpegPath}
 
-	return detectCapabilities(ctx, ffmpeg.output, capabilityDetectionTimeout)
+	capabilities, err := detectCapabilities(ctx, ffmpeg.output, capabilityDetectionTimeout)
+	if err != nil && ctx.Err() == nil {
+		logDetectionFailure(ctx, logger, err)
+	}
+
+	return capabilities, err
+}
+
+// logDetectionFailure writes the one warning of a failed detection: it changes what the
+// server can do until a restart, so it is worth a warning even without a playback request.
+func logDetectionFailure(ctx context.Context, logger *slog.Logger, err error) {
+	attributes := append([]slog.Attr{slog.Any("error", err)}, exitAttributes(err)...)
+	logger.LogAttrs(ctx, slog.LevelWarn, "ffmpeg capability detection failed: only direct play available", attributes...)
 }
 
 // detectCapabilities runs the three queries under one timeout and parses their output.

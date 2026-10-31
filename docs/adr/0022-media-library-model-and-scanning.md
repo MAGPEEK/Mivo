@@ -303,4 +303,6 @@ instead of editing this section.
   accepted only when a drive (`<letter>:\`) or `UNC\` follows the prefix; every other one
   (`\\.\COM1`, `\\.\pipe\…`, `\\?\GLOBALROOT\…`, `\\?\Volume{…}\…`) and every NT object path
   (`\??\…`) is refused with `ErrInvalid`. Volume GUID paths are refused although they can name
-  files; library roots use drive letters or UNC shares.
+  files; library roots use drive letters or UNC shares. Because Win32 resolves `.` and `..`
+  inside device paths (`\\.\C:\..\COM1` opens `\\.\COM1`), a device path with a `.` or `..`
+  segment after the prefix is refused too, and `UNC\` must name a server (review of M2-39).

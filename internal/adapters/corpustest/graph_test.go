@@ -80,8 +80,13 @@ func newCorpusGraph(t *testing.T, environment corpusEnvironment) *corpusGraph {
 		t.Fatalf("libraryfs.New: %v", err)
 	}
 
+	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{FFprobePath: environment.ffprobePath, Logger: logger})
+	if err != nil {
+		t.Fatalf("ffmpeg.NewProber: %v", err)
+	}
+
 	graph := &corpusGraph{
-		database: database, corpusRoot: environment.root, files: files, prober: ffmpeg.NewProber(environment.ffprobePath),
+		database: database, corpusRoot: environment.root, files: files, prober: prober,
 		ffmpegPath: environment.ffmpegPath, transcodeRoot: filepath.Join(dataDirectory, transcodeDirName),
 		logger: logger,
 	}
@@ -113,7 +118,7 @@ func (graph *corpusGraph) syncLibrary(t *testing.T, root string) string {
 func requireTranscoding(t *testing.T, ffmpegPath string) {
 	t.Helper()
 
-	detected, err := ffmpeg.DetectCapabilities(t.Context(), ffmpegPath)
+	detected, err := ffmpeg.DetectCapabilities(t.Context(), ffmpegPath, slog.New(slog.NewTextHandler(t.Output(), nil)))
 	if err != nil {
 		t.Fatalf("detect the FFmpeg capabilities: %v", err)
 	}

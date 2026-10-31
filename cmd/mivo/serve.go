@@ -214,7 +214,10 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 		return err
 	}
 
-	prober := ffmpeg.NewProber(tools.ffprobe)
+	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{FFprobePath: tools.ffprobe, Logger: app.logger})
+	if err != nil {
+		return fmt.Errorf("create prober: %w", err)
+	}
 
 	scans, err := app.newScanService(db, files, prober)
 	if err != nil {

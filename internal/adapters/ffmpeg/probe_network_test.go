@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
 	"github.com/magpeek/mivo/internal/domain"
 )
 
@@ -45,10 +44,14 @@ SEGMENT_URL
 `
 
 // TestProbeNeverFollowsNetworkReferences: a file whose content makes FFmpeg open further
-// URLs must not reach the network (SSRF, ADR 0022). A control run with the network allowed
-// proves that the same file does contact the server, so a pass means the input restrictions
-// held, not that the demuxer is missing: the demuxer whitelist refuses dash and hls before
-// they open anything, and the protocol whitelist would refuse the URL.
+// URLs must not reach the network (SSRF, ADR 0022). The control run opens the same file
+// without the demuxer whitelist and with http and tcp added to the protocol whitelist; a
+// request it sends proves that the local FFmpeg has the demuxer and follows the reference.
+// The prober then runs with both of its restrictions and must send no request, so a pass
+// means they held, not that the demuxer is missing: -format_whitelist refuses dash and hls
+// before they read the manifest, and -protocol_whitelist file would refuse the URL even if a
+// demuxer got that far. The control run cannot tell the two apart; hostile_corpus_test.go
+// checks FFmpeg's whitelist error for the demuxer restriction.
 func TestProbeNeverFollowsNetworkReferences(t *testing.T) {
 	ffprobePath := requireFFprobe(t)
 
@@ -83,7 +86,7 @@ func TestProbeNeverFollowsNetworkReferences(t *testing.T) {
 			requireNetworkReference(t, ffprobePath, path, &requests)
 			requests.Store(0)
 
-			_, err := ffmpeg.NewProber(ffprobePath).Probe(t.Context(), path)
+			_, err := newCorpusProber(t, ffprobePath).Probe(t.Context(), path)
 			if !errors.Is(err, domain.ErrUnsupported) {
 				t.Errorf("Probe error = %v, want ErrUnsupported", err)
 			}
@@ -95,8 +98,9 @@ func TestProbeNeverFollowsNetworkReferences(t *testing.T) {
 	}
 }
 
-// requireNetworkReference runs ffprobe with the network allowed and skips the test when
-// the local FFmpeg does not contact the server (no demuxer for the format).
+// requireNetworkReference runs ffprobe without the demuxer whitelist and with the network
+// allowed, and skips the test when the local FFmpeg does not contact the server even then
+// (no demuxer for the format).
 func requireNetworkReference(t *testing.T, ffprobePath, path string, requests *atomic.Int32) {
 	t.Helper()
 

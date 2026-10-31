@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -50,6 +51,20 @@ const (
 	// undeterminedLanguage is the ISO 639-2 code muxers write for "no language"; it carries
 	// no information, so it is stored as an empty language.
 	undeterminedLanguage = "und"
+	// probeOperation and keyframeOperation name the prober's ffprobe runs in debug logs.
+	probeOperation    = "probe"
+	keyframeOperation = "find keyframe"
+	// win32FilePrefix and win32DevicePrefix start paths in the Win32 device namespace;
+	// ntObjectPrefix starts an NT object path. All with backslashes, after normalisation.
+	win32FilePrefix   = `\\?\`
+	win32DevicePrefix = `\\.\`
+	ntObjectPrefix    = `\??\`
+	// uncDevicePrefix follows a device namespace prefix for a UNC share (\\?\UNC\server\share).
+	uncDevicePrefix = `UNC\`
+	// driveRootLength is the length of a drive root such as `C:\`.
+	driveRootLength = len(`C:\`)
+	// windowsOS is runtime.GOOS on Windows.
+	windowsOS = "windows"
 )
 
 // allowedDemuxers are the FFmpeg demuxers that read exactly the one file they are given: the
@@ -89,32 +104,67 @@ func placeholderValues() []string {
 	return []string{"unknown", "N/A"}
 }
 
+// ProberOptions configures NewProber; every field is required.
+type ProberOptions struct {
+	// FFprobePath is the ffprobe executable, the configured tools.ffprobe value resolved by
+	// the caller.
+	FFprobePath string
+	// Logger receives one debug record with ffprobe's error output per failed run.
+	Logger *slog.Logger
+}
+
 // Prober describes media files with ffprobe and finds keyframes for stream-copy seeks.
 type Prober struct {
 	ffprobe         tool
+	logger          *slog.Logger
 	probeTimeout    time.Duration
 	keyframeTimeout time.Duration
 }
 
-// NewProber returns a prober that runs the ffprobe executable at ffprobePath, the
-// configured tools.ffprobe value resolved by the caller.
-func NewProber(ffprobePath string) *Prober {
+// NewProber returns a prober that runs the ffprobe executable of options. Errors wrap
+// domain.ErrInvalid for a missing option.
+func NewProber(options ProberOptions) (*Prober, error) {
+	switch {
+	case options.FFprobePath == "":
+		return nil, fmt.Errorf("new prober: ffprobe path is empty: %w", domain.ErrInvalid)
+	case options.Logger == nil:
+		return nil, fmt.Errorf("new prober: logger is nil: %w", domain.ErrInvalid)
+	}
+
 	return &Prober{
-		ffprobe:         tool{name: ffprobeName, executable: ffprobePath},
+		ffprobe:         tool{name: ffprobeName, executable: options.FFprobePath},
+		logger:          options.Logger,
 		probeTimeout:    probeTimeout,
 		keyframeTimeout: keyframeTimeout,
+	}, nil
+}
+
+// logRunFailure writes ffprobe's error output of a failed run on absolutePath to the debug
+// log; it does nothing for errors that are no unsuccessful exit. Debug, not warn: a scan may
+// fail on many files and already records each one as probe_failed. The tail stays in the
+// server log and never reaches the returned error (ADR 0024 Notes M2-39).
+func (p *Prober) logRunFailure(ctx context.Context, operation, absolutePath string, err error) {
+	attributes := exitAttributes(err)
+	if attributes == nil {
+		return
 	}
+
+	attributes = append([]slog.Attr{
+		slog.String("operation", operation), slog.String("file", filepath.Base(absolutePath)),
+	}, attributes...)
+	p.logger.LogAttrs(ctx, slog.LevelDebug, "ffprobe failed on a media file", attributes...)
 }
 
 // Probe describes the file at absolutePath. The caller has resolved the path and checked
 // that it lies inside a library root (ADR 0022). Errors wrap
-//   - domain.ErrInvalid for a relative path,
+//   - domain.ErrInvalid for a relative path or a refused Windows device path,
 //   - context.DeadlineExceeded when ffprobe did not finish within the per-file timeout (or
 //     the caller's deadline), context.Canceled when the caller gave up,
 //   - domain.ErrUnavailable when ffprobe cannot be started,
 //   - domain.ErrUnsupported when ffprobe failed on the file or its output was unusable.
 //
-// Error messages name the file by its base name only, so logs do not reveal library roots.
+// Error messages name the file by its base name only, so logs do not reveal library roots;
+// ffprobe's error output goes to the prober's debug log, never into the error.
 func (p *Prober) Probe(ctx context.Context, absolutePath string) (media.Description, error) {
 	input, err := inputArguments(absolutePath)
 	if err != nil {
@@ -126,6 +176,8 @@ func (p *Prober) Probe(ctx context.Context, absolutePath string) (media.Descript
 
 	output, err := p.ffprobe.output(probeContext, probeArguments(input))
 	if err != nil {
+		p.logRunFailure(ctx, probeOperation, absolutePath, err)
+
 		return media.Description{}, fmt.Errorf("probe %s: %w", filepath.Base(absolutePath), classifyRunError(err))
 	}
 
@@ -164,16 +216,75 @@ func inputArguments(absolutePath string) ([]string, error) {
 	}, nil
 }
 
-// isWindowsDevicePath reports paths such as \\.\COM1 or \\?\GLOBALROOT\Device\... that
-// reach devices instead of files. Long paths (\\?\C:\...) and UNC shares stay allowed.
+// isWindowsDevicePath reports, on Windows only, a path that refusesDevicePath refuses. Other
+// systems have no device namespace; there such a string is a relative path.
 func isWindowsDevicePath(path string) bool {
-	if runtime.GOOS != "windows" {
+	return runtime.GOOS == windowsOS && refusesDevicePath(path)
+}
+
+// refusesDevicePath classifies path on any system, after normalising "/" to "\": a path in
+// the Win32 device namespace (\\?\ or \\.\) passes only when a drive root (C:\) or a UNC
+// share (UNC\) follows the prefix, so \\.\COM1, \\.\pipe\…, \\?\GLOBALROOT\… and
+// \\?\Volume{…}\… are refused (ADR 0022 Notes M2-39); every NT object path (\??\) is
+// refused. A device namespace path with a "." or ".." segment is refused as well, because
+// Win32 resolves them after the prefix (\\.\C:\..\COM1 opens \\.\COM1), and so is a UNC
+// form without a server. Any other path is not in the device namespace and passes.
+func refusesDevicePath(path string) bool {
+	normalised := strings.ReplaceAll(path, "/", `\`)
+	if strings.HasPrefix(normalised, ntObjectPrefix) {
+		return true
+	}
+
+	for _, prefix := range []string{win32FilePrefix, win32DevicePrefix} {
+		if rest, inNamespace := strings.CutPrefix(normalised, prefix); inNamespace {
+			return hasDotSegment(rest) || !namesDriveOrShare(rest)
+		}
+	}
+
+	return false
+}
+
+// namesDriveOrShare reports a device namespace remainder that starts with a drive root
+// (C:\) or a UNC share with a server (UNC\server).
+func namesDriveOrShare(rest string) bool {
+	if isDriveRoot(rest) {
+		return true
+	}
+
+	if !hasPrefixFold(rest, uncDevicePrefix) {
 		return false
 	}
 
-	normalised := strings.ToUpper(strings.ReplaceAll(path, "/", `\`))
+	server, _, _ := strings.Cut(rest[len(uncDevicePrefix):], `\`)
 
-	return strings.HasPrefix(normalised, `\\.\`) || strings.HasPrefix(normalised, `\\?\GLOBALROOT`)
+	return server != ""
+}
+
+// hasDotSegment reports a "." or ".." segment in a backslash-separated path.
+func hasDotSegment(path string) bool {
+	for segment := range strings.SplitSeq(path, `\`) {
+		if segment == "." || segment == ".." {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isDriveRoot reports a path that starts with a drive letter, a colon and a backslash.
+func isDriveRoot(path string) bool {
+	if len(path) < driveRootLength {
+		return false
+	}
+
+	letter := path[0] | ('a' - 'A') // ASCII lower case
+
+	return letter >= 'a' && letter <= 'z' && path[1] == ':' && path[2] == '\\'
+}
+
+// hasPrefixFold is strings.HasPrefix ignoring ASCII case.
+func hasPrefixFold(text, prefix string) bool {
+	return len(text) >= len(prefix) && strings.EqualFold(text[:len(prefix)], prefix)
 }
 
 // classifyRunError marks failures caused by the file as unsupported. Context errors and a

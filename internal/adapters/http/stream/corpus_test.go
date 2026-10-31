@@ -46,7 +46,10 @@ func TestCorpusRemuxIsServedOverHTTP(t *testing.T) {
 		t.Fatalf("transcodedir.New error = %v", err)
 	}
 
-	prober := ffmpeg.NewProber(ffprobePath)
+	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{FFprobePath: ffprobePath, Logger: logger})
+	if err != nil {
+		t.Fatalf("NewProber error = %v", err)
+	}
 
 	description, err := prober.Probe(t.Context(), filepath.Join(libraryRoot, filepath.FromSlash(corpusMKVClip)))
 	if err != nil {

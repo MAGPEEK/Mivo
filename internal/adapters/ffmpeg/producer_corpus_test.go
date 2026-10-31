@@ -30,7 +30,11 @@ const (
 func corpusProducer(t *testing.T, tools hlsTools) *ffmpeg.Producer {
 	t.Helper()
 
-	logger := slog.New(slog.NewTextHandler(t.Output(), nil))
+	return corpusProducerWithLogger(t, tools, slog.New(slog.NewTextHandler(t.Output(), nil)))
+}
+
+func corpusProducerWithLogger(t *testing.T, tools hlsTools, logger *slog.Logger) *ffmpeg.Producer {
+	t.Helper()
 
 	files, err := libraryfs.New(logger)
 	if err != nil {
@@ -172,7 +176,8 @@ func TestProducerReportsACorruptInput(t *testing.T) {
 		t.Fatalf("write corrupt input: %v", err)
 	}
 
-	production := startCorpusProduction(t, corpusProducer(t, tools), job)
+	logs := &logCapture{}
+	production := startCorpusProduction(t, corpusProducerWithLogger(t, tools, logs.logger()), job)
 
 	ctx, cancel := context.WithTimeout(t.Context(), hlsRunTimeout)
 	defer cancel()
@@ -186,7 +191,8 @@ func TestProducerReportsACorruptInput(t *testing.T) {
 		t.Errorf("a corrupt input is reported as a stop: %v", err)
 	}
 
-	if tail, ok := ffmpeg.ErrorOutput(err); !ok || tail == "" {
-		t.Errorf("ErrorOutput = %q, %t, want FFmpeg's error output", tail, ok)
+	// FFmpeg's error output is in the producer's warning only (ADR 0024 Notes M2-39).
+	if tails := logs.exitTails(t); len(tails) != 1 || tails[0] == "" {
+		t.Errorf("logged stderr tails = %q, want FFmpeg's error output once", tails)
 	}
 }

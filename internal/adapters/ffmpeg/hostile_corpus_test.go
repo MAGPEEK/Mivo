@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -80,11 +79,11 @@ func TestHostileInputsNeverOpenOtherFiles(t *testing.T) {
 			followed := followsReference(t, tools.ffprobePath, path)
 			t.Logf("an unrestricted ffprobe follows the reference: %t", followed)
 
-			assertProbeRefused(t, tools.prober, path, followed)
-			assertKeyframeLookupRefused(t, tools.prober, path, followed)
+			assertProbeRefused(t, tools.ffprobePath, path, followed)
+			assertKeyframeLookupRefused(t, tools.ffprobePath, path, followed)
 
 			producerSeesTheName := runtime.GOOS != "linux"
-			assertProductionRefused(t, corpusProducer(t, tools), appplayback.Job{
+			assertProductionRefused(t, tools, appplayback.Job{
 				SessionID: producerSessionID, Plan: hostilePlan(), LibraryRoot: library,
 				RelativePath: input.fileName, InputPath: path, OutputDir: t.TempDir(),
 			}, followed && (input.detectedByContent || producerSeesTheName))
@@ -107,32 +106,38 @@ func followsReference(t *testing.T, ffprobePath, path string) bool {
 	return err == nil && strings.Contains(string(output), "h264")
 }
 
-func assertProbeRefused(t *testing.T, prober *ffmpeg.Prober, path string, wantWhitelistError bool) {
+func assertProbeRefused(t *testing.T, ffprobePath, path string, wantWhitelistError bool) {
 	t.Helper()
 
-	description, err := prober.Probe(t.Context(), path)
+	logs := &logCapture{}
+
+	description, err := newCorpusProberWithLogger(t, ffprobePath, logs.logger()).Probe(t.Context(), path)
 	if !errors.Is(err, domain.ErrUnsupported) {
 		t.Fatalf("Probe = %+v, %v, want ErrUnsupported", description, err)
 	}
 
-	assertRefusedByFFmpeg(t, "probe", err, wantWhitelistError)
+	assertRefusedByFFmpeg(t, "probe", logs, wantWhitelistError)
 }
 
-func assertKeyframeLookupRefused(t *testing.T, prober *ffmpeg.Prober, path string, wantWhitelistError bool) {
+func assertKeyframeLookupRefused(t *testing.T, ffprobePath, path string, wantWhitelistError bool) {
 	t.Helper()
+
+	logs := &logCapture{}
+	prober := newCorpusProberWithLogger(t, ffprobePath, logs.logger())
 
 	keyframe, err := prober.KeyframeAtOrBefore(t.Context(), path, hostileKeyframePosition)
 	if !errors.Is(err, domain.ErrUnsupported) {
 		t.Fatalf("KeyframeAtOrBefore = %s, %v, want ErrUnsupported", keyframe, err)
 	}
 
-	assertRefusedByFFmpeg(t, "keyframe lookup", err, wantWhitelistError)
+	assertRefusedByFFmpeg(t, "keyframe lookup", logs, wantWhitelistError)
 }
 
-func assertProductionRefused(t *testing.T, producer *ffmpeg.Producer, job appplayback.Job, wantWhitelistError bool) {
+func assertProductionRefused(t *testing.T, tools hlsTools, job appplayback.Job, wantWhitelistError bool) {
 	t.Helper()
 
-	production := startCorpusProduction(t, producer, job)
+	logs := &logCapture{}
+	production := startCorpusProduction(t, corpusProducerWithLogger(t, tools, logs.logger()), job)
 
 	ctx, cancel := context.WithTimeout(t.Context(), hlsRunTimeout)
 	defer cancel()
@@ -142,24 +147,25 @@ func assertProductionRefused(t *testing.T, producer *ffmpeg.Producer, job apppla
 		t.Fatalf("Ready = %v, want FFmpeg's exit error", err)
 	}
 
-	assertRefusedByFFmpeg(t, "producer", err, wantWhitelistError)
+	assertRefusedByFFmpeg(t, "producer", logs, wantWhitelistError)
 
 	if entries, _ := os.ReadDir(job.OutputDir); len(entries) > 0 {
 		t.Errorf("the refused production wrote %v", entries)
 	}
 }
 
-// assertRefusedByFFmpeg checks that err is FFmpeg's own refusal and, when the control run
-// followed the reference, that the demuxer whitelist refused it.
-func assertRefusedByFFmpeg(t *testing.T, step string, err error, wantWhitelistError bool) {
+// assertRefusedByFFmpeg checks that the step logged FFmpeg's own refusal (an unsuccessful
+// exit) once and, when the control run followed the reference, that the demuxer whitelist
+// refused it. The error output is only in the adapter's log (ADR 0024 Notes M2-39).
+func assertRefusedByFFmpeg(t *testing.T, step string, logs *logCapture, wantWhitelistError bool) {
 	t.Helper()
 
-	tail, isExit := ffmpeg.ErrorOutput(err)
-	if !isExit {
-		t.Fatalf("%s error %v is not FFmpeg's exit error", step, err)
+	tails := logs.exitTails(t)
+	if len(tails) != 1 {
+		t.Fatalf("%s logged %d unsuccessful FFmpeg exits, want 1: %q", step, len(tails), tails)
 	}
 
-	if wantWhitelistError && !strings.Contains(tail, notOnWhitelist) {
+	if tail := tails[0]; wantWhitelistError && !strings.Contains(tail, notOnWhitelist) {
 		t.Errorf("%s error output = %q, want FFmpeg's %q", step, tail, notOnWhitelist)
 	}
 }
@@ -181,8 +187,6 @@ func hostilePlan() playback.Plan {
 func TestProbeRefusesImageSequencePatterns(t *testing.T) {
 	ffprobePath, manifest := requireCorpus(t)
 	image := corpusPath(t, corpusCaseByName(t, manifest, "image-jpeg").File)
-	prober := ffmpeg.NewProber(ffprobePath)
-
 	library := t.TempDir()
 	for _, name := range []string{"frame%d.jpg", "frame0.jpg", "frame1.jpg", "frame2.jpg"} {
 		copyFile(t, image, library, name)
@@ -198,14 +202,9 @@ func TestProbeRefusesImageSequencePatterns(t *testing.T) {
 		t.Logf("an unrestricted ffprobe reads %s frames through the pattern", strings.TrimSpace(string(output)))
 	}
 
-	_, err := prober.Probe(t.Context(), pattern)
-	if !errors.Is(err, domain.ErrUnsupported) {
-		t.Fatalf("Probe(frame%%d.jpg) = %v, want ErrUnsupported", err)
-	}
+	assertProbeRefused(t, ffprobePath, pattern, true)
 
-	assertRefusedByFFmpeg(t, "probe", err, true)
-
-	if _, err := prober.Probe(t.Context(), filepath.Join(library, "frame1.jpg")); err != nil {
+	if _, err := newCorpusProber(t, ffprobePath).Probe(t.Context(), filepath.Join(library, "frame1.jpg")); err != nil {
 		t.Errorf("Probe(frame1.jpg) = %v, want a description", err)
 	}
 }

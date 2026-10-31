@@ -3,6 +3,7 @@ package ffmpeg
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -559,7 +560,9 @@ func TestDetectCapabilitiesWithMissingExecutable(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-such-ffmpeg")
 
 	for _, path := range []string{missing, ""} {
-		got, err := DetectCapabilities(t.Context(), path)
+		logger, logs := capturingLogger()
+
+		got, err := DetectCapabilities(t.Context(), path, logger)
 		if !errors.Is(err, domain.ErrUnavailable) {
 			t.Errorf("DetectCapabilities(%q) error = %v, want ErrUnavailable", path, err)
 		}
@@ -567,29 +570,95 @@ func TestDetectCapabilitiesWithMissingExecutable(t *testing.T) {
 		if got != (playback.ServerCapabilities{}) {
 			t.Errorf("DetectCapabilities(%q) = %+v, want zero", path, got)
 		}
+
+		// A tool that cannot start has no error output, but the failure is still logged.
+		record := assertOneDetectionWarning(t, logs)
+		if _, hasStderr := record["stderr"]; hasStderr {
+			t.Errorf("record = %v, want no stderr for a tool that did not start", record)
+		}
+	}
+}
+
+// TestDetectCapabilitiesRequiresALogger: the check comes before FFmpeg runs, so a missing
+// executable is not reported as ErrUnavailable.
+func TestDetectCapabilitiesRequiresALogger(t *testing.T) {
+	t.Parallel()
+
+	missing := filepath.Join(t.TempDir(), "no-such-ffmpeg")
+
+	_, err := DetectCapabilities(t.Context(), missing, nil)
+	if !errors.Is(err, domain.ErrInvalid) || errors.Is(err, domain.ErrUnavailable) {
+		t.Errorf("error = %v, want ErrInvalid before FFmpeg runs", err)
+	}
+}
+
+// TestDetectCapabilitiesLogsNoCancellation: a shutdown during the detection says nothing
+// about FFmpeg, so it is no warning.
+func TestDetectCapabilitiesLogsNoCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	logger, logs := capturingLogger()
+
+	_, err := DetectCapabilities(ctx, fakeTool(t, fakeModeFail).executable, logger)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+
+	if records := logs.records(t); len(records) > 0 {
+		t.Errorf("unexpected log records: %v", records)
+	}
+}
+
+// assertOneDetectionWarning checks that the detection logged exactly one record, the warning
+// with its error, and returns it.
+func assertOneDetectionWarning(t *testing.T, logs *syncBuffer) map[string]any {
+	t.Helper()
+
+	records := logs.records(t)
+	if len(records) != 1 {
+		t.Fatalf("got %d log records, want exactly 1: %v", len(records), records)
+	}
+
+	record := records[0]
+	if record[slog.LevelKey] != warnLevel ||
+		record[slog.MessageKey] != "ffmpeg capability detection failed: only direct play available" ||
+		record["error"] == nil {
+		t.Errorf("record = %v, want the capability warning with the error", record)
+	}
+
+	return record
+}
+
+// TestDetectCapabilitiesLogsTheErrorOutputOfAFailingTool: the stderr tail is in the one
+// warning, never in the returned error (ADR 0024 Notes M2-39).
+func TestDetectCapabilitiesLogsTheErrorOutputOfAFailingTool(t *testing.T) {
+	executable := fakeTool(t, fakeModeFail).executable
+	logger, logs := capturingLogger()
+
+	_, err := DetectCapabilities(t.Context(), executable, logger)
+	if !errors.Is(err, domain.ErrUnavailable) || strings.Contains(err.Error(), "Invalid data") {
+		t.Fatalf("error = %v, want ErrUnavailable without the error output", err)
+	}
+
+	record := assertOneDetectionWarning(t, logs)
+	if stderr, _ := record["stderr"].(string); !strings.Contains(stderr, "Invalid data") {
+		t.Errorf("record = %v, want the tool's error output", record)
+	}
+
+	// JSON numbers decode as float64.
+	if record["exit_code"] != float64(fakeFailExitCode) {
+		t.Errorf("record = %v, want exit code %d", record, fakeFailExitCode)
 	}
 }
 
 func TestDetectCapabilitiesThroughAProcess(t *testing.T) {
-	t.Run("failing tool keeps its error output", func(t *testing.T) {
-		executable := fakeTool(t, fakeModeFail).executable
-
-		_, err := DetectCapabilities(t.Context(), executable)
-		if !errors.Is(err, domain.ErrUnavailable) {
-			t.Fatalf("error = %v, want ErrUnavailable", err)
-		}
-
-		if tail, ok := ErrorOutput(err); !ok || !strings.Contains(tail, "Invalid data") {
-			t.Errorf("ErrorOutput = %q, %t; want the tool's error output", tail, ok)
-		}
-	})
-
 	t.Run("arguments reach the process verbatim", func(t *testing.T) {
 		// The fake prints the same text for every query, so the encoders listing is not
 		// understood; detection stops with an error after recording the calls.
 		fake, calls := fakeResponder(t, map[string]string{fakeDefaultResponse: "ffmpeg version 9.0.2\n"})
 
-		_, err := DetectCapabilities(t.Context(), fake.executable)
+		_, err := DetectCapabilities(t.Context(), fake.executable, slog.New(slog.DiscardHandler))
 		if !errors.Is(err, errNoListing) || !errors.Is(err, domain.ErrUnavailable) {
 			t.Fatalf("error = %v, want ErrUnavailable wrapping errNoListing", err)
 		}

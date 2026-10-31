@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,6 +30,9 @@ const (
 	processWaitDelay = 5 * time.Second
 	// truncatedMarker precedes an error output whose beginning was dropped.
 	truncatedMarker = "[truncated] "
+	// exitCodeKey and stderrKey name the log attributes of a tool's unsuccessful exit.
+	exitCodeKey = "exit_code"
+	stderrKey   = "stderr"
 )
 
 // errOutputTooLarge reports a tool whose standard output exceeded maxOutputBytes.
@@ -56,7 +60,7 @@ type process struct {
 
 // exitError reports a tool that ran and exited unsuccessfully. Its message names the tool
 // and the exit code only: FFmpeg's error output contains absolute paths and arbitrary bytes
-// from the file, so callers that log it take the bounded tail explicitly.
+// from the file, so only this package logs the bounded tail (exitAttributes).
 type exitError struct {
 	tool   string
 	code   int
@@ -72,19 +76,19 @@ func (e *exitError) stderrTail() string {
 	return e.stderr
 }
 
-// ErrorOutput returns the bounded tail of FFmpeg's error output (at most 4 KiB) when err
-// comes from a tool of this package that exited unsuccessfully; the second result is false
-// for any other error. The tail may be logged on the server – the Producer logs it once at
-// warn level when a production fails (ADR 0024) – but it is never returned to clients: it
-// can contain absolute media paths, revealing the library roots, and arbitrary bytes taken
-// from the media file.
-func ErrorOutput(err error) (string, bool) {
+// exitAttributes returns the exit code and the bounded stderr tail (at most 4 KiB) of err for
+// a log record when err comes from a tool of this package that exited unsuccessfully, and
+// nothing for any other error. The tail never leaves this package except into the server log
+// (ADR 0024 Notes M2-39): it can contain absolute media paths, revealing the library roots,
+// and arbitrary bytes taken from the media file, so no error, problem response or client
+// message may carry it.
+func exitAttributes(err error) []slog.Attr {
 	var exit *exitError
 	if !errors.As(err, &exit) {
-		return "", false
+		return nil
 	}
 
-	return exit.stderrTail(), true
+	return []slog.Attr{slog.Int(exitCodeKey, exit.code), slog.String(stderrKey, exit.stderrTail())}
 }
 
 // output runs the tool to completion and returns its standard output. The process is

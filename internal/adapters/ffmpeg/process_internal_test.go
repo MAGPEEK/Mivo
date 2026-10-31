@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -289,19 +290,19 @@ func TestLimitedBufferRejectsWritesBeyondLimit(t *testing.T) {
 	}
 }
 
-func TestErrorOutput(t *testing.T) {
+func TestExitAttributes(t *testing.T) {
 	t.Parallel()
 
 	exit := &exitError{tool: "ffprobe", code: 1, stderr: "file:/media/x.mkv: Invalid data"}
+	want := []slog.Attr{slog.Int("exit_code", 1), slog.String("stderr", exit.stderr)}
 
 	tests := []struct {
-		name   string
-		err    error
-		want   string
-		wantOK bool
+		name string
+		err  error
+		want []slog.Attr
 	}{
-		{name: "exit error", err: exit, want: exit.stderr, wantOK: true},
-		{name: "wrapped exit error", err: fmt.Errorf("probe x.mkv: %w: %w", domain.ErrUnsupported, exit), want: exit.stderr, wantOK: true},
+		{name: "exit error", err: exit, want: want},
+		{name: "wrapped exit error", err: fmt.Errorf("probe x.mkv: %w: %w", domain.ErrUnsupported, exit), want: want},
 		{name: "other error", err: context.DeadlineExceeded},
 		{name: "nil", err: nil},
 	}
@@ -310,10 +311,21 @@ func TestErrorOutput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, ok := ErrorOutput(test.err)
-			if got != test.want || ok != test.wantOK {
-				t.Errorf("ErrorOutput(%v) = %q, %t, want %q, %t", test.err, got, ok, test.want, test.wantOK)
+			got := exitAttributes(test.err)
+			if !slices.EqualFunc(got, test.want, slog.Attr.Equal) {
+				t.Errorf("exitAttributes(%v) = %v, want %v", test.err, got, test.want)
 			}
 		})
 	}
+}
+
+// stderrOf returns the stderr tail of an unsuccessful exit wrapped in err; the second result
+// is false for any other error.
+func stderrOf(err error) (string, bool) {
+	var exit *exitError
+	if !errors.As(err, &exit) {
+		return "", false
+	}
+
+	return exit.stderrTail(), true
 }

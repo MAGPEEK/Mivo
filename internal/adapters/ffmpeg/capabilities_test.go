@@ -1,6 +1,7 @@
 package ffmpeg_test
 
 import (
+	"log/slog"
 	"os/exec"
 	"strings"
 	"testing"
@@ -22,7 +23,7 @@ func TestDetectCapabilitiesOnLocalFFmpeg(t *testing.T) {
 			"(install FFmpeg, see docs/development.md)")
 	}
 
-	capabilities, err := ffmpeg.DetectCapabilities(t.Context(), ffmpegPath)
+	capabilities, err := ffmpeg.DetectCapabilities(t.Context(), ffmpegPath, slog.New(slog.NewTextHandler(t.Output(), nil)))
 	if err != nil {
 		t.Fatalf("DetectCapabilities: %v", err)
 	}

@@ -342,13 +342,13 @@ func (p *production) logFailure(ctx context.Context, failure error, stderrTail s
 	attributes := []slog.Attr{slog.String("session", p.sessionID)}
 
 	if code, exited := exitCode(failure); exited {
-		attributes = append(attributes, slog.Int("exit_code", code))
+		attributes = append(attributes, slog.Int(exitCodeKey, code))
 	}
 
 	attributes = append(attributes,
 		slog.Bool("segments_written", segmentsWritten),
 		slog.String("error", failure.Error()),
-		slog.String("stderr", stderrTail))
+		slog.String(stderrKey, stderrTail))
 
 	p.logger.LogAttrs(ctx, slog.LevelWarn, "ffmpeg stream production failed", attributes...)
 }

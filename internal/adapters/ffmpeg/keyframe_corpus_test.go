@@ -23,7 +23,7 @@ const (
 // the first keyframe, not from 0.
 func TestKeyframeAtOrBeforeOnSeekClips(t *testing.T) {
 	ffprobePath, manifest := requireCorpus(t)
-	prober := ffmpeg.NewProber(ffprobePath)
+	prober := newCorpusProber(t, ffprobePath)
 
 	for _, name := range []string{"video-mkv-h264-aac-long", "video-ts-mpeg2-mp2-long"} {
 		t.Run(name, func(t *testing.T) {
