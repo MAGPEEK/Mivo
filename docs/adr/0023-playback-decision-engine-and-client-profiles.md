@@ -176,3 +176,17 @@ How player-core (`web/packages/player-core/src/profile`) fills the client profil
   Answers are remembered per decoding type and content type within one detection.
 - The client name loses its control characters (`\p{Cc}`, which the server rejects) and is then
   cut to 64 code points.
+
+## Notes (M2-16)
+
+How `adapters/ffmpeg` detects the server capabilities at startup:
+
+- Detection is all or nothing under one 30 s timeout for the version, encoder and muxer
+  listings together. Any failure leaves the zero capabilities: the server only direct-plays and
+  answers other requests with `transcode_unavailable`.
+- Encoders FFmpeg marks experimental (flag `X`) do not count, because the HLS arguments never
+  pass `-strict experimental`. FFmpeg 7.1.5 (Debian 13, the Docker image) marks its native
+  `opus`, `vorbis`, `truehd` and `dca` encoders experimental.
+- The version string is the token after `ffmpeg version`, cut to 64 bytes; a token with
+  characters other than printable ASCII is shown as `unknown` (M2-32), while the capabilities
+  still count.

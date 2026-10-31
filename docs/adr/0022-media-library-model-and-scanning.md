@@ -173,6 +173,20 @@ model above without changing the decision.
   (OD-8). NAS users with absolute links should use relative links or add the target folder as its
   own library.
 
+## Notes (M2-15)
+
+Details of the sqlite media catalog; they refine the decision above without changing it.
+
+- The primary file of an item, shown in lists and used for playback, is its first file by
+  relative path.
+- The items cursor is base64url without padding of `<id> NUL <sortTitle>`, decoded strictly. It
+  is opaque to clients; a cursor the server cannot have produced is `ErrInvalid`.
+- A stored row the domain rejects (for example after a downgrade) returns a plain error
+  ("stored row cannot be decoded"), never `ErrInvalid`, so the API answers 500 instead of
+  blaming the client's request.
+- `RemoveFiles` ignores IDs that are unknown or belong to another library, so a repeated call
+  changes nothing and a library never loses a file of another one.
+
 ## Notes (M2-18)
 
 - Startup sync: the library use case validates every definition and rejects a root configured

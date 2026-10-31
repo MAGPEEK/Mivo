@@ -114,6 +114,26 @@ it.
   server under a path prefix. Supporting such a prefix (configured base path or relative
   references) is a follow-up; decide it before milestone 7b (remote access).
 
+## Notes (M2-08)
+
+- Requests with a body get a read deadline of 30 s (`server.BodyReadTimeout`), set by the
+  server middleware before any handler runs. Bodiless requests, which include every stream
+  `GET`, never get one, so a long download is not cut off and its request context is not
+  cancelled by a deadline.
+
+## Notes (M2-17)
+
+Rules of the HLS arguments in `adapters/ffmpeg` (`hlsargs.go`); they refine the decision above
+without changing it.
+
+- HLS output paths are built with forward slashes. With a backslash path the hls muxer writes
+  `init.mp4` into FFmpeg's working directory instead of the session directory.
+- Every seek with copied video uses `-copypriorss 0`, and the job's `StartPosition` must be the
+  result of `KeyframeAtOrBefore`, so the output starts at a keyframe.
+- Every AAC copy uses `-bsf:a aac_adtstoasc`, because AAC from MPEG-TS arrives as ADTS, which
+  fMP4 cannot carry.
+- A transcode path containing `%` is rejected: FFmpeg reads it as a segment name template.
+
 ## Notes (M2-20, orchestrator)
 
 - `replacesSessionId` (seeking, track change): the new session takes over the old session's slot
@@ -123,6 +143,32 @@ it.
   `MaxFFmpegSessions` / the transcode limit by the number of replacements in flight.
 - Overall cap: at most 256 sessions (`MaxSessions`) including direct play, answered with 503
   `session_limit_reached` – bounds memory while there is no authentication (until M7).
+
+## Notes (M2-20 review)
+
+- Stream URLs are built once, when a session is created, and stored with it. Milestone 7
+  (time-limited, owner-signed URLs) must build them on every read instead, and changes the
+  `StreamURLBuilder` port to take the owner and an expiry.
+- The overall cap `MaxSessions` (256) counts every session, direct play included; the FFmpeg
+  and transcode limits count only sessions that run FFmpeg (see Notes M2-37 to M2-41).
+
+## Notes (M2-21)
+
+Rules of player-core's seek and recovery helpers and of its stream info; they refine the
+decision above without changing it.
+
+- A restart (seek, recovery) starts at most 1 s before the end of a known duration
+  (`restartEndMarginSeconds`), so a restart never asks for a position at or past the end.
+- Recovery: the player creates a new session at its current position for `404` or `410` on a
+  request for the session, and for a fatal hls.js network error on a segment or on any request
+  of the stream that answered `404` or `410`. `503 stream_not_ready` is not a recovery case:
+  the player retries the same session after `Retry-After`. Every other failure is shown as an
+  error.
+- Stream info: a mode, reason, warning, stream kind or action code the web app does not know
+  (a newer server) maps to the group's `unknown` translation key, and an unknown mode gets the
+  colour token `textMuted`.
+- Hardware encoders are recognised by FFmpeg's name suffix of the acceleration API (`_nvenc`,
+  `_qsv`, `_vaapi`, `_videotoolbox`, …), so a hardware encoder never reads "software".
 
 ## Notes (M2-25)
 

@@ -90,12 +90,20 @@ pnpm -C web e2e                                    # web build + server binary o
 # Gates with the embedded web app (after pnpm -C web build)
 go vet -tags webui ./...
 golangci-lint run --build-tags webui
+go test -race -tags webui ./internal/adapters/http/... ./cmd/...
 go build -tags webui -o bin/mivo.exe ./cmd/mivo
 
 # Run
 go run ./cmd/mivo                                  # :8460, placeholder UI; `go run -tags webui` embeds the build
 go run ./scripts/gen-testmedia                     # test corpus -> testdata/media (needs FFmpeg)
+go test -count=1 -v ./internal/adapters/corpustest/   # corpus integration test (needs FFmpeg + corpus; skips under -short)
 docker build -f packaging/docker/Dockerfile -t mivo:dev .   # [docker][net]; run: packaging/docker/README.md
+
+# Release gate: playback smoke against the image [docker]
+docker run -d --name mivo-smoke -p 127.0.0.1:8460:8460 -v "${PWD}/testdata/media:/media:ro" mivo:dev
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -profile firefox-desktop
+docker rm -f -v mivo-smoke
 
 # Git hooks (lefthook v2.2.2), once per clone; bypass: git commit --no-verify or $env:LEFTHOOK = '0'
 go tool "-modfile=tools/go.mod" lefthook install

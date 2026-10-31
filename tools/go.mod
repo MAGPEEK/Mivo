@@ -2,9 +2,11 @@
 // production module graph in ../go.mod. It declares the same module path because the go
 // command reads it as an alternate go.mod from the repository root:
 //
-//	go tool -modfile=tools/go.mod go-test-coverage --config=.testcoverage.yml
-//	go tool -modfile=tools/go.mod govulncheck ./...
-//	go tool -modfile=tools/go.mod lefthook install
+//	go tool "-modfile=tools/go.mod" go-test-coverage "--config=.testcoverage.yml"
+//	go tool "-modfile=tools/go.mod" govulncheck ./...
+//	go tool "-modfile=tools/go.mod" lefthook install
+//
+// PowerShell needs the quotes: it splits an unquoted argument at the dot.
 //
 // Maintain this file only through `go -C tools …`, e.g. `go -C tools get -tool <path>@<version>`
 // and `go -C tools mod tidy`. Never run `go mod tidy -modfile=tools/go.mod` from the
