@@ -1,5 +1,19 @@
 {
   "heading": "Wiedergabe",
   "placeholder": "Eintrag {{itemId}}, Datei {{fileId}}, ab {{startAt}} s.",
-  "primaryFile": "Hauptdatei"
+  "primaryFile": "Hauptdatei",
+  "video": "Video",
+  "retry": "Erneut versuchen",
+  "status": {
+    "loading": "Das Video wird geladen …",
+    "waitingForStream": "Der Server bereitet den Stream vor …",
+    "playing": "Bereit zur Wiedergabe"
+  },
+  "errors": {
+    "no_compatible_format": "Dieser Browser kann die Datei nicht abspielen, auch nicht nach einer Umwandlung.",
+    "transcode_unavailable": "Diese Datei müsste umgewandelt werden, aber der Server kann nur Direct Play und Remux.",
+    "session_limit_reached": "Auf dem Server laufen gerade zu viele Wiedergaben. Versuche es gleich noch einmal.",
+    "stream_not_ready": "Der Server konnte den Stream nicht rechtzeitig vorbereiten.",
+    "generic": "Dieses Video kann nicht abgespielt werden."
+  }
 }

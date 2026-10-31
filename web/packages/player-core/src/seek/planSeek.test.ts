@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import type { TimelineSession } from "../timeline/timeline";
 import type { TimeRange } from "../timeline/timeRanges";
-import { planSeek, restartEndMarginSeconds, type SeekPlan, type SeekState } from "./planSeek";
+import {
+  planSeek,
+  restartEndMarginSeconds,
+  restartPosition,
+  type SeekPlan,
+  type SeekState,
+} from "./planSeek";
 
 const duration = 100;
 const hls: TimelineSession = {
@@ -87,5 +93,20 @@ describe("planSeek", () => {
     const future = { ...hls, delivery: "dash" } as unknown as TimelineSession;
 
     expect(planSeek(80, state(future))).toEqual({ kind: "restart", position: 80 });
+  });
+});
+
+describe("restartPosition", () => {
+  const known = { delivery: "hls", startPositionSeconds: 0, durationSeconds: 100 } as const;
+  const unknown = { delivery: "hls", startPositionSeconds: 0 } as const;
+
+  it.each([
+    { name: "inside the file", session: known, target: 40, expected: 40 },
+    { name: "before the file", session: known, target: -3, expected: 0 },
+    { name: "at the end", session: known, target: 100, expected: 100 - restartEndMarginSeconds },
+    { name: "past the end", session: known, target: 1e9, expected: 100 - restartEndMarginSeconds },
+    { name: "without a known duration", session: unknown, target: 1e9, expected: 1e9 },
+  ])("keeps a restart $name inside the file", ({ session, target, expected }) => {
+    expect(restartPosition(session, target)).toBe(expected);
   });
 });

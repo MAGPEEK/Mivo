@@ -69,6 +69,7 @@ export {
 export {
   planSeek,
   restartEndMarginSeconds,
+  restartPosition,
   type LocalSeek,
   type RestartSeek,
   type SeekPlan,

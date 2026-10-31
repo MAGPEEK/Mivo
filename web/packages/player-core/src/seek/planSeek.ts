@@ -60,7 +60,13 @@ export function planSeek(target: number, state: SeekState): SeekPlan {
   return { kind: "restart", position: restartPosition(session, position) };
 }
 
-function restartPosition(session: TimelineSession, position: number): number {
+/**
+ * Where a new session for the file position `target` may start: clamped to the file and at
+ * most {@link restartEndMarginSeconds} before a known end. Also for restarts that do not come
+ * from `planSeek`, e.g. a retry or a recovery at the current position.
+ */
+export function restartPosition(session: TimelineSession, target: number): number {
+  const position = clampPosition(session, target);
   const duration = knownDuration(session);
   if (duration === undefined) {
     return position;

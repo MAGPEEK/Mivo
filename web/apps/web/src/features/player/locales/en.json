@@ -1,5 +1,19 @@
 {
   "heading": "Player",
   "placeholder": "Item {{itemId}}, file {{fileId}}, from {{startAt}} s.",
-  "primaryFile": "primary file"
+  "primaryFile": "primary file",
+  "video": "Video",
+  "retry": "Try again",
+  "status": {
+    "loading": "Loading the video…",
+    "waitingForStream": "The server is preparing the stream…",
+    "playing": "Ready to play"
+  },
+  "errors": {
+    "no_compatible_format": "This browser cannot play this file, not even after converting it.",
+    "transcode_unavailable": "This file needs converting, but the server can only Direct Play and Remux.",
+    "session_limit_reached": "Too many videos are playing on the server right now. Try again in a moment.",
+    "stream_not_ready": "The server could not prepare the stream in time.",
+    "generic": "This video cannot be played."
+  }
 }
