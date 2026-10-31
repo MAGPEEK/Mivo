@@ -177,6 +177,14 @@ README)
   AAC belong to M4's streaming work.
 - B: AAC with up to 5.1 channels when the source has them.
 
+## Parallel track: Synology package (SPK)
+
+Since 2026-10-31 the native Synology package runs in parallel (owner decision, ADR 0026
+Accepted, overview [SPK-00](SPK-00-overview.md)). It touches only `packaging/synology/**` and
+changes no milestone-2 file. It reuses M2-32 (wired server) and M2-35 (smoke script) in SPK-11
+and attaches its SPKs to the `v0.1.0-alpha.2` GitHub Release (SPK-13); it must not delay the
+release (OD-SPK-1).
+
 ## Risks and notes
 
 - Playwright's bundled Chromium has no proprietary codecs (OD-7); without a branded channel the

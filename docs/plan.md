@@ -21,6 +21,7 @@
 | Repository | GitHub `MAGPEEK/Mivo` (Remote `origin`). Push nur nach Freigabe. |
 | Dev-Umgebung | nativ unter Windows (Go, Node, FFmpeg), Linux-Tests in Docker Desktop und auf der Synology |
 | Migration | Import aus Plex und Jellyfin (Gesehen-Status, Fortschritt, Bewertungen, Playlists) **nach v0.1** |
+| Synology-Paket (SPK) | **vorgezogen** (Entscheidung 2026-10-31): natives SPK für DSM 7.2+, parallel zu Meilenstein 2, erstes SPK mit 0.1.0-alpha.2; je ein SPK für x86_64, armv8 und armv7 mit gebündeltem statischem FFmpeg. Docker bleibt die primäre NAS-Verteilung, QPKG bleibt „später“. Details: ADR 0026, Aufgaben `docs/tasks/SPK-*` |
 
 ---
 
@@ -94,7 +95,7 @@ Kein Client kann alle Formate. Deshalb **passt der Server jeden Stream an den je
 - **Windows:** Inno-Setup-Installer mit Dienst, FFmpeg und Firewall-Regel
 - **Linux:** systemd-Unit
 - **CI:** GitHub Actions mit Lint, Tests, Build-Matrix und Docker-Push
-- **Später:** native Pakete SPK (spksrc) und QPKG (QDK)
+- **Später:** natives Paket QPKG (QDK). Das Synology-SPK ist vorgezogen (Entscheidung 2026-10-31, ADR 0026) und wird mit Synologys offiziellem Package Toolkit `pkgscripts-ng` in einem Linux-Container gebaut, nicht mit spksrc.
 
 ---
 

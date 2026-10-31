@@ -31,6 +31,7 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0023](0023-playback-decision-engine-and-client-profiles.md) | Playback decision engine and client capability profiles | Accepted |
 | [0024](0024-streaming-sessions-and-delivery.md) | Streaming sessions and delivery | Accepted |
 | [0025](0025-playback-verification.md) | Playback verification: reference profiles, expected modes, smoke and E2E | Accepted |
+| [0026](0026-synology-spk-package.md) | Native Synology DSM package (SPK) | Accepted |
 
 ## Template
 

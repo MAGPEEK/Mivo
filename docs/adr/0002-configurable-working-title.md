@@ -35,3 +35,22 @@ public release, so renaming must be cheap.
 - Reviewers reject new hard-coded occurrences. A quick check is a case-sensitive search for
   `Mivo` in `*.go`, `*.ts` and `*.tsx` files: the only expected hits are the brand modules and
   tests that assert on them.
+
+## Notes (ADR 0026, Synology package)
+
+Additions to the rename checklist for the native Synology package (ADR 0026); they
+extend items 4, 6 and 7 without changing the decision.
+
+- **DSM package name**: INFO `package` is `brand.ID`, filled in at build time. The same name is
+  the package's DSM system user, the directory `/var/packages/<id>/`, the firewall service file
+  `<id>.sc` and the prefix of the SPK file names. DSM identifies a package by this name: a
+  renamed package installs as a different package, existing installs get no upgrade, and the
+  release notes must explain moving the data in `/var/packages/<old id>/var` and granting the
+  shared folders to the new package user again.
+- **Docs** that name the product: `packaging/synology/README.md` and
+  `packaging/synology/TESTING.md`.
+- Templates under `packaging/synology/package/` never contain the name; they use build-time
+  tokens (`@ID@`, `@DISPLAY_NAME@`, `@ENV_PREFIX@`) and generated `package.env` / `build.env`
+  files that the staging step (`packaging/synology/cmd/spkstage`) fills from
+  `internal/platform/brand`. The toolkit project directory name is the brand id as well. A case-insensitive search for the name in that directory must
+  find nothing.

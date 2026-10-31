@@ -34,6 +34,12 @@ decision (OD-9).
   APPROVE and the user's explicit approval (OD-9).
 - Keep the product name out of prose where the brand rule applies (ADR 0002 rename checklist).
 
+## Orchestrator note (from SPK planning, 2026-10-31)
+- `docs/reports/M2-release-readiness.md` gets one short "Synology package" section: status of
+  SPK-11 (per family) and SPK-12, the commit the SPKs were built from (must be the release
+  candidate commit of this report), or "not ready – attached later" (OD-SPK-1 A). The SPK docs
+  themselves belong to SPK-09; do not duplicate them in `README.md` beyond SPK-09's link line.
+
 ## Orchestrator note (from M2-06)
 - `docs/development.md` "Test media corpus": `-only` now takes a comma-separated glob list
   (e.g. `'video-mp4-*,video-webm-vp9-opus'`), and kept files are labelled `kept` in progress and

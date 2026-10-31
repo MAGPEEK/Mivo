@@ -28,3 +28,9 @@ build and maintain.
 - One artifact covers most NAS models.
 - Hardware transcoding depends on the host exposing `/dev/dri`. This is documented per NAS
   model.
+
+## Notes (2026-10-31)
+
+- The project owner decided to start the native **Synology** package now, in parallel to
+  milestone 2; the first SPK ships with 0.1.0-alpha.2. ADR 0026 (Accepted) records its design.
+  Docker stays the primary NAS distribution; QPKG stays "later".
