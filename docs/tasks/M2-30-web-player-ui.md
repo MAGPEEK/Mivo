@@ -57,3 +57,15 @@ ADR 0011 status colours).
   codes map to `<group>.unknown`; params always include `code`. `StreamInfoColorToken` is a local
   union in player-core – add a compile-time check in the app that it is assignable to
   `@mivo/ui-tokens` `ColorToken`.
+
+## Orchestrator note (from the M2-27 review r2)
+- The engine keeps the old attachment only until a restart is requested; decide here whether to keep
+  it playing until the new session is created (needs suppressing the old stream's position updates
+  and audio).
+- Engine leftovers to fix while building the page: `continueAfter` must not clamp a waiting target
+  of another file with the late session's duration (playbackEngine.ts:323 – clamp only for the same
+  request/fileId); native HLS errors before the first frame on a `ready` session must end as a
+  generic error once the retries run out (playbackEngine.ts:514-546); tests for suspend/resume and
+  open-another-file while a create is in flight; a seek on an attached but not yet loaded direct-play
+  file should seek locally; publish the session in `continueAfter` so the stream-info overlay never
+  shows a stale one.

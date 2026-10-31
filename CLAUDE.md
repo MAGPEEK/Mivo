@@ -115,7 +115,7 @@ go tool "-modfile=tools/go.mod" lefthook install
 The main session orchestrates; subagents cannot start other subagents.
 
 1. `mivo-architect` – writes `docs/tasks/<id>.md` with acceptance criteria
-2. implementer (`mivo-backend`, `mivo-media`, `mivo-frontend`, `mivo-webos`) – code + tests
+2. implementer (`mivo-backend`, `mivo-media`, `mivo-frontend`, `mivo-webos`, `mivo-synology`) – code + tests
 3. `mivo-tester` – runs all gates; FAIL → back to step 2 with the report
 4. `mivo-reviewer` – read-only review; REVISE → back to step 2 with findings
 5. PASS + APPROVE → commit. After 3 failed rounds stop and ask the user.
