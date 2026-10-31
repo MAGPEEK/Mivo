@@ -448,7 +448,7 @@ platform environments DSM 7.2.2 build 72723)**
 - Privileges: Docker's default capabilities fail (mounting `/proc` in the chroot);
   **`--cap-add SYS_ADMIN` or `--privileged`** works on Docker Desktop. On Linux hosts with
   AppArmor (Ubuntu, GitHub-hosted runners) the narrow set will likely also need
-  `--security-opt apparmor=unconfined` (unverified); the documented commands use `--privileged`.
+  `--security-opt apparmor=unconfined` (unverified); the documented and tested default is `--cap-add SYS_ADMIN` (SPK-04 r2); `--privileged` is only a fallback for hosts where the narrow set fails.
 - The named volume `spk-toolkit` holds about 24 GB for three families (3.4 GiB tarballs); the
   first x86_64 deployment downloads about 2 GiB, cached runs take about 2 s.
 - `pkg_make_package` writes `package.tgz` **xz-compressed** (`tar cJf`) despite the name;
