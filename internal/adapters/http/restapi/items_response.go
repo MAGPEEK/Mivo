@@ -2,9 +2,7 @@ package restapi
 
 import (
 	"fmt"
-	"math"
 	"strings"
-	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
@@ -56,7 +54,7 @@ func mediaSummaryResponse(file media.File) *apigen.MediaSummary {
 	summary := &apigen.MediaSummary{
 		Available:       file.Probed(),
 		Container:       containerResponse(description.Container),
-		DurationSeconds: durationSeconds(description.Duration),
+		DurationSeconds: optionalDurationSeconds(description.Duration),
 	}
 
 	if video, found := description.PrimaryVideo(); found {
@@ -125,21 +123,21 @@ func mediaFileResponse(file media.File) (apigen.MediaFile, error) {
 		Available:       file.Probed(),
 		ErrorCode:       optionalString(string(file.ProbeError)),
 		Container:       containerResponse(file.Description.Container),
-		DurationSeconds: durationSeconds(file.Description.Duration),
+		DurationSeconds: optionalDurationSeconds(file.Description.Duration),
 		BitRate:         optionalInt64(file.Description.BitRate),
 		Streams:         streams,
 	}, nil
 }
 
-// mediaStreamResponse fails for an index the contract cannot carry: clients select audio
-// streams by it, so it must not be clamped or dropped.
+// mediaStreamResponse fails for an index the contract cannot carry (streamIndex).
 func mediaStreamResponse(stream media.Stream) (apigen.MediaStream, error) {
-	if stream.Index < 0 || stream.Index > math.MaxInt32 {
-		return apigen.MediaStream{}, fmt.Errorf("stream index %d out of range", stream.Index)
+	index, err := streamIndex(stream.Index)
+	if err != nil {
+		return apigen.MediaStream{}, err
 	}
 
 	return apigen.MediaStream{
-		Index:           int32(stream.Index),
+		Index:           index,
 		Kind:            streamKindResponse(stream.Kind),
 		Codec:           optionalString(stream.Codec),
 		Profile:         optionalString(stream.Profile),
@@ -205,17 +203,6 @@ func containerResponse(container media.Container) *string {
 	return optionalString(string(container))
 }
 
-// durationSeconds sends a known duration in seconds with millisecond precision.
-func durationSeconds(duration time.Duration) *float64 {
-	if duration <= 0 {
-		return nil
-	}
-
-	seconds := float64(duration.Round(time.Millisecond)) / float64(time.Second)
-
-	return &seconds
-}
-
 func frameRateResponse(rate media.FrameRate) *float64 {
 	if !rate.IsKnown() {
 		return nil
@@ -229,25 +216,4 @@ func frameRateResponse(rate media.FrameRate) *float64 {
 // fileName returns the last element of a root-relative path.
 func fileName(relativePath string) string {
 	return relativePath[strings.LastIndexAny(relativePath, pathSeparators)+1:]
-}
-
-// optionalInt32 omits 0, which the domain uses for "not reported", and values the contract's
-// int32 cannot carry; they are no real width, level or sample rate.
-func optionalInt32(value int) *int32 {
-	if value <= 0 || value > math.MaxInt32 {
-		return nil
-	}
-
-	converted := int32(value)
-
-	return &converted
-}
-
-// optionalInt64 omits 0, which the domain uses for "not reported".
-func optionalInt64(value int64) *int64 {
-	if value <= 0 {
-		return nil
-	}
-
-	return &value
 }

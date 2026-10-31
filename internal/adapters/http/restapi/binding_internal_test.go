@@ -12,17 +12,21 @@ import (
 )
 
 // recordingAPI serves the contract like API but records the library ID the generated code
-// bound, so a test can see the value that reaches a handler.
+// bound, so a test can see the value that reaches a handler. GetLibrary answers 404 itself,
+// so the test needs no library catalog.
 type recordingAPI struct {
 	*API
 
 	boundLibraryID chan uuid.UUID
 }
 
-func (recorder recordingAPI) GetLibrary(ctx context.Context, request apigen.GetLibraryRequestObject) (apigen.GetLibraryResponseObject, error) {
+func (recorder recordingAPI) GetLibrary(_ context.Context, request apigen.GetLibraryRequestObject) (apigen.GetLibraryResponseObject, error) {
 	recorder.boundLibraryID <- request.LibraryID
 
-	return recorder.API.GetLibrary(ctx, request)
+	return apigen.GetLibrarydefaultApplicationProblemPlusJSONResponse{
+		Body:       NewProblem(http.StatusNotFound, CodeNotFound),
+		StatusCode: http.StatusNotFound,
+	}, nil
 }
 
 // TestUUIDPathParameterBinding proves that the oapi-codegen runtime binds path parameters

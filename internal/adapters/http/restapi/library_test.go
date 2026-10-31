@@ -30,9 +30,6 @@ const (
 
 	// testRoot is the absolute library root; it must never reach a response body.
 	testRoot = `D:\Media\Movies`
-
-	// notImplementedCode is internal (not in the contract) and disappears with M2-32.
-	notImplementedCode = "not_implemented"
 )
 
 func errLibraryNotFound(id string) error {
@@ -207,6 +204,19 @@ func TestLibraryReadFailuresAreInternal(t *testing.T) {
 	}
 }
 
+// TestListLibrariesNotFoundIsInternal: listLibraries has no ID a client could get wrong, so
+// even ErrNotFound from the catalog is a server fault (500), not a 404 for the collection.
+func TestListLibrariesNotFoundIsInternal(t *testing.T) {
+	t.Parallel()
+
+	cause := fmt.Errorf("library table of %s: %w", testRoot, domain.ErrNotFound)
+	handler, logs := newLibraryHandler(t, &fakeLibraryService{listErr: cause}, &fakeScanService{})
+
+	got := serve(t, handler, http.MethodGet, librariesPath)
+	assertProblem(t, got, http.StatusInternalServerError, restapi.CodeInternal)
+	assertInternalFailureLogged(t, got, logs.String(), librariesPath)
+}
+
 // assertInternalFailureLogged checks that a 500 hides the cause from the client and logs it
 // at error level together with the request path.
 func assertInternalFailureLogged(t *testing.T, got response, logs, path string) {
@@ -349,51 +359,6 @@ func TestStartLibraryScanRejectsUnknownState(t *testing.T) {
 	got := serve(t, handler, http.MethodPost, scanPath)
 	assertProblem(t, got, http.StatusInternalServerError, restapi.CodeInternal)
 	assertLogged(t, logs.String(), "paused")
-}
-
-// TestLibraryOperationsAnswerNotImplemented covers the wiring until M2-32: an operation
-// whose services are not all wired is routed, binds its parameters and answers 501.
-func TestLibraryOperationsAnswerNotImplemented(t *testing.T) {
-	t.Parallel()
-
-	allTargets := []libraryRoute{
-		{method: http.MethodGet, target: librariesPath},
-		{method: http.MethodGet, target: libraryPath},
-		{method: http.MethodPost, target: scanPath},
-		{method: http.MethodGet, target: itemsPath},
-		{method: http.MethodGet, target: itemsPath + "?limit=500&cursor=abc"},
-		{method: http.MethodGet, target: itemPath},
-	}
-
-	tests := []struct {
-		name    string
-		options restapi.Options
-		routes  []libraryRoute
-	}{
-		{name: "no services", options: restapi.Options{}, routes: allTargets},
-		{name: "library service only", options: restapi.Options{Library: &fakeLibraryService{}}, routes: allTargets[:3]},
-		{name: "scan service only", options: restapi.Options{Scan: &fakeScanService{}}, routes: append(allTargets[:2:2], allTargets[3:]...)},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			handler, logs := newTestHandlerWithOptions(t, test.options)
-
-			for _, route := range test.routes {
-				got := serve(t, handler, route.method, route.target)
-				assertProblem(t, got, http.StatusNotImplemented, notImplementedCode)
-			}
-
-			assertLogged(t, logs.String(), "api operation not implemented")
-		})
-	}
-}
-
-type libraryRoute struct {
-	method string
-	target string
 }
 
 func assertLibrary(t *testing.T, got, want apigen.Library) {

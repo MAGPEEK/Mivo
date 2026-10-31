@@ -1,6 +1,7 @@
 package restapi
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,15 +10,15 @@ import (
 	"github.com/magpeek/mivo/internal/domain"
 )
 
-// Options are the dependencies of the REST API. System and Logger are required. A nil
-// feature service makes the operations of that feature answer 501 with the internal code
-// "not_implemented", so features can be wired one at a time; the composition root makes
-// them mandatory once all of them exist (M2-32).
+// Options are the dependencies of the REST API. Every service and the logger are required:
+// the contract has no optional operations.
 type Options struct {
 	// System serves the health and system info endpoints.
 	System SystemService
-	// Library serves the library and item endpoints.
-	Library LibraryService
+	// Libraries serves the library endpoints.
+	Libraries LibraryCatalog
+	// Items serves the item endpoints.
+	Items ItemCatalog
 	// Scan starts library scans and reports their status.
 	Scan ScanService
 	// Playback creates, reads and stops playback sessions.
@@ -40,32 +41,50 @@ type Mount struct {
 	Handler http.Handler
 }
 
-// validate reports a wiring bug as an error wrapping domain.ErrInvalid. Mount patterns are
-// checked when they are registered, because only the mux knows whether they conflict.
+// validate reports every wiring bug at once as an error wrapping domain.ErrInvalid. Mount
+// patterns are checked when they are registered, because only the mux knows whether they
+// conflict.
 func (options Options) validate() error {
-	if options.System == nil {
-		return fmt.Errorf("missing system service: %w", domain.ErrInvalid)
+	required := []struct {
+		name    string
+		present bool
+	}{
+		{name: "system service", present: options.System != nil},
+		{name: "library catalog", present: options.Libraries != nil},
+		{name: "item catalog", present: options.Items != nil},
+		{name: "scan service", present: options.Scan != nil},
+		{name: "playback service", present: options.Playback != nil},
+		{name: "logger", present: options.Logger != nil},
 	}
 
-	if options.Logger == nil {
-		return fmt.Errorf("missing logger: %w", domain.ErrInvalid)
+	var problems []error
+
+	for _, dependency := range required {
+		if !dependency.present {
+			problems = append(problems, fmt.Errorf("missing %s: %w", dependency.name, domain.ErrInvalid))
+		}
 	}
 
 	for index, mount := range options.Mounts {
-		if mount.Pattern == "" {
-			return fmt.Errorf("mount %d: missing pattern: %w", index, domain.ErrInvalid)
-		}
-
-		if mount.Handler == nil {
-			return fmt.Errorf("mount %d (%s): missing handler: %w", index, mount.Pattern, domain.ErrInvalid)
-		}
-
-		if !strings.HasPrefix(patternPath(mount.Pattern), apiPathPrefix) {
-			return fmt.Errorf("mount %d (%s): path outside %s: %w", index, mount.Pattern, apiPathPrefix, domain.ErrInvalid)
+		if err := mount.validate(index); err != nil {
+			problems = append(problems, err)
 		}
 	}
 
-	return nil
+	return errors.Join(problems...)
+}
+
+func (mount Mount) validate(index int) error {
+	switch {
+	case mount.Pattern == "":
+		return fmt.Errorf("mount %d: missing pattern: %w", index, domain.ErrInvalid)
+	case mount.Handler == nil:
+		return fmt.Errorf("mount %d (%s): missing handler: %w", index, mount.Pattern, domain.ErrInvalid)
+	case !strings.HasPrefix(patternPath(mount.Pattern), apiPathPrefix):
+		return fmt.Errorf("mount %d (%s): path outside %s: %w", index, mount.Pattern, apiPathPrefix, domain.ErrInvalid)
+	default:
+		return nil
+	}
 }
 
 // apiPathPrefix is where the HTTP server routes requests to this handler; a mount anywhere

@@ -59,12 +59,23 @@ type runHooks struct {
 	// onListening receives the bound address before the server accepts requests; with port
 	// 0 it is the only way to learn the port the OS chose.
 	onListening func(address net.Addr)
+	// wrapListener replaces the bound listener, for example to present connections from a
+	// public address to the LAN-only guard.
+	wrapListener func(listener net.Listener) net.Listener
 }
 
 func (hooks runHooks) reportListening(address net.Addr) {
 	if hooks.onListening != nil {
 		hooks.onListening(address)
 	}
+}
+
+func (hooks runHooks) wrap(listener net.Listener) net.Listener {
+	if hooks.wrapListener == nil {
+		return listener
+	}
+
+	return hooks.wrapListener(listener)
 }
 
 // options holds the parsed command line.

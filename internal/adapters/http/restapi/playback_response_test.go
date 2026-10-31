@@ -3,10 +3,13 @@ package restapi_test
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
@@ -175,7 +178,7 @@ func TestCreatePlaybackSessionWithoutBody(t *testing.T) {
 	logger, _ := newTestLogger()
 	service := &fakePlaybackService{session: transcodeSession()}
 
-	api, err := restapi.NewAPI(restapi.Options{System: fakeSystemService{}, Playback: service, Logger: logger})
+	api, err := restapi.NewAPI(completeOptions(restapi.Options{Playback: service, Logger: logger}))
 	if err != nil {
 		t.Fatalf("NewAPI: %v", err)
 	}
@@ -187,6 +190,48 @@ func TestCreatePlaybackSessionWithoutBody(t *testing.T) {
 
 	if started := service.startRequests(); len(started) != 0 {
 		t.Errorf("Start was called without a body: %+v", started)
+	}
+}
+
+// TestPlaybackSessionContractValues pins the shared conversions (contract_values.go):
+// positions and durations in seconds rounded to milliseconds, sizes the contract cannot carry
+// dropped, not clamped.
+func TestPlaybackSessionContractValues(t *testing.T) {
+	t.Parallel()
+
+	session := transcodeSession()
+	session.StartPosition = 598*time.Second + 500400*time.Microsecond
+	session.Duration = 5423*time.Second + 41700*time.Microsecond
+	// Values beyond int32 are dropped too (TestOptionalInt32DropsValuesBeyondInt32).
+	session.Plan.Streams[0].TargetWidth = -1
+
+	handler, _ := newPlaybackHandler(t, &fakePlaybackService{session: session})
+	got := serve(t, handler, http.MethodGet, sessionPath)
+	assertJSONResponse(t, got, http.StatusOK)
+
+	body := decode[apigen.PlaybackSession](t, got.body)
+	if body.StartPositionSeconds != 598.5 || body.DurationSeconds == nil || *body.DurationSeconds != 5423.042 {
+		t.Errorf("start/duration = %v/%v, want 598.5/5423.042", body.StartPositionSeconds, body.DurationSeconds)
+	}
+
+	if width := body.Streams[0].TargetWidth; width != nil {
+		t.Errorf("targetWidth = %d, want it dropped", *width)
+	}
+}
+
+// TestPlaybackSessionWithUnrepresentableSourceIndexIsAServerFault: clients select streams by
+// index, so an index the contract cannot carry answers 500 instead of being clamped.
+func TestPlaybackSessionWithUnrepresentableSourceIndexIsAServerFault(t *testing.T) {
+	t.Parallel()
+
+	for _, index := range append([]int{-1}, beyondInt32()...) {
+		session := transcodeSession()
+		session.Plan.Streams[0].SourceIndex = index
+
+		handler, logs := newPlaybackHandler(t, &fakePlaybackService{session: session})
+
+		assertProblem(t, serve(t, handler, http.MethodGet, sessionPath), http.StatusInternalServerError, restapi.CodeInternal)
+		assertLogged(t, logs.String(), "stream index")
 	}
 }
 
@@ -211,4 +256,18 @@ func TestPlaybackSessionWithMalformedIDsIsAServerFault(t *testing.T) {
 			assertLogged(t, logs.String(), `msg="api operation failed" operation=getPlaybackSession`)
 		})
 	}
+}
+
+// beyondInt32 returns ints the contract's int32 cannot carry; empty where int is 32 bits
+// wide (GOARCH=arm). The conversion goes through a variable so the file compiles there.
+func beyondInt32() []int {
+	const int64Bits = 64
+
+	if strconv.IntSize < int64Bits {
+		return nil
+	}
+
+	above := int64(math.MaxInt32) + 1
+
+	return []int{int(above)}
 }

@@ -1,7 +1,6 @@
 package restapi
 
 import (
-	"math"
 	"testing"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
@@ -52,35 +51,12 @@ func TestHDRResponse(t *testing.T) {
 	}
 }
 
-func TestOptionalInt32(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		value int
-		want  *int32
-	}{
-		{value: math.MinInt32 - 1},
-		{value: -1},
-		{value: 0},
-		{value: 1, want: new(int32(1))},
-		{value: math.MaxInt32, want: new(int32(math.MaxInt32))},
-		{value: math.MaxInt32 + 1},
-	}
-
-	for _, test := range tests {
-		got := optionalInt32(test.value)
-		if (got == nil) != (test.want == nil) || (got != nil && *got != *test.want) {
-			t.Errorf("optionalInt32(%d) = %v, want %v", test.value, got, test.want)
-		}
-	}
-}
-
 // TestStreamIndexOutOfRangeFailsTheItem: clients select audio streams by index, so an index
 // the contract cannot carry fails the response instead of being clamped.
 func TestStreamIndexOutOfRangeFailsTheItem(t *testing.T) {
 	t.Parallel()
 
-	for _, index := range []int{-1, math.MaxInt32 + 1} {
+	for _, index := range append([]int{-1}, beyondInt32()...) {
 		detail := applibrary.ItemDetail{
 			Item: library.Item{ID: "8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d", LibraryID: "3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c"},
 			Files: []media.File{{

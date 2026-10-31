@@ -5,15 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
-	"net/http"
+	"os/exec"
 	"path/filepath"
-	"strconv"
+	"runtime"
 	"time"
 
-	"github.com/magpeek/mivo/internal/adapters/http/restapi"
-	"github.com/magpeek/mivo/internal/adapters/http/server"
-	"github.com/magpeek/mivo/internal/adapters/http/webui"
+	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
+	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
@@ -29,15 +27,22 @@ const (
 	// databaseFileName is the SQLite file inside the data directory (ADR 0004).
 	databaseFileName = "server.db"
 
-	// listenNetwork is the network of the HTTP listener.
-	listenNetwork = "tcp"
-
 	// closeDatabaseStep names the cleanup step in the error when closing the database fails.
 	closeDatabaseStep = "close database"
 
 	// releaseLockStep names the cleanup step in the error when releasing the data directory
 	// lock fails.
 	releaseLockStep = "release data directory lock"
+
+	// shutdownBudget is how long the whole shutdown may take after SIGTERM: Docker's
+	// --stop-timeout 20 and the Synology package's stop script both kill the server after
+	// 20 s, so the bounded steps (HTTP, playback, scans) plus databaseCloseReserve stay below
+	// it with two seconds to spare.
+	shutdownBudget = 18 * time.Second
+
+	// databaseCloseReserve is what the budget keeps for closing the database and releasing
+	// the lock; both are local file operations that finish in milliseconds.
+	databaseCloseReserve = time.Second
 )
 
 // application is the configured server: everything the startup steps after loading the
@@ -47,11 +52,17 @@ type application struct {
 	logger *slog.Logger
 	build  buildinfo.Info
 	hooks  runHooks
+	// tools resolves tools.ffmpeg and tools.ffprobe.
+	tools toolHost
 }
 
 // serve loads the configuration, builds the logger and runs the server until ctx is done.
-// The startup order is config → logger → directories → data directory lock → database →
-// identity → HTTP; every step closes what it opened when a later one fails.
+//
+// Startup order: config → logger → directories → data directory lock → database and
+// migrations → server identity → FFmpeg tools and capabilities → library sync → scan service →
+// playback service and workspace purge → HTTP listener → startup scan → serve. Shutdown runs
+// backwards: HTTP server → playback sessions → scans → database → lock. Every step closes
+// what it opened when a later one fails, and every shutdown step is bounded.
 func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error {
 	cfg, err := config.Load(config.Options{
 		ConfigDirFlag: opts.configDir,
@@ -66,7 +77,10 @@ func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error 
 		return fmt.Errorf("create logger: %w", err)
 	}
 
-	app := application{config: cfg, logger: logger, build: buildinfo.Read(), hooks: hooks}
+	app := application{
+		config: cfg, logger: logger, build: buildinfo.Read(), hooks: hooks,
+		tools: toolHost{goos: runtime.GOOS, lookPath: exec.LookPath},
+	}
 
 	return app.start(ctx)
 }
@@ -74,11 +88,6 @@ func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error 
 // start creates the directories, locks the data directory and serves from it. The lock is
 // released last, after the database is closed; a release error is reported with the result.
 func (app application) start(ctx context.Context) error {
-	app.logger.InfoContext(ctx, "starting "+brand.DisplayName,
-		slog.String("version", app.build.Summary()),
-		slog.String("config_dir", app.config.ConfigDir),
-		slog.String("data_dir", app.config.Paths.Data))
-
 	directories := app.config.Paths
 
 	err := paths.Ensure(directories.Data, directories.Cache, directories.Transcode)
@@ -91,17 +100,29 @@ func (app application) start(ctx context.Context) error {
 		return err
 	}
 
-	serveErr := app.openAndServe(ctx)
+	// Logged after the lock, so a refused second start writes only its error line.
+	app.logger.InfoContext(ctx, "starting "+brand.DisplayName,
+		slog.String("version", app.build.Summary()),
+		slog.String("config_dir", app.config.ConfigDir),
+		slog.String("data_dir", directories.Data))
 
-	return withCleanupError(ctx, serveErr, releaseLockStep, lock.Release())
+	serveErr := app.openAndServe(ctx)
+	result := withCleanupError(ctx, serveErr, releaseLockStep, lock.Release())
+
+	if result == nil {
+		app.logger.InfoContext(ctx, brand.DisplayName+" stopped")
+	}
+
+	return result
 }
 
 // lockDataDirectory keeps a second server off the data directory before it can race the
-// migrations or purge this server's transcode sessions (ADR 0024).
+// migrations or purge this server's transcode sessions (ADR 0024). The lock's own error names
+// the lock file inside dataDir, so only the sentinel is kept to name the path once.
 func lockDataDirectory(dataDir string) (*instancelock.Lock, error) {
 	lock, err := instancelock.Acquire(dataDir)
 	if errors.Is(err, instancelock.ErrLocked) {
-		return nil, fmt.Errorf("another server is already using %s: %w", dataDir, err)
+		return nil, fmt.Errorf("another server is already using %s: %w", dataDir, instancelock.ErrLocked)
 	}
 
 	if err != nil {
@@ -121,7 +142,7 @@ func (app application) openAndServe(ctx context.Context) error {
 
 	serveErr := app.serveWith(ctx, db)
 
-	return withCleanupError(ctx, serveErr, closeDatabaseStep, db.Close())
+	return withCleanupError(ctx, serveErr, closeDatabaseStep, app.closeDatabase(ctx, db))
 }
 
 // openDatabase opens and migrates <data>/server.db.
@@ -139,6 +160,17 @@ func (app application) openDatabase(ctx context.Context) (*sqlite.DB, error) {
 	}
 
 	return db, nil
+}
+
+func (app application) closeDatabase(ctx context.Context, db *sqlite.DB) error {
+	if err := db.Close(); err != nil {
+		// withCleanupError names the step.
+		return err
+	}
+
+	app.logger.DebugContext(ctx, "database closed")
+
+	return nil
 }
 
 // withCleanupError adds the error of a cleanup step, such as closing the database, to result,
@@ -159,87 +191,65 @@ func withCleanupError(ctx context.Context, result error, step string, cleanupErr
 	return errors.Join(result, cleanupErr)
 }
 
-// serveWith wires the use cases and the HTTP adapter on the open database and serves until
-// ctx is done.
+// serveWith wires the use cases on the open database and serves until ctx is done. The scan
+// service is closed after everything that serves requests or plays has stopped.
 func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
-	handlers, err := app.newHTTPHandlers(ctx, db)
+	system, err := app.newSystemService(ctx, db)
 	if err != nil {
 		return err
 	}
 
-	listener, err := app.listen(ctx)
+	tools, err := app.prepareTools(ctx)
 	if err != nil {
 		return err
 	}
 
-	httpServer, err := server.New(server.Options{
-		Listener:   listener,
-		Logger:     app.logger,
-		APIHandler: handlers.api,
-		Fallback:   handlers.webUI,
-	})
+	files, err := libraryfs.New(app.logger)
 	if err != nil {
-		return errors.Join(fmt.Errorf("create http server: %w", err), listener.Close())
+		return fmt.Errorf("create library file system: %w", err)
 	}
 
-	app.hooks.reportListening(listener.Addr())
-
-	err = httpServer.Run(ctx)
+	libraries, err := app.newLibraryService(ctx, db, files)
 	if err != nil {
-		return fmt.Errorf("run http server: %w", err)
+		return err
 	}
 
-	app.logger.InfoContext(ctx, brand.DisplayName+" stopped")
+	prober := ffmpeg.NewProber(tools.ffprobe)
 
-	return nil
+	scans, err := app.newScanService(db, files, prober)
+	if err != nil {
+		return err
+	}
+
+	catalog := catalogServices{system: system, libraries: libraries, scans: scans}
+	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
+
+	return withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scans))
 }
 
-// httpHandlers are the handlers the HTTP server routes between: the REST API below /api/ and
-// the web UI for every other path.
-type httpHandlers struct {
-	api   http.Handler
-	webUI http.Handler
-}
-
-func (app application) newHTTPHandlers(ctx context.Context, db *sqlite.DB) (httpHandlers, error) {
-	service, err := app.newSystemService(ctx, db)
+// serveWithPlayback starts the playback service and serves; the playback sessions are stopped
+// after the HTTP server, so no request can start one meanwhile.
+func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, catalog catalogServices, adapters playbackAdapters) error {
+	workspace, err := app.newWorkspace()
 	if err != nil {
-		return httpHandlers{}, err
+		return err
 	}
 
-	apiHandler, err := restapi.NewHandler(restapi.Options{System: service, Logger: app.logger})
+	adapters.workspace = workspace
+
+	playback, err := app.newPlaybackService(ctx, db, adapters)
 	if err != nil {
-		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)
+		return err
 	}
 
-	webUIHandler, err := app.newWebUIHandler(ctx)
+	streams, err := app.newStreamHandlers(playback, adapters)
 	if err != nil {
-		return httpHandlers{}, err
+		return withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, playback))
 	}
 
-	return httpHandlers{api: apiHandler, webUI: webUIHandler}, nil
-}
+	serveErr := app.serveHTTP(ctx, wiredServices{catalogServices: catalog, playback: playback, streams: streams})
 
-// newWebUIHandler serves the web app embedded with the webui build tag, or the page that
-// explains how to build it (ADR 0020).
-func (app application) newWebUIHandler(ctx context.Context) (*webui.Handler, error) {
-	files, err := webui.Files()
-	if err != nil {
-		return nil, fmt.Errorf("load web ui: %w", err)
-	}
-
-	handler, err := webui.NewHandler(files, app.logger)
-	if err != nil {
-		return nil, fmt.Errorf("create web ui handler: %w", err)
-	}
-
-	if !webui.Embedded {
-		// Normal during development, where Vite serves the app; worth a line for operators
-		// who expected the app in this binary.
-		app.logger.InfoContext(ctx, "web app not embedded, serving build instructions instead")
-	}
-
-	return handler, nil
+	return withCleanupError(ctx, serveErr, closePlaybackStep, app.closePlayback(ctx, playback))
 }
 
 // newSystemService builds the system use cases and ensures the server identity, so the
@@ -270,19 +280,4 @@ func (app application) newSystemService(ctx context.Context, db *sqlite.DB) (*ap
 	app.logger.InfoContext(ctx, "server identity ready", slog.String("server_id", identity.ID.String()))
 
 	return service, nil
-}
-
-// listen binds the configured address here rather than in the server, so the bound address
-// (with port 0 chosen by the OS) is known before serving starts.
-func (app application) listen(ctx context.Context) (net.Listener, error) {
-	address := net.JoinHostPort(app.config.Server.Host, strconv.Itoa(app.config.Server.Port))
-
-	var listenConfig net.ListenConfig
-
-	listener, err := listenConfig.Listen(ctx, listenNetwork, address)
-	if err != nil {
-		return nil, fmt.Errorf("listen on %s: %w", address, err)
-	}
-
-	return listener, nil
 }

@@ -179,7 +179,7 @@ export interface paths {
         put?: never;
         /**
          * Start playing a media file
-         * @description Decides how the client plays the file (direct play, remux or transcode) from its profile and the server's capabilities, starts FFmpeg when needed and returns the session with an opaque streamUrl. Problem codes: "invalid" (400, for example a malformed profile), "not_found" (404, unknown file), "unsupported" (422, the file cannot be played, for example because probing failed), "no_compatible_format" and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and "unavailable" (503, for example the server is shutting down or the library folder is unreachable). Set replacesSessionId when seeking outside the produced range: the old session stops before the limit is checked.
+         * @description Decides how the client plays the file (direct play, remux or transcode) from its profile and the server's capabilities, starts FFmpeg when needed and returns the session with an opaque streamUrl. Problem codes: "invalid" (400, for example a malformed profile), "forbidden" (403, only for a client outside the local network while server.lan_only is on), "not_found" (404, unknown file or a file deleted from disk), "unsupported" (422, the file cannot be played, for example because probing failed or its path now leads outside its library folder), "no_compatible_format" and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and "unavailable" (503, for example the server is shutting down or the library folder is unreachable). Set replacesSessionId when seeking outside the produced range: the old session stops before the limit is checked.
          */
         post: operations["createPlaybackSession"];
         delete?: never;
@@ -233,7 +233,7 @@ export interface paths {
         };
         /**
          * Download the original file of a direct-play session
-         * @description Serves the original media file of a session in mode direct_play with HTTP range support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients load streamUrl as it is and never build it. Content-Type follows the direct-play container (for example video/mp4 or video/webm). Sessions in another mode answer 404 "not_found".
+         * @description Serves the original media file of a session in mode direct_play with HTTP range support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients load streamUrl as it is and never build it. Content-Type follows the direct-play container (for example video/mp4 or video/webm). Sessions in another mode answer 404 "not_found", a file deleted from disk 404, a file whose path now leads outside its library folder 422 "unsupported".
          */
         get: operations["getPlaybackFile"];
         put?: never;
@@ -268,14 +268,18 @@ export interface paths {
         };
         /**
          * Download a file of an HLS session
-         * @description Serves the playlist and segments of a session in mode remux or transcode. The URL is unauthenticated and opaque: clients load streamUrl and follow the relative URIs inside the playlist. A playlist request waits up to 20 seconds for the first segment, then answers 503 "stream_not_ready" with Retry-After. The playlist is sent with Cache-Control no-store, init and media segments with private, max-age=3600.
+         * @description Serves the playlist and segments of a session in mode remux or transcode. The URL is unauthenticated and opaque: clients load streamUrl and follow the relative URIs inside the playlist. Every file request, not only the playlist, waits up to 20 seconds for the session's first segment, then answers 503 "stream_not_ready" with Retry-After; once the first segment exists it answers at once. Sessions in another mode answer 404 "not_found", a session whose FFmpeg failed answers 500 for every file. Every file supports HTTP range requests (Range, If-Range, 206, 416). The playlist is sent with Cache-Control no-store, init and media segments with private, max-age=3600.
          */
         get: operations["getPlaybackHlsFile"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
-        head?: never;
+        /**
+         * Describe a file of an HLS session
+         * @description Like getPlaybackHlsFile without a body, including the wait for the first segment, so players can read the size and the range support. The URL is unauthenticated and opaque.
+         */
+        head: operations["headPlaybackHlsFile"];
         patch?: never;
         trace?: never;
     };
@@ -1394,7 +1398,10 @@ export interface operations {
     getPlaybackHlsFile: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
+                Range?: components["parameters"]["Range"];
+            };
             path: {
                 /**
                  * @description ID of the playback session (PlaybackSession.id).
@@ -1422,6 +1429,24 @@ export interface operations {
                     "video/iso.segment": components["schemas"]["MediaBytes"];
                 };
             };
+            /** @description The requested byte range of the playlist or segment. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
+                    "video/mp4": components["schemas"]["MediaBytes"];
+                    "video/iso.segment": components["schemas"]["MediaBytes"];
+                };
+            };
+            /** @description The requested range lies outside the file. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description The first segment is not ready yet ("stream_not_ready"). */
             503: {
                 headers: {
@@ -1431,6 +1456,61 @@ export interface operations {
                 content: {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    headPlaybackHlsFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
+                Range?: components["parameters"]["Range"];
+            };
+            path: {
+                /**
+                 * @description ID of the playback session (PlaybackSession.id).
+                 * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+                 */
+                sessionId: components["parameters"]["SessionId"];
+                /**
+                 * @description A file of the session's HLS output: the playlist index.m3u8, the fMP4 init segment init.mp4 or a media segment seg-NNNNN.m4s. Any other name answers 404.
+                 * @example index.m3u8
+                 */
+                fileName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The headers of the whole file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The headers of the requested byte range. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The requested range lies outside the file. */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The first segment is not ready yet ("stream_not_ready"); like for GET, the problem body is not sent. */
+            503: {
+                headers: {
+                    "Retry-After": components["headers"]["RetryAfter"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

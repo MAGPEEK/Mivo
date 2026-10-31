@@ -304,7 +304,7 @@ func TestStartFailures(t *testing.T) {
 				r.FileID = directFileID
 				env.resolver.err = fmt.Errorf("outside the root: %w", domain.ErrForbidden)
 			},
-			wantErr: domain.ErrForbidden, wantText: "resolve " + directRelativePath,
+			wantErr: appplayback.ErrFileOutsideLibrary, wantText: "resolve " + directRelativePath,
 		},
 		{
 			name:      "id generator fails",
@@ -451,6 +451,33 @@ func TestStartReportsADuplicateSessionIDAsAnInternalError(t *testing.T) {
 
 	if jobs := env.producer.jobs(); len(jobs) != 1 {
 		t.Errorf("producer jobs = %d, want only the first session", len(jobs))
+	}
+}
+
+// TestStartReportsALibraryEscapeAsUnsupported: forbidden means a missing permission (403,
+// also for clients outside the LAN), so a file that leaves its library is unsupported and
+// logged at warn, because the HTTP adapter logs client errors at debug only.
+func TestStartReportsALibraryEscapeAsUnsupported(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment()
+	env.resolver.err = fmt.Errorf("evaluated path leaves the library root: %w", domain.ErrForbidden)
+
+	_, err := env.service(t).Start(t.Context(), request(directFileID))
+
+	if !errors.Is(err, domain.ErrUnsupported) || errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("error = %v, want it to wrap ErrUnsupported and not ErrForbidden", err)
+	}
+
+	if !strings.Contains(err.Error(), "evaluated path leaves the library root") {
+		t.Errorf("error = %q, want the resolver's message kept", err)
+	}
+
+	logs := env.logs.String()
+	for _, want := range []string{"level=WARN", "leaves its library folder", "file=" + directFileID, "path=" + directRelativePath} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("log %q does not contain %q", logs, want)
+		}
 	}
 }
 

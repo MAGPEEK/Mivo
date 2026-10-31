@@ -31,7 +31,7 @@ func newInternalTestAPI(t *testing.T) (*API, *bytes.Buffer) {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	api, err := NewAPI(Options{System: nilSystemService{}, Logger: logger})
+	api, err := NewAPI(internalTestOptions(nilSystemService{}, logger))
 	if err != nil {
 		t.Fatalf("NewAPI: %v", err)
 	}
@@ -39,7 +39,26 @@ func newInternalTestAPI(t *testing.T) (*API, *bytes.Buffer) {
 	return api, logs
 }
 
-type nilSystemService struct{ SystemService }
+// internalTestOptions wires system and logger and fills the other mandatory services with
+// stand-ins whose methods panic: the internal tests never call them.
+func internalTestOptions(system SystemService, logger *slog.Logger) Options {
+	return Options{
+		System:    system,
+		Libraries: nilLibraryCatalog{},
+		Items:     nilItemCatalog{},
+		Scan:      nilScanService{},
+		Playback:  nilPlaybackService{},
+		Logger:    logger,
+	}
+}
+
+type (
+	nilSystemService   struct{ SystemService }
+	nilLibraryCatalog  struct{ LibraryCatalog }
+	nilItemCatalog     struct{ ItemCatalog }
+	nilScanService     struct{ ScanService }
+	nilPlaybackService struct{ PlaybackService }
+)
 
 type errorHandler func(writer http.ResponseWriter, request *http.Request, err error)
 

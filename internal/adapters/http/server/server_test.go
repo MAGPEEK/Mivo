@@ -34,6 +34,15 @@ func (service fakeSystemService) Info(context.Context) (system.Info, error) {
 	return service.info, nil
 }
 
+// The feature services are mandatory; these tests only call the system endpoints, so the
+// stand-ins panic if a request ever reached them.
+type (
+	unusedLibraries struct{ restapi.LibraryCatalog }
+	unusedItems     struct{ restapi.ItemCatalog }
+	unusedScans     struct{ restapi.ScanService }
+	unusedPlayback  struct{ restapi.PlaybackService }
+)
+
 func discardLogger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
@@ -50,7 +59,10 @@ func newAPIHandler(t *testing.T) http.Handler {
 		ProductName: "Mivo", Version: "1.0.0", ServerID: serverID, APIVersion: system.APIVersion,
 	}}
 
-	handler, err := restapi.NewHandler(restapi.Options{System: service, Logger: discardLogger()})
+	handler, err := restapi.NewHandler(restapi.Options{
+		System: service, Libraries: unusedLibraries{}, Items: unusedItems{},
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: discardLogger(),
+	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler: %v", err)
 	}

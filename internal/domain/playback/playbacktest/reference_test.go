@@ -144,14 +144,14 @@ func TestServerCapabilities(t *testing.T) {
 			name:         "full",
 			capabilities: playbacktest.FullCapabilities(),
 			want: playback.ServerCapabilities{
-				FFmpegVersion: "7.1.2", HLSMuxing: true,
+				FFmpegVersion: "7.1.5", HLSMuxing: true,
 				H264Encoder: playback.EncoderLibx264, AACEncoder: playback.EncoderAAC,
 			},
 		},
 		{
 			name:         "no encoders",
 			capabilities: playbacktest.NoEncoders(),
-			want:         playback.ServerCapabilities{FFmpegVersion: "7.1.2", HLSMuxing: true},
+			want:         playback.ServerCapabilities{FFmpegVersion: "7.1.5", HLSMuxing: true},
 		},
 	}
 

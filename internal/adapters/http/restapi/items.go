@@ -18,22 +18,20 @@ const (
 	minPageLimit = 1
 	// maxCursorLength is the maxLength of the cursor. A cursor holds an item ID and a sort
 	// title; 2048 characters cover the longest file names (decision of 2026-10-30, M2-26).
+	// It is checked in bytes: a cursor is base64 text, where bytes and characters agree, and
+	// for anything else the byte count is the stricter bound.
 	maxCursorLength = 2048
 )
 
 // ListLibraryItems answers one page of a library's items. A limit or cursor outside the
 // contract answers 400 "invalid", an unknown library 404; every other failure is a 500.
 func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibraryItemsRequestObject) (apigen.ListLibraryItemsResponseObject, error) {
-	if api.library == nil {
-		return apigen.ListLibraryItemsdefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationListLibraryItems)), nil
-	}
-
 	page, err := pageRequest(request.Params)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationListLibraryItems, err)
 	}
 
-	items, err := api.library.ListItems(ctx, request.LibraryID.String(), page)
+	items, err := api.items.ListItems(ctx, request.LibraryID.String(), page)
 	if err != nil {
 		return nil, operationFailure(operationListLibraryItems, err, http.StatusBadRequest, http.StatusNotFound)
 	}
@@ -49,11 +47,7 @@ func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibrary
 // GetItem answers an item with its files and streams. Only an unknown ID is a client
 // mistake (404); every other failure is a 500.
 func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject) (apigen.GetItemResponseObject, error) {
-	if api.library == nil {
-		return apigen.GetItemdefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationGetItem)), nil
-	}
-
-	detail, err := api.library.GetItem(ctx, request.ItemID.String())
+	detail, err := api.items.GetItem(ctx, request.ItemID.String())
 	if err != nil {
 		return nil, operationFailure(operationGetItem, err, http.StatusNotFound)
 	}
@@ -83,7 +77,7 @@ func pageRequest(params apigen.ListLibraryItemsParams) (library.PageRequest, err
 
 	if params.Cursor != nil {
 		if len(*params.Cursor) > maxCursorLength {
-			return library.PageRequest{}, fmt.Errorf("cursor longer than %d characters: %w",
+			return library.PageRequest{}, fmt.Errorf("cursor longer than %d bytes: %w",
 				maxCursorLength, domain.ErrInvalid)
 		}
 

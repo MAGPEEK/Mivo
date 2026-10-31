@@ -438,13 +438,13 @@ func TestListLibraryItemsErrors(t *testing.T) {
 	}
 }
 
-// TestItemOperationsNeedNoScanService documents that the item endpoints only use the
-// library service, so the scan status of a library cannot break them.
+// TestItemOperationsNeedNoScanService documents that the item endpoints only use the item
+// catalog, so the scan status of a library cannot break them.
 func TestItemOperationsNeedNoScanService(t *testing.T) {
 	t.Parallel()
 
-	libraries := &fakeLibraryService{detail: applibrary.ItemDetail{Item: testItem(testItemID, "x"), Files: []media.File{unprobedFile()}}}
-	handler, _ := newTestHandlerWithOptions(t, restapi.Options{Library: libraries, Scan: &fakeScanService{
+	items := &fakeLibraryService{detail: applibrary.ItemDetail{Item: testItem(testItemID, "x"), Files: []media.File{unprobedFile()}}}
+	handler, _ := newTestHandlerWithOptions(t, restapi.Options{Items: items, Scan: &fakeScanService{
 		statuses: map[string]appscan.Status{testLibraryID: {State: "paused"}},
 	}})
 

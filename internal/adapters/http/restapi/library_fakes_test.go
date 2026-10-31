@@ -16,11 +16,13 @@ import (
 
 // The use cases cmd/mivo wires in must keep satisfying the ports the handlers declare.
 var (
-	_ restapi.LibraryService = (*applibrary.Service)(nil)
+	_ restapi.LibraryCatalog = (*applibrary.Service)(nil)
+	_ restapi.ItemCatalog    = (*applibrary.Service)(nil)
 	_ restapi.ScanService    = (*appscan.Service)(nil)
 )
 
-// fakeLibraryService is an in-memory LibraryService that records the arguments it got.
+// fakeLibraryService is an in-memory LibraryCatalog and ItemCatalog that records the
+// arguments it got.
 type fakeLibraryService struct {
 	mutex sync.Mutex
 
@@ -133,7 +135,7 @@ func (service *fakeScanService) startedIDs() []string {
 func newLibraryHandler(t *testing.T, libraries *fakeLibraryService, scans *fakeScanService) (http.Handler, *syncBuffer) {
 	t.Helper()
 
-	return newTestHandlerWithOptions(t, restapi.Options{Library: libraries, Scan: scans})
+	return newTestHandlerWithOptions(t, restapi.Options{Libraries: libraries, Items: libraries, Scan: scans})
 }
 
 // decodeStrictly decodes body into T and fails on fields T does not declare, so the JSON

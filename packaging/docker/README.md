@@ -31,8 +31,10 @@ docker run -d --name mivo -p 8460:8460 --stop-timeout 20 \
 ```
 
 `--stop-timeout 20` (compose: `stop_grace_period: 20s`) gives the server time for its
-graceful shutdown: it waits up to 10 s for open requests and then closes the database.
-Docker's default of 10 s would kill it with `SIGKILL` right at that limit.
+graceful shutdown, which is bounded to 18 s in total: up to 10 s for open requests, up to 5 s
+to stop the playback sessions (FFmpeg killed, session directories removed), up to 2 s for
+running library scans, then the database is closed. Docker's default of 10 s would kill it
+with `SIGKILL` in the middle of that.
 
 The image needs no init process: the server handles `SIGTERM` and `Ctrl+C` itself. When you
 run it interactively (`docker run -it`), add `--init` so that a second `Ctrl+C` ends a

@@ -95,6 +95,10 @@ func newAudioStreamIndex(index *int32) (*int, error) {
 }
 
 // newClientProfile converts the profile and validates it with the domain's bounds (ADR 0023).
+// The generated decoder does not enforce "required", so a missing codec or direct-play array
+// arrives as nil. It is tolerated as the empty list: it can only take formats away from the
+// client, never offer one it did not announce. A missing profile as a whole has no name and
+// no HLS delivery, which Validate rejects (400 "invalid").
 func newClientProfile(profile apigen.ClientProfile) (playback.ClientProfile, error) {
 	converted := playback.ClientProfile{
 		Name:       profile.Name,

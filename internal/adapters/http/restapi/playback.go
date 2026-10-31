@@ -27,16 +27,16 @@ const (
 const playbackSessionsPath = "/api/v1/playback/sessions/"
 
 // sessionLimitRetryAfterSeconds is the Retry-After of session_limit_reached. A slot frees
-// when another viewer stops or a session reaches the 2-minute idle timeout, rarely within
-// seconds, so a short value would only make players hammer the server.
+// when another viewer stops or a session reaches the idle timeout (appplayback.IdleTimeout),
+// rarely within seconds, so a short value would only make players hammer the server.
 const sessionLimitRetryAfterSeconds int32 = 30
 
 // reasonCodeSeparator joins the reason codes of a session start in the log line.
 const reasonCodeSeparator = ","
 
 // PlaybackService is the port of the playback session endpoints, implemented by
-// app/playback.Service. A nil service makes them answer 501 until M2-32 wires it. The
-// stream delivery routes are not served here but mounted (Options.Mounts, M2-29).
+// app/playback.Service. The stream delivery routes are not served here but mounted
+// (Options.Mounts, M2-29).
 type PlaybackService interface {
 	// Start decides how the client plays the file and starts the session.
 	Start(ctx context.Context, request appplayback.StartRequest) (appplayback.Session, error)
@@ -50,10 +50,6 @@ type PlaybackService interface {
 // Location. Errors of the service reach writeResponseError, which maps and logs them; only
 // session_limit_reached is answered here, because it carries Retry-After.
 func (api *API) CreatePlaybackSession(ctx context.Context, request apigen.CreatePlaybackSessionRequestObject) (apigen.CreatePlaybackSessionResponseObject, error) {
-	if api.playback == nil {
-		return apigen.CreatePlaybackSessiondefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationCreatePlaybackSession)), nil
-	}
-
 	startRequest, err := newStartRequest(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationCreatePlaybackSession, err)
@@ -87,6 +83,7 @@ func (api *API) CreatePlaybackSession(ctx context.Context, request apigen.Create
 // like every 503 writeResponseError logs.
 func (api *API) sessionLimitReached(ctx context.Context, err error) apigen.CreatePlaybackSessionResponseObject {
 	api.logger.WarnContext(ctx, "playback session limit reached",
+		slog.String("operation", operationCreatePlaybackSession),
 		slog.String("request_id", requestid.FromContext(ctx)),
 		slog.Any("error", err))
 
@@ -137,10 +134,6 @@ func reasonCodes(reasons []playback.Reason) string {
 
 // GetPlaybackSession answers 200 with the session or 404 for an unknown or stopped one.
 func (api *API) GetPlaybackSession(ctx context.Context, request apigen.GetPlaybackSessionRequestObject) (apigen.GetPlaybackSessionResponseObject, error) {
-	if api.playback == nil {
-		return apigen.GetPlaybackSessiondefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationGetPlaybackSession)), nil
-	}
-
 	session, err := api.playback.Get(ctx, request.SessionID.String())
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationGetPlaybackSession, err)
@@ -160,19 +153,16 @@ func (api *API) GetPlaybackSession(ctx context.Context, request apigen.GetPlayba
 }
 
 // StopPlaybackSession answers 204 also for an unknown or already stopped session (DELETE is
-// idempotent).
+// idempotent). The log line says "requested" because it is written for those no-op stops
+// too.
 func (api *API) StopPlaybackSession(ctx context.Context, request apigen.StopPlaybackSessionRequestObject) (apigen.StopPlaybackSessionResponseObject, error) {
-	if api.playback == nil {
-		return apigen.StopPlaybackSessiondefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationStopPlaybackSession)), nil
-	}
-
 	id := request.SessionID.String()
 
 	if err := api.playback.Stop(ctx, id); err != nil {
 		return nil, fmt.Errorf("%s: %w", operationStopPlaybackSession, err)
 	}
 
-	api.logger.InfoContext(ctx, "playback session stopped",
+	api.logger.InfoContext(ctx, "playback session stop requested",
 		slog.String("session", id),
 		slog.String("request_id", requestid.FromContext(ctx)))
 

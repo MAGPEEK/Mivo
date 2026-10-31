@@ -101,7 +101,7 @@ func TestGetSystemInfoForCancelledRequestWritesNothing(t *testing.T) {
 	logs := &bytes.Buffer{}
 	logger := slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	api, err := NewAPI(Options{System: infoFailingService{}, Logger: logger})
+	api, err := NewAPI(internalTestOptions(infoFailingService{}, logger))
 	if err != nil {
 		t.Fatalf("NewAPI: %v", err)
 	}

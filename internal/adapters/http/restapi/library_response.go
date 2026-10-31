@@ -2,7 +2,6 @@ package restapi
 
 import (
 	"fmt"
-	"time"
 	"uuid"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
@@ -10,10 +9,6 @@ import (
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
-
-// timestampPrecision is the precision of every timestamp the API sends. JavaScript dates
-// hold milliseconds, and the catalog stores modification times in milliseconds.
-const timestampPrecision = time.Millisecond
 
 // libraryResponse combines a library with the status of its scan. The root path is left
 // out on purpose: the API never exposes file system paths (ADR 0022).
@@ -88,23 +83,6 @@ func scanStateResponse(state appscan.State) (apigen.ScanState, error) {
 	default:
 		return "", fmt.Errorf("unknown scan state %q", state)
 	}
-}
-
-// apiTimestamp converts a time to what the contract sends: UTC with millisecond precision,
-// encoded as RFC 3339 by encoding/json.
-func apiTimestamp(moment time.Time) time.Time {
-	return moment.UTC().Truncate(timestampPrecision)
-}
-
-// optionalTimestamp omits the zero time, which means "not yet" in the use cases.
-func optionalTimestamp(moment time.Time) *time.Time {
-	if moment.IsZero() {
-		return nil
-	}
-
-	converted := apiTimestamp(moment)
-
-	return &converted
 }
 
 // parseStoredID converts a stored canonical UUID text. A malformed one is broken stored

@@ -1,9 +1,7 @@
 package stream_test
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,8 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -33,10 +29,6 @@ const (
 	// corpusMKVClip is the MKV H.264/AAC clip, which the Chromium profile remuxes.
 	corpusMKVClip = "video/h264_aac.mkv"
 	corpusFileID  = "c0000000-0000-4000-8000-000000000001"
-	// corpusPollInterval spaces the playlist checks of the test producer.
-	corpusPollInterval = 50 * time.Millisecond
-	// corpusStopTimeout bounds waiting for a killed FFmpeg.
-	corpusStopTimeout = 30 * time.Second
 	// corpusResponseLimit bounds what the test reads of one response.
 	corpusResponseLimit = 64 << 20
 )
@@ -66,7 +58,7 @@ func TestCorpusRemuxIsServedOverHTTP(t *testing.T) {
 			LibraryRoot: libraryRoot,
 			File:        media.File{ID: corpusFileID, RelativePath: corpusMKVClip, Description: description},
 		}}},
-		Paths: library, Keyframes: prober, Producer: ffmpegProducer{ffmpegPath: ffmpegPath}, Workspace: workspace,
+		Paths: library, Keyframes: prober, Producer: mustProducer(t, ffmpegPath, library, logger), Workspace: workspace,
 		URLs: stream.NewURLBuilder(), IDs: uuidgen.New(), Clock: time.Now, Logger: logger,
 	})
 	handlers := mustHandlers(t, stream.Options{Sessions: service, Library: library, Output: workspace, Logger: logger})
@@ -164,120 +156,14 @@ func fetch(t *testing.T, url, wantType string) string {
 	return string(body)
 }
 
-// ffmpegProducer runs FFmpeg with the arguments of ffmpeg.HLSArguments. It is a minimal
-// stand-in for the adapter's producer (M2-24), enough to exercise the readiness wait
-// against real output.
-type ffmpegProducer struct {
-	ffmpegPath string
-}
+// mustProducer returns the adapter's FFmpeg producer, the one cmd/mivo wires.
+func mustProducer(t *testing.T, ffmpegPath string, inputs ffmpeg.InputOpener, logger *slog.Logger) *ffmpeg.Producer {
+	t.Helper()
 
-func (producer ffmpegProducer) Start(ctx context.Context, job appplayback.Job) (appplayback.Production, error) {
-	arguments, err := ffmpeg.HLSArguments(ffmpeg.HLSJob{
-		Plan: job.Plan, InputPath: job.InputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
-	})
+	producer, err := ffmpeg.NewProducer(ffmpeg.ProducerOptions{FFmpegPath: ffmpegPath, Inputs: inputs, Logger: logger})
 	if err != nil {
-		return nil, err
+		t.Fatalf("ffmpeg.NewProducer error = %v", err)
 	}
 
-	processContext, cancel := context.WithCancel(ctx)
-	// The executable comes from PATH and the arguments are a slice; no shell is involved.
-	command := exec.CommandContext(processContext, producer.ffmpegPath, arguments...) //nolint:gosec // see above
-
-	if err := command.Start(); err != nil {
-		cancel()
-
-		return nil, err
-	}
-
-	production := &ffmpegProduction{directory: job.OutputDir, cancel: cancel, done: make(chan struct{})}
-
-	go func() {
-		production.exitErr = command.Wait()
-		close(production.done)
-	}()
-
-	return production, nil
-}
-
-type ffmpegProduction struct {
-	directory string
-	cancel    context.CancelFunc
-	done      chan struct{}
-	// exitErr is written before done is closed and read only after.
-	exitErr  error
-	stopOnce sync.Once
-	stopped  atomic.Bool
-}
-
-func (production *ffmpegProduction) Ready(ctx context.Context) error {
-	ticker := time.NewTicker(corpusPollInterval)
-	defer ticker.Stop()
-
-	for {
-		if production.hasSegment() {
-			return nil
-		}
-
-		select {
-		case <-production.done:
-			return production.result()
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-	}
-}
-
-func (production *ffmpegProduction) result() error {
-	switch {
-	case production.stopped.Load():
-		return appplayback.ErrProductionStopped
-	case production.exitErr != nil:
-		return production.exitErr
-	case !production.hasSegment():
-		return errors.New("ffmpeg exited without a segment")
-	default:
-		return nil
-	}
-}
-
-func (production *ffmpegProduction) hasSegment() bool {
-	// os.OpenInRoot shares the file for deletion on Windows, so FFmpeg can still rename the
-	// next playlist over it.
-	file, err := os.OpenInRoot(production.directory, "index.m3u8")
-	if err != nil {
-		return false
-	}
-
-	defer func() { _ = file.Close() }()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if strings.HasPrefix(scanner.Text(), "seg-") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (production *ffmpegProduction) Stop() {
-	production.stopOnce.Do(func() {
-		select {
-		case <-production.done:
-		default:
-			production.stopped.Store(true)
-		}
-
-		production.cancel()
-
-		select {
-		case <-production.done:
-		case <-time.After(corpusStopTimeout):
-		}
-	})
-}
-
-func (production *ffmpegProduction) Done() <-chan struct{} {
-	return production.done
+	return producer
 }

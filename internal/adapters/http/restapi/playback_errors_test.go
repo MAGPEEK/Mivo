@@ -68,9 +68,10 @@ func TestCreatePlaybackSessionMapsStartErrors(t *testing.T) {
 			wantStatus: http.StatusBadRequest, wantCode: restapi.CodeInvalid,
 		},
 		{
+			// 403 means "client outside the LAN" (M2-31), so the escape is "unsupported".
 			name:       "file outside its library",
-			err:        startFailure(fmt.Errorf("resolve movies/x.mkv: %w", domain.ErrForbidden)),
-			wantStatus: http.StatusForbidden, wantCode: restapi.CodeForbidden,
+			err:        startFailure(fmt.Errorf("resolve movies/x.mkv: %w", appplayback.ErrFileOutsideLibrary)),
+			wantStatus: http.StatusUnprocessableEntity, wantCode: restapi.CodeUnsupported,
 		},
 		{
 			name: "port failure", err: startFailure(errors.New("create workspace: disk full")),
@@ -89,6 +90,10 @@ func TestCreatePlaybackSessionMapsStartErrors(t *testing.T) {
 
 			if retryAfter := got.header.Get("Retry-After"); retryAfter != test.wantRetryAfter {
 				t.Errorf("Retry-After = %q, want %q", retryAfter, test.wantRetryAfter)
+			}
+
+			if test.wantCode == restapi.CodeSessionLimitReached {
+				assertLogged(t, logs.String(), `level=WARN msg="playback session limit reached" operation=createPlaybackSession`)
 			}
 
 			if strings.Contains(logs.String(), "playback session started") {

@@ -66,23 +66,46 @@ func newTestHandler(t *testing.T, service restapi.SystemService) (http.Handler, 
 	return newTestHandlerWithOptions(t, restapi.Options{System: service})
 }
 
-// newTestHandlerWithOptions fills in the logger and, if missing, a healthy system service.
+// newTestHandlerWithOptions fills in the logger and every missing service (completeOptions).
 func newTestHandlerWithOptions(t *testing.T, options restapi.Options) (http.Handler, *syncBuffer) {
 	t.Helper()
 
 	logger, logs := newTestLogger()
 	options.Logger = logger
 
-	if options.System == nil {
-		options.System = fakeSystemService{health: healthyHealth()}
-	}
-
-	handler, err := restapi.NewHandler(options)
+	handler, err := restapi.NewHandler(completeOptions(options))
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
 	}
 
 	return handler, logs
+}
+
+// completeOptions fills every missing service with an empty fake: a healthy system, a
+// catalog without libraries, idle scans and a playback service without sessions. Every
+// service is mandatory, so a test sets only those it exercises.
+func completeOptions(options restapi.Options) restapi.Options {
+	if options.System == nil {
+		options.System = fakeSystemService{health: healthyHealth()}
+	}
+
+	if options.Libraries == nil {
+		options.Libraries = &fakeLibraryService{}
+	}
+
+	if options.Items == nil {
+		options.Items = &fakeLibraryService{}
+	}
+
+	if options.Scan == nil {
+		options.Scan = &fakeScanService{}
+	}
+
+	if options.Playback == nil {
+		options.Playback = &fakePlaybackService{}
+	}
+
+	return options
 }
 
 func mustServerID(t *testing.T, text string) system.ServerID {

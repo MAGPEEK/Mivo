@@ -86,9 +86,9 @@ func TestRequestBodyLimitOnOperations(t *testing.T) {
 		{name: "unannounced 65 KiB of non-JSON", body: tooLargeText, wantStatus: http.StatusRequestEntityTooLarge, wantCode: restapi.CodePayloadTooLarge},
 		{name: "unannounced small non-JSON", body: "fileId=1", wantStatus: http.StatusBadRequest, wantCode: restapi.CodeBadRequest},
 		{name: "unannounced 64 KiB of non-JSON", body: tooLargeText[:restapi.MaxRequestBodyBytes], wantStatus: http.StatusBadRequest, wantCode: restapi.CodeBadRequest},
-		// The stub answers 501 only after the generated code decoded the body.
-		{name: "exactly 64 KiB", body: jsonBodyOfSize(restapi.MaxRequestBodyBytes), announced: true, wantStatus: http.StatusNotImplemented, wantCode: notImplementedCode},
-		{name: "unannounced 64 KiB", body: jsonBodyOfSize(restapi.MaxRequestBodyBytes), wantStatus: http.StatusNotImplemented, wantCode: notImplementedCode},
+		// "invalid" (no fileId) is only answered after the generated code decoded the body.
+		{name: "exactly 64 KiB", body: jsonBodyOfSize(restapi.MaxRequestBodyBytes), announced: true, wantStatus: http.StatusBadRequest, wantCode: restapi.CodeInvalid},
+		{name: "unannounced 64 KiB", body: jsonBodyOfSize(restapi.MaxRequestBodyBytes), wantStatus: http.StatusBadRequest, wantCode: restapi.CodeInvalid},
 	}
 
 	for _, test := range tests {

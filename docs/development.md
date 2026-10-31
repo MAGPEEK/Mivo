@@ -227,6 +227,12 @@ $env:MIVO_PATHS_TRANSCODE = 'transcode'
 go run ./cmd/mivo
 ```
 
+To play something, add a library: `$env:MIVO_LIBRARIES = "$PWD\testdata\media"` points it at
+the test corpus (see below). The server syncs the configured libraries and scans them at every
+start. It looks up `ffmpeg` and `ffprobe` on `PATH` (`MIVO_TOOLS_FFMPEG`, `MIVO_TOOLS_FFPROBE`
+override them) and logs what FFmpeg can do; without ffmpeg it starts with direct play only,
+without ffprobe its scans fail with `prober_unavailable`.
+
 With the embedded web app (after `pnpm -C web build`):
 
 ```

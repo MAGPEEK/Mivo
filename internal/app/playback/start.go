@@ -2,6 +2,7 @@ package playback
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +15,12 @@ import (
 // only plans direct play for containers that have one, so it is a guard, not a path.
 const fallbackContentType = "application/octet-stream"
 
+// ErrFileOutsideLibrary reports a catalogued file whose path now leaves its library folder,
+// for example through a link swapped in after the scan. It wraps domain.ErrUnsupported, not
+// domain.ErrForbidden: the client can do nothing about this file, while a forbidden answer
+// (HTTP 403) means the caller lacks a permission, such as a client outside the LAN.
+var ErrFileOutsideLibrary = fmt.Errorf("media file is outside its library folder: %w", domain.ErrUnsupported)
+
 // Start decides how the client plays the file and starts the session (ADR 0023, ADR 0024).
 // Direct play needs no FFmpeg; remux and transcode create the session's workspace and start
 // the stream producer under the service's own context, so the production outlives the
@@ -24,7 +31,7 @@ const fallbackContentType = "application/octet-stream"
 // production has started; a failed start leaves it untouched.
 //
 // Errors wrap domain.ErrInvalid (profile or request), domain.ErrNotFound (unknown file or a
-// file missing on disk), domain.ErrForbidden (a file outside its library),
+// file missing on disk), ErrFileOutsideLibrary (a file outside its library),
 // domain.ErrUnsupported (file without a probe result, or a playback.Decide failure such as
 // playback.ErrNoCompatibleFormat), ErrSessionLimitReached, domain.ErrUnavailable (the service
 // is closed, ErrServiceClosed, or the startup purge runs), or the error of a port.
@@ -100,10 +107,27 @@ func (s *Service) prepare(ctx context.Context, request StartRequest) (preparedSt
 
 	inputPath, err := s.paths.Resolve(playable.LibraryRoot, playable.File.RelativePath)
 	if err != nil {
-		return preparedStart{}, fmt.Errorf("resolve %s: %w", playable.File.RelativePath, err)
+		return preparedStart{}, s.resolveFailure(ctx, playable.File, err)
 	}
 
 	return preparedStart{playable: playable, plan: plan, inputPath: inputPath}, nil
+}
+
+// resolveFailure reports a file that cannot be resolved. A file that leaves its library
+// folder becomes ErrFileOutsideLibrary, keeping only the resolver's message: domain.ErrForbidden
+// would tell the client it lacks a permission it can never get. The escape is logged at warn
+// here because a client error never reaches the info log of the HTTP adapter, and a catalogued
+// file that suddenly points outside its library (a link swapped in after the scan) is worth
+// an operator's attention.
+func (s *Service) resolveFailure(ctx context.Context, file media.File, err error) error {
+	if !errors.Is(err, domain.ErrForbidden) {
+		return fmt.Errorf("resolve %s: %w", file.RelativePath, err)
+	}
+
+	s.logger.WarnContext(ctx, "refused to play a file that leaves its library folder",
+		"file", file.ID, "path", file.RelativePath, "error", err)
+
+	return fmt.Errorf("resolve %s: %w (%s)", file.RelativePath, ErrFileOutsideLibrary, err.Error())
 }
 
 // decide validates the profile, loads the file and runs the decision engine.

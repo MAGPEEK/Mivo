@@ -2,8 +2,6 @@ package restapi
 
 import (
 	"fmt"
-	"math"
-	"time"
 	"uuid"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
@@ -15,7 +13,8 @@ import (
 // passed through as strings, so values a later domain version adds reach clients, which
 // tolerate them (ADR 0023). The lists are never nil: the contract requires arrays, and
 // direct-play plans carry nil reasons and warnings. The streamUrl is the app's, unchanged.
-// An ID that is no UUID breaks the contract and is reported as an error (a server fault).
+// An ID that is no UUID or a stream index the contract cannot carry breaks the contract and
+// is reported as an error (a server fault).
 func newPlaybackSession(session appplayback.Session) (apigen.PlaybackSession, error) {
 	id, err := uuid.Parse(session.ID)
 	if err != nil {
@@ -29,6 +28,11 @@ func newPlaybackSession(session appplayback.Session) (apigen.PlaybackSession, er
 
 	plan := session.Plan
 
+	streams, err := newStreamDecisions(plan.Streams)
+	if err != nil {
+		return apigen.PlaybackSession{}, fmt.Errorf("convert plan of session %s: %w", session.ID, err)
+	}
+
 	return apigen.PlaybackSession{
 		ID:                   id,
 		FileID:               fileID,
@@ -37,45 +41,42 @@ func newPlaybackSession(session appplayback.Session) (apigen.PlaybackSession, er
 		Mode:                 apigen.PlaybackMode(plan.Mode),
 		Delivery:             apigen.PlaybackDelivery(plan.Delivery),
 		StreamURL:            session.StreamURL,
-		StartPositionSeconds: session.StartPosition.Seconds(),
-		DurationSeconds:      knownDurationSeconds(session.Duration),
+		StartPositionSeconds: durationSeconds(session.StartPosition),
+		DurationSeconds:      optionalDurationSeconds(session.Duration),
 		SourceContainer:      string(plan.SourceContainer),
 		TargetContainer:      string(plan.TargetContainer),
-		Streams:              newStreamDecisions(plan.Streams),
+		Streams:              streams,
 		Reasons:              newPlaybackReasons(plan.Reasons),
 		Warnings:             newPlaybackWarnings(plan.Warnings),
 	}, nil
 }
 
-// knownDurationSeconds omits an unknown (zero) duration, as the contract asks.
-func knownDurationSeconds(duration time.Duration) *float64 {
-	if duration <= 0 {
-		return nil
-	}
-
-	seconds := duration.Seconds()
-
-	return &seconds
-}
-
-func newStreamDecisions(decisions []playback.StreamDecision) []apigen.StreamDecision {
+// newStreamDecisions fails for a source index the contract cannot carry (streamIndex). A
+// size or channel count the plan does not know (0), or one that does not apply to the
+// stream kind, such as the width of audio, is omitted.
+func newStreamDecisions(decisions []playback.StreamDecision) ([]apigen.StreamDecision, error) {
 	converted := make([]apigen.StreamDecision, 0, len(decisions))
 
 	for _, decision := range decisions {
+		sourceIndex, err := streamIndex(decision.SourceIndex)
+		if err != nil {
+			return nil, err
+		}
+
 		converted = append(converted, apigen.StreamDecision{
 			Kind:           apigen.MediaStreamKind(decision.Kind),
-			SourceIndex:    contractInt32(decision.SourceIndex),
+			SourceIndex:    sourceIndex,
 			Action:         apigen.StreamAction(decision.Action),
 			SourceCodec:    decision.SourceCodec,
 			TargetCodec:    decision.TargetCodec,
-			TargetWidth:    knownQuantity(decision.TargetWidth),
-			TargetHeight:   knownQuantity(decision.TargetHeight),
-			TargetChannels: knownQuantity(decision.TargetChannels),
+			TargetWidth:    optionalInt32(decision.TargetWidth),
+			TargetHeight:   optionalInt32(decision.TargetHeight),
+			TargetChannels: optionalInt32(decision.TargetChannels),
 			Encoder:        optionalString(decision.Encoder),
 		})
 	}
 
-	return converted
+	return converted, nil
 }
 
 func newPlaybackReasons(reasons []playback.Reason) []apigen.PlaybackReason {
@@ -102,23 +103,4 @@ func newPlaybackWarnings(warnings []playback.Warning) []apigen.PlaybackReason {
 	}
 
 	return converted
-}
-
-// knownQuantity omits a size or channel count the plan does not know (0), and the fields
-// that do not apply to a stream kind, such as the width of audio.
-func knownQuantity(value int) *int32 {
-	if value <= 0 {
-		return nil
-	}
-
-	converted := contractInt32(value)
-
-	return &converted
-}
-
-// contractInt32 narrows a stream index, size or channel count to the contract's int32.
-// Probed values are far below the limit; clamping keeps a corrupt one from wrapping into a
-// negative number.
-func contractInt32(value int) int32 {
-	return int32(min(max(value, math.MinInt32), math.MaxInt32))
 }

@@ -23,6 +23,7 @@ output-options:
     - getPlaybackFile
     - headPlaybackFile
     - getPlaybackHlsFile
+    - headPlaybackHlsFile
   type-mapping:
     string:
       formats:

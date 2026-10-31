@@ -1,12 +1,15 @@
 package stream
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
+	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/statuswriter"
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
@@ -43,7 +46,7 @@ func (handlers *Handlers) serveFile(writer http.ResponseWriter, request *http.Re
 		// it vanished, moved out of reach or sits on storage that dropped.
 		handlers.logger.WarnContext(request.Context(), "open direct-play file",
 			logtext.RequestAttributes(request, slog.String(sessionAttribute, id), logtext.Error(err))...)
-		writeProblem(response, restapi.ProblemForError(err))
+		writeProblem(response, openFailureProblem(err))
 
 		return
 	}
@@ -53,4 +56,16 @@ func (handlers *Handlers) serveFile(writer http.ResponseWriter, request *http.Re
 	handlers.serveContent(response, request, id, content{
 		file: file, contentType: granted.contentType, lastModified: true,
 	})
+}
+
+// openFailureProblem answers a file that cannot be opened like a session start does: a file
+// that now leaves its library folder (domain.ErrForbidden from libraryfs) is 422
+// "unsupported" (appplayback.ErrFileOutsideLibrary), because 403 "forbidden" means a missing
+// permission, such as a client outside the LAN, which the player must be able to tell apart.
+func openFailureProblem(err error) apigen.Problem {
+	if errors.Is(err, domain.ErrForbidden) {
+		return restapi.NewProblem(http.StatusUnprocessableEntity, restapi.CodeUnsupported)
+	}
+
+	return restapi.ProblemForError(err)
 }

@@ -184,8 +184,9 @@ func TestParseVersion(t *testing.T) {
 		{name: "other program", output: "ffprobe version 9.0.2 Copyright\n", wantErr: errNoVersionBanner},
 		{name: "banner not at line start", output: "x ffmpeg version 9.0.2\n", wantErr: errNoVersionBanner},
 		{name: "banner without version", output: "ffmpeg version \n", wantErr: errNoVersionBanner},
-		{name: "control character", output: "ffmpeg version 9.0\x1b[2J Copyright\n", wantErr: errMalformedVersion},
-		{name: "non-ASCII version", output: "ffmpeg version 9.0é Copyright\n", wantErr: errMalformedVersion},
+		// A version that cannot be shown safely is replaced; FFmpeg itself still works.
+		{name: "control character", output: "ffmpeg version 9.0\x1b[2J Copyright\n", want: unknownVersion},
+		{name: "non-ASCII version", output: "ffmpeg version 9.0é Copyright\n", want: unknownVersion},
 	}
 
 	for _, test := range tests {
@@ -530,6 +531,25 @@ func TestDetectCapabilitiesReportsCallerCancellationAsIs(t *testing.T) {
 
 	if got != (playback.ServerCapabilities{}) {
 		t.Errorf("capabilities = %+v, want zero", got)
+	}
+}
+
+// TestDetectCapabilitiesWrapsACancellationDuringAQuery: a query killed because the caller
+// gave up fails with its own error (an exit code), which must still read as the
+// cancellation, not as FFmpeg being unavailable.
+func TestDetectCapabilitiesWrapsACancellationDuringAQuery(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	killed := func(context.Context, []string) ([]byte, error) {
+		cancel()
+
+		return nil, errors.New("ffmpeg exited with code -1")
+	}
+
+	_, err := detectCapabilities(ctx, killed, time.Minute)
+	if !errors.Is(err, context.Canceled) || errors.Is(err, domain.ErrUnavailable) {
+		t.Fatalf("error = %v, want context.Canceled and not ErrUnavailable", err)
 	}
 }
 

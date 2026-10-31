@@ -19,7 +19,10 @@ const (
 	operationGetItem          = "getItem"
 )
 
-// LibraryCatalog is the library part of app/library.Service.
+// LibraryCatalog is the port of the library endpoints, the library part of
+// app/library.Service. Handlers must go through the service rather than a repository: it
+// turns unreadable stored rows into server faults, which a repository reports as
+// domain.ErrInvalid.
 type LibraryCatalog interface {
 	// ListLibraries returns every library ordered by name with its availability.
 	ListLibraries(ctx context.Context) ([]applibrary.Overview, error)
@@ -27,7 +30,7 @@ type LibraryCatalog interface {
 	GetLibrary(ctx context.Context, id string) (applibrary.Overview, error)
 }
 
-// ItemCatalog is the item part of app/library.Service.
+// ItemCatalog is the port of the item endpoints, the item part of app/library.Service.
 type ItemCatalog interface {
 	// ListItems returns one page of a library's items. A bad limit or cursor wraps
 	// domain.ErrInvalid, an unknown library domain.ErrNotFound.
@@ -37,18 +40,8 @@ type ItemCatalog interface {
 	GetItem(ctx context.Context, itemID string) (applibrary.ItemDetail, error)
 }
 
-// LibraryService is the port of the library and item endpoints, implemented by
-// app/library.Service. Handlers must go through it rather than a repository: the service
-// turns unreadable stored rows into server faults, which a repository reports as
-// domain.ErrInvalid. A nil service makes these operations answer 501 until M2-32 wires it.
-type LibraryService interface {
-	LibraryCatalog
-	ItemCatalog
-}
-
 // ScanService is the port of the scan endpoint and the scan status of a library,
-// implemented by app/scan.Service. The library endpoints need it next to LibraryService;
-// while it is nil they answer 501, like the scan endpoint.
+// implemented by app/scan.Service. The library endpoints need it next to LibraryCatalog.
 type ScanService interface {
 	// Start starts a background scan, or returns the status of the one that runs. An
 	// unknown library wraps domain.ErrNotFound, a closed service domain.ErrUnavailable.
@@ -60,11 +53,7 @@ type ScanService interface {
 // ListLibraries answers every library with its scan status. Every failure is a 500: the
 // operation takes no client input (see operationFailure).
 func (api *API) ListLibraries(ctx context.Context, _ apigen.ListLibrariesRequestObject) (apigen.ListLibrariesResponseObject, error) {
-	if api.library == nil || api.scan == nil {
-		return apigen.ListLibrariesdefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationListLibraries)), nil
-	}
-
-	overviews, err := api.library.ListLibraries(ctx)
+	overviews, err := api.libraries.ListLibraries(ctx)
 	if err != nil {
 		return nil, operationFailure(operationListLibraries, err)
 	}
@@ -86,13 +75,9 @@ func (api *API) ListLibraries(ctx context.Context, _ apigen.ListLibrariesRequest
 // GetLibrary answers one library with its scan status. Only an unknown ID is a client
 // mistake (404); every other failure is a 500.
 func (api *API) GetLibrary(ctx context.Context, request apigen.GetLibraryRequestObject) (apigen.GetLibraryResponseObject, error) {
-	if api.library == nil || api.scan == nil {
-		return apigen.GetLibrarydefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationGetLibrary)), nil
-	}
-
 	libraryID := request.LibraryID.String()
 
-	overview, err := api.library.GetLibrary(ctx, libraryID)
+	overview, err := api.libraries.GetLibrary(ctx, libraryID)
 	if err != nil {
 		return nil, operationFailure(operationGetLibrary, err, http.StatusNotFound)
 	}
@@ -109,10 +94,6 @@ func (api *API) GetLibrary(ctx context.Context, request apigen.GetLibraryRequest
 // runs. An unknown ID answers 404, a server that is shutting down 503; every other failure
 // is a 500.
 func (api *API) StartLibraryScan(ctx context.Context, request apigen.StartLibraryScanRequestObject) (apigen.StartLibraryScanResponseObject, error) {
-	if api.scan == nil {
-		return apigen.StartLibraryScandefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationStartLibraryScan)), nil
-	}
-
 	status, err := api.scan.Start(ctx, request.LibraryID.String())
 	if err != nil {
 		return nil, operationFailure(operationStartLibraryScan, err, http.StatusNotFound, http.StatusServiceUnavailable)

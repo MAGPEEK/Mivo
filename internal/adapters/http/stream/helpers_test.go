@@ -235,7 +235,8 @@ func (clock *manualClock) advance(step time.Duration) time.Time {
 	return clock.now
 }
 
-// healthySystem is the SystemService the REST API requires.
+// healthySystem is the SystemService the REST API requires; the stream tests only request
+// the mounts, so the other mandatory services are stand-ins that panic if ever called.
 type healthySystem struct{}
 
 func (healthySystem) Health(context.Context) system.Health {
@@ -245,6 +246,13 @@ func (healthySystem) Health(context.Context) system.Health {
 func (healthySystem) Info(context.Context) (system.Info, error) {
 	return system.Info{}, nil
 }
+
+type (
+	unusedLibraries struct{ restapi.LibraryCatalog }
+	unusedItems     struct{ restapi.ItemCatalog }
+	unusedScans     struct{ restapi.ScanService }
+	unusedPlayback  struct{ restapi.PlaybackService }
+)
 
 // syncBuffer collects log output; handlers log from the request goroutines.
 type syncBuffer struct {
@@ -379,7 +387,10 @@ func mustHandlers(t *testing.T, options stream.Options) *stream.Handlers {
 func mustAPI(t *testing.T, logger *slog.Logger, mounts []restapi.Mount) http.Handler {
 	t.Helper()
 
-	api, err := restapi.NewHandler(restapi.Options{System: healthySystem{}, Logger: logger, Mounts: mounts})
+	api, err := restapi.NewHandler(restapi.Options{
+		System: healthySystem{}, Libraries: unusedLibraries{}, Items: unusedItems{},
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: logger, Mounts: mounts,
+	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler error = %v", err)
 	}

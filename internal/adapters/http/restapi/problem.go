@@ -57,11 +57,6 @@ const (
 	CodeStreamNotReady = "stream_not_ready"
 )
 
-// codeNotImplemented answers operations whose feature service is not wired yet. It is
-// internal, not part of the published contract, and is removed in M2-32 when every
-// service is wired.
-const codeNotImplemented = "not_implemented"
-
 // errorMapping maps one domain sentinel error to its HTTP status and problem code.
 type errorMapping struct {
 	target error

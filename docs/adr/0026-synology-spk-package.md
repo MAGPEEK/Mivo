@@ -290,8 +290,9 @@ the package log, the privileges the toolkit needs in a container, and which `arc
   last log lines where Package Center shows them (`$SYNOPKG_TEMP_LOGFILE`, verify SPK-01). A
   process that is alive but not yet healthy after 30 s counts as started (slow first start,
   database migration). Starting a running package does not start a second process.
-- `stop`: `SIGTERM`, wait up to 20 s (the server's graceful shutdown plus database close; the
-  same budget as Docker's `--stop-timeout 20`), then `SIGKILL`. FFmpeg children die with the
+- `stop`: `SIGTERM`, wait up to 20 s (the server bounds its graceful shutdown, playback and
+  scan stop and database close to 18 s, ADR 0024 Notes M2-32; the same budget as Docker's
+  `--stop-timeout 20`), then `SIGKILL`. FFmpeg children die with the
   server (ADR 0024, Notes M2-24b).
 - `status`: 0 when the PID file names a live process whose `/proc/<pid>/exe` is the package
   binary, 3 when not running (a stale PID file is removed), 150 when the binary is missing or

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
@@ -129,7 +130,7 @@ func TestCreatePlaybackSessionRejectsInvalidRequests(t *testing.T) {
 		name   string
 		change func(request *apigen.PlaybackRequest)
 	}{
-		{name: "missing file id", change: func(request *apigen.PlaybackRequest) { request.FileID = [16]byte{} }},
+		{name: "missing file id", change: func(request *apigen.PlaybackRequest) { request.FileID = uuid.Nil() }},
 		{name: "negative start position", change: func(request *apigen.PlaybackRequest) { request.StartPositionSeconds = playbackPointer(-0.5) }},
 		{name: "start position beyond the duration range", change: func(request *apigen.PlaybackRequest) { request.StartPositionSeconds = playbackPointer(1e300) }},
 		{name: "negative audio stream index", change: func(request *apigen.PlaybackRequest) { request.AudioStreamIndex = playbackPointer[int32](-1) }},
@@ -172,6 +173,51 @@ func TestCreatePlaybackSessionRejectsInvalidRequests(t *testing.T) {
 
 			if started := service.startRequests(); len(started) != 0 {
 				t.Errorf("Start was called for an invalid request: %+v", started)
+			}
+		})
+	}
+}
+
+// TestCreatePlaybackSessionToleratesMissingProfileArraysOnly: the decoder does not enforce
+// "required". Missing arrays inside the profile read as empty lists (they can only take
+// formats away), but a missing profile has no name and no delivery and is rejected.
+func TestCreatePlaybackSessionToleratesMissingProfileArraysOnly(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{name: "profile missing", body: `{"fileId":"` + testFileID + `"}`, wantStatus: http.StatusBadRequest},
+		{
+			name:       "profile arrays missing",
+			body:       `{"fileId":"` + testFileID + `","profile":{"name":"bare","hls":{"delivery":"none"}}}`,
+			wantStatus: http.StatusCreated,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := &fakePlaybackService{session: transcodeSession()}
+			handler, _ := newPlaybackHandler(t, service)
+
+			got := postSession(t, handler, test.body)
+			if got.status != test.wantStatus {
+				t.Fatalf("status = %d, want %d (body %s)", got.status, test.wantStatus, got.body)
+			}
+
+			if test.wantStatus == http.StatusBadRequest {
+				assertProblem(t, got, http.StatusBadRequest, restapi.CodeInvalid)
+
+				return
+			}
+
+			started := service.startRequests()
+			if len(started) != 1 || len(started[0].Profile.DirectPlay) != 0 || len(started[0].Profile.HLS.VideoCodecs) != 0 {
+				t.Errorf("Start requests = %+v, want one with empty lists", started)
 			}
 		})
 	}

@@ -48,7 +48,8 @@ breaking change. Throttling, bandwidth tiers and hardware encoders arrive in mil
 - `GET /api/v1/playback/sessions/{id}/hls/{fileName}` serves those files. `fileName` must match
   `index.m3u8`, `init.mp4` or `seg-[0-9]{5}.m4s`; files are opened through `os.Root` of the
   session directory. A playlist request waits up to 20 s (named constant) for the first segment,
-  then answers 503 `stream_not_ready` with `Retry-After`. Content types are explicit
+  then answers 503 `stream_not_ready` with `Retry-After` (every HLS file waits, and the route
+  supports `HEAD` and Range; Notes M2-32). Content types are explicit
   (`application/vnd.apple.mpegurl`, `video/mp4`, `video/iso.segment`); the playlist is
   `Cache-Control: no-store`, init and segments `private, max-age=3600`.
 - Streaming routes are documented in `api/openapi.yaml` (tag `stream`) but excluded from the
@@ -240,3 +241,45 @@ Player decisions of the web app; they refine "Seeking by restart" without changi
   engine's intent (`autoplay` in the snapshot) instead of acting on the empty element, and the
   button shows that intent. The controls hide after 3 s of playback, but never while keyboard
   focus is on one of them.
+
+## Notes (M2-32)
+
+Wiring in `cmd/mivo` and delivery details; they refine the decision above without changing it.
+
+- **HLS delivery**: every file of the HLS route waits for the session's first segment, not only
+  the playlist (once it exists the wait returns at once), and a failed session answers 500 for
+  every file. The route answers `HEAD` like `GET` and supports Range (`If-Range`, 206, 416) for
+  every file, through `http.ServeContent`; `api/openapi.yaml` lists both (`headPlaybackHlsFile`).
+- **Startup**: the playback service is built after the FFmpeg capability detection and purges
+  `<transcode>/sessions` before the HTTP listener is bound, so the purge can never meet a live
+  session. A sessions entry that is no plain directory fails the start and names
+  `ErrSessionsNotPlainDirectory`; a leftover that cannot be deleted is only logged (it costs disk
+  space, not correctness). A transcode path containing `%` fails the start, because FFmpeg
+  would read it as a segment template. The transcode height cap is 1080 (OD-5 B) without a
+  configuration key.
+- **Missing tools degrade the server instead of stopping it**: `tools.ffmpeg` and
+  `tools.ffprobe` are resolved once with `exec.LookPath` (which adds the Windows executable
+  extensions also to a configured path) and must be regular files; on Windows a `.bat` or `.cmd`
+  file fails the start, because `cmd.exe` re-parses its command line. A tool that does not exist
+  is logged at warn and the server starts: without ffmpeg the capabilities stay zero (direct play
+  only, `transcode_unavailable` otherwise), without ffprobe scans fail with
+  `prober_unavailable`. Such a tool reaches the adapters as an absolute path below
+  `<data>/missing-tools/`, which is never created, so every run fails with `ErrUnavailable`
+  until a restart resolves the tool again with all checks. The configured bare name would let
+  `os/exec` repeat the PATH lookup on every run and start a tool installed later without them.
+- **Shutdown fits 18 s** (`shutdownBudget`), below the 20 s after which Docker
+  (`--stop-timeout 20`) and the Synology stop script send `SIGKILL`: HTTP server
+  (`server.ShutdownTimeout`, 10 s) → playback `Close` (5 s; killed FFmpeg processes normally exit
+  within milliseconds; when the bound runs out, the cancelled service context kills what is
+  left and the next start purges leftover directories) → scan `Close` (2 s; cancelling kills the
+  ffprobe processes) → database → data directory lock (1 s reserved). A test keeps the sum of
+  the bounds inside the budget. A second Ctrl+C still ends the process at once, and FFmpeg dies
+  with it (Notes M2-24b).
+- **Quiet routes**: `server.Options.QuietPatterns` gets exactly the two stream patterns
+  (`stream.QuietPatterns()`), so `GET`/`DELETE` of a session stay at info.
+- **Path escape**: a catalogued file whose path now leaves its library (`libraryfs` reports
+  `domain.ErrForbidden`) is answered 422 `unsupported`, at session start
+  (`appplayback.ErrFileOutsideLibrary`, logged at warn by `app/playback`) and on the direct-play
+  file route after the session started (logged at warn by the stream handler). 403 `forbidden`
+  stays reserved for a missing permission, which since M2-31 also means a client outside the
+  LAN, so a player can tell the two apart.

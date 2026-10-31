@@ -204,7 +204,8 @@ func operationCases() []operationCase {
 		{method: http.MethodDelete, path: session, operationID: "stopPlaybackSession", tag: "playback"},
 		{method: http.MethodGet, path: session + "/file", operationID: "getPlaybackFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/*", schema: "MediaBytes", unauthenticated: true},
 		{method: http.MethodHead, path: session + "/file", operationID: "headPlaybackFile", tag: streamTag, unauthenticated: true},
-		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusOK}, mediaType: "video/iso.segment", schema: "MediaBytes", unauthenticated: true},
+		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/iso.segment", schema: "MediaBytes", unauthenticated: true},
+		{method: http.MethodHead, path: session + "/hls/{fileName}", operationID: "headPlaybackHlsFile", tag: streamTag, unauthenticated: true},
 		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem", unauthenticated: true},
 	}
 }

@@ -16,19 +16,34 @@ func TestNewHandlerRejectsInvalidOptions(t *testing.T) {
 	t.Parallel()
 
 	logger, _ := newTestLogger()
-	service := fakeSystemService{}
 	mounted := http.NotFoundHandler()
+	complete := completeOptions(restapi.Options{Logger: logger})
 
 	withMounts := func(mounts ...restapi.Mount) restapi.Options {
-		return restapi.Options{System: service, Logger: logger, Mounts: mounts}
+		options := complete
+		options.Mounts = mounts
+
+		return options
+	}
+
+	without := func(drop func(options *restapi.Options)) restapi.Options {
+		options := complete
+		drop(&options)
+
+		return options
 	}
 
 	tests := []struct {
 		name    string
 		options restapi.Options
 	}{
-		{name: "missing system service", options: restapi.Options{Logger: logger}},
-		{name: "missing logger", options: restapi.Options{System: service}},
+		{name: "missing system service", options: without(func(options *restapi.Options) { options.System = nil })},
+		{name: "missing library catalog", options: without(func(options *restapi.Options) { options.Libraries = nil })},
+		{name: "missing item catalog", options: without(func(options *restapi.Options) { options.Items = nil })},
+		{name: "missing scan service", options: without(func(options *restapi.Options) { options.Scan = nil })},
+		{name: "missing playback service", options: without(func(options *restapi.Options) { options.Playback = nil })},
+		{name: "missing logger", options: without(func(options *restapi.Options) { options.Logger = nil })},
+		{name: "nothing wired", options: restapi.Options{}},
 		{name: "mount without pattern", options: withMounts(restapi.Mount{Handler: mounted})},
 		{name: "mount without handler", options: withMounts(restapi.Mount{Pattern: mountPattern})},
 		{name: "malformed mount pattern", options: withMounts(restapi.Mount{Pattern: "GET /api/v1/{", Handler: mounted})},
@@ -67,10 +82,10 @@ func TestMountPatternForms(t *testing.T) {
 
 			logger, _ := newTestLogger()
 
-			_, err := restapi.NewHandler(restapi.Options{
-				System: fakeSystemService{}, Logger: logger,
+			_, err := restapi.NewHandler(completeOptions(restapi.Options{
+				Logger: logger,
 				Mounts: []restapi.Mount{{Pattern: pattern, Handler: http.NotFoundHandler()}},
-			})
+			}))
 			if err != nil {
 				t.Errorf("NewHandler with mount %q: %v", pattern, err)
 			}

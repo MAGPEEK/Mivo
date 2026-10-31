@@ -51,6 +51,15 @@ func (stubSystemService) Info(context.Context) (system.Info, error) {
 	return system.Info{}, nil
 }
 
+// The feature services are mandatory, but these tests never get past body reading or
+// decoding, so the stand-ins panic if a request ever reached them.
+type (
+	unusedLibraries struct{ restapi.LibraryCatalog }
+	unusedItems     struct{ restapi.ItemCatalog }
+	unusedScans     struct{ restapi.ScanService }
+	unusedPlayback  struct{ restapi.PlaybackService }
+)
+
 // newDeadlineTestServer serves the full chain with the real API and web UI and the short
 // body read timeout over a real connection: only net/http itself applies read deadlines,
 // discards unread bodies and runs the background read.
@@ -59,7 +68,10 @@ func newDeadlineTestServer(t *testing.T, withFallback bool, mounts ...restapi.Mo
 
 	logger, _ := newTestLogger()
 
-	api, err := restapi.NewHandler(restapi.Options{System: stubSystemService{}, Logger: logger, Mounts: mounts})
+	api, err := restapi.NewHandler(restapi.Options{
+		System: stubSystemService{}, Libraries: unusedLibraries{}, Items: unusedItems{},
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: logger, Mounts: mounts,
+	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler: %v", err)
 	}

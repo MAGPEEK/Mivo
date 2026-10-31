@@ -8,13 +8,15 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.1.1"
+  version: "1.1.2"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
     major version changes are additive only: clients must ignore unknown fields and
     tolerate new enum values. Every request body is limited to 64 KiB; a larger body is
-    rejected with 413 and the problem code "payload_too_large".
+    rejected with 413 and the problem code "payload_too_large". While the server setting
+    server.lan_only is on (the default), every request from a peer outside the local
+    network is refused with 403 and the problem code "forbidden", except the health check.
   license:
     name: GPL-3.0-or-later
     url: https://www.gnu.org/licenses/gpl-3.0.html
@@ -214,12 +216,14 @@ paths:
         Decides how the client plays the file (direct play, remux or transcode) from its
         profile and the server's capabilities, starts FFmpeg when needed and returns the
         session with an opaque streamUrl. Problem codes: "invalid" (400, for example a
-        malformed profile), "not_found" (404, unknown file), "unsupported" (422, the file
-        cannot be played, for example because probing failed), "no_compatible_format" and
-        "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and
-        "unavailable" (503, for example the server is shutting down or the library folder
-        is unreachable). Set replacesSessionId when seeking outside the produced range: the
-        old session stops before the limit is checked.
+        malformed profile), "forbidden" (403, only for a client outside the local network
+        while server.lan_only is on), "not_found" (404, unknown file or a file deleted from
+        disk), "unsupported" (422, the file cannot be played, for example because probing
+        failed or its path now leads outside its library folder), "no_compatible_format"
+        and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After)
+        and "unavailable" (503, for example the server is shutting down or the library
+        folder is unreachable). Set replacesSessionId when seeking outside the produced
+        range: the old session stops before the limit is checked.
       tags:
         - playback
       requestBody:
@@ -303,7 +307,8 @@ paths:
         support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients
         load streamUrl as it is and never build it. Content-Type follows the direct-play
         container (for example video/mp4 or video/webm). Sessions in another mode answer
-        404 "not_found".
+        404 "not_found", a file deleted from disk 404, a file whose path now leads outside
+        its library folder 422 "unsupported".
       tags:
         - stream
       security: []
@@ -359,12 +364,18 @@ paths:
       description: >-
         Serves the playlist and segments of a session in mode remux or transcode. The URL is
         unauthenticated and opaque: clients load streamUrl and follow the relative
-        URIs inside the playlist. A playlist request waits up to 20 seconds for the first
-        segment, then answers 503 "stream_not_ready" with Retry-After. The playlist is sent
-        with Cache-Control no-store, init and media segments with private, max-age=3600.
+        URIs inside the playlist. Every file request, not only the playlist, waits up to 20
+        seconds for the session's first segment, then answers 503 "stream_not_ready" with
+        Retry-After; once the first segment exists it answers at once. Sessions in another
+        mode answer 404 "not_found", a session whose FFmpeg failed answers 500 for every
+        file. Every file supports HTTP range requests (Range, If-Range, 206, 416). The
+        playlist is sent with Cache-Control no-store, init and media segments with private,
+        max-age=3600.
       tags:
         - stream
       security: []
+      parameters:
+        - $ref: "#/components/parameters/Range"
       responses:
         "200":
           description: The requested playlist or segment.
@@ -379,6 +390,20 @@ paths:
             video/iso.segment:
               schema:
                 $ref: "#/components/schemas/MediaBytes"
+        "206":
+          description: The requested byte range of the playlist or segment.
+          content:
+            application/vnd.apple.mpegurl:
+              schema:
+                type: string
+            video/mp4:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+            video/iso.segment:
+              schema:
+                $ref: "#/components/schemas/MediaBytes"
+        "416":
+          description: The requested range lies outside the file.
         "503":
           description: The first segment is not ready yet ("stream_not_ready").
           headers:
@@ -388,6 +413,34 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    head:
+      operationId: headPlaybackHlsFile
+      summary: Describe a file of an HLS session
+      description: >-
+        Like getPlaybackHlsFile without a body, including the wait for the first segment,
+        so players can read the size and the range support. The URL is unauthenticated and
+        opaque.
+      tags:
+        - stream
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Range"
+      responses:
+        "200":
+          description: The headers of the whole file.
+        "206":
+          description: The headers of the requested byte range.
+        "416":
+          description: The requested range lies outside the file.
+        "503":
+          description: >-
+            The first segment is not ready yet ("stream_not_ready"); like for GET, the
+            problem body is not sent.
+          headers:
+            Retry-After:
+              $ref: "#/components/headers/RetryAfter"
         default:
           $ref: "#/components/responses/Problem"
 components:

@@ -18,7 +18,7 @@ const (
 
 // referenceFFmpegVersion is the FFmpeg of the Docker image (Debian 7.1.x); the decision
 // does not depend on it.
-const referenceFFmpegVersion = "7.1.2"
+const referenceFFmpegVersion = "7.1.5"
 
 // ChromiumDesktop is the profile player-core reports for Chrome and Edge on the desktop:
 // H.264/AAC/VP9/AV1/Opus, HLS over MSE, no Matroska, no Theora, no HEVC.

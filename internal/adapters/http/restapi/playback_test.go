@@ -323,7 +323,7 @@ func TestStopPlaybackSessionAnswersNoContent(t *testing.T) {
 		t.Errorf("Stop calls = %v, want the session twice", stopped)
 	}
 
-	assertLogged(t, logs.String(), `level=INFO msg="playback session stopped" session=`+testSessionID)
+	assertLogged(t, logs.String(), `level=INFO msg="playback session stop requested" session=`+testSessionID)
 }
 
 func TestStopPlaybackSessionMapsServiceErrors(t *testing.T) {
@@ -335,37 +335,8 @@ func TestStopPlaybackSessionMapsServiceErrors(t *testing.T) {
 
 	assertProblem(t, serve(t, handler, http.MethodDelete, sessionPath), http.StatusForbidden, restapi.CodeForbidden)
 
-	if strings.Contains(logs.String(), "playback session stopped") {
+	if strings.Contains(logs.String(), "playback session stop requested") {
 		t.Errorf("a failed stop was logged as stopped: %s", logs.String())
-	}
-}
-
-// TestPlaybackOperationsAnswerNotImplemented covers a nil service, which keeps answering
-// 501 until M2-32 makes the service mandatory.
-func TestPlaybackOperationsAnswerNotImplemented(t *testing.T) {
-	t.Parallel()
-
-	handler, _ := newTestHandlerWithOptions(t, restapi.Options{})
-
-	tests := []struct {
-		name   string
-		method string
-		target string
-		body   string
-	}{
-		{name: "create session", method: http.MethodPost, target: sessionsPath, body: playbackRequestBody},
-		{name: "get session", method: http.MethodGet, target: sessionPath},
-		{name: "stop session", method: http.MethodDelete, target: sessionPath},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			request := httptest.NewRequestWithContext(t.Context(), test.method, test.target, strings.NewReader(test.body))
-			got := serveRequest(t, handler, request)
-			assertProblem(t, got, http.StatusNotImplemented, notImplementedCode)
-		})
 	}
 }
 

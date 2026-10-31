@@ -29,6 +29,11 @@ const (
 	// versions ("2026-10-01-git-0123456789-full_build-www.gyan.dev").
 	maxVersionLength = 64
 
+	// unknownVersion replaces a version token with characters other than printable ASCII:
+	// it would end up in logs and diagnostics unescaped, but FFmpeg itself works, so its
+	// capabilities still count.
+	unknownVersion = "unknown"
+
 	// encoderKindVideo and encoderKindAudio are the first flag of an -encoders entry.
 	encoderKindVideo = 'V'
 	encoderKindAudio = 'A'
@@ -47,9 +52,6 @@ var (
 	// errNoVersionBanner reports -version output without an "ffmpeg version <version>" line,
 	// for example because the configured executable is not FFmpeg.
 	errNoVersionBanner = errors.New(`no "ffmpeg version" line in the output`)
-	// errMalformedVersion reports a version with characters other than printable ASCII; it
-	// would end up in logs and diagnostics unescaped.
-	errMalformedVersion = errors.New("version contains characters other than printable ASCII")
 	// errNoListing reports -encoders or -muxers output without the dashed separator line
 	// that starts the list.
 	errNoListing = errors.New("no list separator in the output")
@@ -111,9 +113,19 @@ func detectCapabilities(ctx context.Context, run commandOutput, timeout time.Dur
 }
 
 // unavailableUnlessCancelled marks a failed query as FFmpeg being unavailable, unless the
-// caller gave up (shutdown during startup) or the runner already said so.
+// caller gave up (shutdown during startup) or the runner already said so. A query killed by
+// the cancellation fails with its own error (an exit code), so the caller's context error is
+// wrapped in that case: the result must read as the cancellation.
 func unavailableUnlessCancelled(ctx context.Context, err error) error {
-	if ctx.Err() != nil || errors.Is(err, domain.ErrUnavailable) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		if errors.Is(err, ctxErr) {
+			return err
+		}
+
+		return fmt.Errorf("%w: %w", ctxErr, err)
+	}
+
+	if errors.Is(err, domain.ErrUnavailable) {
 		return err
 	}
 
@@ -179,7 +191,7 @@ func parseVersion(output []byte) (string, error) {
 
 		version := fields[0]
 		if !isPrintableASCII(version) {
-			return "", errMalformedVersion
+			return unknownVersion, nil
 		}
 
 		return version[:min(len(version), maxVersionLength)], nil

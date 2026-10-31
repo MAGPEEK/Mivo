@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
+	"github.com/magpeek/mivo/internal/domain"
 )
 
 const mp4ContentType = "video/mp4"
@@ -272,5 +274,35 @@ func TestUnexpectedAccessFailureAnswersInternalError(t *testing.T) {
 
 	if text := logs.String(); !strings.Contains(text, errRegistry.Error()) || !strings.Contains(text, "session="+unknownSessionID) {
 		t.Errorf("logs lack the cause with the session:\n%s", text)
+	}
+}
+
+// forbiddenLibrary refuses every file like libraryfs does for a link that leaves the root.
+type forbiddenLibrary struct{}
+
+func (forbiddenLibrary) Open(_, relativePath string) (*os.File, error) {
+	return nil, fmt.Errorf("open %q: evaluated path leaves the library root: %w", relativePath, domain.ErrForbidden)
+}
+
+// TestDirectFileOutsideItsLibraryAnswersUnsupported: a file that leaves its library after
+// the session started gets the same 422 as a session start (M2-32), never 403, which means a
+// client outside the LAN.
+func TestDirectFileOutsideItsLibraryAnswersUnsupported(t *testing.T) {
+	t.Parallel()
+
+	env := newEnvironment(t)
+	session := env.start(t, directFileID)
+
+	logger := slog.New(slog.NewTextHandler(env.logs, nil))
+	handlers := mustHandlers(t, stream.Options{
+		Sessions: env.service, Library: forbiddenLibrary{}, Output: mustWorkspace(t), Logger: logger,
+	})
+
+	recorder := httptest.NewRecorder()
+	mustAPI(t, logger, handlers.Mounts()).ServeHTTP(recorder, newRequest(t, http.MethodGet, session.StreamURL))
+	assertProblem(t, recorder, http.StatusUnprocessableEntity, restapi.CodeUnsupported)
+
+	if logs := env.logs.String(); !strings.Contains(logs, "level=WARN") || !strings.Contains(logs, "leaves the library root") {
+		t.Errorf("logs lack the warning with the cause:\n%s", logs)
 	}
 }

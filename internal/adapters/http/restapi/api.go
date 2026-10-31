@@ -25,19 +25,20 @@ type SystemService interface {
 
 // API implements apigen.StrictServerInterface.
 type API struct {
-	system   SystemService
-	library  LibraryService
-	scan     ScanService
-	playback PlaybackService
-	logger   *slog.Logger
-	mounts   []Mount
+	system    SystemService
+	libraries LibraryCatalog
+	items     ItemCatalog
+	scan      ScanService
+	playback  PlaybackService
+	logger    *slog.Logger
+	mounts    []Mount
 }
 
 // Compile-time check that API serves every operation of the contract.
 var _ apigen.StrictServerInterface = (*API)(nil)
 
-// NewAPI returns the API handlers. Invalid options are a wiring bug and are reported as an
-// error wrapping domain.ErrInvalid.
+// NewAPI returns the API handlers. Invalid options, such as a missing service, are a wiring
+// bug and are reported as an error wrapping domain.ErrInvalid.
 func NewAPI(options Options) (*API, error) {
 	err := options.validate()
 	if err != nil {
@@ -45,12 +46,13 @@ func NewAPI(options Options) (*API, error) {
 	}
 
 	return &API{
-		system:   options.System,
-		library:  options.Library,
-		scan:     options.Scan,
-		playback: options.Playback,
-		logger:   options.Logger,
-		mounts:   options.Mounts,
+		system:    options.System,
+		libraries: options.Libraries,
+		items:     options.Items,
+		scan:      options.Scan,
+		playback:  options.Playback,
+		logger:    options.Logger,
+		mounts:    options.Mounts,
 	}, nil
 }
 
@@ -152,26 +154,6 @@ func (api *API) writeResponseError(writer http.ResponseWriter, request *http.Req
 	}
 
 	WriteProblem(writer, problem)
-}
-
-// notImplemented answers an operation whose feature service is not wired yet. The code
-// "not_implemented" is internal and not published in the contract (removed in M2-32).
-func (api *API) notImplemented(ctx context.Context, operation string) problemResponse {
-	api.logger.DebugContext(ctx, "api operation not implemented",
-		slog.String("operation", operation),
-		slog.String("request_id", requestid.FromContext(ctx)))
-
-	return problemResponse{
-		Body:       NewProblem(http.StatusNotImplemented, codeNotImplemented),
-		StatusCode: http.StatusNotImplemented,
-	}
-}
-
-// problemResponse has the fields of every generated
-// <Operation>defaultApplicationProblemPlusJSONResponse, so it converts to each of them.
-type problemResponse struct {
-	Body       apigen.Problem
-	StatusCode int
 }
 
 // logOperationFailure records a server-side failure of a strict handler, which knows its

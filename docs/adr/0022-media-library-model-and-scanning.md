@@ -262,3 +262,15 @@ Additions from the scan use case (`internal/app/scan`, M2-19); they refine "Scan
   with a weak signature. Revisit when the catalog stores the probed demuxer.
 - Support for further file kinds (music and photo libraries) extends the list deliberately; a
   demuxer that opens other files needs its own decision first.
+
+## Notes (M2-32)
+
+Wiring in `cmd/mivo`; it refines the decision above without changing it.
+
+- `cmd/mivo` converts every `config.LibraryConfig` with `library.ParseKind` and
+  `library.Definition.Validate` (platform must not import domain); a failure names the entry
+  (`config: libraries[<i>] (<path>): …`). The sync runs before the HTTP listener is bound.
+- The startup scan (OD-3) starts once the listener is bound, so a port conflict fails the start
+  before any ffprobe runs; a failure to start it is logged, the scan button still works.
+- Availability: `libraryfs.FileSystem.RootAvailable` opens the root with `os.OpenRoot` and stats
+  it; the library use case bounds the call (Notes M2-18).

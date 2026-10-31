@@ -157,11 +157,3 @@ func parseBuildTime(text string) (*time.Time, error) {
 
 	return &parsed, nil
 }
-
-func optionalString(value string) *string {
-	if value == "" {
-		return nil
-	}
-
-	return &value
-}

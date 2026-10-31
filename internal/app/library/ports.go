@@ -58,7 +58,7 @@ type IDGenerator interface {
 }
 
 // RootChecker reports whether a library root is reachable now. Implemented by
-// adapters/fs/libraryfs (wired in M2-32).
+// adapters/fs/libraryfs (FileSystem.RootAvailable).
 type RootChecker interface {
 	// RootAvailable reports whether root can be opened. It should return when ctx is done;
 	// the service stops waiting at its timeout either way, because a stat on a hung network
