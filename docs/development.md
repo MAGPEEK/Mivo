@@ -501,6 +501,62 @@ Never push an image from a dev machine. Releases (version tag, image push to Doc
 published only by the `mivo-release` agent, after the gates pass and the review approves, and
 only with the owner's explicit approval for each push.
 
+## Synology package
+
+The native DSM package (ADR 0026) is built with Docker only: a normal `docker build` prebuilds
+the web app, the static server binaries and FFmpeg for x86_64, armv8 and armv7 and stages one
+toolkit project per family, then Synology's Package Toolkit packs each project in a container
+with `--cap-add SYS_ADMIN`. One command builds all three SPKs into `packaging/synology/dist/`
+(git-ignored) together with `SHA256SUMS`:
+
+```
+pwsh -NoProfile -File packaging/synology/build.ps1 -Version 0.1.0-alpha.2
+pwsh -NoProfile -File packaging/synology/build.ps1 -Version 0.1.0-alpha.2 -Release
+```
+
+In bash (Linux, Git Bash): `bash packaging/synology/build.sh 0.1.0-alpha.2`, release builds
+with `--release`. Without `-Release`/`--release` the result is a test build for the owner's
+device only (it may carry an interim FFmpeg and writes `dist/NOT-FOR-RELEASE.txt`); a release
+build refuses interim FFmpeg, the default version and a dirty working tree. The first run
+downloads Synology's platform environments into the named volume `spk-toolkit` (about 24 GB
+for all families, about 10 minutes; CDN speed varies); later runs take about 80 s. Options,
+the volume, privileges
+(AppArmor hosts), the FFmpeg build and the toolkit pitfalls:
+[packaging/synology/README.md](../packaging/synology/README.md), "Build". The user guide for
+DSM is the same file; the hardware test protocol is
+[packaging/synology/TESTING.md](../packaging/synology/TESTING.md).
+
+Tests of the packaging (all in Docker; Git Bash needs `MSYS_NO_PATHCONV=1` and `"$(pwd -W)"`
+instead of `"${PWD}"`):
+
+```
+docker build -t spk-script-test:dev packaging/synology/test
+docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/scripts
+docker build -t spk-build-test:dev packaging/synology/test/build
+docker run --rm -v "${PWD}:/code" -w /code spk-build-test:dev packaging/synology/test/build
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/ffmpeg/fetch.sh packaging/synology/toolkit/run.sh packaging/synology/toolkit/test.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/fake-docker.bash
+bash packaging/synology/toolkit/test.sh
+go test ./packaging/...
+```
+
+The first pair runs the package scripts under four shells against a fake server (a few
+minutes), the second pair the build scripts against a fake Docker (`build.sh` and `build.ps1`
+parity, seconds); `toolkit/test.sh` packs placeholder projects for all families on the
+`spk-toolkit` volume; the Go line covers `spkmeta`, `spkicon` and `spkstage` and is part of
+`go test ./...`. Details: `packaging/synology/test/README.md` and
+`packaging/synology/toolkit/README.md`.
+
+To look into a built SPK without installing it (outer tar, `INFO`, then the xz-compressed
+`package.tgz`):
+
+```
+docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "${PWD}/packaging/synology/dist:/dist:ro" debian:stable-slim sh -c 'apt-get -qq update >/dev/null && apt-get -qq install -y xz-utils >/dev/null && cd /dist && f=mivo-0.1.0-alpha.2-x86_64.spk && tar -tvf "$f" && tar -xOf "$f" INFO && tar -xOf "$f" package.tgz | tar -tJvf -'
+```
+
+Task SPK-10 adds `packaging/synology/test/inspect/inspect-spk.sh [--release] <file.spk> <family>`,
+the check releases and the hardware test run on the exact files.
+
 ## Git hooks
 
 lefthook v2.2.2 is a pinned Go tool (ADR 0019); there is no global or npm install.

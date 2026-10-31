@@ -3,7 +3,8 @@
 > Working title. The final name is decided before the first public release.
 
 An open-source media server that plays practically any container format. It runs on Linux
-(Synology DSM, QNAP and other NAS via Docker) and Windows, and adapts every stream to the
+(Synology DSM, QNAP and other NAS via Docker or the native Synology package) and Windows, and
+adapts every stream to the
 client: direct play, remux or transcode.
 
 **Status:** alpha (v0.1-alpha), under active development. Expect missing features and breaking
@@ -52,6 +53,9 @@ another layer controls who can reach the port.
   [packaging/docker/README.md](packaging/docker/README.md) (volumes, user IDs, libraries,
   transcoding, Synology and QNAP examples). Mount your videos at `/media`; the web app is on
   port 8460.
+- **Synology (native package)**: on DSM 7.2 or newer, install the SPK for your NAS's
+  architecture (x86_64, armv8 or armv7) through Package Center > Manual Install, as described in
+  [packaging/synology/README.md](packaging/synology/README.md); the web app is on port 8460.
 - **From source** (Windows or Linux): [docs/development.md](docs/development.md) covers Go,
   Node.js, FFmpeg, configuring libraries and tools, and running the server.
 
