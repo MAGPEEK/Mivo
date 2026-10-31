@@ -10,8 +10,9 @@ import {
   mockSession,
 } from "./support/playback";
 
-// The player engine against mocked playback endpoints (task M2-27). A real-server playback
-// flow follows once M2-32 wires the playback API into the binary (M2-34).
+// The player engine against mocked playback endpoints (task M2-27): error and waiting states
+// the real server cannot be made to produce on demand. Real playback: playback.spec.ts and
+// branded.spec.ts (M2-34).
 
 const playerPath = `/items/${mockItemId}/play`;
 const hlsChunk = /\/assets\/hls-[^/]*\.js$/;

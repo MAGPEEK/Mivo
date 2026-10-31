@@ -1,6 +1,6 @@
-// Mocks the item and playback endpoints with page.route. The real server does not serve
-// playback sessions until M2-32 wires them into the binary, so these specs check the web
-// player engine against the API contract instead (task M2-27).
+// Mocks the item and playback endpoints with page.route, so player.spec.ts can check the web
+// player engine against the API contract in states the real server does not produce on
+// demand (task M2-27). Real playback helpers: realPlayback.ts.
 
 import type { ItemDetail, PlaybackRequest, PlaybackSession, Problem } from "@mivo/api-client";
 import type { Page, Request, Route } from "@playwright/test";

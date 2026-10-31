@@ -1,7 +1,7 @@
 // Builds the real server binary with the embedded web app and runs it in a throwaway
 // environment, so the E2E suite never touches the developer's config, data or fixed ports.
 import { productId } from "@mivo/ui-tokens";
-import { execFile, spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
   mkdir,
@@ -17,12 +17,9 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
-const runFile = promisify(execFile);
+import { assertCommandAvailable, repositoryRoot, runCommand } from "./commands";
 
-const repositoryRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
 // Vite writes the production build here and `-tags webui` embeds it (ADR 0020).
 const webBuildIndex = join(
   repositoryRoot,
@@ -36,6 +33,9 @@ const webBuildIndex = join(
 // A Go package path, not a product name: renaming the product does not move the code.
 const serverPackage = "./cmd/mivo";
 
+/** Name of the server's only library: the folder name of its root (ADR 0022). */
+export const e2eLibraryName = "media";
+
 /** Only the loopback interface: the test server must not be reachable from the network. */
 export const loopbackHost = "127.0.0.1";
 
@@ -46,10 +46,6 @@ const temporaryRootPrefix = `${productId}-e2e-`;
 // A cold build compiles the whole module and its dependencies; a hung toolchain must still
 // fail the run instead of blocking it.
 const buildTimeoutMs = 5 * 60_000;
-// Room for a few large Go compiler messages before execFile gives up on the output.
-const buildOutputLimitBytes = 16 * 1024 * 1024;
-// Node's error code when a child process writes more than maxBuffer.
-const outputLimitErrorCode = "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
 const healthPath = "/api/v1/health";
 const startupTimeoutMs = 30_000;
 const healthPollIntervalMs = 100;
@@ -68,6 +64,13 @@ const staleRootAgeMs = 6 * 60 * 60_000;
 export interface E2EServer {
   /** Origin the server listens on, e.g. `http://127.0.0.1:53124`. */
   readonly baseUrl: string;
+  /**
+   * Root of the server's only library, created empty. The server names a library after the
+   * last element of its root, so the library is called {@link e2eLibraryName}.
+   */
+  readonly mediaDirectory: string;
+  /** The server's transcode directory; sessions live in its `sessions` subdirectory. */
+  readonly transcodeDirectory: string;
   /** Stops the server and deletes its temporary directory. */
   readonly stop: () => Promise<void>;
 }
@@ -102,6 +105,8 @@ export async function startE2EServer(options: E2EServerOptions): Promise<E2EServ
     await waitUntilHealthy(baseUrl, running.exited, options.logFile);
     return {
       baseUrl,
+      mediaDirectory: mediaDirectoryOf(root),
+      transcodeDirectory: transcodeDirectoryOf(root),
       stop: async () => {
         try {
           await running.stop();
@@ -158,14 +163,12 @@ async function removeStaleRoots(): Promise<void> {
 }
 
 function assertGoAvailable(): void {
-  const result = spawnSync("go", ["version"], { encoding: "utf8" });
-  if (result.error !== undefined || result.status !== 0) {
-    throw new Error(
-      "Go was not found on PATH. The E2E suite builds the server with `go build -tags webui`; " +
-        "install the Go version from go.mod and open a new shell.",
-      { cause: result.error },
-    );
-  }
+  assertCommandAvailable(
+    "go",
+    ["version"],
+    "Go was not found on PATH. The E2E suite builds the server with `go build -tags webui`; " +
+      "install the Go version from go.mod and open a new shell.",
+  );
 }
 
 function assertWebBuildExists(): void {
@@ -179,38 +182,18 @@ function assertWebBuildExists(): void {
 
 async function buildServer(root: string): Promise<string> {
   const binary = join(root, "bin", `${productId}${executableSuffix}`);
-  const args = ["build", "-tags", "webui", "-o", binary, serverPackage];
-  const command = `go ${args.join(" ")}`;
-  try {
-    await runFile("go", args, {
-      cwd: repositoryRoot,
-      maxBuffer: buildOutputLimitBytes,
-      timeout: buildTimeoutMs,
-    });
-  } catch (error) {
-    throw buildError(command, error);
-  }
+  await runCommand("go", ["build", "-tags", "webui", "-o", binary, serverPackage], {
+    timeoutMs: buildTimeoutMs,
+  });
   return binary;
 }
 
-// An exceeded maxBuffer is only recognisable by its error code; `killed` marks the timeout.
-function buildError(command: string, error: unknown): Error {
-  if (!(error instanceof Error)) {
-    return new Error(`${command} failed.`, { cause: error });
-  }
-  if ("code" in error && error.code === outputLimitErrorCode) {
-    return new Error(
-      `${command} wrote more than ${String(buildOutputLimitBytes)} bytes of output.`,
-      { cause: error },
-    );
-  }
-  if ("killed" in error && error.killed === true) {
-    return new Error(`${command} did not finish within ${String(buildTimeoutMs)} ms.`, {
-      cause: error,
-    });
-  }
-  const output = "stderr" in error ? String(error.stderr) : "";
-  return new Error(`${command} failed:\n${output}`, { cause: error });
+function mediaDirectoryOf(root: string): string {
+  return join(root, e2eLibraryName);
+}
+
+function transcodeDirectoryOf(root: string): string {
+  return join(root, "transcode");
 }
 
 // The OS picks the port; closing the probe frees it for the server a moment later. Another
@@ -235,7 +218,7 @@ async function findFreePort(): Promise<number> {
 
 /**
  * The inherited environment without any server setting, plus server and OS base directories
- * that all point into `root`. OS directories are replaced as well, so a default the server
+ * and the library root that all point into `root`. OS directories are replaced as well, so a default the server
  * derives from them can never reach the real profile.
  */
 async function isolatedEnvironment(root: string, port: number): Promise<NodeJS.ProcessEnv> {
@@ -255,7 +238,9 @@ async function isolatedEnvironment(root: string, port: number): Promise<NodeJS.P
     [`${envPrefix}CONFIG_DIR`]: join(root, "config"),
     [`${envPrefix}PATHS_DATA`]: join(root, "data"),
     [`${envPrefix}PATHS_CACHE`]: join(root, "cache"),
-    [`${envPrefix}PATHS_TRANSCODE`]: join(root, "transcode"),
+    [`${envPrefix}PATHS_TRANSCODE`]: transcodeDirectoryOf(root),
+    // The only library. The server scans it at startup, while it is still empty.
+    [`${envPrefix}LIBRARIES`]: mediaDirectoryOf(root),
   };
   await Promise.all(Object.values(directories).map((path) => mkdir(path, { recursive: true })));
   const overrides: Record<string, string> = {

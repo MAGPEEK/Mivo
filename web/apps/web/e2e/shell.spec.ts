@@ -1,6 +1,7 @@
 import type { SystemInfo } from "@mivo/api-client";
 import { expect, test } from "@playwright/test";
 
+import { e2eLibraryName } from "./support/server";
 import { abortSystemInfo, openApp } from "./support/shell";
 
 // Enough intermediate pointer positions to land several times in the gap beside the icon.
@@ -80,6 +81,9 @@ test("keeps an unreachable server visible and reachable in the collapsed sidebar
   await sidebarToggle.focus();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Home" })).toBeFocused();
+  // The shared server has one library (task M2-34); its link comes before the footer.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: e2eLibraryName, exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(indicator).toBeFocused();
   await expect(tooltip).toHaveCSS("opacity", "1");
