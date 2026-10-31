@@ -37,5 +37,5 @@ Synology users can download the media-server SPK for their family, verify it and
   instruction; no Docker push is part of this task.
 - Never upload SPKs built from a dirty tree or a commit other than the tag.
 - If OD-SPK-1 A applies (Docker released first), this task runs later against the same release;
-  a packaging-only fix uses `PACKAGE_REVISION=1` and replaces the assets, noted in the release
+  a packaging-only fix uses `PACKAGE_REVISION=1`, whose SPKs are named `<id>-<version>-r1-<family>.spk`; delete the old assets, upload the `-r1` files and note it in the release
   notes.

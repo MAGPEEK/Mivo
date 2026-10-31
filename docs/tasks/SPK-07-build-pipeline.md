@@ -17,7 +17,7 @@ FFmpeg are prebuilt in a normal Docker build, Synology's toolkit packs them.
       (`CGO_ENABLED=0`, `-tags webui`, `-trimpath`, `-buildvcs=false`, version via `-ldflags -X`;
       armv7 `GOARM=7`), FFmpeg via `ffmpeg/fetch.sh` (interim pins until SPK-16), and `spkstage`
       (SPK-14) per family; the output holds one staged project per family.
-- [ ] Step 2: for each family `docker run --rm --privileged -v spk-toolkit:/toolkit -v <stage>/<family>:/project:ro -v <dist>:/output spk-toolkit:dev <family>`
+- [ ] Step 2: for each family `docker run --rm --cap-add SYS_ADMIN -v spk-toolkit:/toolkit -v <stage>/<family>:/project:ro -v <dist>:/output spk-toolkit:dev <family>`
       (SPK-04's image and `run.sh`); the scripts rename the toolkit's
       `<id>-<family>-<DSM_VERSION>.spk` to `<id>-<version>-<family>.spk` and write `SHA256SUMS`.
       A failed toolkit run (exit 1, `[spk-toolkit] failed:`) stops the build.
@@ -26,9 +26,9 @@ FFmpeg are prebuilt in a normal Docker build, Synology's toolkit packs them.
       fail on the first error; on Docker Desktop (Windows) the PowerShell script produces the three
       SPKs and `SHA256SUMS`. A second run downloads no platform environment (durations of both runs
       in the REPORT). Both scripts print a warning when `sources.lock` still has `interim` entries.
-- [ ] Privileges: the scripts use `--privileged` by default; an option (parameter or environment
-      variable, documented) switches to `--cap-add SYS_ADMIN`, plus
-      `--security-opt apparmor=unconfined` for AppArmor hosts such as GitHub-hosted Ubuntu runners
+- [ ] Privileges: the scripts use `--cap-add SYS_ADMIN` by default (ADR 0026 Notes, verified for all three
+      families); an option (parameter or environment variable, documented) adds
+      `--security-opt apparmor=unconfined` for AppArmor hosts such as GitHub-hosted Ubuntu runners, or falls back to `--privileged`
       (ADR 0026 Notes; not verifiable here – say so in the REPORT).
 - [ ] Build inputs: `VERSION` (default `0.0.0-dev`), `REVISION`, `PACKAGE_REVISION` (default 0),
       `SOURCE_DATE_EPOCH` (default documented), and the image args `NODE_IMAGE`, `GO_IMAGE` with

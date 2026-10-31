@@ -212,7 +212,7 @@ the package log, the privileges the toolkit needs in a container, and which `arc
   number *(verify, SPK-01)*. The server's `--version` and the web app keep showing the real
   version; the docs explain the Package Center number.
 - SPK file name in the release: `<id>-<server version>-<family>.spk`, e.g.
-  `mivo-0.1.0-alpha.2-armv7.spk` (the build script renames the toolkit's output).
+  `mivo-0.1.0-alpha.2-armv7.spk` (the build script renames the toolkit's output); a package revision N ≥ 1 adds `-r<N>` before the family, e.g. `mivo-0.1.0-alpha.2-r1-armv7.spk` (Notes SPK-07).
 - The package name contains the working title. DSM identifies a package by it, so a rename
   installs a different package without an upgrade path. This is on the rename checklist of
   ADR 0002 (Notes ADR 0026).
@@ -536,3 +536,18 @@ platform environments DSM 7.2.2 build 72723)**
   server sees loopback or the NAS's own LAN address, so every client passes; QuickConnect is
   documented only for DSM and Synology packages and is assumed not to reach port 8460. The docs
   warn against both until milestone 7.
+
+## Notes (SPK-07)
+
+- **Build pipeline privileges**: `build.sh` / `build.ps1` run the toolkit container with
+  `--cap-add SYS_ADMIN` by default (the tested default of the Privileges note above);
+  `sys-admin-apparmor` adds `--security-opt apparmor=unconfined` for AppArmor hosts, and
+  `privileged` remains a fallback only.
+- **Release builds** (`--release`, or `CI` set without `--test`) refuse interim FFmpeg pins,
+  a `nonfree` licence, a dynamically linked FFmpeg, the version `0.0.0-dev` and a dirty working
+  tree. A test build prints a warning banner and writes `dist/NOT-FOR-RELEASE.txt`; its SPKs are
+  for the owner's device only.
+- **Package revision in the file name**: revision 0 keeps `<id>-<version>-<family>.spk`; a
+  packaging-only rebuild with revision N ≥ 1 is named `<id>-<version>-r<N>-<family>.spk`, so an
+  old download and a corrected one can be told apart (SPK-13 deletes the old assets and uploads
+  the `-rN` files). No `+` in the name (GitHub encodes it in URLs) and no DSM build number.

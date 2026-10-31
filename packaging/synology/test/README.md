@@ -125,3 +125,24 @@ take `Error`, `error:` and `fatal error` for failures.
 
 Files must use LF line endings (`.gitattributes` enforces it on checkout); a test fails on CR
 characters in the scripts, the templates and this directory.
+
+## Build script tests (`build/`)
+
+`build/build-scripts.bats` tests the safety paths of `../build.sh` and `../build.ps1` (SPK-07):
+CI hosts default to release builds, `--test` / `-TestBuild` overrides that, release builds refuse
+interim `sources.lock` entries, the default version, a staged interim or non-free FFmpeg and a
+dirty git tree, a `SOURCE.txt` needs exactly one `Status:` and one `Licence:` line, a failed
+toolkit run leaves no `SHA256SUMS`, and the SPK names carry `-r<N>` for package revision N ≥ 1.
+`build/fake-docker.bash` replaces Docker (its header lists the switches), so every case runs in
+well under a second. Each case runs against `build.sh` and, when `pwsh` is installed, against
+`build.ps1` with the same arguments (parity). Each test copies both scripts into its own temp
+tree, so the repository's `dist/` is never touched.
+
+```powershell
+# build.sh cases only (the script test image has neither pwsh nor git; those cases are skipped)
+docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/build
+# all cases, with the build.ps1 parity cases and the dirty-tree case
+docker build -t spk-build-test:dev packaging/synology/test/build
+docker run --rm -v "${PWD}:/code" -w /code spk-build-test:dev packaging/synology/test/build
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/fake-docker.bash
+```
