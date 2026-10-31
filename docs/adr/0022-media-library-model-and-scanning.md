@@ -228,3 +228,37 @@ Additions from the scan use case (`internal/app/scan`, M2-19); they refine "Scan
   alone, while the scan probe also sees the extension; for files with weak signatures the two can
   disagree. `-protocol_whitelist file` keeps FFmpeg off the network but still lets playlist-like
   demuxers (hls, concat) open other local files; pinning the input demuxer is task M2-24b.
+
+## Notes (M2-24b)
+
+- **Input demuxers are whitelisted, not pinned.** Every ffprobe and ffmpeg invocation of
+  `adapters/ffmpeg` (scan probe, keyframe lookup, HLS producer) passes
+  `-format_whitelist <list>` before its input, next to `-protocol_whitelist file`. The list
+  holds only demuxers that read exactly the one file they are given: the video containers
+  `media.IdentifyContainer` and the scanner's extensions map to (`matroska`, `mov`, `mpegts`,
+  `mpeg`, `mpegvideo`, `avi`, `flv`, `live_flv`, `ogg`, `asf`, `mxf`, `rm`), audio containers
+  (`flac`, `mp3`, `wav`, `aiff`, `wv`, `ape`, `dsf`, `iff`, `aac`, `ac3`, `eac3`, `dts`),
+  single images (`gif`, `png_pipe`, `jpeg_pipe`, `tiff_pipe`, `webp_pipe`) and subtitle files
+  (`srt`, `webvtt`, `ass`, `sup`). Not on it, because they open files named by the content or
+  derived from the path: `concat` (ffconcat lists), `hls`, `dash`, `imf`, `vobsub`; also every
+  script, device and network demuxer. FFmpeg 7.1.5 and 9.0.2 both check the whitelist right
+  after probing and before the demuxer reads its header (where concat and hls open their
+  entries) and copy it into nested opens. A file whose content selects another demuxer fails
+  with "Format not on whitelist"; it is never handed to the next-best demuxer. Verified with a
+  canary file: an unrestricted ffprobe reads it through an ffconcat list named `evil.mkv` and
+  through an `.m3u8` playlist, the protected probe, keyframe lookup and producer are refused.
+  FFmpeg itself already refuses HLS playlists without an `.m3u8`/`.m3u` extension, but
+  detects ffconcat lists by content, also through the producer's `/proc/self/fd/3`.
+- **image2** reads image sequences (`frame%d.jpg`) and, in FFmpeg 7.1, `%`-escaped globs; both
+  need a `%` in the path. It is allowed only for paths without `%`, where it reads exactly the
+  named file. It is the only demuxer FFmpeg opens JPEG files with, so the corpus stays fully
+  probeable. A path with `%` (`100% Wolf.mkv`) loses nothing but image2.
+- **Why not `-f` pinned from the probe result:** the scan probe has nothing to pin and needs
+  the whitelist anyway; `-f` restricts only the top-level demuxer, while the whitelist also
+  covers nested opens; pinning would make the probed demuxer travel through the catalog, the
+  playback job and the `KeyframeAtOrBefore` port. Pinning would also remove the
+  path-versus-descriptor detection difference noted under M2-24, which the whitelist does not:
+  both sides are limited to single-file demuxers but may still pick different ones for a file
+  with a weak signature. Revisit when the catalog stores the probed demuxer.
+- Support for further file kinds (music and photo libraries) extends the list deliberately; a
+  demuxer that opens other files needs its own decision first.

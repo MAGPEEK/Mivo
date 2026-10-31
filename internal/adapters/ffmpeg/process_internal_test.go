@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -205,6 +206,27 @@ func TestStartedProcessStopsWithItsContext(t *testing.T) {
 
 	if tail := process.stderrTail(); tail != "" {
 		t.Errorf("stderr tail = %q, want empty", tail)
+	}
+}
+
+// TestAbandonKillsAndReapsTheProcess: a start whose lifetime guard failed must not leave
+// the tool behind.
+func TestAbandonKillsAndReapsTheProcess(t *testing.T) {
+	fake := fakeTool(t, fakeModeHang)
+
+	command := exec.CommandContext(t.Context(), fake.executable) //nolint:gosec // this test binary, no shell
+	if err := command.Start(); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	abandon(command)
+
+	if command.ProcessState == nil {
+		t.Fatal("abandon did not reap the process")
+	}
+
+	if command.ProcessState.Success() {
+		t.Errorf("the abandoned process ended successfully (%v), want it killed", command.ProcessState)
 	}
 }
 

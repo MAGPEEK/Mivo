@@ -18,6 +18,16 @@ import (
 // The expected arguments below are written out literally on purpose: they are the contract
 // with FFmpeg (ADR 0024) and must not follow the implementation's constants.
 
+// hlsSingleFileDemuxers is the -format_whitelist of every input (ADR 0022 Notes M2-24b);
+// image2 joins it for paths without "%".
+const (
+	hlsSingleFileDemuxers = "matroska,mov,mpegts,mpeg,mpegvideo,avi,flv,live_flv,ogg,asf,mxf,rm," +
+		"flac,mp3,wav,aiff,wv,ape,dsf,iff,aac,ac3,eac3,dts," +
+		"gif,png_pipe,jpeg_pipe,tiff_pipe,webp_pipe," +
+		"srt,webvtt,ass,sup"
+	hlsDemuxersWithImages = hlsSingleFileDemuxers + ",image2"
+)
+
 func hlsCopyVideo(index int, codec string) playback.StreamDecision {
 	return playback.StreamDecision{
 		Kind: media.StreamKindVideo, SourceIndex: index, Action: playback.ActionCopy,
@@ -90,7 +100,7 @@ func hlsExpected(input, outputDirectory string, shape hlsShape) []string {
 
 	expected := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
 	expected = append(expected, shape.seek...)
-	expected = append(expected, "-protocol_whitelist", "file", "-i", "file:"+input)
+	expected = append(expected, "-format_whitelist", hlsDemuxersWithImages, "-protocol_whitelist", "file", "-i", "file:"+input)
 	expected = append(expected, shape.maps...)
 	expected = append(expected, "-sn", "-dn", "-map_metadata", "-1", "-map_chapters", "-1")
 	expected = append(expected, shape.codecs...)
@@ -205,12 +215,12 @@ func TestHLSArgumentsPerPlanShape(t *testing.T) {
 	}
 }
 
-func TestHLSArgumentsPassesTheProtocolWhitelistBeforeTheInput(t *testing.T) {
+func TestHLSArgumentsPassesTheWhitelistsBeforeTheInput(t *testing.T) {
 	t.Parallel()
 
 	got, err := ffmpeg.HLSArguments(ffmpeg.HLSJob{
 		Plan:            hlsPlan(playback.ModeRemux, hlsCopyVideo(0, "h264")),
-		InputPath:       hlsAbsolutePath(t, "media", "film.mkv"),
+		InputPath:       hlsAbsolutePath(t, "media", "100% Wolf.mkv"),
 		StartPosition:   time.Second,
 		OutputDirectory: hlsAbsolutePath(t, "transcode", "session"),
 	})
@@ -218,15 +228,19 @@ func TestHLSArgumentsPassesTheProtocolWhitelistBeforeTheInput(t *testing.T) {
 		t.Fatalf("HLSArguments: %v", err)
 	}
 
-	whitelist := slices.Index(got, "-protocol_whitelist")
 	input := slices.Index(got, "-i")
 
-	if whitelist < 0 || whitelist+1 >= len(got) || got[whitelist+1] != "file" {
-		t.Fatalf("arguments %q lack -protocol_whitelist file", got)
-	}
+	// Input options apply to the next -i only, so both whitelists must precede it. A path
+	// with "%" could be an image2 sequence pattern, so image2 is not allowed for it.
+	for option, value := range map[string]string{"-format_whitelist": hlsSingleFileDemuxers, "-protocol_whitelist": "file"} {
+		whitelist := slices.Index(got, option)
+		if whitelist < 0 || whitelist+1 >= len(got) || got[whitelist+1] != value {
+			t.Fatalf("arguments %q lack %s %s", got, option, value)
+		}
 
-	if input < whitelist {
-		t.Errorf("-protocol_whitelist at %d must precede -i at %d: %q", whitelist, input, got)
+		if input < whitelist {
+			t.Errorf("%s at %d must precede -i at %d: %q", option, whitelist, input, got)
+		}
 	}
 
 	if seek := slices.Index(got, "-ss"); seek < 0 || seek > input {

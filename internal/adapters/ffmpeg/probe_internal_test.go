@@ -239,7 +239,7 @@ func TestProbeRunsFFprobeWithSafeArguments(t *testing.T) {
 
 	want := []string{
 		"-v", "error", "-hide_banner", "-print_format", "json", "-show_format", "-show_streams",
-		"-protocol_whitelist", "file", "file:" + path,
+		"-format_whitelist", wantDemuxersWithImages, "-protocol_whitelist", "file", "file:" + path,
 	}
 	if recorded := calls(); len(recorded) != 1 || !slices.Equal(recorded[0], want) {
 		t.Errorf("arguments = %q, want %q", recorded, want)
@@ -247,6 +247,69 @@ func TestProbeRunsFFprobeWithSafeArguments(t *testing.T) {
 
 	if got.Container != media.ContainerWebM || len(got.Streams) != 5 {
 		t.Errorf("description = %+v", got)
+	}
+}
+
+// The demuxer whitelist is the contract with FFmpeg that keeps playlist-like demuxers away
+// from library files (ADR 0022 Notes M2-24b); it is written out literally on purpose.
+const (
+	wantSingleFileDemuxers = "matroska,mov,mpegts,mpeg,mpegvideo,avi,flv,live_flv,ogg,asf,mxf,rm," +
+		"flac,mp3,wav,aiff,wv,ape,dsf,iff,aac,ac3,eac3,dts," +
+		"gif,png_pipe,jpeg_pipe,tiff_pipe,webp_pipe," +
+		"srt,webvtt,ass,sup"
+	wantDemuxersWithImages = wantSingleFileDemuxers + ",image2"
+)
+
+func TestInputArgumentsRestrictDemuxersAndProtocols(t *testing.T) {
+	t.Parallel()
+
+	directory := t.TempDir()
+
+	tests := []struct {
+		name         string
+		path         string
+		wantDemuxers string
+	}{
+		{name: "plain name", path: filepath.Join(directory, "film.mkv"), wantDemuxers: wantDemuxersWithImages},
+		{name: "image", path: filepath.Join(directory, "cover.jpg"), wantDemuxers: wantDemuxersWithImages},
+		// image2 would read cover0.jpg, cover1.jpg, … for these.
+		{name: "sequence pattern", path: filepath.Join(directory, "cover%d.jpg"), wantDemuxers: wantSingleFileDemuxers},
+		{name: "percent in a folder", path: filepath.Join(directory, "100% films", "a.jpg"), wantDemuxers: wantSingleFileDemuxers},
+		{name: "percent in a film name", path: filepath.Join(directory, "100% Wolf.mkv"), wantDemuxers: wantSingleFileDemuxers},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := inputArguments(test.path)
+			if err != nil {
+				t.Fatalf("inputArguments: %v", err)
+			}
+
+			want := []string{"-format_whitelist", test.wantDemuxers, "-protocol_whitelist", "file", "file:" + test.path}
+			if !slices.Equal(got, want) {
+				t.Errorf("inputArguments(%q) = %q, want %q", test.path, got, want)
+			}
+		})
+	}
+}
+
+func TestAllowedDemuxersExcludeDemuxersThatOpenOtherFiles(t *testing.T) {
+	t.Parallel()
+
+	allowed := allowedDemuxers()
+
+	for _, demuxer := range []string{"concat", "hls", "dash", "imf", "vobsub", "image2", "avisynth", "vapoursynth", "lavfi", "sdp", "rtsp"} {
+		if slices.Contains(allowed, demuxer) {
+			t.Errorf("allowedDemuxers contains %s", demuxer)
+		}
+	}
+
+	for _, demuxer := range allowed {
+		if demuxer == "" || strings.ContainsAny(demuxer, ", ") {
+			t.Errorf("allowedDemuxers entry %q is not a single demuxer name", demuxer)
+		}
 	}
 }
 

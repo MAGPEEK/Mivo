@@ -1,11 +1,14 @@
 package ffmpeg
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +32,14 @@ const (
 	fakeModeHang        = "hang"
 	fakeModeFloodStdout = "flood-stdout"
 	fakeModeFloodStderr = "flood-stderr"
+	// fakeModeSpawnHang starts the fake in hang mode as its own child through the runner,
+	// prints the child's process ID and hangs: the parent of lifetime tests.
+	fakeModeSpawnHang = "spawn-hang"
+	// fakeModeHangHoldingStderr starts a hanging grandchild that inherits its standard error,
+	// writes the grandchild's process ID to the file named by fakeHolderVariable and hangs:
+	// after a kill the error pipe stays open until the test ends the grandchild.
+	fakeModeHangHoldingStderr = "hang-holding-stderr"
+	fakeHolderVariable        = "MIVO_FFMPEG_FAKE_HOLDER"
 
 	fakeFailExitCode = 3
 	fakeFailStderr   = "first line\nInvalid data found when processing input: ü\n"
@@ -64,11 +75,103 @@ func runFakeTool(mode string, arguments []string) int {
 		return fakeFlood(os.Stdout, 0)
 	case fakeModeFloodStderr:
 		return fakeFlood(os.Stderr, 1)
+	case fakeModeSpawnHang:
+		return fakeSpawnHang()
+	case fakeModeHangHoldingStderr:
+		return fakeHangHoldingStderr()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown fake mode %q\n", mode)
 
 		return 1
 	}
+}
+
+// fakeSpawnHang plays the server: it starts a hanging child exactly like the producer does,
+// reports the child's process ID on standard output and hangs until it is killed.
+func fakeSpawnHang() int {
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	// The child inherits the environment and must hang instead of spawning again.
+	if err := os.Setenv(fakeModeVariable, fakeModeHang); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	child, err := tool{name: "fakechild", executable: executable}.start(context.Background(), nil, processFiles{})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	if _, err := fmt.Fprintln(os.Stdout, child.command.Process.Pid); err != nil {
+		return 1
+	}
+
+	time.Sleep(fakeHangDuration)
+
+	return 0
+}
+
+// fakeHangHoldingStderr plays an FFmpeg whose stray child keeps its error output open: the
+// runner's Wait then cannot finish before processWaitDelay, however fast the kill is.
+func fakeHangHoldingStderr() int {
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	if err := os.Setenv(fakeModeVariable, fakeModeHang); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	// Started without the runner on purpose: no lifetime guard ties the holder to this
+	// process, so it outlives the kill. The test ends it through its process ID.
+	holder := exec.Command(executable) //nolint:gosec,noctx // this test binary; ended by the test
+	holder.Stderr = os.Stderr
+
+	if err := holder.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	if err := writeHolderPID(holder.Process.Pid); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	time.Sleep(fakeHangDuration)
+
+	return 0
+}
+
+// writeHolderPID publishes the holder's process ID under a temporary name and renames it,
+// so the test never reads a partial file.
+func writeHolderPID(pid int) error {
+	path := os.Getenv(fakeHolderVariable)
+
+	// The path comes from the test that started the fake, through the environment.
+	if err := os.WriteFile(path+fakeTemporarySuffix, []byte(strconv.Itoa(pid)), 0o600); err != nil { //nolint:gosec // see above
+		return fmt.Errorf("write holder pid: %w", err)
+	}
+
+	if err := os.Rename(path+fakeTemporarySuffix, path); err != nil { //nolint:gosec // see above
+		return fmt.Errorf("publish holder pid: %w", err)
+	}
+
+	return nil
 }
 
 // fakeFlood writes far more than any limit of the runner and stops when the reader is gone.

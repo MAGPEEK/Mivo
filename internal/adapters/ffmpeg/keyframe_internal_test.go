@@ -177,7 +177,7 @@ func assertKeyframeCalls(t *testing.T, recorded [][]string, path string, interva
 			"-v", "error", "-hide_banner", "-select_streams", "V:0", "-skip_frame", "nokey",
 			"-show_entries", "frame=key_frame,pts_time,best_effort_timestamp_time:format=start_time",
 			"-read_intervals", interval, "-print_format", "json",
-			"-protocol_whitelist", "file", "file:" + path,
+			"-format_whitelist", wantDemuxersWithImages, "-protocol_whitelist", "file", "file:" + path,
 		}
 		if !slices.Equal(recorded[index], want) {
 			t.Errorf("call %d = %q, want %q", index, recorded[index], want)

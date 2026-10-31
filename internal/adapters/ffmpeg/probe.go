@@ -33,10 +33,56 @@ const (
 	// the explicit list does not depend on that default.
 	protocolWhitelistOption = "-protocol_whitelist"
 	allowedProtocols        = "file"
+	// formatWhitelistOption with allowedDemuxers limits the demuxers FFmpeg may pick for an
+	// input, whatever the file's content says. FFmpeg checks it after probing and before the
+	// demuxer reads its header, which is where playlist-like demuxers (concat/ffconcat, hls,
+	// dash, imf) open the files they reference, and copies it into nested opens (ADR 0022
+	// Notes M2-24b). A refused input fails with "Format not on whitelist".
+	formatWhitelistOption = "-format_whitelist"
+	// demuxerSeparator joins the entries of the whitelist.
+	demuxerSeparator = ","
+	// imageSequenceDemuxer reads numbered image sequences ("img%03d.jpg") and, in FFmpeg
+	// 7.1, %-escaped globs: both need a "%" in the path. Without one it reads exactly the
+	// named file, the only way FFmpeg opens a JPEG, so it is allowed for such paths only.
+	imageSequenceDemuxer = "image2"
+	// imageSequenceMarker starts every image2 pattern.
+	imageSequenceMarker = "%"
 	// undeterminedLanguage is the ISO 639-2 code muxers write for "no language"; it carries
 	// no information, so it is stored as an empty language.
 	undeterminedLanguage = "und"
 )
+
+// allowedDemuxers are the FFmpeg demuxers that read exactly the one file they are given: the
+// containers Mivo knows (media.IdentifyContainer) and the scanner's video extensions map to,
+// the audio containers an audio-only file is remuxed from, single images and text or bitmap
+// subtitle files. Missing on purpose, because they open further files named by the content
+// or derived from the path: concat (ffconcat lists), hls, dash, imf, vobsub (the companion
+// .sub file), image2 (see imageSequenceDemuxer); also every device, script (avisynth,
+// vapoursynth) and network demuxer. A file whose content selects one of them is refused,
+// never handed to the next-best demuxer.
+func allowedDemuxers() []string {
+	return []string{
+		// Video containers.
+		"matroska", "mov", "mpegts", "mpeg", "mpegvideo", "avi", "flv", "live_flv", "ogg", "asf", "mxf", "rm",
+		// Audio containers and raw audio streams.
+		"flac", "mp3", "wav", "aiff", "wv", "ape", "dsf", "iff", "aac", "ac3", "eac3", "dts",
+		// Single images.
+		"gif", "png_pipe", "jpeg_pipe", "tiff_pipe", "webp_pipe",
+		// Subtitle files.
+		"srt", "webvtt", "ass", "sup",
+	}
+}
+
+// inputDemuxers returns the -format_whitelist value for absolutePath. A whitelist entry
+// matches every alias of a demuxer ("matroska" matches "matroska,webm").
+func inputDemuxers(absolutePath string) string {
+	demuxers := allowedDemuxers()
+	if !strings.Contains(absolutePath, imageSequenceMarker) {
+		demuxers = append(demuxers, imageSequenceDemuxer)
+	}
+
+	return strings.Join(demuxers, demuxerSeparator)
+}
 
 // placeholderValues are what ffprobe prints instead of a missing text value.
 func placeholderValues() []string {
@@ -98,9 +144,9 @@ func probeArguments(input []string) []string {
 	}, input...)
 }
 
-// inputArguments returns the arguments that open absolutePath as FFmpeg's input: the
-// protocol whitelist followed by the file: URL. Every tool invocation that reads a media
-// file ends with them. Relative paths are rejected because they would depend on the
+// inputArguments returns the arguments that open absolutePath as FFmpeg's input: the format
+// and protocol whitelists followed by the file: URL. Every tool invocation that reads a
+// media file ends with them. Relative paths are rejected because they would depend on the
 // server's working directory, Windows device paths because they do not name a file.
 func inputArguments(absolutePath string) ([]string, error) {
 	if !filepath.IsAbs(absolutePath) {
@@ -111,7 +157,11 @@ func inputArguments(absolutePath string) ([]string, error) {
 		return nil, fmt.Errorf("path in the Windows device namespace: %w", domain.ErrInvalid)
 	}
 
-	return []string{protocolWhitelistOption, allowedProtocols, fileProtocol + absolutePath}, nil
+	return []string{
+		formatWhitelistOption, inputDemuxers(absolutePath),
+		protocolWhitelistOption, allowedProtocols,
+		fileProtocol + absolutePath,
+	}, nil
 }
 
 // isWindowsDevicePath reports paths such as \\.\COM1 or \\?\GLOBALROOT\Device\... that

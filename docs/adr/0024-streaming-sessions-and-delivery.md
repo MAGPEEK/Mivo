@@ -171,3 +171,51 @@ Lifecycle details of `app/playback`; they refine the decision above without chan
 - When the service context ends without `Stop`, `Ready` reports `ErrProductionStopped` and no
   warning is logged.
 
+## Notes (M2-24b)
+
+Process hardening in `adapters/ffmpeg`; it refines the process rules above.
+
+- **FFmpeg dies with the server**, also when the server crashes or is killed. Linux: every tool
+  starts with the parent-death signal `SIGKILL` (`Pdeathsig`). Linux sends it when the OS
+  thread that started the child ends, and Go ends a thread when a goroutine locked to it
+  returns, so the goroutine that starts a tool stays locked to its thread until it has waited
+  for the tool (one OS thread per running tool, which the wait blocks anyway). Locking only
+  around the start would not do: afterwards any goroutine could lock that thread and end it.
+  The producer therefore starts and waits for FFmpeg on its supervising goroutine, never on
+  the caller's. Windows: every tool runs in its own job object with
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`; the server holds the only handle, so Windows ends the
+  job's processes when the server exits. A tool joins its job right after the start, so it runs
+  for a moment outside it; a server killed in exactly that moment leaves it running. Creating
+  the tool suspended (`CREATE_SUSPENDED`) would close that window, but `os/exec` closes the
+  handle of the primary thread, and finding the thread again with the documented Toolhelp
+  snapshot costs 100–150 ms per start on a desktop with thousands of threads (measured), more
+  than a quick ffprobe run takes; the faster ways (`NtResumeProcess`, `NtGetNextThread`) are
+  undocumented. Windows refuses (`ACCESS_DENIED`) to assign a tool that is already terminating,
+  which a quick ffprobe can be by then (about 1 in 5000 starts under load). Such a tool needs no
+  job: its exit code is set, or its handle is signalled within 100 ms. Any other assignment
+  failure refuses the start (`ErrUnavailable`) instead of running an unguarded tool. macOS and
+  the BSDs have no such guard. Tests kill a stand-in server without cleanup and assert that its
+  child is gone (Linux in Docker, Windows locally), and start 1000 instantly exiting tools on
+  Windows (100 elsewhere; `MIVO_FFMPEG_STRESS_STARTS` sets the count) without a single
+  failure.
+- The job limits travel to `SetInformationJobObject` by address through a
+  `//go:uintptrescapes` function. `golang.org/x/sys/windows` takes such addresses as plain
+  `uintptr` values and hands them on through Go code, so a value on the goroutine's stack can
+  move during the call. Before this fix about 6 in a million job objects silently lost
+  `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` under GC pressure. A test reads the limits back after
+  every bind, 500,000 binds while the collector churns
+  (`MIVO_FFMPEG_JOB_STRESS_BINDS` sets the count). Any future call that passes a Go value by
+  address to `x/sys/windows` needs the same treatment.
+- **Playlist rename on Windows.** FFmpeg's `temp_file` flag replaces `index.m3u8` by renaming
+  the temporary file over it. On Windows that rename fails while any reader has the playlist
+  open, even with `FILE_SHARE_DELETE` (`os.Root`), and FFmpeg 9.0.2 only logs it and still
+  exits with 0. Readers are the producer's readiness poll and the clients' playlist requests.
+  A lost rewrite is repaired by the next one, but a lost last rewrite left the playlist without
+  its last segments and `#EXT-X-ENDLIST`, plus a stray `index.m3u8.tmp`. After a clean exit the
+  producer therefore renames a remaining `index.m3u8.tmp` itself, retrying for about a second
+  while readers hold the playlist, and logs a warning if that fails. While FFmpeg runs, a client
+  may briefly see the previous playlist version.
+- The failure warning carries `exit_code` only when FFmpeg exited: its code, 0 for a clean
+  exit without segments, and -1 for a process ended by a signal, as Go reports it. It is left
+  out for failures that are no exit, such as a failed wait. `ffmpeg.ErrorOutput` (the stderr
+  tail) may be logged; it is never returned to clients.

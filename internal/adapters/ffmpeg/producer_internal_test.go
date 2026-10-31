@@ -9,9 +9,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -195,6 +197,24 @@ func awaitDone(t *testing.T, production appplayback.Production) {
 	}
 }
 
+// awaitFile waits until path exists.
+func awaitFile(t *testing.T, path string) {
+	t.Helper()
+
+	deadline := time.Now().Add(readyDeadline)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("%s did not appear within %s", filepath.Base(path), readyDeadline)
+		}
+
+		time.Sleep(testPollInterval)
+	}
+}
+
 func isDone(production appplayback.Production) bool {
 	select {
 	case <-production.Done():
@@ -332,8 +352,10 @@ func TestProducerHandsTheLibraryFileToFFmpeg(t *testing.T) {
 	}
 
 	input := slices.Index(calls[0], "-i")
-	if input < 2 || !slices.Equal(calls[0][input-2:input+2], []string{"-protocol_whitelist", "file", "-i", wantInput}) {
-		t.Errorf("arguments %q lack -protocol_whitelist file -i %s", calls[0], wantInput)
+	wantInputArguments := []string{"-format_whitelist", wantDemuxersWithImages, "-protocol_whitelist", "file", "-i", wantInput}
+
+	if input < 4 || !slices.Equal(calls[0][input-4:input+2], wantInputArguments) {
+		t.Errorf("arguments %q lack %q", calls[0], wantInputArguments)
 	}
 
 	assertNoWarnings(t, test.logs)
@@ -392,7 +414,179 @@ func TestProducerReportsACleanExitWithoutSegments(t *testing.T) {
 		t.Fatalf("Ready = %v, want errNoSegment", err)
 	}
 
+	// FFmpeg did exit, with code 0.
 	assertOneFailureLog(t, test.logs, 0, false)
+}
+
+func TestProducerCompletesALostFinalPlaylistRename(t *testing.T) {
+	test := newProducerTest(t, fakeModeHLSLostFinalRename)
+	production := test.start(t.Context(), t)
+	awaitDone(t, production)
+
+	if err := production.Ready(t.Context()); err != nil {
+		t.Fatalf("Ready after a clean end = %v, want nil", err)
+	}
+
+	playlist, err := os.ReadFile(filepath.Join(test.job.OutputDir, hlsPlaylistName))
+	if err != nil || !strings.HasSuffix(string(playlist), fakePlaylistEnd) {
+		t.Errorf("playlist = %q (%v), want the final playlist with #EXT-X-ENDLIST", playlist, err)
+	}
+
+	if _, err := os.Stat(filepath.Join(test.job.OutputDir, temporaryPlaylistName)); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the temporary playlist is left: %v", err)
+	}
+
+	assertNoWarnings(t, test.logs)
+}
+
+func TestCompletePlaylist(t *testing.T) {
+	t.Parallel()
+
+	const (
+		stalePlaylist = fakePlaylistHeader + fakePlaylistSegment
+		finalPlaylist = stalePlaylist + fakePlaylistEnd
+		// readerHold is how long a reader keeps the playlist open; the rename must wait.
+		readerHold = 100 * time.Millisecond
+	)
+
+	t.Run("nothing to complete", func(t *testing.T) {
+		t.Parallel()
+
+		directory := t.TempDir()
+		writeTestFile(t, directory, hlsPlaylistName, finalPlaylist)
+
+		if err := completePlaylist(directory); err != nil {
+			t.Fatalf("completePlaylist = %v, want nil", err)
+		}
+
+		assertFileContent(t, filepath.Join(directory, hlsPlaylistName), finalPlaylist)
+	})
+
+	t.Run("while a reader holds the playlist", func(t *testing.T) {
+		t.Parallel()
+
+		directory := t.TempDir()
+		writeTestFile(t, directory, hlsPlaylistName, stalePlaylist)
+		writeTestFile(t, directory, temporaryPlaylistName, finalPlaylist)
+
+		// Windows refuses to replace a file another handle has open.
+		reader, err := os.Open(filepath.Join(directory, hlsPlaylistName)) //nolint:gosec // test directory
+		if err != nil {
+			t.Fatalf("open the playlist: %v", err)
+		}
+
+		time.AfterFunc(readerHold, func() { _ = reader.Close() })
+
+		if err := completePlaylist(directory); err != nil {
+			t.Fatalf("completePlaylist = %v, want nil", err)
+		}
+
+		assertFileContent(t, filepath.Join(directory, hlsPlaylistName), finalPlaylist)
+	})
+
+	t.Run("rename keeps failing", func(t *testing.T) {
+		t.Parallel()
+
+		directory := t.TempDir()
+		writeTestFile(t, directory, temporaryPlaylistName, finalPlaylist)
+
+		// A non-empty directory under the playlist's name can never be replaced.
+		if err := os.MkdirAll(filepath.Join(directory, hlsPlaylistName, "blocker"), 0o750); err != nil {
+			t.Fatalf("create blocker: %v", err)
+		}
+
+		if err := completePlaylist(directory); err == nil {
+			t.Fatal("completePlaylist = nil, want the rename error")
+		}
+	})
+}
+
+func assertFileContent(t *testing.T, path, want string) {
+	t.Helper()
+
+	data, err := os.ReadFile(path) //nolint:gosec // test directory
+	if err != nil || string(data) != want {
+		t.Errorf("%s = %q (%v), want %q", filepath.Base(path), data, err, want)
+	}
+}
+
+func TestProducerLogsNoExitCodeForAFailureThatIsNoExit(t *testing.T) {
+	t.Parallel()
+
+	logs := &syncBuffer{}
+	failed := &production{sessionID: testSessionID, logger: slog.New(slog.NewJSONHandler(logs, nil))}
+
+	failed.logFailure(t.Context(), fmt.Errorf("run ffmpeg: %w", exec.ErrWaitDelay), "", true)
+
+	warnings := logs.warnings(t)
+	if len(warnings) != 1 {
+		t.Fatalf("got %d warnings, want 1: %v", len(warnings), warnings)
+	}
+
+	if code, found := warnings[0]["exit_code"]; found {
+		t.Errorf("warning carries exit_code %v for a failure that is no exit: %v", code, warnings[0])
+	}
+
+	if warnings[0]["session"] != testSessionID || warnings[0]["segments_written"] != true {
+		t.Errorf("warning = %v", warnings[0])
+	}
+}
+
+// TestProducerOutlivesTheGoroutineThatStartedIt: Linux sends the parent-death signal when the
+// OS thread that started FFmpeg ends, and Go ends a thread when a goroutine locked to it
+// returns. A caller doing that must not take the production with it (lifetime_linux.go).
+func TestProducerOutlivesTheGoroutineThatStartedIt(t *testing.T) {
+	// Go parks the main thread instead of ending it, and only one goroutine can park it, so
+	// with two starting goroutines at least one thread really ends.
+	const startingGoroutines = 2
+
+	test := newProducerTest(t, fakeModeHLSLive)
+
+	for range startingGoroutines {
+		job := test.job
+		job.OutputDir = t.TempDir()
+
+		production := startOnEndingThread(t, test.producer, job)
+
+		// The fake writes its segment only after fakeSegmentDelay, long after the starting
+		// goroutine and its thread ended.
+		if err := readyWithin(t, production, readyDeadline); err != nil {
+			t.Fatalf("Ready = %v, want the production to survive its starting goroutine", err)
+		}
+
+		if isDone(production) {
+			t.Error("the process ended with the goroutine that started it")
+		}
+	}
+}
+
+// startOnEndingThread starts job from a goroutine that ends locked to its OS thread, so the
+// thread ends with it, and stops the production when the test ends.
+func startOnEndingThread(t *testing.T, producer *Producer, job appplayback.Job) appplayback.Production {
+	t.Helper()
+
+	started := make(chan appplayback.Production, 1)
+
+	go func() {
+		// Never unlocked: the thread ends together with this goroutine.
+		runtime.LockOSThread()
+
+		production, err := producer.Start(t.Context(), job)
+		if err != nil {
+			t.Errorf("Start: %v", err)
+		}
+
+		started <- production
+	}()
+
+	production := <-started
+	if production == nil {
+		t.FailNow()
+	}
+
+	t.Cleanup(production.Stop)
+
+	return production
 }
 
 func TestProducerReadyEndsWithItsContext(t *testing.T) {
@@ -400,6 +594,12 @@ func TestProducerReadyEndsWithItsContext(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			test := newProducerTest(t, mode)
 			production := test.start(t.Context(), t)
+
+			// The header-only fake writes its playlist after fakeSegmentDelay. The not-ready
+			// wait starts once it exists, so Ready has really read a playlist without segments.
+			if mode == fakeModeHLSHeaderOnly {
+				awaitFile(t, filepath.Join(test.job.OutputDir, hlsPlaylistName))
+			}
 
 			if err := readyWithin(t, production, notReadyWait); !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatalf("Ready = %v, want context.DeadlineExceeded", err)
@@ -464,19 +664,82 @@ func TestProducerStopsWithItsContext(t *testing.T) {
 	assertNoWarnings(t, test.logs)
 }
 
+// TestProducerStopGivesUpAfterTheStopTimeout: a stray child of FFmpeg keeps its error output
+// open, so after the kill the process cannot be reaped before processWaitDelay. Done stays
+// open however fast the kill is, and only the stop timeout can end Stop: the test does not
+// depend on which of two ready select cases Go picks.
 func TestProducerStopGivesUpAfterTheStopTimeout(t *testing.T) {
-	test := newProducerTest(t, fakeModeHang)
-	// Killing a process takes far longer than a nanosecond, so Stop gives up first.
-	test.producer.stopTimeout = time.Nanosecond
+	const testStopTimeout = 50 * time.Millisecond
+
+	holderFile := filepath.Join(t.TempDir(), "holder.pid")
+	t.Setenv(fakeHolderVariable, holderFile)
+
+	test := newProducerTest(t, fakeModeHangHoldingStderr)
+	test.producer.stopTimeout = testStopTimeout
 	production := test.start(t.Context(), t)
+	holder := awaitHolder(t, holderFile)
 
 	production.Stop()
-	awaitDone(t, production)
+
+	if isDone(production) {
+		t.Fatal("Done is closed although the stray child still holds the error output")
+	}
 
 	warnings := test.logs.warnings(t)
 	if len(warnings) != 1 || warnings[0]["session"] != testSessionID {
 		t.Errorf("warnings = %v, want one about the slow exit", warnings)
 	}
+
+	// Once the stray child is gone, the process is reaped and reported as stopped.
+	_ = holder.Kill()
+
+	awaitDone(t, production)
+	assertStopped(t, production.Ready(t.Context()))
+
+	if after := test.logs.warnings(t); len(after) != 1 {
+		t.Errorf("warnings after the end = %v, want only the one about the slow exit", after)
+	}
+}
+
+// awaitHolder waits until the fake published its stray child's process ID and ends that
+// child when the test ends.
+func awaitHolder(t *testing.T, holderFile string) *os.Process {
+	t.Helper()
+
+	var (
+		pid     int
+		readErr error
+	)
+
+	// Windows may still hold the freshly renamed file for a moment (sharing violation).
+	deadline := time.Now().Add(readyDeadline)
+	for {
+		var text []byte
+
+		text, readErr = os.ReadFile(holderFile) //nolint:gosec // test directory
+		if readErr == nil {
+			pid, readErr = strconv.Atoi(string(text))
+		}
+
+		if readErr == nil {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatalf("read the holder pid within %s: %v", readyDeadline, readErr)
+		}
+
+		time.Sleep(testPollInterval)
+	}
+
+	holder, err := os.FindProcess(pid)
+	if err != nil {
+		t.Fatalf("find holder %d: %v", pid, err)
+	}
+
+	t.Cleanup(func() { _ = holder.Kill() })
+
+	return holder
 }
 
 func TestProducerStartFailures(t *testing.T) {

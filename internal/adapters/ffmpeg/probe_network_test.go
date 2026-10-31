@@ -46,8 +46,9 @@ SEGMENT_URL
 
 // TestProbeNeverFollowsNetworkReferences: a file whose content makes FFmpeg open further
 // URLs must not reach the network (SSRF, ADR 0022). A control run with the network allowed
-// proves that the same file does contact the server, so a pass means the protocol
-// whitelist held, not that the demuxer is missing.
+// proves that the same file does contact the server, so a pass means the input restrictions
+// held, not that the demuxer is missing: the demuxer whitelist refuses dash and hls before
+// they open anything, and the protocol whitelist would refuse the URL.
 func TestProbeNeverFollowsNetworkReferences(t *testing.T) {
 	ffprobePath := requireFFprobe(t)
 

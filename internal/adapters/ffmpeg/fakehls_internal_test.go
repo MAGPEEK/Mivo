@@ -22,6 +22,10 @@ const (
 	fakeModeHLSFailAfterSegment = "hls-fail-after-segment"
 	// fakeModeHLSHeaderOnly writes a playlist without segments and keeps running.
 	fakeModeHLSHeaderOnly = "hls-header-only"
+	// fakeModeHLSLostFinalRename writes one segment, then the final playlist only under its
+	// temporary name, and exits cleanly: FFmpeg on Windows when a reader held the playlist
+	// during its last rename.
+	fakeModeHLSLostFinalRename = "hls-lost-final-rename"
 
 	// fakeSegmentDelay holds the first segment back, so Ready has to poll for it.
 	fakeSegmentDelay = 300 * time.Millisecond
@@ -38,6 +42,7 @@ const (
 func isFakeHLSMode(mode string) bool {
 	return slices.Contains([]string{
 		fakeModeHLSLive, fakeModeHLSComplete, fakeModeHLSFailAfterSegment, fakeModeHLSHeaderOnly,
+		fakeModeHLSLostFinalRename,
 	}, mode)
 }
 
@@ -57,7 +62,7 @@ func fakeHLS(mode string, arguments []string) int {
 	}
 
 	switch mode {
-	case fakeModeHLSComplete:
+	case fakeModeHLSComplete, fakeModeHLSLostFinalRename:
 		return 0
 	case fakeModeHLSFailAfterSegment:
 		fmt.Fprint(os.Stderr, fakeFailStderr)
@@ -99,7 +104,21 @@ func writeFakeHLS(mode string, arguments []string) error {
 		playlist += fakePlaylistEnd
 	}
 
-	return writeFakeFile(directory, hlsPlaylistName, []byte(playlist))
+	if err := writeFakeFile(directory, hlsPlaylistName, []byte(playlist)); err != nil {
+		return err
+	}
+
+	if mode != fakeModeHLSLostFinalRename {
+		return nil
+	}
+
+	// The rename of the final playlist is the one that failed.
+	final := filepath.Join(directory, hlsPlaylistName+fakeTemporarySuffix)
+	if err := os.WriteFile(final, []byte(playlist+fakePlaylistEnd), 0o600); err != nil { //nolint:gosec // see writeFakeFile
+		return fmt.Errorf("write the final playlist: %w", err)
+	}
+
+	return nil
 }
 
 // fakeHLSPaths returns the output directory and the input path of an HLSArguments list.

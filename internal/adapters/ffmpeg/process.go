@@ -42,14 +42,16 @@ type tool struct {
 	executable string
 }
 
-// process is a started tool. wait must be called exactly once.
+// process is a started tool. wait must be called exactly once, on the goroutine that called
+// start (childLifetime pins that goroutine to its OS thread on Linux).
 type process struct {
 	tool tool
 	// ctx is the context the process runs under; wait reports it as the reason when it
 	// ended the process.
-	ctx     context.Context
-	command *exec.Cmd
-	stderr  *tailBuffer
+	ctx      context.Context
+	command  *exec.Cmd
+	stderr   *tailBuffer
+	lifetime *childLifetime
 }
 
 // exitError reports a tool that ran and exited unsuccessfully. Its message names the tool
@@ -72,9 +74,10 @@ func (e *exitError) stderrTail() string {
 
 // ErrorOutput returns the bounded tail of FFmpeg's error output (at most 4 KiB) when err
 // comes from a tool of this package that exited unsuccessfully; the second result is false
-// for any other error. It is for debugging only: the text contains absolute paths and bytes
-// taken from the media file, so callers log it at debug level and never return it to
-// clients.
+// for any other error. The tail may be logged on the server – the Producer logs it once at
+// warn level when a production fails (ADR 0024) – but it is never returned to clients: it
+// can contain absolute media paths, revealing the library roots, and arbitrary bytes taken
+// from the media file.
 func ErrorOutput(err error) (string, bool) {
 	var exit *exitError
 	if !errors.As(err, &exit) {
@@ -125,7 +128,8 @@ type processFiles struct {
 }
 
 // start starts the tool without waiting for it; long-running jobs (the HLS producer) use it
-// directly. The process is killed when ctx ends.
+// directly. The process is killed when ctx ends, and with the server where the system allows
+// it (childLifetime). The caller must call wait on the same goroutine.
 func (t tool) start(ctx context.Context, arguments []string, files processFiles) (*process, error) {
 	// The executable is the configured tool path and the arguments are a slice: no shell
 	// is involved, so no argument can inject a command.
@@ -139,7 +143,14 @@ func (t tool) start(ctx context.Context, arguments []string, files processFiles)
 	command.ExtraFiles = files.inherited
 	command.WaitDelay = processWaitDelay
 
+	lifetime, err := bindChildLifetime(command)
+	if err != nil {
+		return nil, fmt.Errorf("start %s: %w: %w", t.name, domain.ErrUnavailable, err)
+	}
+
 	if err := command.Start(); err != nil {
+		lifetime.release()
+
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, fmt.Errorf("start %s: %w", t.name, ctxErr)
 		}
@@ -147,13 +158,28 @@ func (t tool) start(ctx context.Context, arguments []string, files processFiles)
 		return nil, fmt.Errorf("start %s: %w: %w", t.name, domain.ErrUnavailable, err)
 	}
 
-	return &process{tool: t, ctx: ctx, command: command, stderr: stderr}, nil
+	if err := lifetime.adopt(command.Process); err != nil {
+		// A tool that would outlive a crashed server is not run on.
+		abandon(command)
+		lifetime.release()
+
+		return nil, fmt.Errorf("start %s: %w: %w", t.name, domain.ErrUnavailable, err)
+	}
+
+	return &process{tool: t, ctx: ctx, command: command, stderr: stderr, lifetime: lifetime}, nil
+}
+
+// abandon kills a started command and reaps it; its outcome no longer matters.
+func abandon(command *exec.Cmd) {
+	_ = command.Process.Kill()
+	_ = command.Wait()
 }
 
 // wait waits for the process to end. A process stopped by its context reports ctx.Err(),
 // whatever exit code the kill produced.
 func (p *process) wait() error {
 	err := p.command.Wait()
+	p.lifetime.release()
 
 	if ctxErr := p.ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("run %s: %w", p.tool.name, ctxErr)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"runtime"
@@ -23,8 +24,10 @@ const (
 	// The temp_file flag makes every file the playlist lists complete.
 	readyPollInterval = 150 * time.Millisecond
 	// stopTimeout bounds how long Stop waits for the killed process. It exceeds
-	// processWaitDelay, after which Wait returns even when a stray child holds the pipes.
-	stopTimeout = processWaitDelay + 5*time.Second
+	// processWaitDelay, after which Wait returns even when a stray child holds the pipes, by
+	// stopKillGrace, the time the system gets to end and reap the killed process.
+	stopTimeout   = processWaitDelay + stopKillGrace
+	stopKillGrace = 5 * time.Second
 	// maxPlaylistReadBytes bounds what Ready reads of the playlist; the first segment is
 	// listed within its first lines.
 	maxPlaylistReadBytes = 64 << 10
@@ -38,6 +41,13 @@ const (
 	// playlistCommentPrefix starts the tags and comments of a playlist; every other
 	// non-empty line is a segment URI.
 	playlistCommentPrefix = "#"
+	// temporaryPlaylistName is where FFmpeg's temp_file flag writes each playlist version
+	// before renaming it over hlsPlaylistName.
+	temporaryPlaylistName = hlsPlaylistName + ".tmp"
+	// playlistRenameAttempts and playlistRenameRetryDelay bound how long completePlaylist
+	// waits for readers to release the playlist: about a second, far longer than a read.
+	playlistRenameAttempts   = 100
+	playlistRenameRetryDelay = 10 * time.Millisecond
 )
 
 // errNoSegment reports an FFmpeg run that exited cleanly without writing a segment, for
@@ -129,17 +139,11 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		return nil, err
 	}
 
-	// FFmpeg holds its own copy of an inherited descriptor once it started.
+	// FFmpeg holds its own copy of an inherited descriptor once it started, and start
+	// returns only after the start.
 	defer closeAll(inherited)
 
 	processContext, cancel := context.WithCancel(ctx)
-
-	started, err := p.ffmpeg.start(processContext, arguments, processFiles{inherited: inherited})
-	if err != nil {
-		cancel()
-
-		return nil, err
-	}
 
 	production := &production{
 		sessionID:   job.SessionID,
@@ -151,7 +155,20 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		done:        make(chan struct{}),
 	}
 
-	go production.supervise(ctx, started)
+	// The process is started and waited for on the supervising goroutine, never on the
+	// caller's: on Linux it must be waited for on the goroutine that started it, which keeps
+	// the thread its parent-death signal is bound to alive (lifetime_linux.go).
+	startResult := make(chan error, 1)
+
+	go production.run(ctx, func() (*process, error) {
+		return p.ffmpeg.start(processContext, arguments, processFiles{inherited: inherited})
+	}, startResult)
+
+	if err := <-startResult; err != nil {
+		cancel()
+
+		return nil, err
+	}
 
 	return production, nil
 }
@@ -269,6 +286,17 @@ func (p *production) stoppedError() error {
 	return fmt.Errorf("session %s: %w", p.sessionID, appplayback.ErrProductionStopped)
 }
 
+// run starts the process, reports the start's error on startResult and supervises the
+// started process. ctx is the context Start ran under, used for logging only.
+func (p *production) run(ctx context.Context, start func() (*process, error), startResult chan<- error) {
+	started, err := start()
+	startResult <- err
+
+	if err == nil {
+		p.supervise(ctx, started)
+	}
+}
+
 // supervise waits for the process, records how it ended and closes done. ctx is the
 // context Start ran under, used for logging only.
 func (p *production) supervise(ctx context.Context, started *process) {
@@ -283,6 +311,13 @@ func (p *production) supervise(ctx context.Context, started *process) {
 func (p *production) outcome(ctx context.Context, started *process, waitErr error) error {
 	if contextErr := started.ctx.Err(); contextErr != nil {
 		return fmt.Errorf("session %s: %w (%s)", p.sessionID, appplayback.ErrProductionStopped, contextErr.Error())
+	}
+
+	if waitErr == nil {
+		if err := completePlaylist(p.directory); err != nil {
+			p.logger.LogAttrs(ctx, slog.LevelWarn, "the final playlist could not be completed",
+				slog.String("session", p.sessionID), slog.String("error", err.Error()))
+		}
 	}
 
 	segmentsWritten := playlistListsSegment(p.directory)
@@ -300,29 +335,74 @@ func (p *production) outcome(ctx context.Context, started *process, waitErr erro
 	return fmt.Errorf("stream production of session %s: %w", p.sessionID, failure)
 }
 
-// logFailure writes the one warning of a failed production. The task asks for FFmpeg's
-// stderr tail at warn level (ADR 0024): it is the only record of why a transcode broke. It
-// may contain the media path; logs stay on the server.
+// logFailure writes the one warning of a failed production. FFmpeg's stderr tail is logged
+// at warn level (ADR 0024): it is the only record of why a transcode broke. It may contain
+// the media path; logs stay on the server. exit_code is present only when FFmpeg exited.
 func (p *production) logFailure(ctx context.Context, failure error, stderrTail string, segmentsWritten bool) {
-	exitCode := 0
+	attributes := []slog.Attr{slog.String("session", p.sessionID)}
 
-	var exit *exitError
-	if errors.As(failure, &exit) {
-		exitCode = exit.code
+	if code, exited := exitCode(failure); exited {
+		attributes = append(attributes, slog.Int("exit_code", code))
 	}
 
-	p.logger.LogAttrs(ctx, slog.LevelWarn, "ffmpeg stream production failed",
-		slog.String("session", p.sessionID),
-		slog.Int("exit_code", exitCode),
+	attributes = append(attributes,
 		slog.Bool("segments_written", segmentsWritten),
 		slog.String("error", failure.Error()),
 		slog.String("stderr", stderrTail))
+
+	p.logger.LogAttrs(ctx, slog.LevelWarn, "ffmpeg stream production failed", attributes...)
+}
+
+// exitCode returns FFmpeg's exit code for a failure that is an exit: an unsuccessful one,
+// or a clean one without segments (code 0). The second result is false for anything else,
+// such as a failed wait.
+func exitCode(failure error) (int, bool) {
+	var exit *exitError
+
+	switch {
+	case errors.As(failure, &exit):
+		return exit.code, true
+	case errors.Is(failure, errNoSegment):
+		return 0, true
+	default:
+		return 0, false
+	}
+}
+
+// completePlaylist finishes a playlist rename FFmpeg could not do. FFmpeg replaces the
+// playlist by renaming its temporary file over it; on Windows that rename fails while any
+// reader (Ready, a client's playlist request) has the playlist open, even with
+// FILE_SHARE_DELETE, and FFmpeg carries on without an error (FFmpeg 9.0.2). The next rewrite
+// repairs a lost one, but after the last one the playlist would stay without its last
+// segments and #EXT-X-ENDLIST. After a clean exit the temporary playlist is complete, so it
+// is renamed here, retrying while readers hold the playlist. Without a temporary playlist
+// there is nothing to do.
+func completePlaylist(directory string) error {
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return fmt.Errorf("open the session directory: %w", err)
+	}
+
+	defer closeQuietly(root)
+
+	for attempt := 1; ; attempt++ {
+		err := root.Rename(temporaryPlaylistName, hlsPlaylistName)
+		if err == nil || errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+
+		if attempt == playlistRenameAttempts {
+			return fmt.Errorf("rename the final playlist after %d attempts: %w", attempt, err)
+		}
+
+		time.Sleep(playlistRenameRetryDelay)
+	}
 }
 
 // playlistListsSegment reports whether the playlist in directory lists a segment; a missing
-// or unreadable playlist lists none yet. It reads through os.Root because that opens files
-// with FILE_SHARE_DELETE on Windows: FFmpeg replaces the playlist by renaming its temporary
-// file over it, which fails while a reader holds it open without that share mode.
+// or unreadable playlist lists none yet. It reads through os.Root, which opens files with
+// FILE_SHARE_DELETE on Windows; that keeps deletes possible but does not stop a read from
+// failing FFmpeg's rename over the playlist (see completePlaylist).
 func playlistListsSegment(directory string) bool {
 	root, err := os.OpenRoot(directory)
 	if err != nil {
