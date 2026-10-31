@@ -118,29 +118,40 @@ function useAutoHidingControls(playingFreely: boolean): boolean {
   return useControlsVisibility(playingFreely && !keyboardFocusInControls);
 }
 
-/** What the play button shows and does. */
-interface PlayControl {
-  readonly paused: boolean;
+/** What the control bar shows of the element and does with it. */
+interface PlayerMedia {
+  /** The element's sound and produced ranges; `paused` is what the play button shows. */
+  readonly media: MediaState;
   readonly togglePlay: () => void;
+  readonly toggleMute: () => void;
+  readonly setVolume: (volume: number) => void;
 }
 
 /**
- * Play and pause act on the element while a stream plays. Before that (loading, a restart, a
- * wait for the stream, an error) the element is empty, so they set the engine's intent for
- * the next stream instead, and the button shows that intent.
+ * Play and pause always set the engine's intent, which plays or pauses an attached stream at
+ * once: a recovery or a retry of a stream that was not ready then keeps a pause the user made
+ * (ADR 0024 Notes M2-41). The element's own togglePlay is therefore not used. While a stream
+ * plays, the button shows and toggles the element's state, which may differ from the intent
+ * (the file ended, the browser refused to autoplay). Before that (loading, a restart, a wait
+ * for the stream, an error) the element is empty, so the button shows the intent for the next
+ * stream.
  */
-function playControl(
-  playback: Pick<PlaybackSessionView, "status" | "autoplay" | "setAutoplay">,
-  element: PlayControl,
-): PlayControl {
-  if (playback.status === "playing") {
-    return element;
-  }
+function usePlayerMedia(
+  video: HTMLVideoElement | null,
+  playback: Pick<PlaybackSessionView, "session" | "status" | "autoplay" | "setAutoplay">,
+): PlayerMedia {
+  const { paused, muted, volume, producedRanges, toggleMute, setVolume } = useMediaControls(
+    video,
+    playback.session,
+  );
+  const shownPaused = playback.status === "playing" ? paused : !playback.autoplay;
   return {
-    paused: !playback.autoplay,
+    media: { paused: shownPaused, muted, volume, producedRanges },
     togglePlay: () => {
-      playback.setAutoplay(!playback.autoplay);
+      playback.setAutoplay(shownPaused);
     },
+    toggleMute,
+    setVolume,
   };
 }
 
@@ -171,18 +182,17 @@ export function usePlayer(target: PlaybackTarget): Player {
   const [video, videoRef] = useVideoElement(attachVideo);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const { session } = playback;
-  const { togglePlay, toggleMute, setVolume, ...media } = useMediaControls(video, session);
-  const play = playControl(playback, { paused: media.paused, togglePlay });
+  const { media, togglePlay, toggleMute, setVolume } = usePlayerMedia(video, playback);
   const fullscreen = useFullscreen(container);
   const overlay = useStreamInfoOverlay();
   const [playButtonRef, retryAndFocus] = useRetryWithFocus(retry);
   const title = usePlayerTitle(target.itemId);
   const { exit, openItem } = usePlayerExit(target.itemId);
   const controlsVisible = useAutoHidingControls(
-    playback.status === "playing" && !play.paused && !overlay.open,
+    playback.status === "playing" && !media.paused && !overlay.open,
   );
   const actions: PlayerActions = {
-    togglePlay: play.togglePlay,
+    togglePlay,
     seek,
     toggleMute,
     setVolume,
@@ -201,7 +211,7 @@ export function usePlayer(target: PlaybackTarget): Player {
       streamInfo: session === undefined ? undefined : streamInfo(session),
       position: playback.position,
       duration: session === undefined ? undefined : knownDuration(session),
-      media: { ...media, paused: play.paused },
+      media,
       fullscreenSupported: fullscreen.supported,
       fullscreenActive: fullscreen.active,
       controlsVisible,

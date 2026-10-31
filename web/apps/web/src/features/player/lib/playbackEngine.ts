@@ -249,19 +249,26 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     this.updatePosition();
   }
 
-  /** Starts again at the current position after an error, e.g. `session_limit_reached`. */
+  /**
+   * Starts again at the current position after an error, e.g. `session_limit_reached`. It
+   * keeps the intent: playing, unless the user paused (ADR 0024 Notes M2-41).
+   */
   retry(): void {
     const { request } = this;
     if (request === undefined || this.suspended) {
       return;
     }
     this.resetRecovery();
-    this.restart(request, this.snapshot.position, true);
+    this.restart(request, this.snapshot.position, this.autoplay);
   }
 
   /**
    * Sets whether playback should run. Before a stream is attached, this decides whether it
    * starts playing once it is; an attached stream plays or pauses right away.
+   *
+   * Only the user's play and pause set the intent; the engine does not follow the element's own
+   * `pause` events (the end of the file, a refused autoplay), so a recovery after those still
+   * plays as the user last asked.
    */
   setAutoplay(autoplay: boolean): void {
     if (this.request === undefined) {

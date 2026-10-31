@@ -49,7 +49,7 @@
       "unknown": "Other mode"
     },
     "reason": {
-      "container_not_supported": "{{sourceContainer}} not supported → remux to {{targetContainer}}",
+      "container_not_supported": "{{sourceContainer}} not supported → {{targetContainer}}",
       "video_codec_not_supported": "Video {{sourceCodec}} not supported → {{targetCodec}}",
       "video_profile_not_supported": "Video profile of {{sourceCodec}} not supported → {{targetCodec}}",
       "video_bit_depth_not_supported": "Video bit depth of {{sourceCodec}} not supported → {{targetCodec}}",

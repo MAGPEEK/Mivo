@@ -29,6 +29,8 @@ function useDragEndListeners(): DragEndListeners {
   );
   return {
     listen: (onRelease, onCancel) => {
+      // A second pointerdown can arrive before the first drag ended (e.g. another touch).
+      remove.current?.();
       window.addEventListener("pointerup", onRelease);
       window.addEventListener("pointercancel", onCancel);
       remove.current = () => {

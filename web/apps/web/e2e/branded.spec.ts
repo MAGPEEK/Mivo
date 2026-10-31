@@ -49,7 +49,7 @@ const modeCases: readonly ModeCase[] = [
     clip: flvClip,
     sessionMode: "remux",
     mode: modes.remux,
-    reason: /^FLV not supported → remux to MP4$/,
+    reason: /^FLV not supported → MP4$/,
   },
   {
     clip: aviClip,

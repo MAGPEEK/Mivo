@@ -427,7 +427,7 @@ describe("PlaybackEngine play intent", () => {
     expect(snapshot().autoplay).toBe(true);
   });
 
-  it("starts every new attempt with the intent it asks for", async () => {
+  it("plays every newly opened file, whatever the intent was before", async () => {
     const { engine, open, snapshot, untilSession } = createEngineHarness();
     engine.setAutoplay(false);
     expect(snapshot().autoplay).toBe(true);
@@ -435,7 +435,7 @@ describe("PlaybackEngine play intent", () => {
     await untilSession("session-1");
     engine.setAutoplay(false);
 
-    engine.retry();
+    open();
 
     expect(snapshot().autoplay).toBe(true);
   });

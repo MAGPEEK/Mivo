@@ -129,7 +129,7 @@ test("shows the stream-info overlay from the keyboard and returns focus when it 
 
   const overlay = page.getByRole("region", { name: "Stream info" });
   await expect(overlay.getByText("Direct Stream")).toBeVisible();
-  await expect(overlay.getByText("MKV not supported → remux to MP4")).toBeVisible();
+  await expect(overlay.getByText("MKV not supported → MP4")).toBeVisible();
   await expect(overlay.getByText("MKV → MP4")).toBeVisible();
   await expect(overlay.getByText("4.1 Mbit/s")).toBeVisible();
   await expect(overlay.getByRole("heading", { name: "Stream info" })).toBeFocused();

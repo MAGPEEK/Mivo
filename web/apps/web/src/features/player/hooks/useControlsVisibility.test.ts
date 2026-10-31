@@ -1,7 +1,12 @@
 import { act, fireEvent, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { controlsHideDelayMilliseconds, useControlsVisibility } from "./useControlsVisibility";
+import {
+  controlsHideDelayMilliseconds,
+  playerControlsMarker,
+  useControlsVisibility,
+  useKeyboardFocusInControls,
+} from "./useControlsVisibility";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -81,5 +86,81 @@ describe("useControlsVisibility", () => {
 
     expect(removeListener).toHaveBeenCalledWith("pointermove", expect.any(Function));
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("useKeyboardFocusInControls", () => {
+  let controls: HTMLElement;
+  let button: HTMLButtonElement;
+  let focusVisible: boolean;
+
+  beforeEach(() => {
+    controls = document.createElement("div");
+    for (const [name, value] of Object.entries(playerControlsMarker)) {
+      controls.setAttribute(name, value);
+    }
+    button = document.createElement("button");
+    controls.append(button);
+    document.body.append(controls);
+    focusVisible = false;
+    // jsdom has no focus-visible heuristics; a browser decides it from the input method.
+    const matches = button.matches.bind(button);
+    vi.spyOn(button, "matches").mockImplementation((selectors) =>
+      selectors === ":focus-visible" ? focusVisible : matches(selectors),
+    );
+  });
+
+  afterEach(() => {
+    controls.remove();
+    vi.restoreAllMocks();
+  });
+
+  it("does not pin the controls for a control focused by a mouse click", () => {
+    const { result } = renderHook(() => useKeyboardFocusInControls());
+
+    act(() => {
+      button.focus();
+    });
+
+    expect(result.current).toBe(false);
+  });
+
+  it("pins them once a control focused by a click gets keyboard input", () => {
+    const { result } = renderHook(() => useKeyboardFocusInControls());
+    act(() => {
+      button.focus();
+    });
+    expect(result.current).toBe(false);
+
+    focusVisible = true;
+    act(() => {
+      fireEvent.keyDown(button, { key: "ArrowRight" });
+    });
+
+    expect(result.current).toBe(true);
+  });
+
+  it("stays unpinned on keyboard input that leaves the focus without a ring", () => {
+    const { result } = renderHook(() => useKeyboardFocusInControls());
+    act(() => {
+      button.focus();
+    });
+
+    act(() => {
+      fireEvent.keyDown(button, { key: "Shift" });
+    });
+
+    expect(result.current).toBe(false);
+  });
+
+  it("does not pin them for keyboard input while focus is outside the controls", () => {
+    const { result } = renderHook(() => useKeyboardFocusInControls());
+    focusVisible = true;
+
+    act(() => {
+      fireEvent.keyDown(document.body, { key: "ArrowRight" });
+    });
+
+    expect(result.current).toBe(false);
   });
 });

@@ -329,7 +329,7 @@ deviate reports it instead of editing this section.
 - **Player intent and Retry (M2-41).** Play and pause also set the engine's intent (`autoplay`)
   while a stream plays, so a recovery restart or a `stream_not_ready` retry keeps a pause the
   user made. The Retry button restarts with the current intent (playing unless the user paused
-  in the error state). A keyboard Retry moves focus to the play button (`useRetryWithFocus`), and
+  before or during the error state). A keyboard Retry moves focus to the play button (`useRetryWithFocus`), and
   keyboard focus on a control keeps the controls visible (Notes M2-30): after a keyboard Retry
   the controls therefore stay visible until focus leaves them, which is intended for keyboard
   and TV-remote users.

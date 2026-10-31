@@ -16,7 +16,7 @@ export interface FakePlayback {
   readonly show: (snapshot: Partial<PlaybackSnapshot>) => void;
   readonly seek: ReturnType<typeof vi.fn<(position: number) => void>>;
   readonly retry: ReturnType<typeof vi.fn<() => void>>;
-  /** Records the call and shows the new intent, like the engine. */
+  /** Records the call, plays or pauses a playing stream and shows the new intent, like the engine. */
   readonly setAutoplay: ReturnType<typeof vi.fn<(autoplay: boolean) => void>>;
   readonly attachVideo: ReturnType<typeof vi.fn<(element: HTMLVideoElement | null) => void>>;
 }
@@ -51,7 +51,21 @@ export function createFakePlayback(initial: Partial<PlaybackSnapshot> = {}): Fak
       listener();
     }
   };
+  // Like the engine, the intent also plays or pauses the stream that is attached and playing.
+  let element: HTMLVideoElement | null = null;
+  attachVideo.mockImplementation((video) => {
+    element = video;
+  });
   setAutoplay.mockImplementation((autoplay) => {
+    if (view.status === "playing" && element !== null) {
+      if (autoplay) {
+        Promise.resolve()
+          .then(() => element?.play())
+          .catch(() => undefined);
+      } else {
+        element.pause();
+      }
+    }
     show({ autoplay });
   });
   const subscribe = (listener: () => void) => {

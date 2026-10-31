@@ -67,7 +67,8 @@ function isKeyboardFocusedControl(target: EventTarget | null): boolean {
 
 /**
  * Whether keyboard focus is inside the top bar or the control bar. A mouse click also focuses
- * a button but shows no focus ring, so it does not count and the controls still hide.
+ * a button but shows no focus ring, so it does not count and the controls still hide, until a
+ * key pressed on that button makes the browser show the ring.
  */
 export function useKeyboardFocusInControls(): boolean {
   const [focused, setFocused] = useState(false);
@@ -81,11 +82,18 @@ export function useKeyboardFocusInControls(): boolean {
         setFocused(false);
       }
     };
+    // A control focused by a click shows its focus ring once it gets keyboard input, without a
+    // new focusin; checking again on every key catches that.
+    const onKeyDown = () => {
+      setFocused(isKeyboardFocusedControl(document.activeElement));
+    };
     window.addEventListener("focusin", onFocusIn);
     window.addEventListener("focusout", onFocusOut);
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("focusin", onFocusIn);
       window.removeEventListener("focusout", onFocusOut);
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, []);
   return focused;

@@ -234,6 +234,18 @@ describe("PlayerPage control bar", () => {
     expect(pause).toHaveBeenCalledOnce();
   });
 
+  it("also sets the engine's intent, so a restart keeps a pause", async () => {
+    const { playback, video } = await renderPlayer(playing);
+    setPaused(video, false);
+
+    fireEvent.click(within(controls()).getByRole("button", { name: "Pause" }));
+    expect(playback.setAutoplay).toHaveBeenLastCalledWith(false);
+    setPaused(video, true);
+    pressKey("k");
+
+    expect(playback.setAutoplay).toHaveBeenLastCalledWith(true);
+  });
+
   it("mutes, unmutes and sets the volume", async () => {
     const { video } = await renderPlayer(playing);
     const bar = within(controls());

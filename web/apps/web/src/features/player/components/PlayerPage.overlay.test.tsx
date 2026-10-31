@@ -68,7 +68,7 @@ describe("PlayerPage stream-info overlay", () => {
     await openOverlay(remuxSession);
 
     expect(within(overlay()).getByText("Direct Stream").className).toContain("bg-direct-stream");
-    expect(listItems("Why")).toEqual(["MKV not supported → remux to MP4"]);
+    expect(listItems("Why")).toEqual(["MKV not supported → MP4"]);
     expect(overlayRows()[0]).toEqual(["Container", "MKV → MP4"]);
     expect(overlayRows().at(-1)).toEqual(["Source bit rate", "4.1 Mbit/s"]);
   });
@@ -78,7 +78,7 @@ describe("PlayerPage stream-info overlay", () => {
 
     expect(within(overlay()).getByText("Transcode").className).toContain("bg-transcode");
     expect(listItems("Why")).toEqual([
-      "MKV not supported → remux to MP4",
+      "MKV not supported → MP4",
       "Video HEVC not supported → H.264",
       "Audio AC-3 not supported → AAC",
     ]);
