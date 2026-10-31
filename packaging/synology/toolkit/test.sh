@@ -25,6 +25,14 @@ readonly CHROOT_SOURCE="/source/$FIXTURE_ID"
 # has no apostrophe at all, so run.sh refuses both (used by snippets pack_variant evaluates).
 # shellcheck disable=SC2034
 readonly APOSTROPHE_LINES=("DISPLAY_NAME='It's a demo'" "DISPLAY_NAME='It'\\''s a demo'")
+# Project files run.sh checks for CR characters, beyond INFO.sh, build.env and SynoBuildConf/*
+# (name|path in the staged project); pack_failure_checks appends a CRLF line to each.
+readonly CRLF_FILES=(
+	'script|scripts/postinst'
+	'conf|conf/privilege'
+	'wizard-script|WIZARD_UIFILES/install_uifile.sh'
+	'port-file|prebuilt/port_conf/demo.sc'
+)
 readonly CANNOT_CARRY="^Error: INFO.sh: build.env DISPLAY_NAME contains characters INFO cannot carry"
 
 # Characters INFO.sh must reject (label|value as written into build.env through sed, where
@@ -125,6 +133,8 @@ build_stage_checks() {
 	expect_build_error "unknown family" "$project" "sed -i s/x86_64/mips/ build.env" \
 		"ARCH 'mips' is not a family"
 	expect_build_error "no licences" "$project" 'rm -r prebuilt/share/licenses' 'holds no licence files'
+	expect_build_error "no firewall service file" "$project" 'rm -r prebuilt/port_conf' \
+		"prebuilt/port_conf/$FIXTURE_ID.sc (firewall service file) is missing"
 }
 
 # Runs the toolkit container; prints its output and returns its exit status. Arguments after
@@ -159,7 +169,8 @@ verify_spk() {
 		grep -q "^adminurl=" <<<"$info" && problems="$problems info:adminurl-present"
 		modes="$(tar -xOf "$spk" package.tgz | tar -tvJf -)"
 		for entry in "-rwxr-xr-x bin/$id" "-rwxr-xr-x bin/ffmpeg" "-rwxr-xr-x bin/ffprobe" \
-			"-rw-r--r-- share/licenses/ffmpeg/LICENSE.md" "-rw-r--r-- share/licenses/ffmpeg/SOURCE.txt"; do
+			"-rw-r--r-- share/licenses/ffmpeg/LICENSE.md" "-rw-r--r-- share/licenses/ffmpeg/SOURCE.txt" \
+			"-rw-r--r-- port_conf/$id.sc"; do
 			awk -v want="$entry" "{ sub(/^\.\//, \"\", \$6); if (\$1 \" \" \$6 == want) found = 1 } END { exit !found }" <<<"$modes" ||
 				problems="$problems package.tgz:$entry"
 		done
@@ -287,6 +298,34 @@ pack_failure_checks() {
 		else
 			expect_match "toolkit run refuses ${APOSTROPHE_LINES[$index]} in build.env" "$log" \
 				"build.env lines other than NAME='literal' assignments"
+		fi
+	done
+	if log="$(pack_variant unknown-field "echo \"EXTRA='x'\" >>build.env")"; then
+		fail "toolkit run with an unknown build.env field succeeded"
+	else
+		expect_match "toolkit run refuses build.env fields outside the known twelve" "$log" \
+			"build.env fields other than ID .* PORT: EXTRA"
+	fi
+	if log="$(pack_variant duplicate-field "echo \"PORT='8460'\" >>build.env")"; then
+		fail "toolkit run with a field assigned twice succeeded"
+	else
+		expect_match "toolkit run refuses a build.env field assigned twice" "$log" \
+			"build.env assigns these fields more than once: PORT"
+	fi
+	if log="$(pack_variant missing-field "sed -i '/^VERSION=/d' build.env")"; then
+		fail "toolkit run with a missing build.env field succeeded"
+	else
+		expect_match "toolkit run refuses a build.env without one of the twelve fields" "$log" \
+			"build.env lacks these fields: VERSION"
+	fi
+	local entry name file
+	for entry in "${CRLF_FILES[@]}"; do
+		name="${entry%%|*}"
+		file="${entry#*|}"
+		if log="$(pack_variant "crlf-$name" "mkdir -p \"\$(dirname '$file')\" && printf '#!/bin/sh\r\n' >>'$file'")"; then
+			fail "toolkit run with CRLF in $file succeeded"
+		else
+			expect_match "toolkit run refuses CRLF in $file" "$log" "CRLF line endings in $file;"
 		fi
 	done
 }

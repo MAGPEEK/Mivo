@@ -25,8 +25,9 @@ SPK without further edits.
 - [ ] Modes are set explicitly (executables and scripts 0755, everything else 0644, directories
       0755); every file gets the modification time of `-source-date-epoch`.
 - [ ] Refusals (exit 1, message naming the input): unknown family; missing or non-executable inputs;
-      a binary for the wrong ELF machine; leftover `@NAME@` tokens; non-ASCII bytes or CRLF in
-      `SynoBuildConf/*` or scripts; INFO-unsafe values (SPK-03); an existing non-empty project
+      a binary for the wrong ELF machine; leftover `@NAME@` tokens; non-ASCII bytes in
+      `INFO.sh` and `SynoBuildConf/*` (scripts may carry UTF-8 messages, accepted in review), CR
+      in every rendered text file; INFO-unsafe values (SPK-03); an existing non-empty project
       directory (unless `-force`). An FFmpeg `SOURCE.txt` with status `interim` is staged but
       reported as a warning on stderr.
 - [ ] Go tests with a fake binary and fake FFmpeg files: the staged tree's file list and modes equal a

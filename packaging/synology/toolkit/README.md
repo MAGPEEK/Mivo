@@ -12,8 +12,9 @@ from **prebuilt** files. The toolkit compiles nothing; its chroot is only used t
 | `run.sh` | container entrypoint: clone, deploy once, pack, copy the SPK out |
 | `tarballs.sha256` | SHA-256 pins of the DSM 7.2 platform tarballs (see "Pinned tarballs") |
 | `test.sh` | shellcheck, build-stage checks, pack and verify all families, caching |
-| `testdata/demo/` | placeholder project files (fixture `build.env`, stub scripts, `conf/privilege`) |
-| `testdata/stage-demo.sh` | stages the placeholder project for one family (stand-in for SPK-14) |
+| `testdata/demo/` | placeholder project files (fixture `build.env`, stub scripts, `conf/privilege`, `prebuilt/port_conf/demo.sc`) |
+| `testdata/stage-demo.sh` | stages the placeholder project for one family (fast fixture of `test.sh`) |
+| `../cmd/spkstage` | stages the real project of a family from the templates and prebuilt files (SPK-14, see "Staging the real package") |
 | `../package/SynoBuildConf/{depends,build,install}`, `../package/INFO.sh` | the toolkit side of the real package |
 
 ## Quick start (PowerShell, repository root)
@@ -22,7 +23,7 @@ from **prebuilt** files. The toolkit compiles nothing; its chroot is only used t
 docker build -t spk-toolkit:dev packaging/synology/toolkit
 $work = Join-Path $env:TEMP 'spk-demo'      # anywhere outside the repository
 
-# Stage the placeholder project for a family (the real staging is spkstage, SPK-14) ...
+# Stage the placeholder project for a family (the real package: "Staging the real package") ...
 docker run --rm --entrypoint bash -v "${PWD}:/src:ro" -v "${work}:/work" spk-toolkit:dev /src/packaging/synology/toolkit/testdata/stage-demo.sh x86_64 /work/project-x86_64
 # ... and pack it. One command per family; replace x86_64 by armv8 or armv7 in both lines.
 docker run --rm --cap-add SYS_ADMIN -v spk-toolkit:/toolkit -v "${work}/project-x86_64:/project:ro" -v "${work}/out:/output" spk-toolkit:dev x86_64
@@ -45,6 +46,64 @@ bash packaging/synology/toolkit/test.sh x86_64   # lint, build-stage checks, one
 
 `test.sh` runs the toolkit container with `--cap-add SYS_ADMIN`; `SPK_TOOLKIT_PRIVILEGE`
 replaces those options (for example `SPK_TOOLKIT_PRIVILEGE='--privileged'`).
+
+## Staging the real package (spkstage)
+
+`packaging/synology/cmd/spkstage` (Go, standard library only) writes the staged project of one
+family from the templates in `../package/`, the repository `LICENSE`, the brand values
+(`internal/platform/brand` through `internal/spkmeta`), the generated icons
+(`internal/spkicon`), a prebuilt server binary and an FFmpeg directory written by
+`../ffmpeg/fetch.sh`. SPK-07 calls it once per family; by hand (PowerShell, repository root):
+
+```powershell
+$work = Join-Path $env:TEMP 'spk-real'
+# Server binary (add -tags webui after `pnpm -C web build`; armv8: GOARCH=arm64, armv7: GOARCH=arm and GOARM=7)
+$env:GOOS='linux'; $env:GOARCH='amd64'; $env:CGO_ENABLED='0'
+go build -trimpath -buildvcs=false -ldflags "-s -w -X github.com/magpeek/mivo/internal/platform/buildinfo.version=0.1.0-alpha.2" -o "$work/bin/server" ./cmd/mivo
+Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+# FFmpeg of the family (curl/wget, sha256sum, tar and xz; alpine has them after adding xz)
+docker run --rm -v "${PWD}:/src:ro" -v "${work}:/work" alpine:3 sh -c 'apk add --no-cache xz >/dev/null && sh /src/packaging/synology/ffmpeg/fetch.sh x86_64 /work/ffmpeg-x86_64'
+# Stage and pack
+go run ./packaging/synology/cmd/spkstage -family x86_64 -version 0.1.0-alpha.2 -binary "$work/bin/server" -ffmpeg-dir "$work/ffmpeg-x86_64" -out "$work/project-x86_64"
+docker run --rm --cap-add SYS_ADMIN -v spk-toolkit:/toolkit -v "${work}/project-x86_64:/project:ro" -v "${work}/out:/output" spk-toolkit:dev x86_64
+```
+
+| Flag | Meaning |
+|---|---|
+| `-family` | `x86_64`, `armv8` or `armv7` (one family per call) |
+| `-version` | server version, mapped to the DSM version by `spkmeta` (`0.1.0-alpha.2` → `0.1.0-1020`) |
+| `-binary` | static linux server binary of the family; staged as `prebuilt/bin/<ID>` |
+| `-ffmpeg-dir` | `ffmpeg`, `ffprobe`, `SOURCE.txt` and at least one licence file; hidden files (`.fetch-manifest`) are skipped, anything else is refused |
+| `-out` | project directory; must be missing or empty unless `-force` (see below) |
+| `-package-revision` | packaging-only revision 0-9 (default 0) |
+| `-source-date-epoch` | modification time of every staged file and directory (default `$SOURCE_DATE_EPOCH`, else 0) |
+| `-repo` | repository root (default `.`) |
+
+Modes are explicit: `INFO.sh`, `SynoBuildConf/{build,install}`, `scripts/*` (except
+`package.env`), `WIZARD_UIFILES/*.sh` and the three executables 0755, everything else 0644,
+directories 0755. On Windows only the file list and the times carry over (see "Why the toolkit
+never lives in a Windows bind mount"). `package/port/service.sc` becomes
+`prebuilt/port_conf/<ID>.sc`; a template without a rule (or a `scripts/package.env` next to the
+generated one) is refused. spkstage exits with 1 and names the input for: an unknown family or
+version, a missing or non-executable input (the executable bit is not checked on Windows), an
+ELF class or machine other than the family's, an ELF type other than `ET_EXEC` or `ET_DYN`, a
+dynamically linked executable (`PT_INTERP`; a static-pie is `ET_DYN` without it), a leftover
+`@NAME@` token, a CR in any rendered
+text file, a non-ASCII byte in `INFO.sh` or `SynoBuildConf/*`, a JSON template that no longer
+parses, an INFO-unsafe package value (`spkmeta`), and a non-empty project directory without
+`-force`. A `SOURCE.txt` with `Status: interim` is staged with a warning on stderr; only such an
+interim build may have dynamically linked `ffmpeg`/`ffprobe` (the jellyfin pins of
+`sources.lock` link glibc), again with a warning, until SPK-16 switches to the own static
+build. The package scripts may contain UTF-8 (German messages), so only CRs are refused there.
+
+**Where spkstage writes.** `-out` is resolved with all symbolic links followed. It is refused
+when it is a file system root or when it is, contains or lies inside an input (the template
+directory, `LICENSE`, `-binary`, `-ffmpeg-dir`). Every staged project carries a marker file
+`.spkstage`; `-force` replaces only a directory that has it next to `build.env`, so a mistyped
+`-out` cannot delete anything else. The project is written into a temporary sibling
+(`.spkstage-*`), and only after it is complete is the old project removed and the new one
+renamed into place: a failed run leaves the old project, or nothing, never a partial tree. The
+marker is not packed (`SynoBuildConf/install` copies named files only).
 
 ## Interface of `run.sh` (stable for SPK-07 and SPK-14)
 
@@ -75,7 +134,8 @@ The staged project that `SynoBuildConf/*` and `INFO.sh` expect:
 | `INFO.sh`, `SynoBuildConf/{depends,build,install}` | from `packaging/synology/package/` | – |
 | `prebuilt/bin/<ID>`, `prebuilt/bin/ffmpeg`, `prebuilt/bin/ffprobe` | static ELF executables of the family | `package.tgz`: `bin/*`, 0755 |
 | `prebuilt/share/licenses/**` | licence files and source notices (at least one file) | `package.tgz`: `share/licenses/**`, files 0644, directories 0755 |
-| `scripts/`, `conf/` | package scripts and `privilege`/`resource` | `scripts/*` 0755, `conf/*` 0644 |
+| `prebuilt/port_conf/<ID>.sc` | firewall service file (rendered `package/port/service.sc`), required | `package.tgz`: `port_conf/<ID>.sc`, 0644 (`conf/resource` `port-config`) |
+| `scripts/`, `conf/` | package scripts (with `common.sh` and the generated `package.env`) and `privilege`/`resource` | `scripts/*` 0755, `conf/*` 0644 |
 | `LICENSE`, `PACKAGE_ICON.PNG`, `PACKAGE_ICON_256.PNG` | optional; a note is logged when missing | 0644 |
 | `WIZARD_UIFILES/` | optional | `*.sh` 0755, other files 0644 |
 
@@ -85,7 +145,9 @@ The staged project that `SynoBuildConf/*` and `INFO.sh` expect:
 (INFO `version`), `BETA` (`yes`/`no`), `OS_MIN_VER`, `ARCH` (INFO `arch`: the family,
 optionally followed by further arch values, e.g. `armv7 armada38x monaco`; the first word is
 the family the build and INFO checks use), `PORT` (INFO `adminport`). All are required by
-`INFO.sh`.
+`INFO.sh`. `run.sh` refuses any other field name (an extra assignment could override a
+variable of the scripts or the toolkit that source the file), a field assigned twice (the
+second would silently win) and a missing field.
 
 **`build.env` grammar (contract for SPK-03/SPK-14).** `run.sh` sources `build.env` as root
 outside the chroot, `INFO.sh` and `SynoBuildConf/*` source it inside, so `run.sh` checks the
@@ -328,7 +390,9 @@ text such as the umlaut above passes through unchanged.
   non-ASCII byte (a `section` sign in a comment did it) makes the dependency list empty; the
   build and install stages then report "0 projects, 0 failed" and only the collect stage fails
   with `ConfigNotFoundError: .../source/<ID>/INFO`. `run.sh` refuses non-ASCII bytes in
-  `SynoBuildConf/` and CRLF line endings in the project scripts before calling the toolkit.
+  `SynoBuildConf/` and CRLF line endings in `INFO.sh`, `build.env`, `SynoBuildConf/*`,
+  `scripts/*`, `conf/*`, `prebuilt/port_conf/*` and `WIZARD_UIFILES/*.sh` before calling the
+  toolkit (the error names the files).
   `build.env` and therefore INFO values may contain UTF-8.
 - Docker Desktop shows bind-mounted files as `0777`, see "Why the toolkit never lives in a
   Windows bind mount".

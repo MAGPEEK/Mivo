@@ -168,6 +168,50 @@ check_build_env_grammar() {
 $bad"
 }
 
+# The fields of build.env (README "Staged project"; spkmeta's Build.BuildEnv writes exactly
+# these). Any other name could override a variable of INFO.sh, SynoBuildConf/* or the toolkit
+# that sources the file, so it is refused; each field must be assigned exactly once, because a
+# second assignment would silently win over the first.
+readonly BUILD_ENV_FIELDS="ID DISPLAY_NAME DESCRIPTION DESCRIPTION_GER MAINTAINER MAINTAINER_URL VERSION DSM_VERSION BETA OS_MIN_VER ARCH PORT"
+
+check_build_env_fields() {
+	local name field seen=" " unknown="" duplicate="" missing=""
+	while IFS= read -r name; do
+		case " $BUILD_ENV_FIELDS " in
+			*" $name "*) ;;
+			*) unknown="$unknown $name"; continue ;;
+		esac
+		case "$seen" in
+			*" $name "*) duplicate="$duplicate $name" ;;
+			*) seen="$seen$name " ;;
+		esac
+	done < <(sed -n "s/^\([A-Z_][A-Z0-9_]*\)='.*/\1/p" "$1")
+	[ -z "$unknown" ] || die "build.env fields other than $BUILD_ENV_FIELDS:$unknown"
+	[ -z "$duplicate" ] || die "build.env assigns these fields more than once:$duplicate"
+	for field in $BUILD_ENV_FIELDS; do
+		case "$seen" in *" $field "*) ;; *) missing="$missing $field" ;; esac
+	done
+	[ -z "$missing" ] || die "build.env lacks these fields:$missing"
+}
+
+# Refuses CR characters in every text file of the project that a shell reads or DSM parses:
+# INFO.sh, build.env, SynoBuildConf/*, scripts/*, conf/*, the firewall service file and the
+# wizard scripts. bash in the chroot and DSM's sh would take the CR for part of a command or
+# value.
+check_line_endings() {
+	local project="$1" files=() crlf
+	mapfile -t files < <(
+		find "$project/INFO.sh" "$project/build.env" "$project/SynoBuildConf" "$project/scripts" \
+			"$project/conf" "$project/prebuilt/port_conf" -type f 2>/dev/null
+		find "$project/WIZARD_UIFILES" -type f -name '*.sh' 2>/dev/null
+	)
+	[ "${#files[@]}" -gt 0 ] || return 0
+	crlf="$(grep -l $'\r' "${files[@]}")" || true
+	[ -n "$crlf" ] || return 0
+	crlf="${crlf//"$project/"/}"
+	die "CRLF line endings in ${crlf//$'\n'/, }; bash in the chroot and DSM cannot read them"
+}
+
 # Reads one variable of build.env in a subshell, so its values never leak into this script.
 build_env_value() {
 	# shellcheck source=/dev/null
@@ -179,10 +223,9 @@ build_env_value() {
 stage_project() {
 	local project="$1" id dest
 	[ -f "$project/build.env" ] || die "$project/build.env not found (is the project staged?)"
-	if grep -lq $'\r' "$project/INFO.sh" "$project/build.env" "$project"/SynoBuildConf/* 2>/dev/null; then
-		die "CRLF line endings in the project scripts; bash in the chroot cannot run them"
-	fi
+	check_line_endings "$project"
 	check_build_env_grammar "$project/build.env"
+	check_build_env_fields "$project/build.env"
 	id="$(build_env_value "$project/build.env" ID)"
 	[[ "$id" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "build.env ID '$id' is not a package name"
 	# The chroot's Python 3.4 reads SynoBuildConf/depends with an ASCII locale; a non-ASCII byte

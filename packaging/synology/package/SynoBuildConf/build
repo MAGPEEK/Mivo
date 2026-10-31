@@ -58,7 +58,10 @@ spk_check_prebuilt() {
 	done
 	[ -n "$(find prebuilt/share/licenses -type f 2>/dev/null)" ] ||
 		spk_build_fail "prebuilt/share/licenses holds no licence files"
-	echo "prebuilt files for $arch present: $id, ffmpeg, ffprobe, licences"
+	# conf/resource registers the port through port_conf/<ID>.sc in package.tgz.
+	[ -f "prebuilt/port_conf/$id.sc" ] ||
+		spk_build_fail "prebuilt/port_conf/$id.sc (firewall service file) is missing"
+	echo "prebuilt files for $arch present: $id, ffmpeg, ffprobe, licences, port_conf/$id.sc"
 }
 
 spk_check_prebuilt

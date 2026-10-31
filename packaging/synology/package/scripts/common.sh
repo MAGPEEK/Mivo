@@ -63,7 +63,7 @@ pkg_load_package_env() {
 		pkg_error "$PKG_SCRIPT_DIR/package.env is missing; reinstall the package"
 		return 1
 	fi
-	# Not followed: in the repository package.env is a template with tokens instead of values.
+	# Not followed: package.env exists only in the staged package (spkstage writes it).
 	# shellcheck source=/dev/null
 	. "$PKG_SCRIPT_DIR/package.env"
 	pkg_check_package_env

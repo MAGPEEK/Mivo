@@ -608,10 +608,11 @@ case_scripts_find_common_sh_from_any_directory() {
 	assert_success
 }
 
-case_rendered_package_env_template_works() {
-	sed -e "s/@ID@/$FIXTURE_ID/" -e "s/@DISPLAY_NAME@/$FIXTURE_DISPLAY_NAME/" \
-		-e "s/@ENV_PREFIX@/DEMO/" -e "s/@PORT@/9999/" \
-		"$PACKAGE_SCRIPTS/package.env" >"$PKG_ROOT/scripts/package.env"
+# spkstage writes package.env from spkmeta's Package.PackageEnv: the assignments only, without
+# the fixture's comments. TestScriptFixtureIsSpkmetaOutput (packaging/synology/cmd/spkstage)
+# proves that the fixture's assignments are exactly spkmeta's output for its brand.
+case_spkmeta_package_env_works() {
+	grep -v '^#' "$TEST_DIR/fixtures/package.env" >"$PKG_ROOT/scripts/package.env"
 	run_sss start
 	assert_success
 	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_CONFIG_DIR=$SYNOPKG_PKGVAR"
@@ -659,7 +660,7 @@ register_cases \
 	missing_common_sh_marks_package_broken \
 	missing_dsm_variable_is_unknown \
 	scripts_find_common_sh_from_any_directory \
-	rendered_package_env_template_works
+	spkmeta_package_env_works
 
 # --- static checks, independent of the shell -----------------------------------------------
 
@@ -678,10 +679,10 @@ register_cases \
 	assert_output ''
 }
 
-@test "package.env template holds exactly the brand tokens" {
-	run grep -o '@[A-Z_]*@' "$PACKAGE_SCRIPTS/package.env"
-	assert_success
-	assert_equal "$(printf '%s\n' "${lines[@]}" | sort | tr '\n' ' ')" "@DISPLAY_NAME@ @ENV_PREFIX@ @ID@ @PORT@ "
-	run grep -o '@[A-Z_]*@' "$PACKAGE_SCRIPTS/start-stop-status" "$PACKAGE_SCRIPTS/common.sh"
+@test "package.env is generated, not a template, and scripts hold no build tokens" {
+	# spkstage writes package.env from spkmeta (one source of truth); a template next to it would
+	# be a second one, and spkstage refuses to stage both.
+	[[ ! -e $PACKAGE_SCRIPTS/package.env ]] || fail "$PACKAGE_SCRIPTS/package.env must not exist"
+	run grep -o '@[A-Z_]*@' -r "$PACKAGE_SCRIPTS"
 	assert_failure 1
 }

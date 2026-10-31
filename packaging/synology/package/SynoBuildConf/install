@@ -12,6 +12,8 @@
 # Layout inside package.tgz (extracted to the package target, ADR 0026 section 6):
 #   bin/<ID>, bin/ffmpeg, bin/ffprobe   0755
 #   share/licenses/**                   files 0644, directories 0755
+#   port_conf/<ID>.sc                   0644, from prebuilt/port_conf/ (conf/resource
+#                                       "port-config" names it relative to the target)
 # SPK members next to package.tgz: INFO, LICENSE, PACKAGE_ICON*.PNG, conf/, scripts/,
 # WIZARD_UIFILES/ (whatever of the optional ones the staged project contains).
 
@@ -62,6 +64,8 @@ spk_create_package_tgz() {
 			spk_install_fail "cannot copy prebuilt/bin/$binary"
 	done
 	spk_copy_tree prebuilt/share/licenses "$SPK_PAYLOAD_DIR/share/licenses"
+	# DSM reads the firewall service file from the extracted package (DSM-NOTES section 7).
+	spk_copy_tree prebuilt/port_conf "$SPK_PAYLOAD_DIR/port_conf"
 	pkg_make_package "$SPK_PAYLOAD_DIR" "$SPK_PACKAGE_DIR" || spk_install_fail "pkg_make_package failed"
 }
 
