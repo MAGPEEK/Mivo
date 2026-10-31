@@ -9,7 +9,10 @@ import {
   problemWithRetryAfter,
   sessionResponse,
 } from "../test/fakePlaybackServer";
-import { playerItemId } from "../test/playerFixtures";
+import { playerFileId, playerItemId } from "../test/playerFixtures";
+
+// The page with the real engine and API client against the fake server; the control tests
+// next to this file replace the engine hook instead.
 
 const playerPath = `/items/${playerItemId}/play`;
 
@@ -26,19 +29,40 @@ afterEach(() => {
 });
 
 describe("PlayerPage", () => {
-  it("plays the item in a labelled video element and says when it is ready", async () => {
+  it("plays the item in a labelled video element and seeks in it", async () => {
     const server = createPlaybackServer();
-    renderApp(playerPath, { fetch: server.fetch });
+    renderApp(`${playerPath}?t=30`, { fetch: server.fetch });
 
-    const video = await screen.findByLabelText("Video");
-    expect(await screen.findByRole("status")).toHaveProperty("textContent", "Loading the video…");
+    const video = await screen.findByLabelText<HTMLVideoElement>("Video");
+    expect(await screen.findByRole("heading", { level: 1, name: "Big Buck Bunny" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Loading the video…");
     await vi.waitFor(() => {
       expect(video.getAttribute("src")).toBe("/api/v1/playback/sessions/session-1/file");
     });
+    fireEvent(video, new Event("loadedmetadata"));
     fireEvent(video, new Event("loadeddata"));
 
-    expect(await screen.findByText("Ready to play")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    await vi.waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("");
+    });
+    fireEvent.change(screen.getByRole("slider", { name: "Position" }), {
+      target: { value: "50" },
+    });
+    expect(video.currentTime).toBe(50);
+    expect(server.sessionRequests).toHaveLength(1);
+  });
+
+  it("plays the file and start position the route's search names", async () => {
+    const server = createPlaybackServer();
+    renderApp(`${playerPath}?fileId=${playerFileId}&t=90.5`, { fetch: server.fetch });
+
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(1);
+    });
+    expect(server.sessionRequests[0]).toMatchObject({
+      fileId: playerFileId,
+      startPositionSeconds: 90.5,
+    });
   });
 
   it("explains a full server in German and retries on request", async () => {
@@ -50,11 +74,9 @@ describe("PlayerPage", () => {
     });
     renderApp(playerPath, { fetch: server.fetch, languages: ["de"] });
 
-    expect(
-      await screen.findByText(
-        "Auf dem Server laufen gerade zu viele Wiedergaben. Versuche es gleich noch einmal.",
-      ),
-    ).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Auf dem Server laufen gerade zu viele Wiedergaben. Versuche es gleich noch einmal.",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
 
     expect(await screen.findByText("Das Video wird geladen …")).toBeTruthy();

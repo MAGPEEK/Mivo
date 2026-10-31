@@ -10,7 +10,10 @@ export type PlaybackErrorCode =
   | "stream_not_ready"
   | "generic";
 
-/** Why playback stopped; the page offers a retry for every code. */
+/**
+ * Why playback stopped. The page offers a retry, except for the codes a retry cannot fix
+ * (`playbackNotice` in playbackStatusText.ts).
+ */
 export interface PlaybackError {
   readonly code: PlaybackErrorCode;
   /** Seconds the server asked the client to wait before retrying (`Retry-After`), when sent. */

@@ -1,13 +1,12 @@
 {
   "heading": "Wiedergabe",
-  "placeholder": "Eintrag {{itemId}}, Datei {{fileId}}, ab {{startAt}} s.",
-  "primaryFile": "Hauptdatei",
   "video": "Video",
+  "back": "Zurück",
+  "backToItem": "Zurück zu den Details",
   "retry": "Erneut versuchen",
   "status": {
     "loading": "Das Video wird geladen …",
-    "waitingForStream": "Der Server bereitet den Stream vor …",
-    "playing": "Bereit zur Wiedergabe"
+    "waitingForStream": "Der Server bereitet den Stream vor …"
   },
   "errors": {
     "no_compatible_format": "Dieser Browser kann die Datei nicht abspielen, auch nicht nach einer Umwandlung.",
@@ -15,5 +14,74 @@
     "session_limit_reached": "Auf dem Server laufen gerade zu viele Wiedergaben. Versuche es gleich noch einmal.",
     "stream_not_ready": "Der Server konnte den Stream nicht rechtzeitig vorbereiten.",
     "generic": "Dieses Video kann nicht abgespielt werden."
+  },
+  "controls": {
+    "label": "Wiedergabesteuerung",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "mute": "Stummschalten",
+    "unmute": "Ton einschalten",
+    "volume": "Lautstärke",
+    "volumeValue": "{{percent}} %",
+    "position": "Position",
+    "positionValue": "{{position}} von {{duration}}",
+    "time": "{{position}} / {{duration}}",
+    "enterFullscreen": "Vollbild",
+    "exitFullscreen": "Vollbild beenden",
+    "streamInfo": "Stream-Info"
+  },
+  "overlay": {
+    "heading": "Stream-Info",
+    "close": "Stream-Info schließen",
+    "noSession": "Noch kein Stream.",
+    "reasons": "Warum",
+    "warnings": "Hinweise",
+    "container": "Container",
+    "containerChange": "{{source}} → {{target}}",
+    "encoder": "Encoder",
+    "sourceBitRate": "Bitrate der Quelle"
+  },
+  "streamInfo": {
+    "mode": {
+      "direct_play": "Direct Play",
+      "remux": "Direct Stream",
+      "transcode": "Transcode",
+      "unknown": "Anderer Modus"
+    },
+    "reason": {
+      "container_not_supported": "{{sourceContainer}} nicht unterstützt → Remux zu {{targetContainer}}",
+      "video_codec_not_supported": "Video {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
+      "video_profile_not_supported": "Videoprofil von {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
+      "video_bit_depth_not_supported": "Farbtiefe von {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
+      "audio_codec_not_supported": "Audio {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
+      "audio_track_not_default": "Die gewählte Audiospur ist nicht die Standardspur, und Browser können die Spuren einer Datei nicht wechseln",
+      "unknown": "Anderer Grund ({{code}})"
+    },
+    "warning": {
+      "hdr_not_tone_mapped": "HDR wird ohne Tone Mapping umgewandelt, die Farben können blass wirken",
+      "subtitles_not_supported": "Untertitel werden noch nicht angezeigt",
+      "video_downscaled": "Video auf {{resolution}} verkleinert",
+      "unknown": "Anderer Hinweis ({{code}})"
+    },
+    "streamKind": {
+      "video": "Video",
+      "audio": "Audio",
+      "subtitle": "Untertitel",
+      "other": "Sonstige",
+      "unknown": "Stream"
+    },
+    "action": {
+      "copy": "Kopiert",
+      "transcode": "Umgewandelt",
+      "unknown": "Andere"
+    },
+    "encoder": {
+      "software": "Software ({{encoder}})",
+      "hardware": "Hardware ({{encoder}})"
+    },
+    "bitRate": {
+      "kilobits": "{{value, number}} kbit/s",
+      "megabits": "{{value, number}} Mbit/s"
+    }
   }
 }

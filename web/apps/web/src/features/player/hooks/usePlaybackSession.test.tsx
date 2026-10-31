@@ -51,8 +51,9 @@ function renderPlayback(initialTarget: PlaybackTarget = target, options: RenderO
 }
 
 beforeEach(() => {
-  // jsdom implements neither; the engine calls both.
+  // jsdom implements none of them; the engine calls them.
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockReturnValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, "load").mockReturnValue(undefined);
 });
 
@@ -109,6 +110,19 @@ describe("usePlaybackSession", () => {
       expect(result.current.session?.id).toBe("session-2");
     });
     expect(server.sessionRequests[1]).toMatchObject({ replacesSessionId: "session-1" });
+  });
+
+  it("sets the play intent through the engine", async () => {
+    const { result } = renderPlayback();
+    await waitFor(() => {
+      expect(result.current.session).toBeDefined();
+    });
+
+    act(() => {
+      result.current.setAutoplay(false);
+    });
+
+    expect(result.current.autoplay).toBe(false);
   });
 
   it("stops the session with a keepalive request on unmount", async () => {

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { jsonResponse, problemResponse } from "../../../test/fakeApi";
 import { createEngineHarness, fatalHlsError, type EngineHarness } from "../test/engineHarness";
 import { fakeSession, nativeHlsProfile } from "../test/playerFixtures";
+import { maxStreamNotReadyRetries } from "./playbackEngine";
 import { recoveryProgressSeconds } from "./recoveryBudget";
 
 const mediaErrorAborted = 1;
@@ -229,6 +230,35 @@ describe("PlaybackEngine recovery from media element errors", () => {
 
     expect(media.src).toBe(session.streamUrl);
   });
+
+  it.each([
+    { state: "starting", code: "stream_not_ready" },
+    // The session is ready, so the server is not the one still preparing: something else broke.
+    { state: "ready", code: "generic" },
+  ] as const)(
+    "ends with $code when native HLS never plays while its session is $state",
+    async ({ state, code }) => {
+      const { open, media, timers, snapshot, untilSession, until } = createEngineHarness({
+        profile: nativeHlsProfile,
+        delivery: "hls",
+        getSession: () => jsonResponse(fakeSession({ id: "session-1", state })),
+      });
+      open();
+      await untilSession("session-1");
+
+      for (let attempt = 0; attempt < maxStreamNotReadyRetries; attempt += 1) {
+        media.fail(mediaErrorNetwork);
+        await vi.waitFor(() => {
+          expect(timers.pending()).toHaveLength(1);
+        });
+        timers.pending()[0]?.fire();
+      }
+      media.fail(mediaErrorNetwork);
+
+      await until((current) => current.status === "error");
+      expect(snapshot()).toMatchObject({ waitingForStream: false, error: { code } });
+    },
+  );
 
   it("shows an error when a playing native HLS stream breaks while its session is ready", async () => {
     const { open, media, snapshot, untilSession, until } = createEngineHarness({

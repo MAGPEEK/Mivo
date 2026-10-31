@@ -4,6 +4,7 @@ import { problemResponse } from "../../../test/fakeApi";
 import { createEngineHarness } from "../test/engineHarness";
 import type { FakeMedia } from "../test/fakeMedia";
 import { createdSession, sessionResponse } from "../test/fakePlaybackServer";
+import { createHeldAnswers } from "../test/heldAnswers";
 import type { HlsPlayer } from "./hlsPlayer";
 import { initialPlaybackSnapshot } from "./playbackEngine";
 
@@ -194,6 +195,70 @@ describe("PlaybackEngine page lifecycle", () => {
     );
     expect(server.sessionRequests[1]?.replacesSessionId).toBeUndefined();
     expect(media.calls.filter((call) => call === "play")).toHaveLength(playCalls);
+  });
+
+  it("stops a session that arrives while the page is hidden", async () => {
+    const answers = createHeldAnswers("file");
+    const { engine, open, media, server, untilSession } = createEngineHarness({
+      createSession: answers.respond,
+    });
+    open();
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(1);
+    });
+
+    engine.suspend();
+    await answers.release(0);
+
+    await vi.waitFor(() => {
+      expect(server.stoppedSessions).toEqual(["session-1"]);
+    });
+    expect(media.src).toBe("");
+    engine.resume();
+    await answers.release(1);
+    await untilSession("session-2");
+    expect(server.sessionRequests[1]?.replacesSessionId).toBeUndefined();
+  });
+
+  it("uses a session that arrives after the page was hidden and shown again", async () => {
+    const answers = createHeldAnswers("file");
+    const { engine, open, media, server, untilSession } = createEngineHarness({
+      createSession: answers.respond,
+    });
+    open(30);
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(1);
+    });
+
+    engine.suspend();
+    engine.resume();
+    await answers.release(0);
+
+    await untilSession("session-1");
+    expect(media.src).toBe("/api/v1/playback/sessions/session-1/file");
+    expect(server.sessionRequests).toHaveLength(1);
+    expect(server.stoppedSessions).toEqual([]);
+    // Shown again after a hide: the restart waits for the user's play.
+    expect(media.calls).not.toContain("play");
+  });
+
+  it("uses an HLS session that arrives after hide and show at the same position", async () => {
+    const answers = createHeldAnswers("hls");
+    const { engine, open, server, untilSession } = createEngineHarness({
+      createSession: answers.respond,
+    });
+    open(30);
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(1);
+    });
+
+    engine.suspend();
+    engine.resume();
+    await answers.release(0);
+
+    await untilSession("session-1");
+    expect(server.sessionRequests).toHaveLength(1);
+    expect(server.stoppedSessions).toEqual([]);
   });
 
   it("ignores seek and retry while the page is hidden", async () => {

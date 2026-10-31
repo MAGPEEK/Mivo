@@ -1,7 +1,23 @@
 export { Badge, type BadgeProps } from "./Badge";
 export { MediaCard, type CardLinkProps, type MediaCardProps } from "./Card";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
-export { AlertIcon, HomeIcon, LibraryIcon, SearchIcon, SidebarIcon, type IconProps } from "./icons";
+export {
+  AlertIcon,
+  BackIcon,
+  CloseIcon,
+  ExitFullscreenIcon,
+  FullscreenIcon,
+  HomeIcon,
+  InfoIcon,
+  LibraryIcon,
+  MutedIcon,
+  PauseIcon,
+  PlayIcon,
+  SearchIcon,
+  SidebarIcon,
+  VolumeIcon,
+  type IconProps,
+} from "./icons";
 export {
   Sidebar,
   type SidebarLibraries,

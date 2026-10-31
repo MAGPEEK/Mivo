@@ -21,8 +21,8 @@ import { FullScreenLayout } from "./layout/FullScreenLayout";
 const shellLayoutId = "shell";
 const fullScreenLayoutId = "full-screen";
 
-// An unknown path matches only the root route (the pathless shell route never matches it), so
-// the root's not-found view brings its own shell.
+// The root is the only route with a notFoundComponent, so every unmatched path ends there; it
+// renders outside the shell layout route and therefore brings its own shell.
 function ShellNotFound() {
   return createElement(AppLayout, { children: createElement(NotFoundPage) });
 }
@@ -39,10 +39,11 @@ function ItemRoute() {
   return createElement(ItemPage, { itemId });
 }
 
+// The whole validated search goes to the player, so new player search params need no edit here.
 function PlayerRoute() {
   const { itemId } = useParams({ from: "/full-screen/items/$itemId/play" });
-  const { fileId, t } = useSearch({ from: "/full-screen/items/$itemId/play" });
-  return createElement(PlayerPage, { itemId, fileId, startAt: t });
+  const search = useSearch({ from: "/full-screen/items/$itemId/play" });
+  return createElement(PlayerPage, { itemId, search });
 }
 
 // Code-based route tree: no generated file in milestone 1. Switching to file-based routing

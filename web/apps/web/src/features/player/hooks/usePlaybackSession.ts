@@ -36,6 +36,8 @@ export interface PlaybackSessionView extends PlaybackSnapshot {
   readonly seek: (position: number) => void;
   /** Tries again after an error. */
   readonly retry: () => void;
+  /** Sets whether playback should run, also before a stream is attached (`autoplay`). */
+  readonly setAutoplay: (autoplay: boolean) => void;
 }
 
 function usePlaybackEngine(services: PlaybackServices): PlaybackEngine<HTMLVideoElement> {
@@ -147,6 +149,9 @@ export function usePlaybackSession(
     },
     retry: () => {
       engine.retry();
+    },
+    setAutoplay: (autoplay: boolean) => {
+      engine.setAutoplay(autoplay);
     },
   };
   if (failed) {

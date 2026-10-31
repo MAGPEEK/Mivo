@@ -1,16 +1,9 @@
-import type { PlaybackRequest } from "@mivo/api-client";
 import { describe, expect, it, vi } from "vitest";
 
-import { problemResponse } from "../../../test/fakeApi";
 import { createEngineHarness } from "../test/engineHarness";
 import { createdSession, sessionResponse } from "../test/fakePlaybackServer";
-import { fakeSession, playerFileDurationSeconds } from "../test/playerFixtures";
-
-/** A session request the test answers when it wants to. */
-interface HeldAnswer {
-  readonly release: () => void;
-  readonly fail: () => void;
-}
+import { createHeldAnswers } from "../test/heldAnswers";
+import { fakeSession, mseProfile, playerFileDurationSeconds } from "../test/playerFixtures";
 
 describe("PlaybackEngine seek", () => {
   it("seeks a direct-play file locally", async () => {
@@ -121,13 +114,13 @@ describe("PlaybackEngine seek", () => {
   });
 
   it("restarts anywhere after the start when the duration is unknown", async () => {
-    const withoutDuration = fakeSession({ id: "s" });
+    const withoutDuration = fakeSession({ id: "s", delivery: "hls" });
     delete withoutDuration.durationSeconds;
     const { engine, open, server, untilSession } = createEngineHarness({
       createSession: (request, index) =>
         index === 0
           ? sessionResponse(withoutDuration)
-          : sessionResponse(createdSession(request, index)),
+          : sessionResponse(createdSession(request, index, "hls")),
     });
     open();
     await untilSession("s");
@@ -180,6 +173,8 @@ describe("PlaybackEngine seek while a session request is in flight", () => {
       startPositionSeconds: 70,
       replacesSessionId: "session-2",
     });
+    // The overlay describes the session that exists now, not the replaced one.
+    expect(snapshot().session?.id).toBe("session-2");
     await answers.release(2);
     await untilSession("session-3");
 
@@ -285,40 +280,163 @@ describe("PlaybackEngine seek while a session request is in flight", () => {
     });
     expect(server.sessionRequests).toHaveLength(2);
   });
+
+  it("opens another file without clamping its start to the previous file's late session", async () => {
+    const answers = createHeldAnswers("file");
+    const { engine, open, server, media, snapshot, untilSession } = createEngineHarness({
+      createSession: answers.respond,
+    });
+    open();
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(1);
+    });
+    const longerStart = playerFileDurationSeconds * 4;
+
+    engine.open({
+      media,
+      profile: mseProfile,
+      fileId: "file-2",
+      startPositionSeconds: longerStart,
+    });
+    await answers.release(0);
+
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(2);
+    });
+    // The late session of the first file gives its slot to the new file and is never shown.
+    expect(server.sessionRequests[1]).toMatchObject({
+      fileId: "file-2",
+      startPositionSeconds: longerStart,
+      replacesSessionId: "session-1",
+    });
+    expect(snapshot().session).toBeUndefined();
+    expect(media.src).toBe("");
+    await answers.release(1);
+    await untilSession("session-2");
+    expect(media.src).toBe("/api/v1/playback/sessions/session-2/file");
+    expect(answers.maxInFlight()).toBe(1);
+  });
 });
 
-/** Session requests the test answers one by one, counting how many were in flight at once. */
-function createHeldAnswers(delivery: "file" | "hls") {
-  const held: HeldAnswer[] = [];
-  let inFlight = 0;
-  let maxInFlight = 0;
-  const respond = (request: PlaybackRequest, index: number) =>
-    new Promise<Response>((resolve) => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      const settle = (response: Response) => {
-        inFlight -= 1;
-        resolve(response);
-      };
-      held[index] = {
-        release: () => {
-          settle(sessionResponse(createdSession(request, index, delivery)));
-        },
-        fail: () => {
-          settle(problemResponse(500, "internal"));
-        },
-      };
-    });
-  const answer = async (index: number, how: "release" | "fail") => {
+describe("PlaybackEngine seek on a direct-play file that has not loaded yet", () => {
+  it("moves the pending start instead of creating a new session", async () => {
+    const { engine, open, server, media, snapshot, untilSession } = createEngineHarness();
+    open(30);
+    await untilSession("session-1");
+
+    engine.seek(50);
+
+    expect(snapshot()).toMatchObject({ status: "loading", position: 50 });
+    media.emit("loadedmetadata");
+    expect(media.currentTime).toBe(50);
+    expect(server.sessionRequests).toHaveLength(1);
+  });
+
+  it("seeks the element when the file starts at its beginning", async () => {
+    const { engine, open, server, media, snapshot, untilSession } = createEngineHarness();
+    open();
+    await untilSession("session-1");
+
+    engine.seek(50);
+
+    expect(media.currentTime).toBe(50);
+    expect(snapshot().position).toBe(50);
+    expect(server.sessionRequests).toHaveLength(1);
+  });
+});
+
+describe("PlaybackEngine bounds after opening another file during a request", () => {
+  async function openSecondFile() {
+    const answers = createHeldAnswers("hls");
+    const harness = createEngineHarness({ createSession: answers.respond });
+    harness.open();
     await vi.waitFor(() => {
-      expect(held[index]).toBeDefined();
+      expect(harness.server.sessionRequests).toHaveLength(1);
     });
-    held[index]?.[how]();
-  };
-  return {
-    respond,
-    release: (index: number) => answer(index, "release"),
-    fail: (index: number) => answer(index, "fail"),
-    maxInFlight: () => maxInFlight,
-  };
-}
+    const start = playerFileDurationSeconds * 4;
+    harness.engine.open({
+      media: harness.media,
+      profile: mseProfile,
+      fileId: "file-2",
+      startPositionSeconds: start,
+    });
+    await answers.release(0);
+    await vi.waitFor(() => {
+      expect(harness.server.sessionRequests).toHaveLength(2);
+    });
+    return { ...harness, answers, start };
+  }
+
+  it("does not clamp a seek during the new file's request to the old file's duration", async () => {
+    const { engine, snapshot, start } = await openSecondFile();
+
+    engine.seek(start - 10);
+
+    expect(snapshot().position).toBe(start - 10);
+  });
+
+  it("does not clamp a retry after the new file's request failed", async () => {
+    const { engine, server, answers, until, start } = await openSecondFile();
+    await answers.fail(1);
+    await until((current) => current.status === "error");
+
+    engine.retry();
+
+    await vi.waitFor(() => {
+      expect(server.sessionRequests).toHaveLength(3);
+    });
+    expect(server.sessionRequests[2]).toMatchObject({
+      fileId: "file-2",
+      startPositionSeconds: start,
+      replacesSessionId: "session-1",
+    });
+  });
+});
+
+describe("PlaybackEngine play intent", () => {
+  it("keeps a stream that arrives after a pause request paused", async () => {
+    const answers = createHeldAnswers("file");
+    const { engine, open, media, snapshot, untilSession } = createEngineHarness({
+      createSession: answers.respond,
+    });
+    open();
+
+    engine.setAutoplay(false);
+    expect(snapshot().autoplay).toBe(false);
+    await answers.release(0);
+    await untilSession("session-1");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(media.calls).not.toContain("play");
+  });
+
+  it("plays and pauses an attached stream that is still loading", async () => {
+    const { engine, open, media, snapshot, untilSession } = createEngineHarness();
+    open();
+    await untilSession("session-1");
+    await vi.waitFor(() => {
+      expect(media.calls).toEqual(["play"]);
+    });
+
+    engine.setAutoplay(false);
+    engine.setAutoplay(true);
+
+    await vi.waitFor(() => {
+      expect(media.calls).toEqual(["play", "pause", "play"]);
+    });
+    expect(snapshot().autoplay).toBe(true);
+  });
+
+  it("starts every new attempt with the intent it asks for", async () => {
+    const { engine, open, snapshot, untilSession } = createEngineHarness();
+    engine.setAutoplay(false);
+    expect(snapshot().autoplay).toBe(true);
+    open();
+    await untilSession("session-1");
+    engine.setAutoplay(false);
+
+    engine.retry();
+
+    expect(snapshot().autoplay).toBe(true);
+  });
+});

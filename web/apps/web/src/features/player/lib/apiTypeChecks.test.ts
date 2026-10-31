@@ -7,6 +7,7 @@ import {
   coreSessionFitsApi,
   hlsErrorFitsCore,
   sessionKeysMatch,
+  streamInfoColorIsToken,
 } from "./apiTypeChecks";
 
 describe("apiTypeChecks", () => {
@@ -19,6 +20,7 @@ describe("apiTypeChecks", () => {
       coreSessionFitsApi,
       ...sessionKeysMatch,
       hlsErrorFitsCore,
-    ]).toEqual(Array.from({ length: 11 }, () => true));
+      streamInfoColorIsToken,
+    ]).toEqual(Array.from({ length: 12 }, () => true));
   });
 });

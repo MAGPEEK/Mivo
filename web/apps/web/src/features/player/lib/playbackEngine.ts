@@ -4,7 +4,11 @@
 // the React hook usePlaybackSession only wires it to a <video> element.
 //
 // A restart empties the media element right away instead of playing the old stream until the
-// new session arrives; keeping the old picture during a restart is left to the player UI (M2-30).
+// new session arrives (decided in M2-30, ADR 0024 Notes M2-30): a restart means the target lies
+// outside what the element has, so the old stream would keep playing the wrong part of the file,
+// move the position away from the target the user just picked and keep its audio running, and
+// its requests may fail once the server swaps the sessions. The player page shows the target
+// position and a spinner instead.
 
 import {
   clampPosition,
@@ -57,6 +61,9 @@ export const maxStreamNotReadyRetries = 3;
 
 const millisecondsPerSecond = 1_000;
 
+/** The server did not produce the stream in time. */
+const streamNotReadyError: PlaybackError = { code: "stream_not_ready" };
+
 /** Phase of the playback: waiting for a playable stream, playable, or failed. */
 export type PlaybackStatus = "loading" | "playing" | "error";
 
@@ -70,6 +77,11 @@ export interface PlaybackSnapshot {
   /** Whether the server is still preparing the stream (`stream_not_ready`). */
   readonly waitingForStream: boolean;
   readonly error: PlaybackError | undefined;
+  /**
+   * Whether the stream starts playing once it is attached. While no stream is attached (a
+   * restart, a wait for the stream) this is the only play state there is.
+   */
+  readonly autoplay: boolean;
 }
 
 /** Services the engine uses. */
@@ -120,6 +132,7 @@ export const initialPlaybackSnapshot: PlaybackSnapshot = {
   position: 0,
   waitingForStream: false,
   error: undefined,
+  autoplay: true,
 };
 
 /** Plays one file at a time on one media element; see the file comment. */
@@ -137,6 +150,11 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   private generation = 0;
   /** The newest session the server created for this player; the next request replaces it. */
   private session: PlaybackSession | undefined;
+  /**
+   * The open request `session` was created for. After `open` during a pending request,
+   * `session` may belong to the previous file: it lends its slot but not its duration.
+   */
+  private sessionRequest: PlaybackOpenRequest<Media> | undefined;
   private attachment: Attachment<Media> | undefined;
   private hls: HlsPlayer<Media> | undefined;
   private cancelTimer: (() => void) | undefined;
@@ -188,17 +206,22 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
 
   /**
    * Moves to the file position `target`: locally when the element already has it, otherwise
-   * with a new session that replaces the current one. Before the stream plays, every seek
-   * restarts at the target; a seek during a pending request is applied when it settles.
+   * with a new session that replaces the current one. Before a stream plays, every seek
+   * restarts at the target, except in a direct-play file that is already attached; a seek
+   * during a pending request is applied when it settles.
    */
   seek(target: number): void {
-    const { request, session } = this;
+    const { request, session, attachment } = this;
     if (request === undefined || this.suspended) {
       return;
     }
     this.resetRecovery();
     const { media } = request;
-    if (session === undefined || this.snapshot.status !== "playing") {
+    // A direct-play file seeks in the element as soon as it is attached, unless the element
+    // has failed already: then only a new session helps.
+    const loadingFile =
+      session?.delivery === "file" && attachment !== undefined && media.error === null;
+    if (session === undefined || (this.snapshot.status !== "playing" && !loadingFile)) {
       this.restart(request, target, this.autoplay);
       return;
     }
@@ -208,11 +231,22 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       buffered: readTimeRanges(media.buffered),
     });
     if (plan.kind === "local") {
-      media.currentTime = plan.time;
-      this.updatePosition();
+      this.seekLocally(media, plan.time);
       return;
     }
     this.restart(request, plan.position, !media.paused);
+  }
+
+  /** Sets the element's clock, or the start of a direct-play file still loading its metadata. */
+  private seekLocally(media: Media, time: number): void {
+    if (this.pendingFileStart > 0) {
+      // A direct-play file's clock is the file position, so `time` is the position, too.
+      this.pendingFileStart = time;
+      this.publish({ ...this.snapshot, position: time });
+      return;
+    }
+    media.currentTime = time;
+    this.updatePosition();
   }
 
   /** Starts again at the current position after an error, e.g. `session_limit_reached`. */
@@ -223,6 +257,24 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     }
     this.resetRecovery();
     this.restart(request, this.snapshot.position, true);
+  }
+
+  /**
+   * Sets whether playback should run. Before a stream is attached, this decides whether it
+   * starts playing once it is; an attached stream plays or pauses right away.
+   */
+  setAutoplay(autoplay: boolean): void {
+    if (this.request === undefined) {
+      return;
+    }
+    this.autoplay = autoplay;
+    const media = this.attachment?.media;
+    if (media !== undefined && autoplay) {
+      this.playIfWanted(media);
+    } else {
+      media?.pause();
+    }
+    this.publish({ ...this.snapshot, autoplay });
   }
 
   /** Stops the session while the page is hidden (`pagehide`); {@link resume} restarts it. */
@@ -251,7 +303,8 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
 
   /** Starts a session that replaces the current one, inside the file (`restartPosition`). */
   private restart(request: PlaybackOpenRequest<Media>, position: number, autoplay: boolean): void {
-    const bounds = this.session ?? fileOfUnknownLength;
+    const ownSession = this.sessionRequest === request ? this.session : undefined;
+    const bounds = ownSession ?? fileOfUnknownLength;
     this.start({ request, position: restartPosition(bounds, position), autoplay });
   }
 
@@ -265,6 +318,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       position: options.position,
       waitingForStream: false,
       error: undefined,
+      autoplay: options.autoplay,
     });
     this.dispatch(options);
   }
@@ -313,6 +367,13 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
    * A newer wish waited while `session` was being created. It replaces `session`, so one
    * server slot serves the whole series of seeks. A direct-play file needs no new session: the
    * element seeks in it.
+   *
+   * When the newer wish opens another file (`open` while the request was in flight), `session`
+   * belongs to the previous file: it only lends its slot, is never shown, and its duration says
+   * nothing about the new file, whose start `open` has already clamped.
+   *
+   * When the newer wish wants the position `session` was created for (the page was hidden and
+   * shown again meanwhile), `session` already is what it asks for and is used as it is.
    */
   private continueAfter(
     session: PlaybackSession,
@@ -320,11 +381,22 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     next: StartOptions<Media>,
   ): void {
     this.session = session;
+    this.sessionRequest = finished.request;
+    if (next.request !== finished.request) {
+      this.dispatch(next);
+      return;
+    }
     const position = restartPosition(session, next.position);
-    if (session.delivery === "file" && next.request === finished.request) {
+    if (session.delivery === "file") {
       this.useSession(next.request, session, position);
       return;
     }
+    if (next.position === finished.position) {
+      this.useSession(next.request, session, session.startPositionSeconds);
+      return;
+    }
+    // The session shown is replaced already; show the one that exists until the next arrives.
+    this.publish({ ...this.snapshot, session });
     this.dispatch({ ...next, position });
   }
 
@@ -345,6 +417,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     startPosition: number,
   ): void {
     this.session = session;
+    this.sessionRequest = request;
     this.pendingFileStart = session.delivery === "file" ? startPosition : 0;
     const position = clampPosition(session, startPosition);
     this.publish({ ...this.snapshot, session, position });
@@ -445,6 +518,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       this.dependencies.api.stopSession(this.session.id);
       this.session = undefined;
     }
+    this.sessionRequest = undefined;
   }
 
   /** Shows `error`; late answers and hls.js errors of the failed attempt are ignored. */
@@ -463,7 +537,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       return;
     }
     if (isStreamNotReady(error)) {
-      this.retryWhenReady(generation, request, retryAfterSeconds);
+      this.retryWhenReady(generation, request, retryAfterSeconds, streamNotReadyError);
     } else if (shouldRecreateSession({ source: "hls", error })) {
       this.recover(request);
     } else if (isMediaError(error) && this.mediaRecovery.tryRecover(this.snapshot.position)) {
@@ -499,21 +573,31 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     if (generation !== this.generation) {
       return;
     }
-    if (this.waitsForStream(current.state, attachment.kind)) {
-      this.retryWhenReady(generation, request, undefined);
-    } else {
+    const errorAfterWaiting = this.streamWaitOutcome(current.state, attachment.kind);
+    if (errorAfterWaiting === undefined) {
       this.fail(genericPlaybackError);
+    } else {
+      this.retryWhenReady(generation, request, undefined, errorAfterWaiting);
     }
   }
 
   /**
-   * Whether a media element error means "not ready yet": the session is still starting, or
-   * native HLS got the playlist's 503 just before the first segment appeared (the session is
-   * `ready` by now, but the element never played).
+   * Whether a media element error means "not ready yet", and what to show when waiting runs
+   * out; `undefined` means it is a real failure. A session that is still starting is waited
+   * for (`stream_not_ready`). Native HLS may also have got the playlist's 503 just before the
+   * first segment appeared: the session is `ready` by now, but the element never played. That
+   * is waited for, too, but when it keeps failing the server is not the one still preparing,
+   * so it ends as a generic error.
    */
-  private waitsForStream(state: PlaybackSessionState, kind: Attachment<Media>["kind"]): boolean {
+  private streamWaitOutcome(
+    state: PlaybackSessionState,
+    kind: Attachment<Media>["kind"],
+  ): PlaybackError | undefined {
+    if (state === "starting") {
+      return streamNotReadyError;
+    }
     const nativeBeforeFirstFrame = kind === "native" && this.snapshot.status === "loading";
-    return state === "starting" || (state === "ready" && nativeBeforeFirstFrame);
+    return state === "ready" && nativeBeforeFirstFrame ? genericPlaybackError : undefined;
   }
 
   private onSessionLookupFailure(request: PlaybackOpenRequest<Media>, error: unknown): void {
@@ -535,15 +619,19 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     this.restart(request, position, this.autoplay);
   }
 
-  /** Loads the stream of the same session again after the server's `Retry-After`. */
+  /**
+   * Loads the stream of the same session again after the server's `Retry-After`, or shows
+   * `errorAfterWaiting` once {@link maxStreamNotReadyRetries} attempts are used up.
+   */
   private retryWhenReady(
     generation: number,
     request: PlaybackOpenRequest<Media>,
     retryAfterSeconds: number | undefined,
+    errorAfterWaiting: PlaybackError,
   ): void {
     const session = this.session;
     if (session === undefined || this.streamNotReadyRetries >= maxStreamNotReadyRetries) {
-      this.fail({ code: "stream_not_ready" });
+      this.fail(errorAfterWaiting);
       return;
     }
     this.streamNotReadyRetries += 1;

@@ -53,17 +53,18 @@ describe("feature routes", () => {
 });
 
 describe("player route search", () => {
-  it("passes a valid file and start position to the player", async () => {
+  // That the player plays what the search names: features/player/components/PlayerPage.test.tsx.
+  it("validates a valid file and start position for the player", async () => {
     const { router } = renderApp("/items/item-1/play?fileId=file-1&t=90.5");
 
-    expect(await screen.findByText("Item item-1, file file-1, from 90.5 s.")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Player" })).toBeTruthy();
     expect(router.state.matches.at(-1)?.search).toEqual({ fileId: "file-1", t: 90.5 });
   });
 
   it("drops invalid values and still opens the player", async () => {
     const { router } = renderApp("/items/item-1/play?fileId=&t=-5&extra=1");
 
-    expect(await screen.findByText("Item item-1, file primary file, from 0 s.")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Player" })).toBeTruthy();
     expect(router.state.matches.at(-1)?.search).toMatchObject({ fileId: undefined, t: undefined });
   });
 

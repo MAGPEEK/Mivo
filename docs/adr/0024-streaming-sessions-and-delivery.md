@@ -219,3 +219,24 @@ Process hardening in `adapters/ffmpeg`; it refines the process rules above.
   exit without segments, and -1 for a process ended by a signal, as Go reports it. It is left
   out for failures that are no exit, such as a failed wait. `ffmpeg.ErrorOutput` (the stderr
   tail) may be logged; it is never returned to clients.
+
+## Notes (M2-30)
+
+Player decisions of the web app; they refine "Seeking by restart" without changing it.
+
+- **A restart empties the media element right away**; the old stream does not keep playing until
+  the new session arrives. A restart means the target lies outside what the element has, so the
+  old stream would play the wrong part of the file, move the displayed position away from the
+  target the user just picked and keep its audio running, and its requests may fail once the
+  server swaps the sessions (Notes M2-20). The player shows the target position on the scrubber
+  and a spinner until the new stream plays.
+- A seek in a direct-play file is local as soon as the file is attached, also before its first
+  frame (a start position that is still pending moves instead). Only an element that has
+  already failed restarts.
+- Native `controls` stay off: the `EVENT` playlist would show only the produced part. The web
+  player draws its own scrubber over the probed duration and shades the produced range of an
+  HLS stream (its `seekable` ranges on the file timeline).
+- While no stream plays (loading, a restart, a wait for the stream), play and pause set the
+  engine's intent (`autoplay` in the snapshot) instead of acting on the empty element, and the
+  button shows that intent. The controls hide after 3 s of playback, but never while keyboard
+  focus is on one of them.

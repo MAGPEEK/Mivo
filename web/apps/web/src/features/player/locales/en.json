@@ -1,13 +1,12 @@
 {
   "heading": "Player",
-  "placeholder": "Item {{itemId}}, file {{fileId}}, from {{startAt}} s.",
-  "primaryFile": "primary file",
   "video": "Video",
+  "back": "Back",
+  "backToItem": "Back to the details",
   "retry": "Try again",
   "status": {
     "loading": "Loading the video…",
-    "waitingForStream": "The server is preparing the stream…",
-    "playing": "Ready to play"
+    "waitingForStream": "The server is preparing the stream…"
   },
   "errors": {
     "no_compatible_format": "This browser cannot play this file, not even after converting it.",
@@ -15,5 +14,74 @@
     "session_limit_reached": "Too many videos are playing on the server right now. Try again in a moment.",
     "stream_not_ready": "The server could not prepare the stream in time.",
     "generic": "This video cannot be played."
+  },
+  "controls": {
+    "label": "Player controls",
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "volume": "Volume",
+    "volumeValue": "{{percent}} %",
+    "position": "Position",
+    "positionValue": "{{position}} of {{duration}}",
+    "time": "{{position}} / {{duration}}",
+    "enterFullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "streamInfo": "Stream info"
+  },
+  "overlay": {
+    "heading": "Stream info",
+    "close": "Close stream info",
+    "noSession": "No stream yet.",
+    "reasons": "Why",
+    "warnings": "Warnings",
+    "container": "Container",
+    "containerChange": "{{source}} → {{target}}",
+    "encoder": "Encoder",
+    "sourceBitRate": "Source bit rate"
+  },
+  "streamInfo": {
+    "mode": {
+      "direct_play": "Direct Play",
+      "remux": "Direct Stream",
+      "transcode": "Transcode",
+      "unknown": "Other mode"
+    },
+    "reason": {
+      "container_not_supported": "{{sourceContainer}} not supported → remux to {{targetContainer}}",
+      "video_codec_not_supported": "Video {{sourceCodec}} not supported → {{targetCodec}}",
+      "video_profile_not_supported": "Video profile of {{sourceCodec}} not supported → {{targetCodec}}",
+      "video_bit_depth_not_supported": "Video bit depth of {{sourceCodec}} not supported → {{targetCodec}}",
+      "audio_codec_not_supported": "Audio {{sourceCodec}} not supported → {{targetCodec}}",
+      "audio_track_not_default": "The selected audio track is not the default one, and browsers cannot switch the tracks of a file",
+      "unknown": "Other reason ({{code}})"
+    },
+    "warning": {
+      "hdr_not_tone_mapped": "HDR is converted without tone mapping, so colours may look pale",
+      "subtitles_not_supported": "Subtitles are not shown yet",
+      "video_downscaled": "Video downscaled to {{resolution}}",
+      "unknown": "Other warning ({{code}})"
+    },
+    "streamKind": {
+      "video": "Video",
+      "audio": "Audio",
+      "subtitle": "Subtitles",
+      "other": "Other",
+      "unknown": "Stream"
+    },
+    "action": {
+      "copy": "Copied",
+      "transcode": "Transcoded",
+      "unknown": "Other"
+    },
+    "encoder": {
+      "software": "Software ({{encoder}})",
+      "hardware": "Hardware ({{encoder}})"
+    },
+    "bitRate": {
+      "kilobits": "{{value, number}} kbit/s",
+      "megabits": "{{value, number}} Mbit/s"
+    }
   }
 }

@@ -1,11 +1,13 @@
 // Compile-time proofs that player-core's hand-written mirrors of API and hls.js types stay
-// compatible (ADR 0023, task M2-27). player-core may not import the API client
-// (dependency-cruiser rule player-core-not-to-api-client) nor hls.js, so the web app checks the
-// structures here. `tsc -b` (pnpm lint) fails when a side drifts; nothing here exists at run time
-// except the `true` values that carry the checks.
+// compatible (ADR 0023, task M2-27), and that its colour names are ui-tokens colours (M2-30).
+// player-core may not import the API client (dependency-cruiser rule
+// player-core-not-to-api-client) nor hls.js, so the web app checks the structures here.
+// `tsc -b` (pnpm lint) fails when a side drifts; nothing here exists at run time except the
+// `true` values that carry the checks.
 
 import type * as Api from "@mivo/api-client";
 import type * as Core from "@mivo/player-core";
+import type { ColorToken } from "@mivo/ui-tokens";
 import type { ErrorData } from "hls.js";
 
 /** Resolves to `true` when `Source` is assignable to `Target`, otherwise to `never`. */
@@ -47,3 +49,6 @@ export const sessionKeysMatch: [
 
 /** hls.js passes its `ErrorData` to the engine as player-core's `HlsErrorData`. */
 export const hlsErrorFitsCore: Assignable<ErrorData, Core.HlsErrorData> = true;
+
+/** Every colour player-core names for the stream-info overlay is a ui-tokens colour. */
+export const streamInfoColorIsToken: Assignable<Core.StreamInfoColorToken, ColorToken> = true;

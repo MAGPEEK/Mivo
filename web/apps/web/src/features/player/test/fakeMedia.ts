@@ -22,7 +22,7 @@ export class FakeMedia extends EventTarget implements PlaybackMedia {
   error: { readonly code: number } | null = null;
   seekableRanges: TimeRange[] = [];
   bufferedRanges: TimeRange[] = [];
-  /** Calls of `play`, `load` and `removeAttribute`, oldest first. */
+  /** Calls of `play`, `pause`, `load` and `removeAttribute`, oldest first. */
   readonly calls: string[] = [];
   /** Result of the next `play()` calls; a browser rejects without a user gesture. */
   playResult: () => Promise<void> = () => Promise.resolve();
@@ -39,6 +39,11 @@ export class FakeMedia extends EventTarget implements PlaybackMedia {
     this.calls.push("play");
     this.paused = false;
     return this.playResult();
+  }
+
+  pause(): void {
+    this.calls.push("pause");
+    this.paused = true;
   }
 
   load(): void {

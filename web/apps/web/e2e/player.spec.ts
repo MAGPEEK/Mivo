@@ -1,3 +1,4 @@
+import { AxeBuilder } from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 import {
@@ -84,14 +85,67 @@ test("explains a full server and creates the session again on retry", async ({ p
   );
   await page.goto(`${playerPath}?t=45`);
 
-  await expect(page.getByRole("status")).toHaveText(
+  await expect(page.getByRole("alert")).toHaveText(
     "Too many videos are playing on the server right now. Try again in a moment.",
   );
-  await page.getByRole("button", { name: "Try again" }).click();
+  // The retry button takes focus, so keyboard users can act on the error right away.
+  await expect(page.getByRole("button", { name: "Try again" })).toBeFocused();
+  await page.keyboard.press("Enter");
 
   await expect(page.getByLabel("Video")).toHaveAttribute(
     "src",
     "/api/v1/playback/sessions/direct-2/file",
   );
   expect(mocks.sessionRequests.map((request) => request.startPositionSeconds)).toEqual([45, 45]);
+});
+
+/** A remux of an MKV, as the server answers for a browser without Matroska support. */
+const remuxSession = {
+  ...mockSession("remux-1", "hls"),
+  sourceContainer: "mkv",
+  sourceBitRate: 4_073_000,
+  streams: [
+    { kind: "video", sourceIndex: 0, action: "copy", sourceCodec: "vp9", targetCodec: "vp9" },
+    { kind: "audio", sourceIndex: 1, action: "copy", sourceCodec: "opus", targetCodec: "opus" },
+  ],
+  reasons: [{ code: "container_not_supported", scope: "container" }],
+} satisfies ReturnType<typeof mockSession>;
+
+/** Opens the player on a remux whose stream never becomes ready (the spec checks the UI). */
+async function openRemux(page: Page): Promise<void> {
+  await page.route("**/api/v1/playback/sessions/remux-1/hls/**", () => undefined);
+  await mockPlayback(page, (route) => fulfillSession(route, remuxSession));
+  await page.goto(playerPath);
+  await expect(page.getByRole("heading", { level: 1, name: "Mocked Movie" })).toBeVisible();
+}
+
+test("shows the stream-info overlay from the keyboard and returns focus when it closes", async ({
+  page,
+}) => {
+  await openRemux(page);
+
+  await page.keyboard.press("i");
+
+  const overlay = page.getByRole("region", { name: "Stream info" });
+  await expect(overlay.getByText("Direct Stream")).toBeVisible();
+  await expect(overlay.getByText("MKV not supported → remux to MP4")).toBeVisible();
+  await expect(overlay.getByText("MKV → MP4")).toBeVisible();
+  await expect(overlay.getByText("4.1 Mbit/s")).toBeVisible();
+  await expect(overlay.getByRole("heading", { name: "Stream info" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(overlay).toBeHidden();
+  await expect(page.getByRole("button", { name: "Stream info" })).toBeFocused();
+});
+
+test("has no serious or critical axe violations with the overlay open", async ({ page }) => {
+  await openRemux(page);
+  await page.getByRole("button", { name: "Stream info" }).click();
+  await expect(page.getByRole("region", { name: "Stream info" })).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  const blocking = results.violations
+    .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
+    .map((violation) => `${violation.id}: ${violation.help} (${String(violation.nodes.length)}x)`);
+
+  expect(blocking).toEqual([]);
 });

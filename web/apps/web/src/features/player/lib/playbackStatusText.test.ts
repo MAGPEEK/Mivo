@@ -1,18 +1,37 @@
 import { describe, expect, it } from "vitest";
 
-import { playbackStatusKey } from "./playbackStatusText";
+import { playbackNotice } from "./playbackStatusText";
 
-describe("playbackStatusKey", () => {
+describe("playbackNotice", () => {
   it.each([
-    { view: { status: "loading", waitingForStream: false }, expected: "status.loading" },
-    { view: { status: "loading", waitingForStream: true }, expected: "status.waitingForStream" },
-    { view: { status: "playing", waitingForStream: false }, expected: "status.playing" },
     {
-      view: { status: "error", waitingForStream: false, error: { code: "transcode_unavailable" } },
-      expected: "errors.transcode_unavailable",
+      view: { status: "loading", waitingForStream: false },
+      expected: { kind: "loading", key: "status.loading" },
     },
-    { view: { status: "error", waitingForStream: false }, expected: "errors.generic" },
-  ] as const)("maps $view.status to $expected", ({ view, expected }) => {
-    expect(playbackStatusKey({ error: undefined, ...view })).toBe(expected);
+    {
+      view: { status: "loading", waitingForStream: true },
+      expected: { kind: "loading", key: "status.waitingForStream" },
+    },
+    { view: { status: "playing", waitingForStream: false }, expected: { kind: "none" } },
+    {
+      view: { status: "error", waitingForStream: false },
+      expected: { kind: "error", key: "errors.generic", retryable: true },
+    },
+  ] as const)("shows $expected.kind while $view.status", ({ view, expected }) => {
+    expect(playbackNotice({ error: undefined, ...view })).toEqual(expected);
+  });
+
+  it.each([
+    { code: "no_compatible_format", retryable: false },
+    { code: "transcode_unavailable", retryable: false },
+    { code: "session_limit_reached", retryable: true },
+    { code: "stream_not_ready", retryable: true },
+    { code: "generic", retryable: true },
+  ] as const)("offers a retry for $code: $retryable", ({ code, retryable }) => {
+    expect(playbackNotice({ status: "error", waitingForStream: false, error: { code } })).toEqual({
+      kind: "error",
+      key: `errors.${code}`,
+      retryable,
+    });
   });
 });

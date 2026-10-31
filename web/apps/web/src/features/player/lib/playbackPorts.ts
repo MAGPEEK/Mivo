@@ -44,6 +44,7 @@ export interface PlaybackMedia {
   readonly buffered: TimeRangesLike;
   readonly error: { readonly code: number } | null;
   play(): Promise<void>;
+  pause(): void;
   load(): void;
   removeAttribute(name: string): void;
   addEventListener(type: PlaybackMediaEvent, listener: () => void): void;

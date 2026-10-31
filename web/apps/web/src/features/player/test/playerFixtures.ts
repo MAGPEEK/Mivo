@@ -83,3 +83,65 @@ export function fakeSession(fields: SessionFields): PlaybackSession {
     warnings: [],
   };
 }
+
+/** A direct-play session of an MP4 with H.264 and AAC (one session per mode for the overlay). */
+export const directPlaySession: PlaybackSession = {
+  ...fakeSession({ id: "direct-1", startPositionSeconds: 30 }),
+  sourceBitRate: 950_000,
+  streams: [
+    { kind: "video", sourceIndex: 0, action: "copy", sourceCodec: "h264", targetCodec: "h264" },
+    { kind: "audio", sourceIndex: 1, action: "copy", sourceCodec: "aac", targetCodec: "aac" },
+  ],
+};
+
+/** A remux of an MKV whose container the browser does not play. */
+export const remuxSession: PlaybackSession = {
+  ...directPlaySession,
+  id: "remux-1",
+  mode: "remux",
+  delivery: "hls",
+  streamUrl: "/api/v1/playback/sessions/remux-1/hls/index.m3u8",
+  sourceContainer: "mkv",
+  sourceBitRate: 4_073_000,
+  reasons: [{ code: "container_not_supported", scope: "container" }],
+};
+
+/** A transcode of a 4K HDR HEVC MKV with AC-3 5.1 audio and subtitles. */
+export const transcodeSession: PlaybackSession = {
+  ...remuxSession,
+  id: "transcode-1",
+  mode: "transcode",
+  streamUrl: "/api/v1/playback/sessions/transcode-1/hls/index.m3u8",
+  sourceBitRate: 18_500_000,
+  streams: [
+    {
+      kind: "video",
+      sourceIndex: 0,
+      action: "transcode",
+      sourceCodec: "hevc",
+      targetCodec: "h264",
+      targetWidth: 1920,
+      targetHeight: 1080,
+      encoder: "libx264",
+    },
+    {
+      kind: "audio",
+      sourceIndex: 2,
+      action: "transcode",
+      sourceCodec: "ac3",
+      targetCodec: "aac",
+      targetChannels: 2,
+      encoder: "aac",
+    },
+  ],
+  reasons: [
+    { code: "container_not_supported", scope: "container" },
+    { code: "video_codec_not_supported", scope: "video" },
+    { code: "audio_codec_not_supported", scope: "audio" },
+  ],
+  warnings: [
+    { code: "hdr_not_tone_mapped", scope: "video" },
+    { code: "video_downscaled", scope: "video" },
+    { code: "subtitles_not_supported", scope: "subtitle" },
+  ],
+};
