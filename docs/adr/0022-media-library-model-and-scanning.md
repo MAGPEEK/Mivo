@@ -274,3 +274,33 @@ Wiring in `cmd/mivo`; it refines the decision above without changing it.
   before any ffprobe runs; a failure to start it is logged, the scan button still works.
 - Availability: `libraryfs.FileSystem.RootAvailable` opens the root with `os.OpenRoot` and stats
   it; the library use case bounds the call (Notes M2-18).
+
+## Notes (M2-39, M2-40)
+
+Decisions taken before release 0.1.0-alpha.2 (planned 2026-10-31 from the BACKLOG); they
+refine the decision above. The tasks implement them; a task that has to deviate reports it
+instead of editing this section.
+
+- **Linked directories with an unknown identity are not followed (M2-40).** "Directory
+  identity" above lists a directory with an unknown id every time it is reached. With several
+  directory links pointing back to an ancestor, this multiplies the pending links with every
+  level, and the depth limit of 64 does not bound it in practice. From now on only
+  directories of the real tree are listed with an unknown identity; a directory reached
+  through a link whose identity is unknown is not listed, logged at info level and reported as
+  skipped, so the scan keeps catalog entries below it. Directories reached through links with
+  a known identity are unchanged (listed once, duplicates logged at debug).
+- **Catalog writer contract (M2-40).** `scan.CatalogWriter.SaveProbedFile` documents and the
+  scan's in-memory fake enforces the errors of the sqlite adapter: `ErrNotFound` for an unknown
+  library, `ErrConflict` when another file id is stored at the same relative path, `ErrInvalid`
+  when a stored file id belongs to another item or library (or a stored item to another
+  library), besides the record rules of `scan.ProbedFile`.
+- **`scan_canceled` (M2-40).** A scan whose context is done ends with `scan_canceled` whatever
+  error the interrupted step returned. SQLite reports an interrupted statement as a plain
+  "interrupted" error that does not wrap `context.Canceled`, which was logged as
+  `catalog_failed` at warn during a shutdown.
+- **Windows device paths are refused by an allowlist (M2-39).** Before a path reaches FFmpeg,
+  a path in the Win32 device namespace (`\\?\`, `\\.\`, either slash direction, any case) is
+  accepted only when a drive (`<letter>:\`) or `UNC\` follows the prefix; every other one
+  (`\\.\COM1`, `\\.\pipe\…`, `\\?\GLOBALROOT\…`, `\\?\Volume{…}\…`) and every NT object path
+  (`\??\…`) is refused with `ErrInvalid`. Volume GUID paths are refused although they can name
+  files; library roots use drive letters or UNC shares.

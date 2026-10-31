@@ -1,6 +1,7 @@
 # M2-36 Documentation and release readiness for v0.1-alpha
 Owner: mivo-backend
-Depends on: all other M2 tasks
+Depends on: all other M2 tasks, including M2-37, M2-38, M2-39, M2-40 and M2-41 (BACKLOG rows
+due before 0.1.0-alpha.2)
 Files/areas: `docs/development.md`, `README.md`, `CLAUDE.md` ("Commands" section only, needs the
 user's approval like M1-22), `docs/tasks/BACKLOG.md`, `docs/reports/M2-release-readiness.md`
 

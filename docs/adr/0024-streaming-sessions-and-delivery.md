@@ -146,9 +146,9 @@ Lifecycle details of `app/playback`; they refine the decision above without chan
   (`GET /api/v1/playback/sessions/{id}`) stays readable until `DELETE` or the idle timeout, so a
   client can read why it failed. An ended session keeps serving its HLS files; for a failed
   session the delivery adapter answers 500 for every HLS file, including segments written
-  before the failure. A stopped session is removed, not ended. The FFmpeg producer logs a failed process once at warn (exit code,
-  stderr tail); the playback service records the state change only at info (session, file,
-  failure code), so one failure is warned about once.
+  before the failure. A stopped session is removed, not ended. The FFmpeg producer logs a
+  failed process once at warn (exit code, stderr tail); the playback service records the state
+  change only at info (session, file, failure code), so one failure is warned about once.
 - When a replacement re-encodes less than the session it replaces (transcode → remux), the old
   session keeps counting in the categories the replacement does not occupy until it is stopped,
   so the limits hold while both run.
@@ -283,3 +283,53 @@ Wiring in `cmd/mivo` and delivery details; they refine the decision above withou
   file route after the session started (logged at warn by the stream handler). 403 `forbidden`
   stays reserved for a missing permission, which since M2-31 also means a client outside the
   LAN, so a player can tell the two apart.
+
+## Notes (M2-37 to M2-41)
+
+Decisions taken before release 0.1.0-alpha.2 (planned 2026-10-31 from the BACKLOG); they
+refine the decision above without changing it. The tasks implement them; a task that has to
+deviate reports it instead of editing this section.
+
+- **Playlist from memory (M2-37).** The delivery adapter reads `index.m3u8` into memory with a
+  bound of 4 MiB (`maxPlaylistBytes`; the `seg-NNNNN` pattern allows at most 100,000 segments
+  of about 32 bytes each) and closes the file before the first response byte is written. A
+  stalled client therefore never holds the playlist open, so it can neither make FFmpeg's
+  rename over the playlist fail on Windows nor use up the producer's `completePlaylist` retry
+  budget (Notes M2-24b). A playlist beyond the bound is a server fault: 500, logged at error.
+  `HEAD`, Range and `If-Range` keep working on the in-memory body. Init and media segments
+  are still streamed from their files, which FFmpeg never rewrites once they are listed. This
+  refines "only for the duration of one response" in Notes M2-24 for the playlist.
+- **Playback starts at 0 (M2-37).** Native HLS players (Safari, webOS) may treat a growing
+  `EVENT` playlist without `#EXT-X-ENDLIST` as live and start near its newest segment. FFmpeg's
+  hls muxer has no option for a start tag, so the delivery adapter inserts
+  `#EXT-X-START:TIME-OFFSET=0` directly after the leading `#EXTM3U` line of every served
+  playlist, unless it already has an `EXT-X-START` tag; a playlist that does not begin with
+  `#EXTM3U` is served unchanged. The file on disk stays as FFmpeg wrote it, so the producer's
+  readiness check is unaffected. hls.js starts at 0 anyway (`startPosition`, M2-27).
+- **Finished HLS sessions free their process slots (M2-38).** An HLS session in state `ended`
+  or `failed` runs no FFmpeg, so it counts only toward `MaxSessions`, no longer toward
+  `transcode.max_sessions` or the cap of `MaxFFmpegSessions`. This applies the Decision's
+  "sessions running FFmpeg" literally: a finished remux or transcode that is still being
+  watched no longer blocks a new viewer. A session whose process has exited but whose state
+  has not changed yet still counts (conservative for a moment).
+- **A missed `StreamAccess.Release` pins its session (M2-38).** The reaper never stops a session
+  with a stream request in flight (Notes M2-25), and there is deliberately no safety net such
+  as a per-access timeout, because one Range request may legitimately stream a whole film. The
+  guarantee is the delivery adapter's deferred `Release` in every handler. When a session is
+  torn down (`DELETE`, replacement, shutdown; the reaper skips sessions in use) while stream
+  requests are still open, the playback service logs the number of open requests at debug level, so a leak of
+  grants is visible in a debug log.
+- **FFmpeg error output stays inside the adapter (M2-39).** The prober (scan probe and
+  keyframe lookup) logs the stderr tail of a failed ffprobe run itself, at debug level, because
+  a scan may fail on many files and already records each one; capability detection logs its
+  failure, with the stderr tail, once at warn. `ffmpeg.ErrorOutput` is no longer exported, so
+  no code outside the adapter can copy the tail into an error, a problem response or a client
+  message. This supersedes the last sentence of Notes M2-24b ("`ffmpeg.ErrorOutput` … may be
+  logged").
+- **Player intent and Retry (M2-41).** Play and pause also set the engine's intent (`autoplay`)
+  while a stream plays, so a recovery restart or a `stream_not_ready` retry keeps a pause the
+  user made. The Retry button restarts with the current intent (playing unless the user paused
+  in the error state). A keyboard Retry moves focus to the play button (`useRetryWithFocus`), and
+  keyboard focus on a control keeps the controls visible (Notes M2-30): after a keyboard Retry
+  the controls therefore stay visible until focus leaves them, which is intended for keyboard
+  and TV-remote users.

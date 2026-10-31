@@ -56,7 +56,12 @@ subtitles, tone mapping, throttling, bandwidth tiers (M4), online metadata (M6).
 | [M2-33](M2-33-corpus-playback-integration.md) | Integration: every corpus video plays | mivo-media | see file | 5 |
 | [M2-34](M2-34-e2e-scan-library-play.md) | E2E: scan → library → play | mivo-frontend | 06, 22, 23, 30, 32 | 6 |
 | [M2-35](M2-35-playback-smoke-and-docker.md) | Smoke script + Docker verification | mivo-media | 32, 33 | 6 |
-| [M2-36](M2-36-docs-and-release-readiness.md) | Docs + release readiness | mivo-backend | all | 7 |
+| [M2-37](M2-37-hls-playlist-from-memory.md) | HLS playlist from memory, start at 0 | mivo-media | 29, 32 | 6b |
+| [M2-38](M2-38-playback-limits-and-lifecycle-nits.md) | Finished sessions free FFmpeg slots; lifecycle nits | mivo-backend | 25 | 6b |
+| [M2-39](M2-39-ffmpeg-prober-logger-and-device-paths.md) | FFmpeg: prober logger, device-path allowlist | mivo-media | 11, 16, 24b, 32 | 6b |
+| [M2-40](M2-40-scan-catalog-contract-and-link-walk.md) | Scan: catalog contract, `scan_canceled`, link walk | mivo-backend | 12, 15, 19 | 6b |
+| [M2-41](M2-41-player-review-leftovers.md) | Player: pause intent, scrubber, focus, reason copy | mivo-frontend | 30, 34 | 6b |
+| [M2-36](M2-36-docs-and-release-readiness.md) | Docs + release readiness | mivo-backend | all, incl. 37–41 | 7 |
 
 ## Waves (parallel within a wave; no two tasks of a wave share a file)
 
@@ -67,6 +72,10 @@ subtitles, tone mapping, throttling, bandwidth tiers (M4), online metadata (M6).
 5. M2-30 ‖ M2-32 ‖ M2-33 – **walking-skeleton checkpoint after M2-32**: `go run -tags webui
    ./cmd/mivo` with a library scans, lists and plays one file per mode
 6. M2-34 ‖ M2-35
+6b. M2-37 ‖ M2-38 ‖ M2-39 ‖ M2-40 ‖ M2-41 – the BACKLOG rows due before 0.1.0-alpha.2
+   (planned 2026-10-31). Disjoint files; the only shared file is `docs/tasks/BACKLOG.md`, where
+   each task deletes only its own rows. M2-39 edits one line of
+   `internal/adapters/http/stream/corpus_test.go`, M2-37 owns the rest of that package.
 7. M2-36, then the release decision (OD-9) and `mivo-release` with explicit user approval
 
 Same-package pairs that are safe because they touch disjoint files: M2-16/M2-17
