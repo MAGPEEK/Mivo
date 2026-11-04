@@ -80,6 +80,38 @@ func TestDesktopAppConfigOpensTheWebAppForEveryUser(t *testing.T) {
 	}
 }
 
+// INFO dsmappname must equal the unique property name of the entry; without it DSM shows no
+// main menu entry (DSM-NOTES section 16, SPK-12 owner test run 2).
+func TestDesktopAppNameIsTheKeyOfTheConfigEntry(t *testing.T) {
+	t.Parallel()
+
+	pkg := demoPackage()
+
+	name, err := pkg.DesktopAppName()
+	if err != nil {
+		t.Fatalf("DesktopAppName() error = %v", err)
+	}
+
+	if name != "com.examplemaintainer.demo" {
+		t.Errorf("DesktopAppName() = %q, want com.examplemaintainer.demo", name)
+	}
+
+	if _, found := decodedDesktopConfig(t, pkg)[name]; !found {
+		t.Errorf("config has no entry %q", name)
+	}
+}
+
+func TestDesktopAppNameRefusesAnInvalidPackage(t *testing.T) {
+	t.Parallel()
+
+	pkg := demoPackage()
+	pkg.Maintainer = "---"
+
+	if _, err := pkg.DesktopAppName(); !errors.Is(err, spkmeta.ErrInvalidValue) {
+		t.Errorf("DesktopAppName() error = %v, want %v", err, spkmeta.ErrInvalidValue)
+	}
+}
+
 // The title is the display name as it is, also with characters JSON must escape.
 func TestDesktopAppConfigCarriesTheDisplayName(t *testing.T) {
 	t.Parallel()

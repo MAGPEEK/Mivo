@@ -239,6 +239,10 @@ info_sh_value_checks() {
 	done
 	expect_info_sh "INFO.sh writes no beta key for a release" "$platform" "s/^BETA=.*/BETA='no'/" '^beta=' '!'
 	expect_info_sh "INFO.sh writes no adminurl" "$platform" 's/^$//' '^adminurl=' '!'
+	# The demo project has no prebuilt/ui, so neither main menu key is written.
+	expect_info_sh "INFO.sh writes no dsmappname without ui" "$platform" 's/^$//' '^dsmappname=' '!'
+	expect_info_sh "INFO.sh rejects a DSM_APP_NAME list" "$platform" \
+		"s/^DSM_APP_NAME=.*/DSM_APP_NAME='a.b c.d'/" "^Error: INFO.sh: build.env DSM_APP_NAME"
 }
 
 pack_family() {
@@ -303,8 +307,8 @@ pack_failure_checks() {
 	if log="$(pack_variant unknown-field "echo \"EXTRA='x'\" >>build.env")"; then
 		fail "toolkit run with an unknown build.env field succeeded"
 	else
-		expect_match "toolkit run refuses build.env fields outside the known twelve" "$log" \
-			"build.env fields other than ID .* PORT: EXTRA"
+		expect_match "toolkit run refuses build.env fields outside the known thirteen" "$log" \
+			"build.env fields other than ID .* PORT DSM_APP_NAME: EXTRA"
 	fi
 	if log="$(pack_variant duplicate-field "echo \"PORT='8460'\" >>build.env")"; then
 		fail "toolkit run with a field assigned twice succeeded"

@@ -33,7 +33,7 @@ require_info_value() {
 # shellcheck source=/dev/null
 . "$script_dir/build.env"
 for build_env_name in ID DISPLAY_NAME DESCRIPTION DESCRIPTION_GER MAINTAINER MAINTAINER_URL \
-	DSM_VERSION OS_MIN_VER ARCH BETA PORT; do
+	DSM_VERSION OS_MIN_VER ARCH BETA PORT DSM_APP_NAME; do
 	require_info_value "$build_env_name"
 done
 case "$BETA" in yes | no) ;; *) info_fail "build.env BETA must be yes or no, not '$BETA'" ;; esac
@@ -44,6 +44,8 @@ case "$BETA" in yes | no) ;; *) info_fail "build.env BETA must be yes or no, not
 	info_fail "build.env DSM_VERSION '$DSM_VERSION' is not <numbers separated by dots>-<build>"
 [[ "$OS_MIN_VER" =~ ^[0-9]+\.[0-9]+-[0-9]+$ ]] ||
 	info_fail "build.env OS_MIN_VER '$OS_MIN_VER' is not <major>.<minor>-<build>"
+[[ "$DSM_APP_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
+	info_fail "build.env DSM_APP_NAME '$DSM_APP_NAME' is not one application name"
 if ! [[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] || [ "$PORT" -gt 65535 ]; then
 	info_fail "build.env PORT '$PORT' is not a TCP port (1-65535)"
 fi
@@ -92,8 +94,16 @@ if [ "$BETA" = yes ]; then beta="yes"; else beta=""; fi
 # The DSM main menu entry: DSM links target/<dsmuidir> to its 3rdparty UI folder and reads the
 # application config there (README "Main menu entry"). SynoBuildConf/install packs the staged
 # prebuilt/ui as ui/ of package.tgz; a project staged without it gets no entry, like the icons.
+# dsmappname must equal the entry's property name in ui/config: the guide requires it for the
+# integration, and without it DSM 7.4 showed no main menu entry (DSM-NOTES section 16).
 # shellcheck disable=SC2034
-if [ -d "$script_dir/prebuilt/ui" ]; then dsmuidir="ui"; else dsmuidir=""; fi
+if [ -d "$script_dir/prebuilt/ui" ]; then
+	dsmuidir="ui"
+	dsmappname="$DSM_APP_NAME"
+else
+	dsmuidir=""
+	dsmappname=""
+fi
 
 pkg_dump_info || info_fail "pkg_dump_info failed; INFO would be incomplete"
 # Not in pkg_dump_info's key list; written explicitly so the intent is visible in INFO

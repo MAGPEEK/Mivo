@@ -615,7 +615,11 @@ platform environments DSM 7.2.2 build 72723)**
   declares one entry of type `url` (protocol, port 8460, path, `allUsers`, title, description,
   icon file pattern per size) plus the icon files. Title and description are build-time tokens
   filled from `internal/platform/brand` (§6: no product name in packaging files); the icons come
-  from the generated package icons (SPK-08) in the sizes DSM asks for *(verify)*.
+  from the generated package icons (SPK-08) in the sizes DSM asks for *(verify)*. INFO
+  `dsmappname` must equal the key of that `config` entry (`com.<maintainer>.<id>`, from
+  build.env `DSM_APP_NAME`); without it DSM 7.4.1 showed no entry (SPK-12 run 2), with it the
+  entry appears and opens the web app – confirmed on the owner's DS925+ (SPK-12 run 3,
+  DSM-NOTES §16).
 - The launcher grants nothing: whoever opens it still meets the server's own access rules
   (LAN-only guard now, the server's sign-in from milestone 7). A DSM user who sees the icon has
   no more rights in Mivo than any other LAN client.

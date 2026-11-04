@@ -81,6 +81,7 @@ func (build Build) BuildEnv() (string, error) {
 
 	pkg := build.Package
 
+	// build.Validate has validated the package, so the entry key needs no second check.
 	return renderEnv([]envAssignment{
 		{name: "ID", value: pkg.ID},
 		{name: "DISPLAY_NAME", value: pkg.DisplayName},
@@ -94,6 +95,7 @@ func (build Build) BuildEnv() (string, error) {
 		{name: "OS_MIN_VER", value: pkg.OSMinVersion},
 		{name: "ARCH", value: build.Family.Arch},
 		{name: "PORT", value: strconv.Itoa(pkg.Port)},
+		{name: "DSM_APP_NAME", value: pkg.desktopAppKey()},
 	})
 }
 

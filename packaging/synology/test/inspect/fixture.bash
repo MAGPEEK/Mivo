@@ -155,6 +155,7 @@ arch="$arch"
 adminprotocol="http"
 adminport="$FIXTURE_PORT"
 dsmuidir="ui"
+dsmappname="com.examplemaintainer.$FIXTURE_ID"
 os_min_ver="7.2-64570"
 EOF
 	[ "$beta" = no ] || echo 'beta="yes"'

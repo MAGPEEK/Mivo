@@ -62,7 +62,7 @@ step is not fatal for the run: continue where possible and record what happened.
 | A10 | SSH: `ls -l /var/packages/<id>/scripts/` | the seven scripts **plus `common.sh` and `package.env`** are present | |
 | A11 | SSH: `sudo cat /var/packages/<id>/var/config.yaml` and `ls -l /var/packages/<id>/var/` | `config.yaml` (mode `-rw-r-----`, owner `<id>`) with one library whose `path` is `/var/packages/<id>/shares/<share>`; directories `data`, `cache` (mode `drwxr-x---`); `<id>.log` and `<id>.pid` | |
 | A12 | Control Panel > Security > Firewall > Edit Rules > Create > select from the list of built-in applications | a service with the display name and port `8460/tcp` is listed (cancel afterwards unless a rule is needed) | |
-| A13 | Open the DSM **main menu** (top-left button) as administrator, then log in to DSM as a non-admin user and look again; click the entry | the package icon with the display name appears in the main menu (like "Plex Media Server"; record whether the non-admin user sees it, and whether Control Panel > Application Privileges lists it); clicking it **opens the web app** (`http://<host>:8460/`) in a new window or tab. Record the host it uses. SSH: `ls -l /usr/syno/synoman/webman/3rdparty/` shows a link `<id>` to `/var/packages/<id>/target/ui` | |
+| A13 | Open the DSM **main menu** (top-left button) as administrator, then log in to DSM as a non-admin user and look again; click the entry | the package icon with the display name appears in the main menu (like "Plex Media Server"; record whether the non-admin user sees it, and whether Control Panel > Application Privileges lists it); clicking it **opens the web app** (`http://<host>:8460/`) in a new window or tab. Record the host it uses. Reload the DSM page (F5) once after installing before judging a missing entry. SSH: `ls -l /usr/syno/synoman/webman/3rdparty/` shows a link `<id>` to `/var/packages/<id>/target/ui`; `cat /var/packages/<id>/INFO | grep dsm` shows `dsmuidir="ui"` and `dsmappname="<key>"`, where `<key>` is the only key under `".url"` in `cat /var/packages/<id>/target/ui/config`; `ls -l /var/packages/<id>/target/ui/images/` lists seven PNGs, all readable (`-rw-r--r--`). A test build with package revision N (`-rN-` in the file name, e.g. `0.1.0-alpha.3-r1` = DSM version `0.1.0-1031`) sorts above the release of the same server version with revision 0 (`0.1.0-1030`): **uninstall the `-r1` test build before installing that release**, otherwise Package Center does not offer it as an upgrade | |
 
 ### B Use
 
@@ -140,7 +140,7 @@ ADR 0026 Notes). The tester fills this table from the steps named.
 | path variables (`SYNOPKG_PKGVAR`, …) are set in every script | A11, B9 | |
 | `/bin/sh` of DSM (bash or BusyBox) | report table | bash on DS925+, DSM 7.4.1 (SPK-12) |
 | "Open" button exists without `adminurl`; which host it uses | B1 | |
-| `dsmuidir` config with `protocol`/`port`/`url` gives a main menu entry that opens the web app; `allUsers` shows it to non-admin users; DSM removes it on uninstall (DSM-NOTES section 16) | A13, F5 | |
+| `dsmuidir` + `dsmappname` (= the config entry key) with `protocol`/`port`/`url` gives a main menu entry that opens the web app; `allUsers` shows it to non-admin users; DSM removes it on uninstall (DSM-NOTES section 16) | A13, F5 | |
 | no package log view in Package Center | B7 | |
 | start and stop finish within Package Center's limits (30 s / 20 s budgets) | C1, C2 | |
 | `tmp` survives a reboot; stale transcode output is removed at start | C3 | |

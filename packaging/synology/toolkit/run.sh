@@ -181,7 +181,7 @@ $bad"
 # these). Any other name could override a variable of INFO.sh, SynoBuildConf/* or the toolkit
 # that sources the file, so it is refused; each field must be assigned exactly once, because a
 # second assignment would silently win over the first.
-readonly BUILD_ENV_FIELDS="ID DISPLAY_NAME DESCRIPTION DESCRIPTION_GER MAINTAINER MAINTAINER_URL VERSION DSM_VERSION BETA OS_MIN_VER ARCH PORT"
+readonly BUILD_ENV_FIELDS="ID DISPLAY_NAME DESCRIPTION DESCRIPTION_GER MAINTAINER MAINTAINER_URL VERSION DSM_VERSION BETA OS_MIN_VER ARCH PORT DSM_APP_NAME"
 
 check_build_env_fields() {
 	local name field seen=" " unknown="" duplicate="" missing=""

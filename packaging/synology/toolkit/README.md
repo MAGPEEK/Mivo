@@ -138,7 +138,7 @@ The staged project that `SynoBuildConf/*` and `INFO.sh` expect:
 | `prebuilt/bin/<ID>`, `prebuilt/bin/ffmpeg`, `prebuilt/bin/ffprobe` | static ELF executables of the family | `package.tgz`: `bin/*`, 0755 |
 | `prebuilt/share/licenses/**` | licence files and source notices (at least one file) | `package.tgz`: `share/licenses/**`, files 0644, directories 0755 |
 | `prebuilt/port_conf/<ID>.sc` | firewall service file (rendered `package/port/service.sc`), required | `package.tgz`: `port_conf/<ID>.sc`, 0644 (`conf/resource` `port-config`) |
-| `prebuilt/ui/config`, `prebuilt/ui/images/<ID>_<size>.png` | DSM main menu entry (application config, icons 16-256 px); optional | `package.tgz`: `ui/**`, files 0644, directories 0755; INFO `dsmuidir="ui"` when present |
+| `prebuilt/ui/config`, `prebuilt/ui/images/<ID>_<size>.png` | DSM main menu entry (application config, icons 16-256 px); optional | `package.tgz`: `ui/**`, files 0644, directories 0755; INFO `dsmuidir="ui"` and `dsmappname` when present |
 | `scripts/`, `conf/` | package scripts (with `common.sh` and the generated `package.env`) and `privilege`/`resource` | `scripts/*` 0755, `conf/*` 0644 |
 | `LICENSE`, `PACKAGE_ICON.PNG`, `PACKAGE_ICON_256.PNG` | optional; a note is logged when missing | 0644 |
 | `WIZARD_UIFILES/` | optional | `*.sh` 0755, other files 0644 |
@@ -148,7 +148,9 @@ The staged project that `SynoBuildConf/*` and `INFO.sh` expect:
 `MAINTAINER`, `MAINTAINER_URL`, `VERSION` (server version, not written to INFO), `DSM_VERSION`
 (INFO `version`), `BETA` (`yes`/`no`), `OS_MIN_VER`, `ARCH` (INFO `arch`: the family,
 optionally followed by further arch values, e.g. `armv7 armada38x monaco`; the first word is
-the family the build and INFO checks use), `PORT` (INFO `adminport`). All are required by
+the family the build and INFO checks use), `PORT` (INFO `adminport`), `DSM_APP_NAME` (INFO
+`dsmappname`, one name `^[A-Za-z0-9][A-Za-z0-9._-]*$`, written only together with
+`dsmuidir`; it must equal the entry key of `prebuilt/ui/config`). All are required by
 `INFO.sh`. `run.sh` refuses any other field name (an extra assignment could override a
 variable of the scripts or the toolkit that source the file), a field assigned twice (the
 second would silently win) and a missing field.
@@ -404,7 +406,7 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (58 cases on a synthetic SPK of fixture.bash) and shellcheck
+# tests of the script (59 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -441,7 +443,7 @@ checks per SPK:
   `displayname`, `version` (`a.b.c-build`, every number at most 2^31-1), `beta="yes"` exactly
   when the build number is below 9000, `arch` of the family (`armv7 armada38x monaco` for
   armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default 8460),
-  `adminprotocol="http"`, no `adminurl`, `dsmuidir="ui"`, `description`, `description_ger`,
+  `adminprotocol="http"`, no `adminurl`, `dsmuidir="ui"`, `dsmappname`, `description`, `description_ger`,
   `maintainer`, `support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none
   of `thirdparty`, `startable`, `changelog`.
 - **Binaries**: `bin/<id>`, `bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the
@@ -465,7 +467,7 @@ checks per SPK:
   and whose `type` is `url`, `title` INFO `displayname`, `protocol` `http`, `port` INFO
   `adminport`, `url` `/`, `allUsers` `true`, `icon` `images/<id>_{0}.png`, `grantPrivilege`
   `all` and `advanceGrantPrivilege` `true`; `ui/images/<id>_<n>.png` are PNGs of n x n pixels
-  for n = 16, 24, 32, 48, 64, 72, 256.
+  for n = 16, 24, 32, 48, 64, 72, 256; the entry's key equals INFO `dsmappname`.
 
 **Interim rule** (ADR 0026 Notes): while `SOURCE.txt` says `Status: interim` and `--release` is
 not given, the FFmpeg findings (interim status, a `+nonfree` licence, a dynamically linked

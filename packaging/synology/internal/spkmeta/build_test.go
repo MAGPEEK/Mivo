@@ -58,7 +58,8 @@ func TestBuildEnvRendersEveryFieldINFOShNeeds(t *testing.T) {
 		"BETA='yes'\n" +
 		"OS_MIN_VER='7.2-64570'\n" +
 		"ARCH='x86_64'\n" +
-		"PORT='9999'\n"
+		"PORT='9999'\n" +
+		"DSM_APP_NAME='com.examplemaintainer.demo'\n"
 	if got != want {
 		t.Errorf("BuildEnv() =\n%s\nwant\n%s", got, want)
 	}

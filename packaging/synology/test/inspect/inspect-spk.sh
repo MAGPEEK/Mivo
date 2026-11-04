@@ -649,6 +649,7 @@ check_info() {
 	info_required adminprotocol '^http$'
 	info_absent adminurl
 	info_required dsmuidir "^$DESKTOP_UI_DIR\$"
+	info_required dsmappname '^[A-Za-z0-9][A-Za-z0-9._-]*$'
 	info_required description '^.+$'
 	info_required description_ger '^.+$'
 	info_required maintainer '^.+$'
@@ -1078,6 +1079,19 @@ check_desktop_config() {
 	desktop_expect grantPrivilege all
 	desktop_expect advanceGrantPrivilege true
 	check_desktop_keys
+	check_desktop_app_name
+}
+
+# check_desktop_app_name: the entry's property name is INFO dsmappname; DSM integrates the
+# entry into the main menu only then (guide "dsmappname"; DSM-NOTES section 16).
+check_desktop_app_name() {
+	desktop_key=$(jq -r '.".url" | keys | .[0]' "$desktop_config" 2>/dev/null)
+	desktop_app_name=$(info_value dsmappname)
+	if [ -n "$desktop_key" ] && [ "$desktop_key" = "$desktop_app_name" ]; then
+		pass "$DESKTOP_UI_DIR/config: the entry key is INFO dsmappname"
+	else
+		failed "$DESKTOP_UI_DIR/config: entry key \"$desktop_key\" is not INFO dsmappname \"$desktop_app_name\""
+	fi
 }
 
 # check_desktop_keys: the entry has exactly the keys spkmeta writes, so neither a key DSM would

@@ -33,6 +33,9 @@ const (
 	desktopGrantAll = "all"
 	// desktopDescription is the mouse-over text of the menu entry.
 	desktopDescription = "Opens the web app of the media server"
+	// desktopAppKeyPrefix starts the reverse-domain entry key, as in the guide's example
+	// "com.company.App1".
+	desktopAppKeyPrefix = "com."
 )
 
 // desktopApp is one entry of the ".url" object of the application config. The guide documents
@@ -69,10 +72,22 @@ func (pkg Package) desktopIconTemplate() string {
 	return desktopImagesDir + "/" + pkg.ID + "_" + desktopSizePlaceholder + ".png"
 }
 
+// DesktopAppName returns INFO's dsmappname: the unique property name of the entry in the
+// application config. The guide requires the two to be equal "so as to be integrated into
+// Synology DiskStation"; without dsmappname DSM 7.4 showed no main menu entry (DSM-NOTES
+// section 16).
+func (pkg Package) DesktopAppName() (string, error) {
+	if err := pkg.Validate(); err != nil {
+		return "", fmt.Errorf("dsmappname: %w", err)
+	}
+
+	return pkg.desktopAppKey(), nil
+}
+
 // desktopAppKey is the unique property name of the entry: a reverse domain of the maintainer
 // (desktopMaintainerLabel) plus the package name.
 func (pkg Package) desktopAppKey() string {
-	return "com." + pkg.desktopMaintainerLabel() + "." + pkg.ID
+	return desktopAppKeyPrefix + pkg.desktopMaintainerLabel() + "." + pkg.ID
 }
 
 // desktopMaintainerLabel is the maintainer's ASCII letters and digits in lower case, the

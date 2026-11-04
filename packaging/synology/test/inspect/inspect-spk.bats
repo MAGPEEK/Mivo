@@ -577,6 +577,8 @@ set_desktop() {
 	inspect x86_64
 	expect_clean
 	expect_line 'ok   INFO dsmuidir="ui"'
+	expect_line "ok   INFO dsmappname=\"com.examplemaintainer.$FIXTURE_ID\""
+	expect_line "ok   ui/config: the entry key is INFO dsmappname"
 	expect_line "ok   ui/config parses as JSON"
 	expect_line "ok   ui/config: exactly one .url entry"
 	expect_line 'ok   ui/config: type is "url"'
@@ -593,6 +595,16 @@ set_desktop() {
 	for size in 16 24 32 48 64 72 256; do
 		expect_line "ok   ui/images/${FIXTURE_ID}_$size.png is a ${size}x$size PNG"
 	done
+}
+
+# DSM integrates the entry only when INFO dsmappname names its key (DSM-NOTES section 16).
+@test "a missing dsmappname or one other than the entry key fails" {
+	sed -i '/^dsmappname=/d' "$tree/spk/INFO"
+	inspect x86_64
+	expect_fail "INFO dsmappname: present 0 times, want once"
+	echo 'dsmappname="SYNO.SDS._ThirdParty.App.other"' >>"$tree/spk/INFO"
+	inspect x86_64
+	expect_fail "ui/config: entry key \"com.examplemaintainer.$FIXTURE_ID\" is not INFO dsmappname \"SYNO.SDS._ThirdParty.App.other\""
 }
 
 @test "a missing dsmuidir, ui/config or main menu icon fails" {
