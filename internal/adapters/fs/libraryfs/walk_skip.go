@@ -84,7 +84,7 @@ func isPlainUnclassifiedFile(entry fs.DirEntry) bool {
 
 	_, ok := library.ClassifyFile(entry.Name())
 
-	return !ok
+	return !ok && !isISOName(entry.Name())
 }
 
 func pathAttr(relativePath string) slog.Attr {

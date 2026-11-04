@@ -158,7 +158,7 @@ func (w *walk) run(ctx context.Context) error {
 		link := w.pendingLinks[0]
 		w.pendingLinks = w.pendingLinks[1:]
 
-		if err := w.directory(ctx, link); err != nil {
+		if err := w.directoryOrDisc(ctx, link); err != nil {
 			return err
 		}
 	}
@@ -289,7 +289,7 @@ func (w *walk) entry(ctx context.Context, parent location, entry fs.DirEntry) er
 
 	switch {
 	case entry.IsDir():
-		return w.directory(ctx, at)
+		return w.directoryOrDisc(ctx, at)
 	case entry.Type()&linkModes != 0:
 		return w.link(at)
 	case entry.Type().IsRegular():
@@ -339,6 +339,10 @@ func (w *walk) link(at location) error {
 
 // file reports a regular file whose name classifies; any other file is not a library file.
 func (w *walk) file(relativePath string, info fs.FileInfo) error {
+	if isISOName(relativePath) {
+		return w.isoFile(relativePath, info)
+	}
+
 	class, ok := library.ClassifyFile(relativePath)
 	if !ok {
 		return nil
@@ -351,8 +355,12 @@ func (w *walk) file(relativePath string, info fs.FileInfo) error {
 		Size:           info.Size(),
 		ModifiedAt:     info.ModTime(),
 	}
+	return w.report(state)
+}
+
+func (w *walk) report(state library.FileState) error {
 	if err := w.visit(state); err != nil {
-		return fmt.Errorf("visit %s: %w", relativePath, err)
+		return fmt.Errorf("visit %s: %w", state.RelativePath, err)
 	}
 
 	return nil

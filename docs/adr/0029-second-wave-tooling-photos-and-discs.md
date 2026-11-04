@@ -52,3 +52,8 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   a clear state.
 - A new pure-Go parser surface (EXIF, MPLS, IFO, UDF) is fuzz-tested.
 - Supersedes the "libvips/exiftool" wording for photos in the plan; ADR 0027 is not rewritten.
+
+## Notes
+
+- Folder discs are change-detected by their index file (`index.bdmv`, `VIDEO_TS.IFO`) only:
+  size and modification time of the clips are not part of the scan state (M3-16b).

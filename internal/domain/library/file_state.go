@@ -1,6 +1,10 @@
 package library
 
-import "time"
+import (
+	"time"
+
+	"github.com/magpeek/mivo/internal/domain/media"
+)
 
 // FileState is what a scan knows about a library file without opening it: its path relative
 // to the library root (see ParseRelativePath), its size in bytes, its modification time and
@@ -21,6 +25,10 @@ type FileState struct {
 	Class          FileClass
 	Size           int64
 	ModifiedAt     time.Time
+	// Layout says how the video is stored; empty means a single file. For a disc folder
+	// RelativePath is the BDMV or VIDEO_TS folder, and Size and ModifiedAt are those of its
+	// index file (ADR 0029).
+	Layout media.Layout
 }
 
 // PathForParsing returns the NFC path the name parser and match keys work on.

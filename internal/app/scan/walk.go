@@ -57,10 +57,22 @@ func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
 // walkFolder walks one folder. Its result is only used when the whole walk succeeded, so a
 // folder lost halfway never yields a partial listing that would delete catalog entries.
 func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walked, []string, error) {
-	var found walked
+	var (
+		found     walked
+		discPaths []string
+	)
 
 	skipped, err := scanRun.service.walker.Walk(ctx, folder.Path, func(state library.FileState) error {
 		state.RootID = folder.ID
+
+		if state.Layout.IsDisc() {
+			// Temporary guard, removed by M3-16h: until discs are placed and probed, a disc
+			// is neither a video nor a failure, and its stored entries at or below the path
+			// (the disc's files from older scans) must survive.
+			discPaths = append(discPaths, state.RelativePath)
+
+			return nil
+		}
 
 		if state.Class == library.FileClassVideo {
 			found.videos = append(found.videos, state)
@@ -74,5 +86,5 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 		return walked{}, nil, fmt.Errorf("walk folder %s: %w", folder.ID, err)
 	}
 
-	return found, skipped, nil
+	return found, append(skipped, discPaths...), nil
 }

@@ -19,6 +19,12 @@
 //     the scan keeps its catalog entries. A file link is an alias the user made and is
 //     reported under its own path.
 //
+// A BDMV or VIDEO_TS folder holding its index file (index.bdmv, VIDEO_TS.IFO; any case) and
+// an .iso file are reported as one entry with library.FileState.Layout set; the folder's inner
+// files are not walked. A disc folder's size and modification time are those of its index
+// file only, so changes to the clips alone are not noticed by change detection. A disc
+// directly in the library root is reported but cannot be placed (naming.PlaceDisc).
+//
 // Walk never fails because of one unreadable folder: it logs it and returns its path, so the
 // scan keeps the catalog entries below it. Only a root that cannot be read, also when it
 // disappears mid-walk (a dropped NAS share), fails the walk with domain.ErrUnavailable.
