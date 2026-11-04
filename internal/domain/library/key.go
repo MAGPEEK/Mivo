@@ -27,7 +27,7 @@ func NormalizeKey(text string) string {
 	separatorPending := false
 
 	for _, character := range text {
-		if !isWordCharacter(character) {
+		if !IsKeyCharacter(character) {
 			separatorPending = true
 
 			continue
@@ -45,6 +45,9 @@ func NormalizeKey(text string) string {
 	return builder.String()
 }
 
-func isWordCharacter(character rune) bool {
+// IsKeyCharacter reports whether NormalizeKey keeps a character: letters, digits and
+// combining marks. Every other character separates words. The name parser uses it to find
+// word boundaries that agree with match keys.
+func IsKeyCharacter(character rune) bool {
 	return unicode.IsLetter(character) || unicode.IsDigit(character) || unicode.IsMark(character)
 }

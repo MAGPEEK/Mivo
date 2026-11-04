@@ -53,3 +53,20 @@ for samples. Pure, table-driven, the base for scan v2. UX: DT-09 (extras), LB-42
   replaces the `ErrUnsupported` branch only.
 - Functions ≤ 50 lines, cognitive complexity ≤ 15: prefer small token-classifier helpers and
   data tables over long `switch` chains.
+- Implementation decisions (round 2, for the architect to carry into ADR 0027 §4):
+  - Extra match key = `NormalizeKey(<library-relative path>)` of the extra file (path only,
+    extension included); the placement key puts the parent movie's key in front. Unique per
+    file and stable while the file does not move; a moved extra becomes a new extra.
+  - A bare year counts only as the last title word (before the release tags or the end of
+    the name): `The Matrix 1999.mkv` → 1999; `Blade Runner 2049.mkv` (no other year) →
+    "Blade Runner" (2049), deterministically; a bracketed year counts anywhere and the last
+    one wins (`Blade Runner 2049 (2017)`); a lone year (`1917.mkv`) stays the title.
+  - Parts: `cd1`/`part2` after a separator anywhere; `part 1`/`cd 1`/`disc.2` (one separator
+    between word and number) only at the end of the name, so `Deathly Hallows Part 1 (2010)`
+    stays a title.
+  - Extras folders count only when their parent is a movie folder, i.e. a non-root directory
+    whose name carries a year (the parser cannot see the file system); a root `Trailers/` and
+    collection folders (`Blender Open Movies/Extras`) stay normal folders.
+  - An extra suffix is no extra marker when the token before it is a release tag
+    (`Movie.2010.1080p.x264-SHORT` is the release group SHORT) or, in the library root, when
+    nothing precedes it (`-trailer.mkv` is the movie "trailer").
