@@ -154,6 +154,7 @@ maintainer_url="https://example.invalid/demo"
 arch="$arch"
 adminprotocol="http"
 adminport="$FIXTURE_PORT"
+dsmuidir="ui"
 os_min_ver="7.2-64570"
 EOF
 	[ "$beta" = no ] || echo 'beta="yes"'
@@ -180,14 +181,43 @@ Corresponding source: https://example.invalid/ffmpeg-src.tar.xz
 EOF
 }
 
+# Sizes of the main menu icons (DSM's {0} of the config's "icon").
+readonly FIXTURE_DESKTOP_ICON_SIZES="16 24 32 48 64 72 256"
+
+# fixture_desktop_config: ui/config as spkmeta renders it for the fixture package.
+fixture_desktop_config() {
+	cat <<EOF
+{
+  ".url": {
+    "com.examplemaintainer.$FIXTURE_ID": {
+      "type": "url",
+      "title": "Demo Server",
+      "desc": "Opens the web app of the media server",
+      "icon": "images/${FIXTURE_ID}_{0}.png",
+      "protocol": "http",
+      "port": "$FIXTURE_PORT",
+      "url": "/",
+      "allUsers": true,
+      "grantPrivilege": "all",
+      "advanceGrantPrivilege": true
+    }
+  }
+}
+EOF
+}
+
 # make_tree <dir> <family> <status> <static|dynamic> <abi>: the unpacked SPK below <dir>/spk
 # with the payload below <dir>/pkg, every mode set explicitly.
 make_tree() {
-	local dir=$1 family=$2 status=$3 linkage=$4 abi=$5 script
+	local dir=$1 family=$2 status=$3 linkage=$4 abi=$5 script size
 	local spk="$dir/spk" pkg="$dir/pkg"
 	rm -rf "$dir"
 	mkdir -p "$spk/conf" "$spk/scripts" "$spk/WIZARD_UIFILES" \
-		"$pkg/bin" "$pkg/port_conf" "$pkg/share/licenses/ffmpeg"
+		"$pkg/bin" "$pkg/port_conf" "$pkg/share/licenses/ffmpeg" "$pkg/ui/images"
+	fixture_desktop_config >"$pkg/ui/config"
+	for size in $FIXTURE_DESKTOP_ICON_SIZES; do
+		fake_png "$size" >"$pkg/ui/images/${FIXTURE_ID}_$size.png"
+	done
 	fixture_info "$family" >"$spk/INFO"
 	echo "GNU GENERAL PUBLIC LICENSE (fixture)" >"$spk/LICENSE"
 	fake_png 64 >"$spk/PACKAGE_ICON.PNG"

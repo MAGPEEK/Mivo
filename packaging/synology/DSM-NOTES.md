@@ -186,6 +186,16 @@ Link definitions are collected at the end of the file.
 | QuickConnect and a package port | Synology documents QuickConnect for DSM and **Synology-developed packages** (Audio Station, Video Station, Synology Photos, …); nothing for third-party packages or arbitrary ports. **Assumption**: QuickConnect cannot reach port 8460 directly; it can only reach a package through DSM's own web server (reverse proxy or Login Portal alias). | unconfirmed | [Synology KB "QuickConnect"][kb-quickconnect]; check: SPK-12 (owner tries QuickConnect with `:8460`, expecting failure) |
 | DSM reverse proxy | DSM's Login Portal > Advanced > Reverse Proxy forwards requests to a backend host and port, supports custom headers (WebSocket preset) and access-control profiles by source IP or CIDR. The source address the backend sees is not documented. **Assumption**: the server sees **loopback** when the rule targets `localhost`, or **the NAS's own LAN address** when it targets that address – in both cases the LAN-only guard admits every client. DSM's access-control profile (source IP) is the only DSM-side restriction. | confirmed (feature); unconfirmed (source address) | [Synology KB "Login Portal – Advanced" – "Reverse Proxy", "Access Control Profile"][kb-reverse-proxy]; check: SPK-12 (optional; the docs advise against it either way) |
 
+## 16 DSM main menu entry (`dsmuidir`)
+
+| Question | Answer | Status | Source |
+|---|---|---|---|
+| How a package adds a main menu entry | INFO `dsmuidir` names a folder in `package.tgz`; DSM links `/var/packages/<id>/target/<dsmuidir>` to `/usr/syno/synoman/webman/3rdparty/<id>` "to show your package's shortcut in DSM". The folder holds a JSON file `config` whose `".url"` object has one entry per menu item (unique property name). The package uses `dsmuidir="ui"`. | confirmed (guide) | [Guide "Optional Fields" – "dsmuidir"][g-info-opt]; [Guide "Application Config"][g-app-config] |
+| Keys of an entry | Documented: `type` (`"url"`: the URL opens in a pop-up window), `icon` (template, `{0}` is replaced by **16, 24, 32, 48, 64, 72, 256**; the files lie in the dsmuidir folder, e.g. `images/<id>_{0}.png`), `title` (the name in the main menu), `desc` (mouse-over), `url`, `allUsers` (`true`: every user sees it, default admins only), `preloadTexts`. | confirmed (guide) | [Guide "Application Config"][g-app-config] |
+| A URL on the NAS at another port | The guide shows only absolute URLs and `3rdparty/...` paths. **Assumption** (community practice: spksrc's generated configs, Plex): `"protocol": "http"`, `"port": "8460"`, `"url": "/"` make DSM open `http://<host the browser used for DSM>:8460/`; `"grantPrivilege": "all"` with `"advanceGrantPrivilege": true` lets an administrator grant the entry under Control Panel > Application Privileges. | unconfirmed | community: spksrc `ui/config`; check: SPK-12 (TESTING.md A13) |
+| Removal | **Assumption**: DSM removes the 3rdparty link, and with it the menu entry, when the package is uninstalled, because the link points into `target`, which the uninstall deletes. | unconfirmed | check: SPK-12 (TESTING.md F5) |
+| Through QuickConnect or the reverse proxy | **Assumption**: the entry opens port 8460 on the host name the browser used for DSM, so it fails where that host does not serve 8460 (same limit as the "Open" button, section 15). | unconfirmed | ADR 0026 Notes "UX plan" |
+
 ## Impact on ADR 0026
 
 Answers above that contradict or sharpen ADR 0026 or a task file, with proposed wording. The
@@ -330,6 +340,7 @@ the ADR or the task files.
 [g-port-config]: https://help.synology.com/developer-guide/resource_acquisition/port_config.html
 [g-syslog]: https://help.synology.com/developer-guide/resource_acquisition/syslog_config.html
 [g-ports]: https://help.synology.com/developer-guide/integrate_dsm/ports.html
+[g-app-config]: https://help.synology.com/developer-guide/integrate_dsm/config.html
 [g-fhs]: https://help.synology.com/developer-guide/integrate_dsm/fhs.html
 [g-breaking]: https://help.synology.com/developer-guide/breaking_changes.html
 [g-pack]: https://help.synology.com/developer-guide/toolkit/pack_stage.html

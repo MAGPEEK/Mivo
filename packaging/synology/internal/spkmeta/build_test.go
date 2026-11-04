@@ -257,6 +257,11 @@ func TestPackageValidateRejectsMalformedValues(t *testing.T) {
 		{name: "underscore in ID", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "de_mo" }},
 		{name: "slash in ID", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "de/mo" }},
 		{name: "ID starts with dash", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "-demo" }},
+		{name: "ID ends with dash", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "demo-" }},
+		{name: "ID ends with dot", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "demo." }},
+		{name: "ID with double dot", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "de..mo" }},
+		{name: "ID with double dash", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "de--mo" }},
+		{name: "ID with dot after dash", field: "ID", edit: func(pkg *spkmeta.Package) { pkg.ID = "de-.mo" }},
 		{name: "empty prefix", field: "ENV_PREFIX", edit: func(pkg *spkmeta.Package) { pkg.EnvPrefix = "" }},
 		{name: "lower-case prefix", field: "ENV_PREFIX", edit: func(pkg *spkmeta.Package) { pkg.EnvPrefix = "demo" }},
 		{name: "prefix starts with digit", field: "ENV_PREFIX", edit: func(pkg *spkmeta.Package) { pkg.EnvPrefix = "1DEMO" }},
@@ -277,6 +282,19 @@ func TestPackageValidateRejectsMalformedValues(t *testing.T) {
 			test.edit(&pkg)
 			assertPackageRejected(t, pkg, spkmeta.ErrInvalidValue, test.field)
 		})
+	}
+}
+
+func TestPackageValidateAcceptsSeparatedIDs(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range []string{"d", "demo", "demo2", "media-server", "media.server", "a-b.c-1"} {
+		pkg := demoPackage()
+		pkg.ID = id
+
+		if err := pkg.Validate(); err != nil {
+			t.Errorf("ID %q rejected: %v", id, err)
+		}
 	}
 }
 

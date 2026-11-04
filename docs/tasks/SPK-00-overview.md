@@ -14,7 +14,12 @@ are prebuilt outside the chroot; the toolkit only packs them. Runs in parallel t
 the SPKs are attached to the **0.1.0-alpha.2** GitHub Release when ready. Implementer:
 `mivo-synology` (`.claude/agents/mivo-synology.md`).
 
-Not in scope: hardware transcoding, HTTPS, DSM desktop app / SSO, reverse-proxy integration,
+In scope since 2026-11-04 (owner request, ADR 0026 Notes "UX plan"): one **DSM main-menu
+entry** of type `url` (INFO `dsmuidir`, title from the brand, the package icon) that opens the
+web app on port 8460 in a new browser window, like the "Open" button.
+
+Not in scope: hardware transcoding, HTTPS, an app embedded in the DSM desktop (DSM window or
+iframe), single sign-on with DSM accounts, a DSM-side settings UI, reverse-proxy integration,
 migration from Docker, package signing, a package source feed, the GitHub Actions workflow
 (the build is CI-ready; the workflow comes with the general CI task), QPKG.
 

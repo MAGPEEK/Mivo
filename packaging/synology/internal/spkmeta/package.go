@@ -74,28 +74,30 @@ const (
 
 // Formats of the identifiers. The ID becomes a DSM package name, a user name and the section
 // name of the .sc file, which allows letters, digits, "-" and "." but no underscore
-// (DSM-NOTES); lower case keeps it equal to the binary name. The prefix starts environment
-// variable names.
-const (
-	packageIDPattern    = `^[a-z0-9][a-z0-9.-]*$`
-	envPrefixPattern    = `^[A-Z][A-Z0-9_]*$`
-	osMinVersionPattern = `^[0-9]+\.[0-9]+-[0-9]+$`
+// (DSM-NOTES); lower case keeps it equal to the binary name. "-" and "." only separate runs of
+// letters and digits, so the ID neither ends with one nor holds ".." (a path element) or "--".
+// The prefix starts environment variable names.
+var (
+	packageIDFormat    = regexp.MustCompile(`^[a-z0-9]+([.-][a-z0-9]+)*$`)
+	envPrefixFormat    = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
+	osMinVersionFormat = regexp.MustCompile(`^[0-9]+\.[0-9]+-[0-9]+$`)
 )
 
 // Validate reports the first value that cannot be written to INFO, build.env, package.env or
 // a template.
 func (pkg Package) Validate() error {
 	formats := []struct {
-		name, value, pattern string
+		name, value string
+		format      *regexp.Regexp
 	}{
-		{name: "ID", value: pkg.ID, pattern: packageIDPattern},
-		{name: "ENV_PREFIX", value: pkg.EnvPrefix, pattern: envPrefixPattern},
-		{name: "OS_MIN_VER", value: pkg.OSMinVersion, pattern: osMinVersionPattern},
+		{name: "ID", value: pkg.ID, format: packageIDFormat},
+		{name: "ENV_PREFIX", value: pkg.EnvPrefix, format: envPrefixFormat},
+		{name: "OS_MIN_VER", value: pkg.OSMinVersion, format: osMinVersionFormat},
 	}
 
 	for _, format := range formats {
-		if !regexp.MustCompile(format.pattern).MatchString(format.value) {
-			return fmt.Errorf("%s %q does not match %s: %w", format.name, format.value, format.pattern, ErrInvalidValue)
+		if !format.format.MatchString(format.value) {
+			return fmt.Errorf("%s %q does not match %s: %w", format.name, format.value, format.format, ErrInvalidValue)
 		}
 	}
 

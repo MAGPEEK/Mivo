@@ -7,8 +7,10 @@
 # logs survive an uninstall by default (OD-SPK-8 A). Only when the user ticked "delete" in the
 # uninstall wizard (wizard_delete_data=true) during a real uninstall (SYNOPKG_PKG_STATUS
 # UNINSTALL, never UPGRADE) it deletes the contents of $SYNOPKG_PKGVAR and $SYNOPKG_PKGHOME,
-# and only when both are directories of this package. Shared folders and media are never
-# touched: nothing here follows a link out of these directories.
+# and only when both are, as given and with every link resolved, this package's var and home
+# directories in DSM's layout (pkg_resolve_package_directory). It deletes below the resolved
+# directories. Shared folders and media are never touched: nothing here follows a link out of
+# these directories.
 set -eu
 
 if [ "${SYNOPKG_PKG_STATUS:-}" != UNINSTALL ] || [ "${wizard_delete_data:-}" != true ]; then
@@ -29,18 +31,29 @@ fi
 pkg_load_package_env || exit 1
 pkg_require_dsm_environment || exit 1
 
-for data_dir in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGHOME"; do
-	if ! pkg_is_package_directory "$data_dir"; then
-		pkg_tell_user "not deleting $data_dir: it is not a directory of the package $ID; the data of $DISPLAY_NAME was kept"
-		exit 1
+# resolve_data_dir prints the resolved directory of kind $1 (var or home) given as $2, or tells
+# the user why nothing is deleted and leaves the script.
+resolve_data_dir() {
+	if pkg_resolve_package_directory "$1" "$2"; then
+		return 0
 	fi
-done
+	pkg_tell_user "$(pkg_localized \
+		"not deleting $2: it is not the $1 directory of the package $ID; the data of $DISPLAY_NAME was kept" \
+		"$2 wird nicht gelöscht: es ist nicht das $1-Verzeichnis des Pakets $ID; die Daten von $DISPLAY_NAME bleiben erhalten")"
+	exit 1
+}
+
+# Both directories are checked before anything is deleted, so a bad home keeps var as well.
+var_dir=$(resolve_data_dir var "$SYNOPKG_PKGVAR") || exit 1
+home_dir=$(resolve_data_dir home "$SYNOPKG_PKGHOME") || exit 1
 delete_status=0
-for data_dir in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGHOME"; do
+for data_dir in "$var_dir" "$home_dir"; do
 	pkg_remove_directory_contents "$data_dir" || delete_status=1
 done
 if [ "$delete_status" -ne 0 ]; then
-	pkg_tell_user "cannot delete all data of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGHOME"
+	pkg_tell_user "$(pkg_localized \
+		"cannot delete all data of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGHOME" \
+		"Die Daten von $DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGHOME konnten nicht vollständig gelöscht werden")"
 	exit 1
 fi
 echo "deleted the data of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGHOME"

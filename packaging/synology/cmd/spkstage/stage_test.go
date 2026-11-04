@@ -59,6 +59,16 @@ func goldenTree() []treeEntry {
 		{"prebuilt/share/licenses/ffmpeg/COPYING.GPLv3", f},
 		{"prebuilt/share/licenses/ffmpeg/LICENSE.md", f},
 		{"prebuilt/share/licenses/ffmpeg/SOURCE.txt", f},
+		{"prebuilt/ui/", d},
+		{"prebuilt/ui/config", f},
+		{"prebuilt/ui/images/", d},
+		{"prebuilt/ui/images/" + brand.ID + "_16.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_24.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_32.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_48.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_64.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_72.png", f},
+		{"prebuilt/ui/images/" + brand.ID + "_256.png", f},
 		{"scripts/", d},
 		{"scripts/common.sh", x},
 		{"scripts/package.env", f},
@@ -230,14 +240,24 @@ func TestStagedFilesAreRenderedAndValid(t *testing.T) {
 }
 
 func isJSONPath(name string) bool {
-	return strings.HasPrefix(name, "conf/") || (strings.HasPrefix(name, "WIZARD_UIFILES/") && !strings.HasSuffix(name, ".sh"))
+	return strings.HasPrefix(name, "conf/") || name == "prebuilt/ui/config" ||
+		(strings.HasPrefix(name, "WIZARD_UIFILES/") && !strings.HasSuffix(name, ".sh"))
 }
 
+// assertIcons checks the size of every staged PNG: the Package Center icons and the main menu
+// icons of the application config.
 func assertIcons(t *testing.T, root string) {
 	t.Helper()
 
-	for _, icon := range spkicon.PackageIcons() {
-		file, err := os.Open(filepath.Join(root, icon.FileName)) //nolint:gosec // staged icon of the test
+	icons := spkicon.PackageIcons()
+
+	pkg := spkmeta.DefaultPackage()
+	for _, size := range spkmeta.DesktopIconSizes() {
+		icons = append(icons, spkicon.Icon{FileName: "prebuilt/ui/" + pkg.DesktopIconPath(size), Size: size})
+	}
+
+	for _, icon := range icons {
+		file, err := os.Open(filepath.Join(root, filepath.FromSlash(icon.FileName))) //nolint:gosec // staged icon of the test
 		if err != nil {
 			t.Fatalf("open %s: %v", icon.FileName, err)
 		}
@@ -251,6 +271,38 @@ func assertIcons(t *testing.T, root string) {
 
 		if config.Width != icon.Size || config.Height != icon.Size {
 			t.Errorf("%s is %dx%d, want %dx%d", icon.FileName, config.Width, config.Height, icon.Size, icon.Size)
+		}
+	}
+}
+
+// The main menu entry of the staged project names the brand's display name, the server's port
+// and the staged icons.
+func TestStagedDesktopAppConfigOpensTheWebApp(t *testing.T) {
+	t.Parallel()
+
+	opts := testOptions(t, "x86_64", writeInputs(t, "x86_64", fakeSourceSelected))
+	if _, err := stage(opts, spkmeta.DefaultPackage(), io.Discard); err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+
+	var config map[string]map[string]map[string]any
+	if err := json.Unmarshal([]byte(readStaged(t, opts.out, "prebuilt/ui/config")), &config); err != nil {
+		t.Fatalf("prebuilt/ui/config: %v", err)
+	}
+
+	entries := config[".url"]
+	if len(entries) != 1 {
+		t.Fatalf("prebuilt/ui/config has %d .url entries, want 1", len(entries))
+	}
+
+	for _, entry := range entries {
+		for key, want := range map[string]any{
+			"type": "url", "title": brand.DisplayName, "protocol": "http", "port": "8460", "url": "/",
+			"icon": "images/" + brand.ID + "_{0}.png", "allUsers": true,
+		} {
+			if entry[key] != want {
+				t.Errorf("%s = %#v, want %#v", key, entry[key], want)
+			}
 		}
 	}
 }

@@ -24,7 +24,8 @@ PKG_CONFIG_FILE_NAME=config.yaml
 # DSM's directory of the installed packages; /var/packages/<id>/shares/<share> is the link
 # Package Center creates for each share of the data-share resource (DSM-NOTES section 7).
 PKG_DSM_PACKAGES_DIR=/var/packages
-# Longest shared-folder name DSM accepts, in characters (DSM-NOTES section 9).
+# Longest shared-folder name DSM accepts, in characters (DSM-NOTES section 9); counted like the
+# wizard's validator, in UTF-16 code units (pkg_name_length).
 PKG_SHARE_NAME_MAX_CHARACTERS=32
 # Characters DSM forbids in shared-folder names, as a grep bracket expression (DSM-NOTES
 # section 9). Inside brackets "]" must come first and "\" is literal.
@@ -75,7 +76,7 @@ pkg_load_package_env() {
 # renders them from internal/platform/brand.
 pkg_check_package_env() {
 	case "${ID:-}" in
-	'' | [!a-z0-9]* | *[!a-z0-9.-]*)
+	'' | [!a-z0-9]* | *[!a-z0-9.-]* | *[.-] | *[.-][.-]*)
 		pkg_error "package.env: invalid ID '${ID:-}'"
 		return 1
 		;;
@@ -126,6 +127,8 @@ pkg_derive_paths() {
 	PKG_TRANSCODE_DIR=$SYNOPKG_PKGTMP/transcode
 	PKG_LOG_FILE=$SYNOPKG_PKGVAR/$ID.log
 	PKG_PID_FILE=$SYNOPKG_PKGVAR/$ID.pid
+	# The action lock of start-stop-status; in tmp, which DSM wipes on upgrade and uninstall.
+	PKG_LOCK_DIR=$SYNOPKG_PKGTMP/$ID.lock
 	PKG_HOME_DIR=$SYNOPKG_PKGHOME
 }
 
@@ -169,24 +172,46 @@ pkg_remove_directory_contents() {
 	return "$pkg_remove_status"
 }
 
-# pkg_is_package_directory succeeds when $1 is an existing directory that belongs to this
-# package: an absolute path with the package ID as one of its elements, as both
-# /var/packages/<id>/var and its target /volumeN/@appdata/<id> have. It guards every deletion.
-pkg_is_package_directory() {
-	case "$1" in
-	/*/"$ID" | /*/"$ID"/*) ;;
+# pkg_package_directory_kind prints "var" or "home" when the absolute path $1 has the shape of
+# this package's var or home directory as DSM lays them out (DSM-NOTES section 8): the link
+# /var/packages/<id>/var or /var/packages/<id>/home, or the real directory on a volume,
+# <volume>/@appdata/<id> or <volume>/@apphome/<id>. Paths with "." or ".." elements or "//"
+# fail; one trailing "/" is ignored.
+pkg_package_directory_kind() {
+	pkg_kind_path=${1%/}
+	case "$pkg_kind_path/" in
+	*/./* | */../* | *//*) return 1 ;;
+	esac
+	case "$pkg_kind_path" in
+	"$PKG_DSM_PACKAGES_DIR/$ID/var" | /*/@appdata/"$ID") printf '%s\n' var ;;
+	"$PKG_DSM_PACKAGES_DIR/$ID/home" | /*/@apphome/"$ID") printf '%s\n' home ;;
 	*) return 1 ;;
 	esac
-	case "/$1/" in
-	*/../* | */./*) return 1 ;;
-	esac
-	[ -d "$1" ]
 }
 
-# pkg_character_count prints the number of characters of the UTF-8 text $1: the bytes that are
-# not UTF-8 continuation bytes, independent of the locale DSM runs the script in.
-pkg_character_count() {
-	printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c | tr -d ' '
+# pkg_resolve_package_directory prints the resolved path (every link followed, cd -P) of the
+# existing directory $2 when both $2 and its resolved path have the shape of this package's
+# directory of kind $1 (var or home, pkg_package_directory_kind). It guards every deletion:
+# a link that points elsewhere, a path of another package or of the other kind, and anything
+# that is not a directory fail. Callers delete below the printed path, not below $2, so a link
+# changed after the check cannot redirect the deletion.
+pkg_resolve_package_directory() {
+	[ "$(pkg_package_directory_kind "$2")" = "$1" ] || return 1
+	pkg_resolved_dir=$(CDPATH='' cd -P "$2" 2>/dev/null && pwd -P) || return 1
+	[ "$(pkg_package_directory_kind "$pkg_resolved_dir")" = "$1" ] || return 1
+	printf '%s\n' "$pkg_resolved_dir"
+}
+
+# pkg_name_length prints the length of the UTF-8 text $1 the way the install wizard's
+# JavaScript validator counts it, in UTF-16 code units: one per character, two for a character
+# outside the Basic Multilingual Plane (a four-byte UTF-8 sequence, lead byte 0xF0-0xF7), so
+# preinst and the wizard accept the same names. Independent of the locale DSM runs the script
+# in: the bytes that are not UTF-8 continuation bytes plus the four-byte lead bytes.
+pkg_name_length() {
+	pkg_length_characters=$(printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c) || return 1
+	pkg_length_astral=$(printf '%s' "$1" | LC_ALL=C tr -cd '\360-\367' | wc -c) || return 1
+	# Arithmetic drops the padding some wc implementations print.
+	printf '%s\n' "$((pkg_length_characters + pkg_length_astral))"
 }
 
 # pkg_check_share_name succeeds when $1 follows DSM's shared-folder naming rules (DSM-NOTES
@@ -199,7 +224,7 @@ pkg_check_share_name() {
 	if printf '%s' "$1" | LC_ALL=C grep -q -- "$PKG_SHARE_NAME_FORBIDDEN"; then
 		return 1
 	fi
-	[ "$(pkg_character_count "$1")" -le "$PKG_SHARE_NAME_MAX_CHARACTERS" ]
+	[ "$(pkg_name_length "$1")" -le "$PKG_SHARE_NAME_MAX_CHARACTERS" ]
 }
 
 # pkg_share_link prints the path of DSM's link to share $1 (DSM-NOTES section 7). It is the

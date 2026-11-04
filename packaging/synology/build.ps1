@@ -1,11 +1,11 @@
-#Requires -Version 7.2
+#Requires -Version 7.3
 <#
 .SYNOPSIS
 Builds the server SPKs of all three architecture families (x86_64, armv8, armv7) with Docker.
 
 .DESCRIPTION
 PowerShell twin of build.sh (ADR 0026 section 2, task SPK-07): same steps, options and output.
-Nothing but Docker and PowerShell 7.2 or newer is needed on the host.
+Nothing but Docker and PowerShell 7.3 or newer is needed on the host.
 
 Step 0 (docker build of packaging/synology/ffmpeg/build, unprivileged): the own static FFmpeg
 of every family and its corresponding source archive -> the local image SPK_FFMPEG_IMAGE
@@ -22,8 +22,9 @@ and the source archive. The first error stops the build.
 A test build (the default outside CI) packs an interim or unpinned FFmpeg with a loud warning
 and writes dist/NOT-FOR-RELEASE.txt. A release build (-Release; the default on CI hosts)
 refuses interim or non-free FFmpeg builds, FFmpeg binaries that differ from the pins of
-ffmpeg/sources.lock, spkstage warnings, the default version 0.0.0-dev and, when git is present,
-a dirty working tree.
+ffmpeg/sources.lock, spkstage warnings, the default version 0.0.0-dev, a failing git, an empty
+revision and a dirty working tree; without git installed it needs -Revision and does not check
+the tree.
 
 Empty values: a parameter given with an empty value is refused; an empty environment variable
 counts as unset. A host counts as CI when CI is set to anything but empty, "false" or "0".
@@ -45,7 +46,8 @@ Release build (also SPK_BUILD_MODE=release).
 Local test build (also SPK_BUILD_MODE=test).
 
 .PARAMETER Revision
-Git commit recorded in dist/stage/build-info.txt (default: git rev-parse HEAD, empty without git).
+Git commit recorded in dist/stage/build-info.txt (default: git rev-parse HEAD; a test build
+without git records none).
 
 .PARAMETER PackageRevision
 Packaging-only revision 0-9 of the same server version (default 0).
@@ -73,13 +75,17 @@ param(
     [string] $Version = '0.0.0-dev',
     [switch] $Release,
     [switch] $TestBuild,
+    # A value starting with "-" is an option that lost its value, as in build.sh.
     [ValidateNotNullOrEmpty()]
+    [ValidatePattern('^[^-]')]
     [string] $Revision = '',
     [ValidateRange(0, 9)]
     [int] $PackageRevision = 0,
     [ValidateNotNullOrEmpty()]
+    [ValidatePattern('^[^-]')]
     [string] $SourceDateEpoch = '',
     [ValidateNotNullOrEmpty()]
+    [ValidatePattern('^[^-]')]
     [string] $Privilege = ''
 )
 
@@ -97,6 +103,8 @@ $SourceArchiveSuffix = '-source.tar'
 $LockFieldCount = 6
 $Sha256Pattern = '^[0-9a-f]{64}$'
 $PackageNamePattern = '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+# POSIX [[:space:]] in the C locale: blank, tab, newline, vertical tab, form feed, carriage return.
+$PosixSpace = [char[]] @(' ', "`t", "`n", "`v", "`f", "`r")
 # The server versions spkmeta maps (internal/spkmeta/version.go): SemVer core without leading
 # zeros, optionally -alpha.N, -beta.N or -rc.N (N 0-99), or the development version.
 $VersionPattern = '^(0\.0\.0-dev|(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(-(alpha|beta|rc)\.(0|[1-9][0-9]?))?)$'
@@ -165,7 +173,10 @@ function Resolve-BuildInput {
     }
     $script:Mode = Get-BuildMode
     # A separate variable: the validation attribute of -Revision would refuse an empty git result.
-    $script:BuildRevision = if ($script:RevisionGiven) { $Revision } else { "$(Invoke-RepoGit @('rev-parse', 'HEAD'))" }
+    # A release reads the commit in Assert-ReleaseTree, where a failing git stops it.
+    $script:BuildRevision = if ($script:RevisionGiven) { $Revision } elseif ($script:Mode -eq 'test') {
+        "$(Invoke-RepoGit @('rev-parse', 'HEAD'))"
+    } else { '' }
     $epoch = if ($SourceDateEpoch) { $SourceDateEpoch } elseif ($env:SOURCE_DATE_EPOCH) { $env:SOURCE_DATE_EPOCH } else {
         "$(Invoke-RepoGit @('log', '-1', '--format=%ct'))"
     }
@@ -221,13 +232,42 @@ function Write-InterimBanner([string] $InterimFamilies) {
     ) | ForEach-Object { [Console]::Error.WriteLine($_) }
 }
 
-# A release must be rebuildable from its commit, so uncommitted or untracked files are refused
-# (dist/ is ignored by packaging/synology/.gitignore). Without git or outside a checkout there
-# is nothing to compare against.
-function Assert-CleanTree {
-    if ((Invoke-RepoGit @('rev-parse', '--is-inside-work-tree')) -ne 'true') { return }
-    $changes = Invoke-RepoGit @('status', '--porcelain')
-    if ($null -eq $changes) { Exit-Build "git status failed in $RepoRoot" }
+# Runs git in the repository for a release check and returns its trimmed output; when git fails
+# (for example "detected dubious ownership") the release stops with git's own message instead
+# of skipping the check.
+function Invoke-ReleaseGit([string[]] $Arguments) {
+    $errorFile = New-TemporaryFile
+    try {
+        $errorPath = $errorFile.FullName
+        $output = & git -C $RepoRoot @Arguments 2>$errorPath
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -ne 0) {
+            $message = (Get-Content -LiteralPath $errorPath -TotalCount 3) -join ' '
+            Exit-Build "release refused: git $($Arguments -join ' ') failed in $RepoRoot (exit $exitCode): $message"
+        }
+    } finally {
+        Remove-Item -LiteralPath $errorFile.FullName -Force -ErrorAction SilentlyContinue
+    }
+    return ($output -join "`n").Trim()
+}
+
+# A release must be rebuildable from its commit: it records the commit (git rev-parse HEAD, or
+# -Revision) and refuses uncommitted or untracked files (dist/ is ignored by
+# packaging/synology/.gitignore). Any git failure stops the release, so a git that cannot read
+# the checkout (dubious ownership, no repository) never skips the check. Without git at all
+# there is nothing to compare against: the release then needs -Revision.
+function Assert-ReleaseTree {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        if (-not $script:BuildRevision) { Exit-Build 'release refused: no git to read the commit from; pass -Revision <commit>' }
+        Write-BuildLog 'WARNING: git is not installed; the working tree of the release is not checked'
+        return
+    }
+    if ((Invoke-ReleaseGit @('rev-parse', '--is-inside-work-tree')) -cne 'true') {
+        Exit-Build "release refused: $RepoRoot is not a git working tree"
+    }
+    if (-not $script:RevisionGiven) { $script:BuildRevision = Invoke-ReleaseGit @('rev-parse', 'HEAD') }
+    if (-not $script:BuildRevision) { Exit-Build 'release refused: git names no commit for the build (empty revision)' }
+    $changes = Invoke-ReleaseGit @('status', '--porcelain')
     if ($changes) {
         $first = ($changes -split "`n" | Select-Object -First 10) -join "`n"
         Exit-Build "release refused: the working tree has uncommitted changes:`n$first"
@@ -240,7 +280,7 @@ function Assert-ReleaseInput([string] $InterimFamilies) {
         if ($InterimFamilies) {
             Exit-Build "release refused: ffmpeg/sources.lock has interim FFmpeg entries for $InterimFamilies"
         }
-        Assert-CleanTree
+        Assert-ReleaseTree
     } elseif ($InterimFamilies) {
         Write-InterimBanner $InterimFamilies
     }
@@ -278,11 +318,9 @@ function Get-BuildArgument {
     return $arguments
 }
 
-# --output is a CSV list; a comma or quote in the path needs a quoted field. PowerShell 7.2
-# passes embedded quotes unescaped to native programs, which breaks paths with blanks, so the
-# field is quoted only when the path needs it (build.sh always quotes).
+# --output is a CSV list: the quoted field keeps a comma in the path from splitting it, like
+# build.sh. PowerShell 7.3 and newer pass the embedded quotes to native programs escaped.
 function Get-OutputArgument {
-    if ($Stage -notmatch '[,"]') { return "type=local,dest=$Stage" }
     return 'type=local,"dest=' + $Stage.Replace('"', '""') + '"'
 }
 
@@ -306,10 +344,12 @@ function Get-BuildEnvValue([string] $Project, [string] $Name) {
 # Returns the single value of a "Field:" line of a staged FFmpeg SOURCE.txt: everything after
 # the colon, trimmed, so a word such as "nonfree" cannot hide behind the first one. A notice
 # with no or several such lines is refused, since a second line could hide behind the first.
+# Trimmed are the characters of POSIX [[:space:]] in the C locale, as in build.sh: String.Trim()
+# without arguments would also drop Unicode blanks that build.sh keeps.
 function Get-NoticeValue([string[]] $Lines, [string] $Notice, [string] $Field) {
     $matching = @($Lines | Where-Object { $_.StartsWith("${Field}:", [StringComparison]::Ordinal) })
     if ($matching.Count -ne 1) { Exit-Build "$Notice needs exactly one ${Field}: line (has $($matching.Count))" }
-    $value = $matching[0].Substring($Field.Length + 1).Trim()
+    $value = $matching[0].Substring($Field.Length + 1).Trim($PosixSpace)
     if (-not $value) { Exit-Build "$Notice has an empty ${Field}: value" }
     return $value
 }
@@ -372,7 +412,7 @@ function Assert-StagedProject([hashtable] $Lock) {
             Exit-Build "step 1 staged no project for $family ($project)"
         }
         $notice = Get-FfmpegNotice $project
-        if ($notice.Status -cne 'selected' -or $notice.Licence -like '*nonfree*') {
+        if ($notice.Status -cne 'selected' -or $notice.Licence -clike '*nonfree*') {
             $notEligible += "$family ($($notice.Status), $($notice.Licence))"
         }
         $differences = Get-PinDifference $family $Lock[$family] $notice

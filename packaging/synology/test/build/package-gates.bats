@@ -21,7 +21,7 @@ setup() {
 	echo "licence" >/build/licenses/test-COPYING
 	write_fake_tools
 	export PATH="$bin:$PATH"
-	unset FAKE_ELF_FAIL FAKE_ELF_INTERP FAKE_ELF_NEEDED FAKE_ELF_ABI FAKE_ELF_TYPE FAKE_ELF_MACHINE FAKE_OBJDUMP_FAIL
+	unset HOST_PACKAGES FAKE_ELF_FAIL FAKE_ELF_INTERP FAKE_ELF_NEEDED FAKE_ELF_ABI FAKE_ELF_TYPE FAKE_ELF_MACHINE FAKE_OBJDUMP_FAIL
 	for tool in ffmpeg ffprobe; do echo "fake $tool" >"$build/$tool"; done
 	echo "--enable-gpl --enable-version3" >"$build/configuration.txt"
 	echo "HAVE_X86ASM=1" >"$build/config-facts.txt"
@@ -106,4 +106,52 @@ expect_failure_with() {
 	expect_failure_with "ffmpeg is of ELF type DYN, not EXEC"
 	FAKE_ELF_MACHINE=AArch64 run_package
 	expect_failure_with "the family needs 'Advanced Micro Devices X86-64'"
+}
+
+# zeros <n> prints n zeros.
+zeros() { printf '0%.0s' $(seq "$1"); }
+
+@test "SOURCE.txt carries exactly the computed values" {
+	run_package
+	[ "$status" -eq 0 ] || { echo "$output" >&2; return 1; }
+	grep -qx "ffmpeg SHA-256:       $(sha256sum "$dest/ffmpeg" | cut -d ' ' -f 1)" "$dest/SOURCE.txt"
+	grep -qx "Corresponding source: ffmpeg-1-source.tar" "$dest/SOURCE.txt"
+	grep -qx "Source SHA-256:       $(zeros 64)" "$dest/SOURCE.txt"
+	grep -qx "  --enable-gpl --enable-version3" "$dest/SOURCE.txt"
+	# Without a package list dpkg-query is not asked, which would list every package.
+	grep -qx "Host tools: unknown" "$dest/SOURCE.txt"
+}
+
+@test "SOURCE.txt is refused unless there is exactly one well-formed source checksum" {
+	cp "$archive/ffmpeg-1-source.tar.sha256" "$archive/ffmpeg-2-source.tar.sha256"
+	run_package
+	expect_failure_with "more than one *.tar.sha256"
+	rm "$archive"/*.sha256
+	run_package
+	expect_failure_with "no *.tar.sha256"
+	local line
+	for line in "abc  ffmpeg-1-source.tar" "$(printf 'A%.0s' $(seq 64))  ffmpeg-1-source.tar" \
+		"$(zeros 63)  ffmpeg-1-source.tar"; do
+		echo "$line" >"$archive/ffmpeg-1-source.tar.sha256"
+		run_package
+		expect_failure_with "is not a SHA-256"
+	done
+	printf '%s  a.tar\n%s  b.tar\n' "$(zeros 64)" "$(zeros 64)" >"$archive/ffmpeg-1-source.tar.sha256"
+	run_package
+	expect_failure_with "must hold exactly one line"
+	echo "$(zeros 64)  " >"$archive/ffmpeg-1-source.tar.sha256"
+	run_package
+	expect_failure_with "names no archive file"
+}
+
+@test "SOURCE.txt is refused for a missing, empty or multi-line configuration" {
+	printf '%s\n%s\n' "--enable-gpl" "--enable-nonfree" >"$build/configuration.txt"
+	run_package
+	expect_failure_with "configuration.txt must hold exactly one line"
+	echo "" >"$build/configuration.txt"
+	run_package
+	expect_failure_with "configuration.txt is empty"
+	rm "$build/configuration.txt"
+	run_package
+	expect_failure_with "missing $build/configuration.txt"
 }

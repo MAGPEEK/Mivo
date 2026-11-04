@@ -70,10 +70,19 @@ ensure_toolkit() {
 		fi
 		git -C "$PKGSCRIPTS_DIR" checkout --quiet --force --detach "$PKGSCRIPTS_COMMIT"
 	fi
-	# Edits inside the clone would change what the toolkit does without changing the commit.
-	if ! git -C "$PKGSCRIPTS_DIR" diff --quiet HEAD; then
-		log "local changes in the pkgscripts-ng clone, restoring the pinned commit"
+	# Edits inside the clone would change what the toolkit does without changing the commit, and
+	# so would files added to it (a Python module next to pkgdeploy.py is imported first). git
+	# status lists both; ignored files (__pycache__) stay, the clone's .gitignore names them.
+	local changes
+	changes="$(git -C "$PKGSCRIPTS_DIR" status --porcelain --untracked-files=all)" ||
+		die "git status failed in the pkgscripts-ng clone"
+	if [ -n "$changes" ]; then
+		log "local changes or untracked files in the pkgscripts-ng clone, restoring the pinned commit:"
+		printf '%s\n' "$changes" | head -n 10 >&2
 		git -C "$PKGSCRIPTS_DIR" checkout --quiet --force --detach "$PKGSCRIPTS_COMMIT"
+		git -C "$PKGSCRIPTS_DIR" clean --quiet --force -d
+		[ -z "$(git -C "$PKGSCRIPTS_DIR" status --porcelain --untracked-files=all)" ] ||
+			die "the pkgscripts-ng clone still differs from $PKGSCRIPTS_COMMIT"
 	fi
 	git -C "$PKGSCRIPTS_DIR" merge-base --is-ancestor "$PKGSCRIPTS_COMMIT" \
 		"origin/$PKGSCRIPTS_BRANCH" || die "commit $PKGSCRIPTS_COMMIT is not on $PKGSCRIPTS_BRANCH"

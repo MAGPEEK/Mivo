@@ -45,8 +45,10 @@ template output – so no packaging file hard-codes the product name, port or ve
       the template and line; `{{wizard_value}}`, `${VAR}` and `$VAR` pass through unchanged; a
       template that renders non-ASCII into `SynoBuildConf/` is rejected (the chroot's Python
       cannot read it).
-- [ ] No string literal containing the product name outside `_test.go` files
-      (`rg -i -g '!*_test.go' mivo packaging/synology/internal/spkmeta` → no hits).
+- [ ] No string literal or comment containing the product name outside `_test.go` files.
+      Checked by `brandfree_test.go` (`TestNoProductNameOutsideTests`), which parses every
+      non-test file and skips import paths: a plain `rg -i mivo` also matches the module path
+      `github.com/magpeek/mivo/...` of the imports and cannot pass (wave-2 review).
 - [ ] Tests: table-driven unit tests, no mocks; coverage of the package ≥ 90 %
       (`go test -race -cover ./packaging/synology/internal/spkmeta`).
 - [ ] Gates: `go vet ./...`, `golangci-lint run`, `golangci-lint fmt --diff`, `go test ./...`,

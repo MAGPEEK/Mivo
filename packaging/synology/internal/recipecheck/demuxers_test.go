@@ -88,7 +88,9 @@ func recipeDemuxers(t *testing.T) []string {
 }
 
 // serverWhitelistAsConfigureNames returns allowedDemuxers of probe.go plus image2, translated
-// to configure's demuxer names.
+// to configure's demuxer names. Duplicates are refused after the translation, where two
+// whitelist names that configure spells the same ("mpeg" and "mpegps", or an explicit "image2")
+// would collapse into one.
 func serverWhitelistAsConfigureNames(t *testing.T) []string {
 	t.Helper()
 
@@ -97,17 +99,20 @@ func serverWhitelistAsConfigureNames(t *testing.T) []string {
 		t.Fatalf("%s: %s returns no string literal", probeSource, whitelistFunction)
 	}
 
-	if duplicate, found := firstDuplicate(names); found {
-		t.Fatalf("%s: %s lists %q more than once", probeSource, whitelistFunction, duplicate)
-	}
-
 	configureNames := make([]string, 0, len(names)+1)
 
 	for _, name := range names {
 		configureNames = append(configureNames, configureName(name))
 	}
 
-	return append(configureNames, imageSequenceDemuxer)
+	configureNames = append(configureNames, imageSequenceDemuxer)
+
+	if duplicate, found := firstDuplicate(configureNames); found {
+		t.Fatalf("%s: %s plus %s names configure demuxer %q more than once",
+			probeSource, whitelistFunction, imageSequenceDemuxer, duplicate)
+	}
+
+	return configureNames
 }
 
 // firstDuplicate reports the first name that appears twice; a repeated entry would let the two

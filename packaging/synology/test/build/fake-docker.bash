@@ -8,15 +8,21 @@
 #   docker build -t <image> <dir>                 step 0, the FFmpeg recipe image: prints nothing
 #   docker build --target <family> --output <csv> <recipe>
 #                                                 fetch.sh: writes one family's recipe output
-#   docker build ... --output <csv> <context>     step 1: writes a staged project per family and
-#                                                 ffmpeg-source/ with the source archive
+#   docker build -f <dir>/Dockerfile ... --output <csv> <context>
+#                                                 step 1: writes what the FFmpeg image holds and
+#                                                 fake server binaries to a temporary directory
+#                                                 and runs the real <dir>/stage.sh on them, with
+#                                                 the --build-arg values as its environment and
+#                                                 the spkstage of PATH (the tests install
+#                                                 fake-spkstage.bash); stage.sh's output becomes
+#                                                 the --output directory, its failure step 1's
 #   docker run ... -v <dir>:/project:ro -v <dir>:/output <image> <family>
 #                                                 step 2: writes <ID>-<family>-<DSM>.spk
 #
 # Every call is appended to $FAKE_DOCKER_LOG, one line per call with the arguments separated by
 # blanks. The fake FFmpeg binaries have a fixed content, "fake <tool> <family>\n" (the tests
 # compute the pins of their sources.lock from it); the fake source archive holds "fake source\n".
-# Behaviour switches (environment):
+# Behaviour switches (environment; fake-spkstage.bash has its own):
 #   FAKE_FFMPEG_STATUS    Status of the staged SOURCE.txt (default selected)
 #   FAKE_FFMPEG_LICENCE   Licence of the staged SOURCE.txt (default GPL-3.0-or-later)
 #   FAKE_FFMPEG_VERSION   Version of the staged SOURCE.txt (default 1.0-static1)
@@ -24,8 +30,10 @@
 #   FAKE_FFMPEG_OMIT      file name left out of every FFmpeg output directory
 #   FAKE_SOURCE_MISMATCH  non-empty: the staged SOURCE.txt names another source archive hash
 #   FAKE_NOTICE_EXTRA     extra line appended to every staged SOURCE.txt
+#   FAKE_STAGE_TEST_MODE  non-empty: step 1 runs stage.sh with RELEASE=false whatever build.sh
+#                         asked for, so the tests reach the checks build.sh makes after step 1
 #   FAKE_TOOLKIT_FAIL     family whose toolkit run fails like run.sh ("[spk-toolkit] failed:")
-#   FAKE_ID               package name in the staged build.env (default demo)
+#   FAKE_TOOLKIT_SILENT   family whose toolkit run succeeds but writes no SPK
 set -euo pipefail
 
 readonly FAMILIES=(x86_64 armv8 armv7)
@@ -34,21 +42,6 @@ readonly SOURCE_CONTENT="fake source"
 printf '%s\n' "$*" >>"${FAKE_DOCKER_LOG:-/dev/null}"
 
 sha256_of_text() { printf '%s\n' "$1" | sha256sum | cut -d' ' -f1; }
-
-# spkmeta's mapping (internal/spkmeta/version.go): stage x 1000 + pre-release number x 10 +
-# package revision, four digits.
-dsm_version() {
-	local version="$1" revision="$2" core="${1%%-*}" pre="" stage=9 number=0
-	[ "$core" = "$version" ] || pre="${version#*-}"
-	case "$pre" in
-		"") ;;
-		dev) stage=0 ;;
-		alpha.*) stage=1 number="${pre#alpha.}" ;;
-		beta.*) stage=2 number="${pre#beta.}" ;;
-		rc.*) stage=3 number="${pre#rc.}" ;;
-	esac
-	printf '%s-%04d' "$core" "$((stage * 1000 + number * 10 + revision))"
-}
 
 # Turns the --output value type=local,dest=<path> or type=local,"dest=<path>" into <path>.
 output_dir() {
@@ -95,42 +88,52 @@ write_ffmpeg_output() {
 	} >"$directory/SOURCE.txt"
 }
 
-stage_family() {
-	local project="$1/$2"
-	mkdir -p "$project/prebuilt/bin"
-	{
-		echo "ID='${FAKE_ID:-demo}'"
-		echo "VERSION='$3'"
-		echo "DSM_VERSION='$(dsm_version "$3" "$4")'"
-		echo "ARCH='$2'"
-	} >"$project/build.env"
-	write_ffmpeg_output "$project/prebuilt/share/licenses/ffmpeg" "$2"
-	for tool in ffmpeg ffprobe; do
-		[ ! -f "$project/prebuilt/share/licenses/ffmpeg/$tool" ] || mv "$project/prebuilt/share/licenses/ffmpeg/$tool" "$project/prebuilt/bin/$tool"
-	done
-}
-
 write_source_archive() {
-	local directory="$1/ffmpeg-source" name="ffmpeg-${FAKE_FFMPEG_VERSION:-1.0-static1}-source.tar"
+	local directory="$1" name="ffmpeg-${FAKE_FFMPEG_VERSION:-1.0-static1}-source.tar"
 	mkdir -p "$directory"
 	printf '%s\n' "$SOURCE_CONTENT" >"$directory/$name"
 	printf '%s  %s\n' "$(sha256_of_text "$SOURCE_CONTENT")" "$name" >"$directory/$name.sha256"
 }
 
+# stage_step <dockerfile> <output> <build-arg>...: step 1 through the real stage.sh.
+stage_step() {
+	local stage_script="${1%/*}/stage.sh" output="$2" prebuilt family assignment
+	local -a environment=()
+	shift 2
+	for assignment in "$@"; do
+		case "$assignment" in
+			RELEASE=*) [ -z "${FAKE_STAGE_TEST_MODE:-}" ] || assignment=RELEASE=false ;;
+		esac
+		environment+=("$assignment")
+	done
+	prebuilt="$(mktemp -d)"
+	for family in "${FAMILIES[@]}"; do
+		write_ffmpeg_output "$prebuilt/ffmpeg/$family" "$family"
+		mkdir -p "$prebuilt/server/$family"
+		echo "fake server $family" >"$prebuilt/server/$family/server"
+	done
+	write_source_archive "$prebuilt/ffmpeg/source"
+	# BuildKit exports nothing from a failed build.
+	if ! env "${environment[@]}" bash "$stage_script" "$prebuilt" /src "$prebuilt/stage"; then
+		rm -rf "$prebuilt"
+		echo "ERROR: process \"bash packaging/synology/stage.sh\" did not complete successfully" >&2
+		return 1
+	fi
+	mkdir -p "$output"
+	cp -R "$prebuilt/stage/." "$output/"
+	rm -rf "$prebuilt"
+}
+
 fake_build() {
-	local output="" version="0.0.0-dev" revision=0 family target="" quiet=no
+	local output="" dockerfile="" target="" quiet=no
+	local -a build_args=()
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
 			-q) quiet=yes ;;
+			-f) dockerfile="$2" && shift ;;
 			--output) output="$(output_dir "$2")" && shift ;;
 			--target) target="$2" && shift ;;
-			--build-arg)
-				case "$2" in
-					VERSION=*) version="${2#VERSION=}" ;;
-					PACKAGE_REVISION=*) revision="${2#PACKAGE_REVISION=}" ;;
-				esac
-				shift
-				;;
+			--build-arg) build_args+=("$2") && shift ;;
 		esac
 		shift
 	done
@@ -142,10 +145,7 @@ fake_build() {
 		write_ffmpeg_output "$output" "$target"
 		return
 	fi
-	for family in "${FAMILIES[@]}"; do
-		stage_family "$output" "$family" "$version" "$revision"
-	done
-	write_source_archive "$output"
+	stage_step "$dockerfile" "$output" "${build_args[@]}"
 }
 
 fake_run() {
@@ -164,6 +164,7 @@ fake_run() {
 		echo "[spk-toolkit] failed: fake toolkit failure for $family" >&2
 		exit 1
 	fi
+	[ "${FAKE_TOOLKIT_SILENT:-}" != "$family" ] || return 0
 	id="$(sed -n "s/^ID='\(.*\)'$/\1/p" "$project/build.env")"
 	dsm="$(sed -n "s/^DSM_VERSION='\(.*\)'$/\1/p" "$project/build.env")"
 	echo "fake SPK of $family" >"$output/$id-$family-$dsm.spk"

@@ -29,6 +29,7 @@ const (
 	prebuiltBinDir      = "prebuilt/bin"
 	ffmpegLicenseDir    = "prebuilt/share/licenses/ffmpeg"
 	portConfDir         = "prebuilt/port_conf"
+	desktopUIDir        = "prebuilt/" + spkmeta.DesktopUIDir
 	serviceFileSuffix   = ".sc"
 	packageTemplatesDir = "packaging/synology/package"
 )
@@ -156,6 +157,39 @@ func generatedEntries(build spkmeta.Build) ([]entry, error) {
 		}
 
 		entries = append(entries, entry{path: icon.FileName, mode: regularMode, content: png})
+	}
+
+	desktop, err := desktopEntries(build.Package)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(entries, desktop...), nil
+}
+
+// desktopEntries renders the DSM main menu entry: prebuilt/ui/config and one icon per size
+// under prebuilt/ui/images, which SynoBuildConf/install packs as ui/ of package.tgz (INFO
+// dsmuidir).
+func desktopEntries(pkg spkmeta.Package) ([]entry, error) {
+	config, err := pkg.DesktopAppConfig()
+	if err != nil {
+		return nil, fmt.Errorf("render %s/%s: %w", desktopUIDir, spkmeta.DesktopConfigFile, err)
+	}
+
+	entries := []entry{{
+		path:    desktopUIDir + "/" + spkmeta.DesktopConfigFile,
+		mode:    regularMode,
+		content: config,
+		checks:  checkText | checkJSON,
+	}}
+
+	for _, size := range spkmeta.DesktopIconSizes() {
+		png, err := spkicon.EncodePNG(size)
+		if err != nil {
+			return nil, fmt.Errorf("render %s: %w", pkg.DesktopIconPath(size), err)
+		}
+
+		entries = append(entries, entry{path: desktopUIDir + "/" + pkg.DesktopIconPath(size), mode: regularMode, content: png})
 	}
 
 	return entries, nil

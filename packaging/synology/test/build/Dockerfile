@@ -4,8 +4,9 @@
 #
 #   docker build -t spk-build-test:dev packaging/synology/test/build
 #
-# The base image is pinned by tag; digest pinning comes with CI and Renovate.
-FROM bats/bats:1.14.0 AS bats
+# bats is pinned by digest like ../Dockerfile; the PowerShell image by tag (digest pinning
+# comes with CI and Renovate).
+FROM bats/bats:1.14.0@sha256:5322b877351fda0cc435de8c6116de7d0a2ec79d7c680132a0ef329a633bc66f AS bats
 
 FROM mcr.microsoft.com/powershell:7.4-ubuntu-22.04
 

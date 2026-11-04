@@ -33,6 +33,12 @@ VALID_SHARE_NAMES=(
 	"$(repeat_text x 32)"
 	"$(repeat_text x 31)\$"
 	"$(repeat_text ä 32)"
+	# Outside the Basic Multilingual Plane: the wizard's JavaScript regex counts such a
+	# character as two UTF-16 code units, and pkg_check_share_name does the same.
+	'😀'
+	"$(repeat_text 😀 16)"
+	"$(repeat_text x 30)😀"
+	"$(repeat_text 😀 15)\$"
 )
 
 INVALID_SHARE_NAMES=(
@@ -43,6 +49,9 @@ INVALID_SHARE_NAMES=(
 	"$(repeat_text x 33)"
 	"$(repeat_text x 32)\$"
 	"$(repeat_text ä 33)"
+	"$(repeat_text 😀 17)"
+	"$(repeat_text x 31)😀"
+	"$(repeat_text 😀 16)\$"
 	'$'
 	'$video'
 	'a$b'

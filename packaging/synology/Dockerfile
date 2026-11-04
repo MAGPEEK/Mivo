@@ -17,7 +17,7 @@
 #
 # Build arguments:
 #   VERSION            server version (default 0.0.0-dev), mapped to the DSM version by spkstage
-#   REVISION           git commit, recorded in build-info.txt (default empty)
+#   REVISION           git commit, recorded in build-info.txt (default empty; a release needs it)
 #   PACKAGE_REVISION   packaging-only revision 0-9 of the same server version (default 0)
 #   SOURCE_DATE_EPOCH  modification time of every staged file (default 0 = 1970-01-01); the
 #                      local exporter also applies it to the exported files. BuildKit stamps
@@ -26,9 +26,10 @@
 #                      image is built outside this file and is not affected.
 #   RELEASE            true refuses an FFmpeg build whose SOURCE.txt is not "Status: selected"
 #                      or whose licence is non-free, any spkstage warning (interim builds,
-#                      dynamically linked FFmpeg) and VERSION 0.0.0-dev; false (default) stages
-#                      interim builds with spkstage's warning, for local test builds only. In
-#                      both modes a SOURCE.txt needs exactly one Status: and one Licence: line.
+#                      dynamically linked FFmpeg), VERSION 0.0.0-dev and an empty REVISION; false
+#                      (default) stages interim builds with spkstage's warning, for local test
+#                      builds only. In both modes a SOURCE.txt needs exactly one Status: and one
+#                      Licence: line (stage.sh).
 #   NODE_IMAGE, GO_IMAGE  same names and defaults as packaging/docker/Dockerfile
 #   FFMPEG_IMAGE       the image of the FFmpeg recipe's "all" target (default
 #                      spk-ffmpeg-static:dev): /<family>/ with ffmpeg, ffprobe, the licence
@@ -155,57 +156,12 @@ ARG NODE_IMAGE
 ARG GO_IMAGE
 ARG FFMPEG_IMAGE
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-# A release refuses the interim FFmpeg outright (BACKLOG "spk release", ADR 0026 section 4):
-# the check reads the SOURCE.txt that was staged, so it holds whatever stage supplies FFmpeg.
-RUN <<'STAGE'
-set -euo pipefail
-die() { echo "stage: $*" >&2; exit 1; }
-case "$RELEASE" in true | false) ;; *) die "RELEASE must be true or false, not '$RELEASE'" ;; esac
-[ "$RELEASE" = false ] || [ "$VERSION" != 0.0.0-dev ] || die "a release needs VERSION, not the default 0.0.0-dev"
-mkdir -p /stage
-{
-	echo "version=$VERSION"
-	echo "revision=$REVISION"
-	echo "package_revision=$PACKAGE_REVISION"
-	echo "source_date_epoch=$SOURCE_DATE_EPOCH"
-	echo "release=$RELEASE"
-	echo "node_image=$NODE_IMAGE"
-	echo "go_image=$GO_IMAGE"
-	echo "ffmpeg_image=$FFMPEG_IMAGE"
-} >/stage/build-info.txt
-# The corresponding source archive (one .tar with its .sha256) travels with the staged
-# projects; build.sh / build.ps1 move it next to the SPKs and check it against every SOURCE.txt.
-[ "$(find /prebuilt/ffmpeg/source -maxdepth 1 -name '*-source.tar' | wc -l)" = 1 ] ||
-	die "the FFmpeg image holds no single corresponding source archive in /source"
-mkdir -p /stage/ffmpeg-source
-cp /prebuilt/ffmpeg/source/*-source.tar /prebuilt/ffmpeg/source/*-source.tar.sha256 /stage/ffmpeg-source/
-for family in x86_64 armv8 armv7; do
-	warnings="/tmp/spkstage-$family.log"
-	if ! spkstage -family "$family" -version "$VERSION" -package-revision "$PACKAGE_REVISION" \
-		-source-date-epoch "$SOURCE_DATE_EPOCH" -binary "/prebuilt/server/$family/server" \
-		-ffmpeg-dir "/prebuilt/ffmpeg/$family" -repo /src -out "/stage/$family" 2>"$warnings"; then
-		cat "$warnings" >&2
-		die "spkstage failed for $family"
-	fi
-	cat "$warnings" >&2
-	notice="/stage/$family/prebuilt/share/licenses/ffmpeg/SOURCE.txt"
-	# Exactly one of each, so neither value can hide behind a second line.
-	[ "$(grep -c '^Status:' "$notice")" = 1 ] && [ "$(grep -c '^Licence:' "$notice")" = 1 ] ||
-		die "$family: SOURCE.txt needs exactly one Status: and one Licence: line"
-	# The whole trimmed value, so a word such as "nonfree" cannot hide behind the first one.
-	status="$(sed -n 's/^Status:[[:space:]]*//p' "$notice" | sed 's/[[:space:]]*$//')"
-	licence="$(sed -n 's/^Licence:[[:space:]]*//p' "$notice" | sed 's/[[:space:]]*$//')"
-	echo "ffmpeg_$family=${status:-unknown} ${licence:-unknown}" >>/stage/build-info.txt
-	if [ "$RELEASE" = true ]; then
-		[ "$status" = selected ] || die "release refused: the FFmpeg build of $family has status '${status:-none}', not 'selected' (interim builds are for local test builds only)"
-		case "$licence" in *nonfree*) die "release refused: the FFmpeg build of $family is non-free ($licence) and not redistributable" ;; esac
-		! grep -q 'warning:' "$warnings" || die "release refused: spkstage warned for $family (see above)"
-	elif [ "$status" != selected ]; then
-		echo "stage: WARNING: $family uses an FFmpeg build with status '${status:-none}'; this is a test build, not for release or distribution" >&2
-	fi
-done
-STAGE
+# stage.sh (tested by test/build/stage.bats) reads the build arguments above from its
+# environment. A release refuses the interim or non-free FFmpeg outright (BACKLOG "spk release",
+# ADR 0026 section 4) and judges the SOURCE.txt that was staged, so the check holds whatever
+# stage supplies FFmpeg.
+COPY packaging/synology/stage.sh packaging/synology/stage.sh
+RUN bash packaging/synology/stage.sh /prebuilt /src /stage
 
 # ---------------------------------------------------------------------------------------------
 # staged: the export of step 1 (last stage, so `docker build --output` needs no --target).

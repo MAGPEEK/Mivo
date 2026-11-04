@@ -11,7 +11,10 @@ against a fake server, so they need neither DSM nor the real server binary.
 ## Run
 
 From the repository root; Docker Desktop is enough, nothing else is installed. The test image
-(`Dockerfile` here) is `bats/bats:1.14.0` plus dash, jq and Node.js.
+(`Dockerfile` here) is `bats/bats:1.14.0`, pinned by digest, plus dash, jq and Node.js in pinned
+Alpine versions. The tests run as root in the throw-away container and write the link
+`/var/packages/demo` of the container (see `scripts/helpers.bash`); run them in the image, not
+on a host.
 
 ```powershell
 # PowerShell
@@ -34,14 +37,18 @@ regular expression over the test names) runs a subset.
 - `scripts/*.bats` – the test files; bats runs every `.bats` file of the directory.
   `start-stop-status.bats` covers SPK-05 and the SPK-06 hardening of `start-stop-status`,
   `lifecycle.bats` the lifecycle scripts and the `common.sh` helpers they use (share-name check,
-  YAML quoting, package-directory guard), `package-files.bats` the static templates (JSON
-  syntax, privilege, resource, service file, wizard keys and the share-name regex).
+  YAML quoting, the package-directory guard of every deletion), `package-files.bats` the static
+  templates (JSON syntax, privilege, resource, service file, wizard keys and the share-name
+  regex).
 - `scripts/helpers.bash` – shared setup: a DSM-like package tree per test in `$BATS_TEST_TMPDIR`
-  (`target` is a link into `volume1/@appstore/<id>` as on DSM; `var`, `tmp`, `home`; `scripts/`
-  with every package script and the fixture `package.env`), the `SYNOPKG_*` variables, and
-  helpers such as `run_sss`, `run_common` and `assert_file_line`. `$BATS_TEST_TMPDIR` stands for
-  `/` of the NAS: shared folders are created as `volume<N>/<share>` below it. It loads
-  `bats-support` and `bats-assert`, which the `bats/bats` image ships.
+  (`target`, `var`, `tmp` and `home` are links into `volume1/@appstore|@appdata|@apptemp|@apphome/<id>`
+  as on DSM; `scripts/` with every package script and the fixture `package.env`), reached
+  through the link `/var/packages/<id>` of the container, so the `SYNOPKG_*` variables have
+  DSM's real shape `/var/packages/<id>/var` (`postuninst` deletes only below directories of
+  that shape). Helpers such as `run_sss`, `run_common` and `assert_file_line`.
+  `$BATS_TEST_TMPDIR` stands for `/` of the NAS: shared folders are created as
+  `volume<N>/<share>` below it. It loads `bats-support` and `bats-assert`, which the
+  `bats/bats` image ships.
 - `fixtures/package.env` – brand values of a made-up product (`ID=demo`, `ENV_PREFIX=DEMO`), so the
   tests prove that every name comes from `package.env`. Its assignments are exactly what
   `spkmeta`'s `Package.PackageEnv` renders for that brand (Go test
@@ -102,6 +109,7 @@ Documented in the script headers; DSM never sets them.
 | `PKG_TEST_START_TIMEOUT_SECONDS` | `start-stop-status` | the 30 s start budget | start budget cases |
 | `PKG_TEST_STOP_TIMEOUT_SECONDS` | `start-stop-status` | the 20 s stop budget before `SIGKILL` | "stop needing SIGKILL" case |
 | `PKG_TEST_UPTIME_FILE` | `start-stop-status` | `/proc/uptime`, the clock of the start budget | "start budget" clock cases |
+| `PKG_TEST_LOCK_WAIT_SECONDS` | `start-stop-status` | the 10 s wait for another action's lock before it is broken | "lock held too long" case |
 | `PKG_TEST_VOLUMES_ROOT` | `preinst` | `/`, where the `volume*` directories with the shared folders are | every case (set by `setup_package_tree`) |
 
 ### Timing assertions
@@ -133,7 +141,12 @@ SPK-16): CI hosts default to release builds, `--test` / `-TestBuild` overrides t
 builds refuse interim or malformed `sources.lock` entries, the default version, a staged interim
 or non-free FFmpeg, staged `ffmpeg`/`ffprobe` binaries or a `SOURCE.txt` version that differ
 from the pins of `sources.lock` (a test build packs them with a warning and a line in
-`NOT-FOR-RELEASE.txt`) and a dirty git tree; a `SOURCE.txt` needs exactly one `Status:`,
+`NOT-FOR-RELEASE.txt`), a dirty git tree, a failing git (a fake `git` reporting "dubious
+ownership") and an empty revision (without git a release needs `--revision`; `run_build` adds
+a fixture commit then, and the tree of each test is a committed checkout where git exists), an
+spkstage warning, a toolkit run that writes no SPK, a staged DSM version with another package
+revision, an invalid staged package name and option values that are empty or start with `-`; a
+`SOURCE.txt` needs exactly one `Status:`,
 `Licence:`, `Version:` and `Source SHA-256:` line; the staged FFmpeg source archive must be the
 one every `SOURCE.txt` names and lands in `dist/` with a `SHA256SUMS` line; the FFmpeg recipe
 image is built before step 1 and passed to it; a failed toolkit run leaves no `SHA256SUMS`; and
@@ -141,20 +154,27 @@ the SPK names carry `-r<N>` for package revision N ≥ 1. `build/fetch.bats` tes
 `../ffmpeg/fetch.sh` (install with modes and manifest, checksum and notice mismatches, missing
 output files, usage errors, a failed recipe build, a licence that differs from the lock) under
 the image's POSIX `sh`. `build/package-gates.bats` runs `../ffmpeg/build/scripts/package.sh`
-against a fake `readelf`/`objdump`: a failing tool stops every gate, and dynamic, foreign or too
-new executables are refused. A licence is always judged on the whole `Licence:` value.
-`build/fake-docker.bash` replaces Docker (its header lists the switches; the pins of the test
-locks are the SHA-256 of its fake binaries), so every case runs in well under a second. Each
+against a fake `readelf`/`objdump`: a failing tool stops every gate, dynamic, foreign or too
+new executables are refused, and `SOURCE.txt` is written only from checked values (one
+well-formed `.tar.sha256`, a one-line configuration, 64-hex checksums). `build/stage.bats` runs
+`../stage.sh` (the staging stage of the Dockerfile) against `build/fake-spkstage.bash`:
+build-info, the source archive and the release refusals of step 1. A licence is always judged
+on the whole `Licence:` value. `build/fake-docker.bash` replaces Docker (its header lists the
+switches; the pins of the test locks are the SHA-256 of its fake binaries); its step 1 runs the
+real `stage.sh` with the fake spkstage, so a release is refused there exactly as in the real
+build (`FAKE_STAGE_TEST_MODE` lets step 1 pass to reach the checks of `build.sh` behind it).
+Every case runs in well under a second. Each
 build-script case runs against `build.sh` and, when `pwsh` is installed, against `build.ps1`
 with the same arguments (parity). Each test copies both scripts into its own temp tree, so the
 repository's `dist/` is never touched.
 
 ```powershell
-# build.sh and fetch.sh cases only (the script test image has neither pwsh nor git; those cases are skipped)
+# build.sh, stage.sh, fetch.sh and package.sh cases (the script test image has neither pwsh nor git; those cases are skipped)
 docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/build
 # all cases, with the build.ps1 parity cases and the dirty-tree case
 docker build -t spk-build-test:dev packaging/synology/test/build
 docker run --rm -v "${PWD}:/code" -w /code spk-build-test:dev packaging/synology/test/build
-docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/fetch.bats packaging/synology/test/build/fake-docker.bash
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/stage.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/stage.bats packaging/synology/test/build/package-gates.bats packaging/synology/test/build/fetch.bats packaging/synology/test/build/fake-docker.bash packaging/synology/test/build/fake-spkstage.bash
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/ffmpeg/fetch.sh
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -x -s sh packaging/synology/ffmpeg/build/scripts/package.sh
 ```

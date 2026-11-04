@@ -40,3 +40,13 @@ package 0755 share/licenses/
 package 0755 share/licenses/ffmpeg/
 package 0644 share/licenses/ffmpeg/SOURCE.txt
 package 0644 share/licenses/ffmpeg/*
+package 0755 ui/
+package 0644 ui/config
+package 0755 ui/images/
+package 0644 ui/images/<id>_16.png
+package 0644 ui/images/<id>_24.png
+package 0644 ui/images/<id>_32.png
+package 0644 ui/images/<id>_48.png
+package 0644 ui/images/<id>_64.png
+package 0644 ui/images/<id>_72.png
+package 0644 ui/images/<id>_256.png

@@ -10,6 +10,9 @@ import (
 // by build.env and package.env.
 const envNamePattern = `^[A-Z_][A-Z0-9_]*$`
 
+// envNameFormat is envNamePattern, compiled once.
+var envNameFormat = regexp.MustCompile(envNamePattern)
+
 // envAssignment is one line of an env file.
 type envAssignment struct {
 	name  string
@@ -21,12 +24,10 @@ type envAssignment struct {
 // by line with the grammar, because single quotes need no escaping rules when the value
 // contains none.
 func renderEnv(assignments []envAssignment) (string, error) {
-	namePattern := regexp.MustCompile(envNamePattern)
-
 	var content strings.Builder
 
 	for _, assignment := range assignments {
-		if !namePattern.MatchString(assignment.name) {
+		if !envNameFormat.MatchString(assignment.name) {
 			return "", fmt.Errorf("env name %q does not match %s: %w", assignment.name, envNamePattern, ErrInvalidValue)
 		}
 

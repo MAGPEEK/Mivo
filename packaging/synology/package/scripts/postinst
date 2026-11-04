@@ -47,7 +47,9 @@ write_config() {
 
 umask "$PKG_FILE_UMASK"
 if ! pkg_create_server_dirs; then
-	pkg_tell_user "cannot create the directories of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGTMP"
+	pkg_tell_user "$(pkg_localized \
+		"cannot create the directories of $DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGTMP" \
+		"Die Verzeichnisse von $DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGTMP konnten nicht angelegt werden")"
 	exit 1
 fi
 if [ "${SYNOPKG_PKG_STATUS:-}" != INSTALL ]; then
@@ -66,7 +68,9 @@ if ! pkg_check_share_name "$media_share"; then
 	exit 1
 fi
 if ! write_config "$media_share"; then
-	pkg_tell_user "cannot write $PKG_CONFIG_FILE"
+	pkg_tell_user "$(pkg_localized \
+		"cannot write $PKG_CONFIG_FILE" \
+		"$PKG_CONFIG_FILE konnte nicht geschrieben werden")"
 	exit 1
 fi
 echo "wrote $PKG_CONFIG_FILE with the library \"$media_share\" ($(pkg_share_link "$media_share"))"

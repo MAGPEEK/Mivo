@@ -1,7 +1,8 @@
 #!/bin/sh
 # inspect-spk.sh - checks one server SPK the toolkit produced against ADR 0026 and its Notes
 # (task SPK-10): outer archive and members, INFO, package.tgz with the binaries, scripts,
-# resources, icons, leftovers from the build environment and the FFmpeg status.
+# resources, icons, the DSM main menu entry (INFO dsmuidir, ui/config, ui/images), leftovers
+# from the build environment and the FFmpeg status.
 #
 #   inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <family>
 #
@@ -73,6 +74,10 @@ readonly LIFECYCLE_SCRIPTS="preinst postinst preuninst postuninst preupgrade pos
 start-stop-status"
 readonly SCRIPT_SHEBANG='#!/bin/sh'
 readonly ICON_SIZES="PACKAGE_ICON.PNG:64 PACKAGE_ICON_256.PNG:256"
+# The DSM main menu entry (DSM-NOTES section 16): INFO dsmuidir, its application config and
+# the icon sizes DSM puts into the {0} of the config's "icon".
+readonly DESKTOP_UI_DIR=ui
+readonly DESKTOP_ICON_SIZES="16 24 32 48 64 72 256"
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
 readonly script_dir
@@ -610,6 +615,7 @@ check_info() {
 	info_required adminport "^$port\$"
 	info_required adminprotocol '^http$'
 	info_absent adminurl
+	info_required dsmuidir "^$DESKTOP_UI_DIR\$"
 	info_required description '^.+$'
 	info_required description_ger '^.+$'
 	info_required maintainer '^.+$'
@@ -927,7 +933,7 @@ check_scripts() {
 # package.tgz) without @NAME@ tokens; INFO, conf, wizard and service files without CR.
 check_tokens() {
 	list_files "$work/files-all" "$work/spk" "$work/pkg"
-	awk -v binaries="$work/pkg/bin/" '!/\.PNG$/ && !/\/package\.tgz$/ && index($0, binaries) != 1' \
+	awk -v binaries="$work/pkg/bin/" '!/\.(PNG|png)$/ && !/\/package\.tgz$/ && index($0, binaries) != 1' \
 		"$work/files-all" >"$work/files-text"
 	files_matching "$TOKEN_PATTERN" "$work/files-text"
 	if [ -z "$matching_names" ]; then
@@ -936,10 +942,10 @@ check_tokens() {
 		failed "unreplaced @NAME@ tokens in: $matching_names"
 	fi
 	list_files "$work/files-lf" "$work/spk/INFO" "$work/spk/conf" "$work/spk/WIZARD_UIFILES" \
-		"$work/pkg/port_conf"
+		"$work/pkg/port_conf" "$work/pkg/$DESKTOP_UI_DIR/config"
 	files_matching "$(printf '\r')" "$work/files-lf"
 	if [ -z "$matching_names" ]; then
-		pass "INFO, conf/*, WIZARD_UIFILES/* and port_conf/*: LF line endings"
+		pass "INFO, conf/*, WIZARD_UIFILES/*, port_conf/* and $DESKTOP_UI_DIR/config: LF line endings"
 	else
 		failed "CR characters in: $matching_names"
 	fi
@@ -987,6 +993,67 @@ check_icons() {
 			pass "$icon is a ${icon_side}x${icon_side} PNG"
 		else
 			failed "$icon is not a ${icon_side}x${icon_side} PNG (${icon_actual:-not a PNG})"
+		fi
+	done
+}
+
+# --- DSM main menu entry ----------------------------------------------------------------------
+
+# desktop_value <jq path below the entry>: one value of the single ".url" entry of ui/config
+# as text ("" when absent).
+desktop_value() {
+	jq -r "[.\".url\"[]][0]$1 | if . == null then \"\" else tostring end" "$desktop_config" 2>/dev/null
+}
+
+# desktop_expect <key> <expected>: the entry's key has exactly the expected value.
+desktop_expect() {
+	desktop_actual=$(desktop_value ".\"$1\"")
+	if [ "$desktop_actual" = "$2" ]; then
+		pass "$DESKTOP_UI_DIR/config: $1 is \"$2\""
+	else
+		failed "$DESKTOP_UI_DIR/config: $1 is \"$desktop_actual\", want \"$2\""
+	fi
+}
+
+# check_desktop_config: ui/config (the application config of INFO dsmuidir) declares one
+# "url" entry that opens http://<host>:<adminport>/ for every user, titled with INFO
+# displayname and using images/<id>_{0}.png as icon.
+check_desktop_config() {
+	desktop_config="$work/pkg/$DESKTOP_UI_DIR/config"
+	# a missing member is reported by the member check already
+	[ -f "$desktop_config" ] || return 0
+	if ! json_valid "$desktop_config"; then
+		failed "$DESKTOP_UI_DIR/config does not parse as JSON"
+		return
+	fi
+	pass "$DESKTOP_UI_DIR/config parses as JSON"
+	desktop_shape=$(jq -r '(keys | join(",")) + " " + ((.".url" // {}) | length | tostring)' \
+		"$desktop_config" 2>/dev/null)
+	if [ "$desktop_shape" = ".url 1" ]; then
+		pass "$DESKTOP_UI_DIR/config: exactly one .url entry"
+	else
+		failed "$DESKTOP_UI_DIR/config: top-level keys and .url entries are '$desktop_shape', want '.url 1'"
+		return
+	fi
+	desktop_expect type url
+	desktop_expect title "$(info_value displayname)"
+	desktop_expect protocol http
+	desktop_expect port "$(info_value adminport)"
+	desktop_expect url /
+	desktop_expect allUsers true
+	desktop_expect icon "images/${id}_{0}.png"
+}
+
+# check_desktop_icons: one PNG of each size DSM substitutes into the config's icon template.
+check_desktop_icons() {
+	for desktop_size in $DESKTOP_ICON_SIZES; do
+		desktop_icon="$DESKTOP_UI_DIR/images/${id}_$desktop_size.png"
+		[ -f "$work/pkg/$desktop_icon" ] || continue
+		desktop_actual=$(png_size "$work/pkg/$desktop_icon")
+		if [ "$desktop_actual" = "${desktop_size}x$desktop_size" ]; then
+			pass "$desktop_icon is a ${desktop_size}x$desktop_size PNG"
+		else
+			failed "$desktop_icon is not a ${desktop_size}x$desktop_size PNG (${desktop_actual:-not a PNG})"
 		fi
 	done
 }
@@ -1041,6 +1108,8 @@ main() {
 	check_scripts
 	check_json_files
 	check_icons
+	check_desktop_config
+	check_desktop_icons
 	check_tokens
 	[ "$print_members" = no ] || print_member_digests
 	summary

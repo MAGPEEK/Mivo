@@ -23,6 +23,8 @@ fi
 # Name of the package in the fixture package.env (fixtures/package.env).
 readonly FIXTURE_ID=demo
 readonly FIXTURE_DISPLAY_NAME="Demo Media Server"
+# DSM's directory of the installed packages (common.sh PKG_DSM_PACKAGES_DIR).
+readonly DSM_PACKAGES_DIR=/var/packages
 
 # Seconds after which bats fails a test, so that a hang ends the run instead of blocking it.
 # The slowest case needs about 10 s.
@@ -57,16 +59,27 @@ run_case() {
 	"$2"
 }
 
-# setup_package_tree builds what DSM gives a package (DSM-NOTES section 8): target is a link
-# into @appstore as on DSM, var, tmp and home are directories, scripts holds every package
-# script with the fixture package.env. The package binary is the fake server
-# (fake-server.bash). $BATS_TEST_TMPDIR stands for / of the NAS: it holds volume1, and the
-# scripts look for shared folders below it (PKG_TEST_VOLUMES_ROOT).
+# setup_package_tree builds what DSM gives a package (DSM-NOTES section 8): target, var, tmp
+# and home are links into volume1/@appstore, @appdata, @apptemp and @apphome as on DSM, scripts
+# holds every package script with the fixture package.env. The package binary is the fake
+# server (fake-server.bash). $BATS_TEST_TMPDIR stands for / of the NAS: it holds volume1, and
+# the scripts look for shared folders below it (PKG_TEST_VOLUMES_ROOT).
+#
+# The SYNOPKG_* paths go through DSM's real prefix, /var/packages/<id>, because postuninst
+# deletes only below directories of that shape (pkg_resolve_package_directory): setup points
+# the link /var/packages/<id> of the container at the test's package tree. The tests run as
+# root in a throw-away container, one at a time.
 setup_package_tree() {
-	local volume=$BATS_TEST_TMPDIR/volume1
+	local volume=$BATS_TEST_TMPDIR/volume1 kind
 	PKG_ROOT=$BATS_TEST_TMPDIR/packages/$FIXTURE_ID
-	mkdir -p "$volume/@appstore/$FIXTURE_ID/bin" "$PKG_ROOT"/{scripts,var,tmp,home}
-	ln -s "$volume/@appstore/$FIXTURE_ID" "$PKG_ROOT/target"
+	DSM_PKG_ROOT=$DSM_PACKAGES_DIR/$FIXTURE_ID
+	mkdir -p "$PKG_ROOT/scripts" "$DSM_PACKAGES_DIR"
+	for kind in target:@appstore var:@appdata tmp:@apptemp home:@apphome; do
+		mkdir -p "$volume/${kind#*:}/$FIXTURE_ID"
+		ln -s "$volume/${kind#*:}/$FIXTURE_ID" "$PKG_ROOT/${kind%%:*}"
+	done
+	mkdir -p "$PKG_ROOT/target/bin"
+	ln -sfn "$PKG_ROOT" "$DSM_PKG_ROOT"
 	cp "$PACKAGE_SCRIPTS"/* "$PKG_ROOT/scripts/"
 	cp "$TEST_DIR/fixtures/package.env" "$PKG_ROOT/scripts/"
 	cp "$(command -v bash)" "$PKG_ROOT/target/bin/$FIXTURE_ID"
@@ -74,16 +87,16 @@ setup_package_tree() {
 	cp "$PKG_ROOT/target/bin/ffmpeg" "$PKG_ROOT/target/bin/ffprobe"
 	chmod 0755 "$PKG_ROOT/target/bin/"*
 
-	PKG_LOG=$PKG_ROOT/var/$FIXTURE_ID.log
-	PKG_PID=$PKG_ROOT/var/$FIXTURE_ID.pid
+	PKG_LOG=$DSM_PKG_ROOT/var/$FIXTURE_ID.log
+	PKG_PID=$DSM_PKG_ROOT/var/$FIXTURE_ID.pid
 	TEMP_LOGFILE=$BATS_TEST_TMPDIR/synopkg-temp.log
 	FAKE_STATE_DIR=$BATS_TEST_TMPDIR/fake
 	FOREIGN_PIDS=()
 	mkdir -p "$FAKE_STATE_DIR"
 
 	export SYNOPKG_PKGNAME=$FIXTURE_ID SYNOPKG_PKG_STATUS=START
-	export SYNOPKG_PKGDEST=$PKG_ROOT/target SYNOPKG_PKGVAR=$PKG_ROOT/var
-	export SYNOPKG_PKGTMP=$PKG_ROOT/tmp SYNOPKG_PKGHOME=$PKG_ROOT/home
+	export SYNOPKG_PKGDEST=$DSM_PKG_ROOT/target SYNOPKG_PKGVAR=$DSM_PKG_ROOT/var
+	export SYNOPKG_PKGTMP=$DSM_PKG_ROOT/tmp SYNOPKG_PKGHOME=$DSM_PKG_ROOT/home
 	export SYNOPKG_TEMP_LOGFILE=$TEMP_LOGFILE
 	export PKG_TEST_VOLUMES_ROOT=$BATS_TEST_TMPDIR
 	export BASH_ENV=$TEST_DIR/fake-server.bash FAKE_BINARY_NAME=$FIXTURE_ID FAKE_STATE_DIR

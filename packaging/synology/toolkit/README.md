@@ -138,6 +138,7 @@ The staged project that `SynoBuildConf/*` and `INFO.sh` expect:
 | `prebuilt/bin/<ID>`, `prebuilt/bin/ffmpeg`, `prebuilt/bin/ffprobe` | static ELF executables of the family | `package.tgz`: `bin/*`, 0755 |
 | `prebuilt/share/licenses/**` | licence files and source notices (at least one file) | `package.tgz`: `share/licenses/**`, files 0644, directories 0755 |
 | `prebuilt/port_conf/<ID>.sc` | firewall service file (rendered `package/port/service.sc`), required | `package.tgz`: `port_conf/<ID>.sc`, 0644 (`conf/resource` `port-config`) |
+| `prebuilt/ui/config`, `prebuilt/ui/images/<ID>_<size>.png` | DSM main menu entry (application config, icons 16-256 px); optional | `package.tgz`: `ui/**`, files 0644, directories 0755; INFO `dsmuidir="ui"` when present |
 | `scripts/`, `conf/` | package scripts (with `common.sh` and the generated `package.env`) and `privilege`/`resource` | `scripts/*` 0755, `conf/*` 0644 |
 | `LICENSE`, `PACKAGE_ICON.PNG`, `PACKAGE_ICON_256.PNG` | optional; a note is logged when missing | 0644 |
 | `WIZARD_UIFILES/` | optional | `*.sh` 0755, other files 0644 |
@@ -184,8 +185,10 @@ platforms (`include/toolkit.config`).
 `e4a8d54209a31cef21b7636ad58b1b0e86b5b201` ("Release for DSM7.2.2", 2025-05-28, the branch head
 on 2026-10-31); the commit is pinned in one place, `PKGSCRIPTS_COMMIT` in `run.sh`. It verifies
 that the commit is an ancestor of `origin/DSM7.2` and restores the commit when the clone has
-local changes (`git diff --quiet HEAD`). The deploy marker records the toolkit commit; an
-environment deployed by another commit is deployed again. The repository's default branch is now
+local changes or untracked files (`git status --porcelain --untracked-files=all`; ignored files
+such as `__pycache__` stay), with `checkout --force` and `clean -d`. The deploy marker records
+the toolkit commit; an environment deployed by another commit is deployed again. The
+repository's default branch is now
 `DSM7.4`; `DSM7.3` and `DSM7.4` exist but are out of scope (DSM 7.2 minimum, ADR 0026). The
 platform environments are versioned separately on Synology's server: the 7.2 tarballs date
 from 2024-06-06 and report DSM 7.2.2 build 72723 (`PkgVersion`, INFO `toolkit_version`).
@@ -400,7 +403,7 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (47 cases on a synthetic SPK of fixture.bash) and shellcheck
+# tests of the script (53 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -414,7 +417,7 @@ inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <
 
 One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line; exit
 0 when nothing failed, 1 on any failure, 2 on a usage error or a missing tool. An archive tar
-cannot list or extract is a failure (exit 1), not a usage error. The 71 checks per SPK: the
+cannot list or extract is a failure (exit 1), not a usage error. The 88 checks per SPK: the
 outer archive is an uncompressed tar (GNU or ustar/pax headers; the header walk reads GNU
 base-256 sizes big-endian); before anything is extracted, each archive's listing holds only
 files and directories (no symbolic or hard link, device or FIFO), no absolute name and no `..`
@@ -427,8 +430,8 @@ environment: `SynoBuildConf`, `build.env`, `prebuilt/`, hidden files, debug file
 `$` or backquotes, with `package`, `displayname`, `version` (`a.b.c-build`, every number at most
 2^31-1), `beta="yes"` exactly when the build number is below 9000, `arch` of the family
 (`armv7 armada38x monaco` for armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default
-8460), `adminprotocol="http"`, no `adminurl`, `description`, `description_ger`, `maintainer`,
-`support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none of `thirdparty`,
+8460), `adminprotocol="http"`, no `adminurl`, `dsmuidir="ui"`, `description`,
+`description_ger`, `maintainer`, `support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none of `thirdparty`,
 `startable`, `changelog`; `package.tgz` is xz, holds the expected members and `bin/<id>`,
 `bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the family's class and machine
 without a program interpreter, with a GNU ABI tag at most the family's oldest DSM 7.2 kernel
@@ -441,9 +444,14 @@ under `kernelsim`), so a release inspection passes with these two warnings;
 `SOURCE.txt` has one `Status:` and one `Licence:` line plus at least one licence file;
 `port_conf/<id>.sc` has the section, `title`, `desc`, `port_forward="no"` and
 `dst.ports="<port>/tcp"` and `conf/resource` names it; the seven lifecycle scripts start with
-`#!/bin/sh`; `scripts/*`, INFO, `conf/*`, the wizard files and the service file have no CR;
-every JSON member parses and `conf/privilege` runs as `package` without `root`; the icons are
-PNGs of 64 x 64 and 256 x 256 pixels; no text member holds an unreplaced `@NAME@` token.
+`#!/bin/sh`; `scripts/*`, INFO, `conf/*`, the wizard files, the service file and `ui/config`
+have no CR; every JSON member parses and `conf/privilege` runs as `package` without `root`; the
+icons are PNGs of 64 x 64 and 256 x 256 pixels; the DSM main menu entry (`ui/` of `package.tgz`,
+INFO `dsmuidir`): `ui/config` parses, has `.url` as its only key with exactly one entry whose
+`type` is `url`, `title` INFO `displayname`, `protocol` `http`, `port` INFO `adminport`, `url`
+`/`, `allUsers` `true` and `icon` `images/<id>_{0}.png`, and `ui/images/<id>_<n>.png` are PNGs of
+n x n pixels for n = 16, 24, 32, 48, 64, 72, 256; no text member (icons excluded) holds an
+unreplaced `@NAME@` token.
 
 **Interim rule** (ADR 0026 Notes): while `SOURCE.txt` says `Status: interim` and `--release` is
 not given, the FFmpeg findings (interim status, a `+nonfree` licence, a dynamically linked

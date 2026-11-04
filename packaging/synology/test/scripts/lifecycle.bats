@@ -265,6 +265,21 @@ case_postinst_fails_when_config_cannot_be_written() {
 	[[ ! -e $CONFIG ]] || fail "a config.yaml was written"
 }
 
+case_postinst_speaks_german() {
+	export SYNOPKG_PKG_STATUS=INSTALL SYNOPKG_DSM_LANGUAGE=ger wizard_media_share=video
+	mkdir "$CONFIG.new"
+	run_lifecycle postinst
+	assert_failure 1
+	assert_file_line "$TEMP_LOGFILE" "$CONFIG konnte nicht geschrieben werden"
+	rmdir "$CONFIG.new"
+	: >"$TEMP_LOGFILE"
+	rm "$SYNOPKG_PKGTMP"
+	run_lifecycle postinst
+	assert_failure 1
+	assert_file_line "$TEMP_LOGFILE" \
+		"Die Verzeichnisse von $FIXTURE_DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGTMP konnten nicht angelegt werden"
+}
+
 case_postinst_fails_without_dsm_variables() {
 	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
 	unset SYNOPKG_PKGVAR
@@ -310,20 +325,72 @@ case_postuninst_keeps_data_for_every_other_combination() {
 case_postuninst_never_deletes_outside_the_package_directories() {
 	fill_user_data
 	export SYNOPKG_PKG_STATUS=UNINSTALL wizard_delete_data=true
-	local before directory home=$SYNOPKG_PKGHOME
-	mkdir -p "$BATS_TEST_TMPDIR/elsewhere"
+	local before directory home=$SYNOPKG_PKGHOME volume=$BATS_TEST_TMPDIR/volume1
+	mkdir -p "$BATS_TEST_TMPDIR/elsewhere" "$volume/@apphome/other" "$volume/@appdata/other"
 	echo precious >"$BATS_TEST_TMPDIR/elsewhere/file"
+	ln -s "$volume/@apphome/other" "$volume/@apphome/other-link"
 	before=$(user_data_snapshot)
-	for directory in "$BATS_TEST_TMPDIR/elsewhere" / "$PKG_ROOT/var/../../.." "$PKG_ROOT/missing"; do
+	# Not the package's home: another place, ".." and "." elements, a path outside DSM's
+	# /var/packages, the var directory of the package, another package, a share.
+	for directory in "$BATS_TEST_TMPDIR/elsewhere" / "$PKG_ROOT/var/../../.." "$PKG_ROOT/missing" \
+		"$DSM_PKG_ROOT/home/." "$DSM_PKG_ROOT/home/../home" "$PKG_ROOT/home" "$DSM_PKG_ROOT/var" \
+		"$volume/@appdata/$FIXTURE_ID" "$volume/@apphome/other" "$DSM_PACKAGES_DIR/other/home" \
+		"$DSM_PACKAGES_DIR//$FIXTURE_ID/home" "$volume/video" "$DSM_PKG_ROOT/home/data"; do
 		export SYNOPKG_PKGHOME=$directory
+		: >"$TEMP_LOGFILE"
 		run_lifecycle postuninst
 		assert_failure 1
 		assert_stderr_contains "not deleting $directory"
 		assert_file_line "$TEMP_LOGFILE" "$stderr"
 	done
+	# The right path, but its link leads to a share, another package or another directory.
 	export SYNOPKG_PKGHOME=$home
+	for directory in "$volume/video" "$volume/@apphome/other" "$volume/@apphome/other-link" \
+		"$volume/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/elsewhere"; do
+		ln -sfn "$directory" "$PKG_ROOT/home"
+		run_lifecycle postuninst
+		assert_failure 1
+		assert_stderr_contains "not deleting $home"
+	done
+	ln -sfn "$volume/@apphome/$FIXTURE_ID" "$PKG_ROOT/home"
 	assert_equal "$(user_data_snapshot)" "$before"
 	assert_equal "$(cat "$BATS_TEST_TMPDIR/elsewhere/file")" precious
+}
+
+# DSM's shapes as they may arrive: the link below /var/packages (with a trailing slash) or the
+# real directory on the volume.
+case_postuninst_accepts_every_dsm_shape() {
+	local volume=$BATS_TEST_TMPDIR/volume1 shape
+	export SYNOPKG_PKG_STATUS=UNINSTALL wizard_delete_data=true
+	for shape in links slashes volume; do
+		fill_user_data
+		case $shape in
+		slashes) export SYNOPKG_PKGVAR=$DSM_PKG_ROOT/var/ SYNOPKG_PKGHOME=$DSM_PKG_ROOT/home/ ;;
+		volume) export SYNOPKG_PKGVAR=$volume/@appdata/$FIXTURE_ID SYNOPKG_PKGHOME=$volume/@apphome/$FIXTURE_ID ;;
+		esac
+		run_lifecycle postuninst
+		assert_success
+		assert_equal "$(ls -A "$volume/@appdata/$FIXTURE_ID")" ""
+		assert_equal "$(ls -A "$volume/@apphome/$FIXTURE_ID")" ""
+		assert_equal "$(cat "$volume/video/movie.mkv")" movie
+	done
+}
+
+case_postuninst_speaks_german() {
+	fill_user_data
+	export SYNOPKG_PKG_STATUS=UNINSTALL wizard_delete_data=true SYNOPKG_DSM_LANGUAGE=ger
+	export SYNOPKG_PKGHOME=/
+	run_lifecycle postuninst
+	assert_failure 1
+	assert_file_line "$TEMP_LOGFILE" \
+		"/ wird nicht gelöscht: es ist nicht das home-Verzeichnis des Pakets $FIXTURE_ID; die Daten von $FIXTURE_DISPLAY_NAME bleiben erhalten"
+	export SYNOPKG_PKGHOME=$DSM_PKG_ROOT/home
+	: >"$TEMP_LOGFILE"
+	fake_failing_command rm '*/data'
+	run_lifecycle postuninst
+	assert_failure 1
+	assert_file_line "$TEMP_LOGFILE" \
+		"Die Daten von $FIXTURE_DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGHOME konnten nicht vollständig gelöscht werden"
 }
 
 case_postuninst_reports_data_it_cannot_delete() {
@@ -332,7 +399,8 @@ case_postuninst_reports_data_it_cannot_delete() {
 	fake_failing_command rm '*/data'
 	run_lifecycle postuninst
 	assert_failure 1
-	assert_stderr_contains "cannot remove $SYNOPKG_PKGVAR/data"
+	# Named by the resolved directory, which is where the deletion happens.
+	assert_stderr_contains "cannot remove $(cd -P "$SYNOPKG_PKGVAR" && pwd -P)/data"
 	assert_file_line "$TEMP_LOGFILE" "cannot delete all data of $FIXTURE_DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGHOME"
 	[[ ! -e $CONFIG ]] || fail "the deletable rest was kept"
 }
@@ -453,6 +521,16 @@ case_share_name_check_follows_dsm_rules() {
 	done
 }
 
+# The wizard's JavaScript regex counts UTF-16 code units; preinst must count the same way.
+case_name_length_counts_utf16_units() {
+	local entry
+	for entry in a:1 ä:1 日本語:3 😀:2 a😀b:4 "":0; do
+		run_common pkg_name_length "${entry%:*}"
+		assert_success
+		assert_output "${entry##*:}"
+	done
+}
+
 case_yaml_quote_escapes_backslash_and_double_quote() {
 	run_common pkg_yaml_quote 'a"b\c'
 	assert_success
@@ -464,17 +542,35 @@ case_yaml_quote_escapes_backslash_and_double_quote() {
 }
 
 case_package_directory_check_accepts_only_package_paths() {
-	mkdir -p "$BATS_TEST_TMPDIR/appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/demonstration"
-	local directory
-	for directory in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGHOME" "$BATS_TEST_TMPDIR/appdata/$FIXTURE_ID"; do
-		run_common pkg_is_package_directory "$directory"
+	local volume=$BATS_TEST_TMPDIR/volume1 directory real_var real_home
+	real_var=$(cd -P "$volume/@appdata/$FIXTURE_ID" && pwd -P)
+	real_home=$(cd -P "$volume/@apphome/$FIXTURE_ID" && pwd -P)
+	mkdir -p "$BATS_TEST_TMPDIR/demonstration" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x"
+	touch "$PKG_ROOT/keep"
+	for directory in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGVAR/" "$volume/@appdata/$FIXTURE_ID"; do
+		run_common pkg_resolve_package_directory var "$directory"
 		assert_success
+		assert_output "$real_var"
+	done
+	for directory in "$SYNOPKG_PKGHOME" "$volume/@apphome/$FIXTURE_ID/"; do
+		run_common pkg_resolve_package_directory home "$directory"
+		assert_success
+		assert_output "$real_home"
 	done
 	for directory in / '' relative/demo/var "$BATS_TEST_TMPDIR" "$BATS_TEST_TMPDIR/demonstration" \
-		"$SYNOPKG_PKGVAR/../../.." "$SYNOPKG_PKGVAR/./missing" "$PKG_ROOT/missing" "$PKG_ROOT/keep"; do
-		run_common pkg_is_package_directory "$directory"
-		[[ $status -eq 1 ]] || fail "'$directory' passed as a package directory"
+		"$SYNOPKG_PKGVAR/../../.." "$SYNOPKG_PKGVAR/./missing" "$PKG_ROOT/missing" "$PKG_ROOT/keep" \
+		"$PKG_ROOT/var" "$SYNOPKG_PKGHOME" "$SYNOPKG_PKGVAR//" "$SYNOPKG_PKGVAR/data" "$SYNOPKG_PKGTMP" \
+		"$SYNOPKG_PKGDEST" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x" \
+		"$volume/@apptemp/$FIXTURE_ID" "$DSM_PACKAGES_DIR/$FIXTURE_ID" "/var/packages/$FIXTURE_ID/var/." \
+		"$volume/@appdata/$FIXTURE_ID/../$FIXTURE_ID"; do
+		run_common pkg_resolve_package_directory var "$directory"
+		[[ $status -eq 1 ]] || fail "'$directory' passed as the package's var directory"
+		assert_output ''
 	done
+	# A var link that leads to the home directory resolves to the wrong kind.
+	ln -sfn "$volume/@apphome/$FIXTURE_ID" "$PKG_ROOT/var"
+	run_common pkg_resolve_package_directory var "$SYNOPKG_PKGVAR"
+	assert_failure 1
 }
 
 register_cases \
@@ -492,10 +588,13 @@ register_cases \
 	postinst_keeps_existing_directories \
 	postinst_rejects_invalid_share_name \
 	postinst_fails_when_config_cannot_be_written \
+	postinst_speaks_german \
 	postinst_fails_without_dsm_variables \
 	postuninst_deletes_data_only_when_asked_on_uninstall \
 	postuninst_keeps_data_for_every_other_combination \
 	postuninst_never_deletes_outside_the_package_directories \
+	postuninst_accepts_every_dsm_shape \
+	postuninst_speaks_german \
 	postuninst_reports_data_it_cannot_delete \
 	postuninst_without_dsm_variables_deletes_nothing \
 	other_scripts_keep_everything \
@@ -503,6 +602,7 @@ register_cases \
 	upgrade_order_keeps_user_data \
 	uninstall_keeping_data_then_reinstall \
 	share_name_check_follows_dsm_rules \
+	name_length_counts_utf16_units \
 	yaml_quote_escapes_backslash_and_double_quote \
 	package_directory_check_accepts_only_package_paths
 

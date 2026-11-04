@@ -25,6 +25,11 @@
 #   PKG_TEST_START_TIMEOUT_SECONDS  replaces START_TIMEOUT_SECONDS
 #   PKG_TEST_STOP_TIMEOUT_SECONDS   replaces STOP_TIMEOUT_SECONDS
 #   PKG_TEST_UPTIME_FILE            replaces UPTIME_FILE (a path)
+#   PKG_TEST_LOCK_WAIT_SECONDS      replaces LOCK_WAIT_SECONDS
+#
+# start, stop and status read and replace the PID file under an action lock (take_lock), since
+# DSM does not document that it serializes package actions: a status never removes the PID file
+# a concurrent start has just written, and two starts never launch two servers.
 set -eu
 
 # Seconds start waits for a healthy server. A server that is alive but not healthy after that
@@ -49,6 +54,11 @@ readonly KILL_WAIT_SECONDS=5
 readonly LOG_ROTATE_BYTES=10485760
 # Lines of the server log shown in Package Center when the server exits during start.
 readonly LOG_TAIL_LINES=20
+# Seconds an action waits for the action lock of another one. The lock is held only while the
+# PID file is read and replaced, at most the exec wait of start (EXEC_WAIT_TENTHS) and a few
+# moments; a lock held longer belongs to a hanging script or a reused PID and is broken, so the
+# lock can delay an action but never block it.
+readonly LOCK_WAIT_SECONDS=10
 
 # Exit codes of the guide ("scripts" - "start-stop-status").
 readonly EXIT_OK=0 EXIT_FAILURE=1 EXIT_NOT_RUNNING=3 EXIT_UNKNOWN=4 EXIT_BROKEN=150
@@ -119,11 +129,76 @@ read_pid_file() {
 	printf '%s\n' "$pid_line"
 }
 
+# lock_holder prints the PID recorded in the action lock, or nothing.
+lock_holder() {
+	lock_pid=
+	read -r lock_pid 2>/dev/null <"$PKG_LOCK_DIR/pid" || :
+	printf '%s\n' "$lock_pid"
+}
+
+# lock_is_stale succeeds when the lock must be broken: its holder $1 has exited (a killed
+# script leaves its lock behind) or the wait for it has run out.
+lock_is_stale() {
+	if [ "$lock_waited_tenths" -ge "$lock_wait_tenths" ]; then
+		return 0
+	fi
+	case "$1" in
+	'' | *[!0-9]*) return 1 ;; # being taken: mkdir done, PID not written yet
+	esac
+	! process_alive "$1"
+}
+
+# break_lock removes the lock of holder $1, unless another action has replaced it meanwhile.
+# Without recursion: the lock holds only the pid file.
+break_lock() {
+	pkg_error "breaking the action lock of pid '$1' ($PKG_LOCK_DIR)"
+	if [ "$(lock_holder)" = "$1" ]; then
+		rm -f "$PKG_LOCK_DIR/pid" 2>/dev/null || :
+		rmdir "$PKG_LOCK_DIR" 2>/dev/null || return 1
+	fi
+}
+
+# take_lock takes the action lock: mkdir is atomic, and the lock records this script's PID.
+# When the lock cannot be created at all (no tmp directory) or a broken lock cannot be removed,
+# the action runs without it, as it would if DSM serialized the actions.
+take_lock() {
+	lock_waited_tenths=0
+	until mkdir "$PKG_LOCK_DIR" 2>/dev/null; do
+		if [ ! -d "$PKG_LOCK_DIR" ]; then
+			pkg_error "cannot create the action lock $PKG_LOCK_DIR; going on without it"
+			return 0
+		fi
+		lock_pid=$(lock_holder)
+		if lock_is_stale "$lock_pid"; then
+			break_lock "$lock_pid" || return 0
+			lock_waited_tenths=0
+			continue
+		fi
+		pause_briefly
+		lock_waited_tenths=$((lock_waited_tenths + brief_pause_tenths))
+	done
+	lock_taken=yes
+	printf '%s\n' "$$" >"$PKG_LOCK_DIR/pid" || :
+}
+
+# release_lock removes the lock this script holds. It runs on every exit (trap), and a lock
+# that another action has broken and taken over meanwhile is left alone.
+release_lock() {
+	if [ "$lock_taken" != yes ]; then
+		return 0
+	fi
+	lock_taken=no
+	if [ "$(lock_holder)" = "$$" ]; then
+		rm -f "$PKG_LOCK_DIR/pid" 2>/dev/null || :
+		rmdir "$PKG_LOCK_DIR" 2>/dev/null || :
+	fi
+}
+
 # running_pid prints the PID of the running server from the PID file. A PID file that names no
-# server process (dead, reused PID, garbage) is removed. start writes the file only once the
-# server binary runs (wait_for_exec) and replaces it in one rename, so a concurrent start's
-# fresh file is never taken for stale; the content is read again right before the removal for
-# the same reason.
+# server process (dead, reused PID, garbage) is removed; callers hold the action lock, so no
+# concurrent start replaces the file in between. start also writes the file only once the
+# server binary runs (wait_for_exec) and replaces it in one rename, and the content is read
+# again right before the removal, which keeps a fresh file safe when the lock was broken.
 running_pid() {
 	pid_from_file=$(read_pid_file)
 	if is_server_process "$pid_from_file"; then
@@ -354,6 +429,8 @@ start_server() {
 
 action_start() {
 	require_binary || exit "$EXIT_FAILURE"
+	# Held until the PID file names the new server: a second start waits and then finds it.
+	take_lock
 	if existing_pid=$(running_pid); then
 		echo "$DISPLAY_NAME is already running (pid $existing_pid)"
 		exit "$EXIT_OK"
@@ -363,6 +440,7 @@ action_start() {
 	rotate_log
 	pkg_export_server_environment
 	start_server
+	release_lock
 	echo "starting $DISPLAY_NAME (pid $server_pid)"
 	health=0
 	wait_for_health "$server_pid" || health=$?
@@ -390,10 +468,14 @@ wait_for_exit() {
 }
 
 action_stop() {
+	take_lock
 	if ! stop_pid=$(running_pid); then
 		echo "$DISPLAY_NAME is not running"
 		exit "$EXIT_OK"
 	fi
+	# Not held while the server shuts down (up to STOP_TIMEOUT_SECONDS): a status meanwhile
+	# still finds the stopping server.
+	release_lock
 	echo "stopping $DISPLAY_NAME (pid $stop_pid)"
 	kill -TERM "$stop_pid" 2>/dev/null || :
 	if ! wait_for_exit "$stop_pid" "$stop_timeout_seconds"; then
@@ -404,12 +486,17 @@ action_stop() {
 			exit "$EXIT_FAILURE"
 		fi
 	fi
-	rm -f "$PKG_PID_FILE"
+	# Only the file of the stopped server: a start after the shutdown may have written its own.
+	take_lock
+	if [ "$(read_pid_file)" = "$stop_pid" ]; then
+		rm -f "$PKG_PID_FILE"
+	fi
 	exit "$EXIT_OK"
 }
 
 action_status() {
 	require_binary || exit "$EXIT_BROKEN"
+	take_lock
 	if running_pid >/dev/null; then
 		exit "$EXIT_OK"
 	fi
@@ -444,6 +531,13 @@ pkg_derive_paths
 start_timeout_seconds=$(seconds_setting "${PKG_TEST_START_TIMEOUT_SECONDS:-}" "$START_TIMEOUT_SECONDS")
 stop_timeout_seconds=$(seconds_setting "${PKG_TEST_STOP_TIMEOUT_SECONDS:-}" "$STOP_TIMEOUT_SECONDS")
 uptime_file=${PKG_TEST_UPTIME_FILE:-$UPTIME_FILE}
+lock_wait_seconds=$(seconds_setting "${PKG_TEST_LOCK_WAIT_SECONDS:-}" "$LOCK_WAIT_SECONDS")
+lock_wait_tenths=$((lock_wait_seconds * 10))
+lock_taken=no
+# The lock goes with the script however it ends; a signal ends it through exit, which runs the
+# EXIT trap in every shell.
+trap release_lock EXIT
+trap 'exit 1' HUP INT TERM
 
 case "$ACTION" in
 start) action_start ;;

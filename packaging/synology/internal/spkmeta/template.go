@@ -11,6 +11,9 @@ import (
 // DSM's wizard and resource templating and ${...} to sh, so neither is touched.
 const placeholderPattern = `@[A-Z][A-Z0-9_]*@`
 
+// placeholderFormat is placeholderPattern, compiled once.
+var placeholderFormat = regexp.MustCompile(placeholderPattern)
+
 // asciiOnlyDirectory holds the toolkit files the chroot's Python 3.4 reads with an ASCII
 // locale; one non-ASCII byte silently empties the dependency list (ADR 0026 Notes).
 const asciiOnlyDirectory = "SynoBuildConf/"
@@ -29,11 +32,10 @@ func (build Build) RenderTemplate(name, content string) (string, error) {
 	}
 
 	values := build.templateValues()
-	tokenPattern := regexp.MustCompile(placeholderPattern)
 	lines := strings.Split(content, "\n")
 
 	for index, line := range lines {
-		rendered, err := replaceTokens(line, tokenPattern, values)
+		rendered, err := replaceTokens(line, placeholderFormat, values)
 		if err != nil {
 			return "", fmt.Errorf("render %s line %d: %w", name, index+1, err)
 		}

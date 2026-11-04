@@ -283,18 +283,22 @@ case_start_records_pid_only_after_exec() {
 		>"$BATS_TEST_TMPDIR/start.out" 2>"$BATS_TEST_TMPDIR/start.err" 3>&- &
 	local start_pid=$!
 	eventually has_child_process "$start_pid"
+	# A status during the exec window waits for start's action lock instead of judging the
+	# PID file, so it reports the server that start records.
+	"${shell_command[@]}" "$PKG_ROOT/scripts/start-stop-status" status \
+		>"$BATS_TEST_TMPDIR/status.out" 2>&1 3>&- &
+	local status_pid=$!
 	sleep 0.5
-	for _ in 1 2 3; do
-		run_sss status
-		assert_failure 3
-		[[ ! -e $PKG_PID ]] || fail "the PID file exists before the server binary runs"
-	done
+	process_running "$status_pid" || fail "status did not wait for start: $(cat "$BATS_TEST_TMPDIR/status.out")"
+	[[ ! -e $PKG_PID ]] || fail "the PID file exists before the server binary runs"
 
 	cat "$PKG_LOG" >/dev/null 3>&- &
 	track_foreign_process "$!"
-	local start_status=0
+	local start_status=0 status_status=0
 	wait "$start_pid" || start_status=$?
 	assert_equal "$start_status" 0
+	wait "$status_pid" || status_status=$?
+	assert_equal "$status_status" 0
 	assert_equal "$(pid_from_file)" "$(cat "$FAKE_STATE_DIR/server.starts")"
 	run_sss status
 	assert_success
@@ -489,6 +493,97 @@ case_status_removes_garbage_pid_file() {
 	done
 }
 
+# --- action lock -----------------------------------------------------------------------------
+
+LOCK_DIR_NAME=$FIXTURE_ID.lock
+
+# hold_lock creates the action lock as a running action would, recorded for process $1.
+hold_lock() {
+	mkdir "$SYNOPKG_PKGTMP/$LOCK_DIR_NAME"
+	echo "$1" >"$SYNOPKG_PKGTMP/$LOCK_DIR_NAME/pid"
+}
+
+assert_no_lock() {
+	[[ ! -e $SYNOPKG_PKGTMP/$LOCK_DIR_NAME ]] || fail "the action lock is left: $(ls -la "$SYNOPKG_PKGTMP/$LOCK_DIR_NAME")"
+}
+
+# Starts at the same moment: the lock lets one launch the server, the others find it running.
+case_concurrent_starts_launch_one_server() {
+	local -a shell_command pids
+	local pid index
+	read -ra shell_command <<<"$CASE_SHELL"
+	for index in 1 2 3; do
+		"${shell_command[@]}" "$PKG_ROOT/scripts/start-stop-status" start \
+			>"$BATS_TEST_TMPDIR/start-$index.out" 2>&1 &
+		pids+=("$!")
+	done
+	for index in "${!pids[@]}"; do
+		wait "${pids[index]}" || fail "start $((index + 1)) failed: $(cat "$BATS_TEST_TMPDIR/start-$((index + 1)).out")"
+	done
+	assert_equal "$(server_starts)" 1
+	assert_equal "$(pid_from_file)" "$(cat "$FAKE_STATE_DIR/server.starts")"
+	assert_no_lock
+	run_sss status
+	assert_success
+}
+
+case_actions_release_the_lock() {
+	local action
+	for action in status start status stop status; do
+		run_sss "$action"
+		assert_no_lock
+	done
+}
+
+case_start_waits_for_the_lock_of_another_action() {
+	start_foreign_process
+	hold_lock "$FOREIGN_PID"
+	local started
+	started=$(monotonic_centiseconds)
+	(sleep 1 && rm -f "$SYNOPKG_PKGTMP/$LOCK_DIR_NAME/pid" && rmdir "$SYNOPKG_PKGTMP/$LOCK_DIR_NAME") &
+	run_sss start
+	assert_success
+	assert_elapsed_at_least "$started" 1 "start did not wait for the lock"
+	assert_equal "$(server_starts)" 1
+	assert_no_lock
+}
+
+case_lock_of_an_exited_action_is_broken() {
+	hold_lock "$(dead_pid)"
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	assert_elapsed_below "$started" 3 "status waited for the lock of an exited action"
+	assert_stderr_contains "breaking the action lock"
+	assert_no_lock
+}
+
+case_lock_held_too_long_is_broken() {
+	start_foreign_process
+	hold_lock "$FOREIGN_PID"
+	export PKG_TEST_LOCK_WAIT_SECONDS=1
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss start
+	assert_success
+	assert_elapsed_at_least "$started" 1 "start did not wait for the lock"
+	assert_stderr_contains "breaking the action lock of pid '$FOREIGN_PID'"
+	assert_equal "$(server_starts)" 1
+	assert_no_lock
+	process_running "$FOREIGN_PID" || fail "breaking the lock touched its holder"
+}
+
+# A lock that cannot be created (here: tmp is missing) never blocks status or stop.
+case_actions_go_on_without_a_lock() {
+	rm "$SYNOPKG_PKGTMP"
+	run_sss status
+	assert_failure 3
+	assert_stderr_contains "cannot create the action lock"
+	run_sss stop
+	assert_success
+}
+
 case_status_reports_missing_binary_as_broken() {
 	rm "$SYNOPKG_PKGDEST/bin/$FIXTURE_ID"
 	run_sss status
@@ -553,7 +648,7 @@ case_missing_package_env_marks_package_broken() {
 case_invalid_package_env_marks_package_broken() {
 	local line
 	for line in "ENV_PREFIX='demo'" "ENV_PREFIX='DEMO-X'" "ID='../demo'" "ID=''" "ID='de_mo'" \
-		"ID='Demo'" "DISPLAY_NAME=''"; do
+		"ID='Demo'" "ID='demo-'" "ID='de..mo'" "ID='de.-mo'" "DISPLAY_NAME=''"; do
 		cp "$TEST_DIR/fixtures/package.env" "$PKG_ROOT/scripts/package.env"
 		echo "$line" >>"$PKG_ROOT/scripts/package.env"
 		run_sss status
@@ -650,6 +745,12 @@ register_cases \
 	status_removes_pid_file_of_dead_process \
 	status_removes_pid_file_of_reused_pid \
 	status_removes_garbage_pid_file \
+	concurrent_starts_launch_one_server \
+	actions_release_the_lock \
+	start_waits_for_the_lock_of_another_action \
+	lock_of_an_exited_action_is_broken \
+	lock_held_too_long_is_broken \
+	actions_go_on_without_a_lock \
 	status_reports_missing_binary_as_broken \
 	status_reports_non_executable_binary_as_broken \
 	prestart_prestop_and_log_succeed \

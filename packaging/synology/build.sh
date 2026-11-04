@@ -9,13 +9,15 @@
 #                            against the version scheme of spkmeta before anything runs
 #   --release                release build: refuses interim or non-free FFmpeg builds, FFmpeg
 #                            binaries that differ from the pins of ffmpeg/sources.lock, spkstage
-#                            warnings, the default version and (with git) a dirty working tree
-#                            (also SPK_BUILD_MODE=release; the default on CI hosts)
+#                            warnings, the default version, a failing git, an empty revision and
+#                            a dirty working tree (also SPK_BUILD_MODE=release; the default on
+#                            CI hosts); without git installed it needs --revision and does not
+#                            check the tree
 #   --test                   local test build (also SPK_BUILD_MODE=test; the default elsewhere):
 #                            an interim or unpinned FFmpeg is packed with a loud warning and
 #                            dist/ gets NOT-FOR-RELEASE.txt
-#   --revision REV           git commit recorded in build-info.txt (default: git rev-parse HEAD,
-#                            empty without git)
+#   --revision REV           git commit recorded in build-info.txt (default: git rev-parse HEAD;
+#                            a test build without git records none)
 #   --package-revision N     packaging-only revision 0-9 (default 0)
 #   --source-date-epoch N    file time of the staged projects (default: $SOURCE_DATE_EPOCH, else
 #                            the commit time of HEAD, else 0)
@@ -115,14 +117,39 @@ host_path() {
 	if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
 }
 
+have_git() { command -v git >/dev/null 2>&1; }
+
 # Runs git in the repository; fails without git. Git for Windows is a native program and needs
 # the C:/... form, which MSYS_NO_PATHCONV would otherwise withhold.
 repo_git() {
-	command -v git >/dev/null 2>&1 || return 1
+	have_git || return 1
 	git -C "$(host_path "$repo_root")" "$@" 2>/dev/null
 }
 
-require_value() { [ "$#" -ge 2 ] && [ -n "$2" ] || die "$1 needs a value"; }
+# Runs git in the repository for a release check and prints its output; when git fails (for
+# example "detected dubious ownership") the release stops with git's own message instead of
+# skipping the check. Call it as `value="$(release_git ...)" || exit 1`: die ends only the
+# command substitution.
+release_git() {
+	local output error_file status=0
+	error_file="$(mktemp)"
+	output="$(git -C "$(host_path "$repo_root")" "$@" 2>"$error_file")" || status=$?
+	if [ "$status" -ne 0 ]; then
+		local message
+		message="$(head -n 3 "$error_file")"
+		rm -f "$error_file"
+		die "release refused: git $* failed in $repo_root (exit $status): $message"
+	fi
+	rm -f "$error_file"
+	printf '%s' "$output"
+}
+
+# An option value must not be empty and must not look like the next option, which a missing
+# value would otherwise swallow (--revision --release).
+require_value() {
+	[ "$#" -ge 2 ] && [ -n "$2" ] || die "$1 needs a value"
+	[[ "$2" != -* ]] || die "$1 needs a value, not the option '$2'"
+}
 
 parse_args() {
 	local positional=()
@@ -170,7 +197,8 @@ resolve_inputs() {
 	[[ "$version" =~ $VERSION_PATTERN ]] ||
 		die "version '$version' is not <major>.<minor>.<patch>[-alpha.N|-beta.N|-rc.N] or $DEV_VERSION"
 	[[ "$package_revision" =~ ^[0-9]$ ]] || die "--package-revision must be 0-9, not '$package_revision'"
-	if [ "$revision_set" = no ]; then revision="$(repo_git rev-parse HEAD)" || revision=""; fi
+	# A release reads the commit in check_release_inputs, where a failing git stops it.
+	if [ "$revision_set" = no ] && [ "$mode" = test ]; then revision="$(repo_git rev-parse HEAD)" || revision=""; fi
 	[ -n "$source_date_epoch" ] || source_date_epoch="$(repo_git log -1 --format=%ct)" || source_date_epoch=""
 	source_date_epoch="${source_date_epoch:-0}"
 	[[ "$source_date_epoch" =~ ^[0-9]+$ ]] || die "SOURCE_DATE_EPOCH must be seconds since 1970, not '$source_date_epoch'"
@@ -220,13 +248,23 @@ interim_banner() {
 		"==========================================================================================" >&2
 }
 
-# A release must be rebuildable from its commit, so uncommitted or untracked files are refused
-# (dist/ is ignored by packaging/synology/.gitignore). Without git or outside a checkout there
-# is nothing to compare against.
-check_clean_tree() {
-	local changes
-	repo_git rev-parse --is-inside-work-tree >/dev/null || return 0
-	changes="$(repo_git status --porcelain)" || die "git status failed in $repo_root"
+# A release must be rebuildable from its commit: it records the commit (git rev-parse HEAD, or
+# --revision) and refuses uncommitted or untracked files (dist/ is ignored by
+# packaging/synology/.gitignore). Any git failure stops the release, so a git that cannot read
+# the checkout (dubious ownership, no repository) never skips the check. Without git at all
+# there is nothing to compare against: the release then needs --revision.
+check_release_tree() {
+	local changes inside
+	if ! have_git; then
+		[ -n "$revision" ] || die "release refused: no git to read the commit from; pass --revision <commit>"
+		log "WARNING: git is not installed; the working tree of the release is not checked"
+		return
+	fi
+	inside="$(release_git rev-parse --is-inside-work-tree)" || exit 1
+	[ "$inside" = true ] || die "release refused: $repo_root is not a git working tree"
+	if [ "$revision_set" = no ]; then revision="$(release_git rev-parse HEAD)" || exit 1; fi
+	[ -n "$revision" ] || die "release refused: git names no commit for the build (empty revision)"
+	changes="$(release_git status --porcelain)" || exit 1
 	[ -z "$changes" ] || die "release refused: the working tree has uncommitted changes:
 $(head -n 10 <<<"$changes")"
 }
@@ -236,7 +274,7 @@ check_release_inputs() {
 		[ "$version" != "$DEV_VERSION" ] || die "a release build needs a version, not the default $DEV_VERSION"
 		[ -z "$interim_families" ] ||
 			die "release refused: ffmpeg/sources.lock has interim FFmpeg entries for $interim_families"
-		check_clean_tree
+		check_release_tree
 	elif [ -n "$interim_families" ]; then
 		interim_banner
 	fi
@@ -293,7 +331,7 @@ notice_value() {
 	local notice="$1" field="$2" lines value
 	lines="$(grep -c "^$field:" "$notice" || true)"
 	[ "$lines" = 1 ] || die "$notice needs exactly one $field: line (has $lines)"
-	value="$(sed -n "s/^$field:[[:space:]]*//p" "$notice" | sed 's/[[:space:]]*$//')"
+	value="$(LC_ALL=C sed -n "s/^$field:[[:space:]]*//p" "$notice" | LC_ALL=C sed 's/[[:space:]]*$//')"
 	[ -n "$value" ] || die "$notice has an empty $field: value"
 	printf '%s' "$value"
 }

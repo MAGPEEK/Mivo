@@ -140,26 +140,75 @@ source_lines() {
 		awk '{ printf "  %-16s %-13s %-3s %s %s\n", $1, $2, $4, $6, $7 }'
 }
 
-# host_tools prints the installed version of every Debian package of the host stage.
+# host_tools prints the installed version of every Debian package of the host stage, or
+# "unknown" without a list: dpkg-query -W without package names would list every package.
 host_tools() {
+	if [ -z "${HOST_PACKAGES:-}" ]; then
+		printf 'unknown'
+		return 0
+	fi
 	# shellcheck disable=SC2086 # HOST_PACKAGES is a blank-separated list
-	dpkg-query -W -f '${Package}=${Version} ' ${HOST_PACKAGES:-} 2>/dev/null || true
+	dpkg-query -W -f '${Package}=${Version} ' $HOST_PACKAGES 2>/dev/null || true
 }
 
+# require_sha256 <what> <value> fails unless the value is a lowercase SHA-256 in hex.
+require_sha256() {
+	case "$2" in
+	*[!0-9a-f]* | '') fail "$1 is not a SHA-256: '$2'" ;;
+	esac
+	[ "${#2}" -eq 64 ] || fail "$1 is not a SHA-256: '$2'"
+}
+
+# read_source_archive sets archive_sha and archive_name from the one <name>.tar.sha256 of
+# <source-archive-dir> (a line "<sha256>  <name>"); none, several, or a malformed line fail.
+read_source_archive() {
+	sums=$(find "$archive_dir" -maxdepth 1 -type f -name '*.tar.sha256') || fail "cannot list $archive_dir"
+	[ -n "$sums" ] || fail "no *.tar.sha256 in $archive_dir"
+	[ "$(printf '%s\n' "$sums" | wc -l)" -eq 1 ] || fail "more than one *.tar.sha256 in $archive_dir"
+	[ "$(wc -l <"$sums")" -eq 1 ] || fail "$(basename "$sums") must hold exactly one line"
+	sum_line=$(cat "$sums") || fail "cannot read $sums"
+	# sha256sum's format: hash, blank, "*" or blank (binary or text mode), file name.
+	archive_sha=${sum_line%% *}
+	archive_name=${sum_line#"$archive_sha" }
+	archive_name=${archive_name#[ *]}
+	require_sha256 "the source archive checksum in $(basename "$sums")" "$archive_sha"
+	case "$archive_name" in
+	'' | */* | *' '*) fail "$(basename "$sums") names no archive file: '$archive_name'" ;;
+	esac
+}
+
+# write_source_notice computes every value first and fails on the first one it cannot get, so
+# SOURCE.txt never carries an empty or multi-line value: a command inside the here-document
+# would fail without stopping the script.
 write_source_notice() {
-	ffmpeg_version=$(awk '$1 == "ffmpeg" { print $2 }' "$list")
-	archive_sha=$(cut -d ' ' -f 1 "$archive_dir"/*.tar.sha256)
-	archive_name=$(sed 's/^[0-9a-f]*  *//' "$archive_dir"/*.tar.sha256)
-	cat >"$dest/SOURCE.txt" <<EOF
+	ffmpeg_version=$(awk '$1 == "ffmpeg" { print $2 }' "$list") || fail "cannot read $list"
+	[ -n "$ffmpeg_version" ] && [ "$(printf '%s\n' "$ffmpeg_version" | wc -l)" -eq 1 ] ||
+		fail "$list needs exactly one ffmpeg entry"
+	version_text=$(version_label "$ffmpeg_version") || fail "no version label for FFmpeg $ffmpeg_version"
+	read_source_archive
+	ffmpeg_sha=$(sha256_of "$dest/ffmpeg") || fail "cannot hash $dest/ffmpeg"
+	ffprobe_sha=$(sha256_of "$dest/ffprobe") || fail "cannot hash $dest/ffprobe"
+	require_sha256 "the SHA-256 of ffmpeg" "$ffmpeg_sha"
+	require_sha256 "the SHA-256 of ffprobe" "$ffprobe_sha"
+	configuration="$build/configuration.txt"
+	[ -f "$configuration" ] || fail "missing $configuration"
+	[ "$(wc -l <"$configuration")" -eq 1 ] || fail "$configuration must hold exactly one line"
+	configure_line=$(cat "$configuration") || fail "cannot read $configuration"
+	[ -n "$configure_line" ] || fail "$configuration is empty"
+	config_facts=$(sed 's/^/  /' "$build/config-facts.txt") || fail "cannot read $build/config-facts.txt"
+	sources=$(source_lines) || fail "cannot list the sources of $list"
+	check_results=$(cat "$checks") || fail "cannot read the check results"
+	tools=$(host_tools)
+	cat >"$dest/SOURCE.txt" <<EOF || fail "cannot write $dest/SOURCE.txt"
 FFmpeg build bundled for the DSM architecture family $family
 
-Version:              $(version_label "$ffmpeg_version")
+Version:              $version_text
 Status:               selected
 Licence:              GPL-3.0-or-later
 Built by:             static FFmpeg recipe (packaging/synology/ffmpeg/build), task SPK-15
 Target:               $TRIPLET, $ARCH_CFLAGS, musl (static)
-ffmpeg SHA-256:       $(sha256_of "$dest/ffmpeg")
-ffprobe SHA-256:      $(sha256_of "$dest/ffprobe")
+ffmpeg SHA-256:       $ffmpeg_sha
+ffprobe SHA-256:      $ffprobe_sha
 Corresponding source: $archive_name
 Source SHA-256:       $archive_sha
 
@@ -167,19 +216,19 @@ The corresponding source is attached to every GitHub Release that carries these 
 It contains the recipe and every source below.
 
 Configuration:
-  $(cat "$build/configuration.txt")
+  $configure_line
 
 CPU features of FFmpeg's config.h (1 = compiled in, selected at run time where FFmpeg does so):
-$(sed 's/^/  /' "$build/config-facts.txt")
+$config_facts
 
 Sources (name, version, linked into the binaries, SHA-256, URL):
-$(source_lines)
+$sources
 
 Build checks:
-$(cat "$checks")
+$check_results
 
 Build host: ${BUILDER_IMAGE:-unknown}
-Host tools: $(host_tools)
+Host tools: $tools
 EOF
 }
 

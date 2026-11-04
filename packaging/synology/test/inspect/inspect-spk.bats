@@ -521,6 +521,94 @@ make_tree_notice_interim() {
 	expect_line "FAIL PACKAGE_ICON_256.PNG is not a 256x256 PNG (not a PNG)"
 }
 
+# --- DSM main menu entry -----------------------------------------------------------------------
+
+# set_desktop <jq filter>: rewrites ui/config of the tree with the filter.
+set_desktop() {
+	jq "$1" "$tree/pkg/ui/config" >"$tree/pkg/ui/config.new" && mv "$tree/pkg/ui/config.new" "$tree/pkg/ui/config"
+	chmod 0644 "$tree/pkg/ui/config"
+}
+
+@test "the main menu entry of a complete SPK passes every check" {
+	inspect x86_64
+	expect_clean
+	expect_line 'ok   INFO dsmuidir="ui"'
+	expect_line "ok   ui/config parses as JSON"
+	expect_line "ok   ui/config: exactly one .url entry"
+	expect_line 'ok   ui/config: type is "url"'
+	expect_line 'ok   ui/config: title is "Demo Server"'
+	expect_line 'ok   ui/config: protocol is "http"'
+	expect_line "ok   ui/config: port is \"$FIXTURE_PORT\""
+	expect_line 'ok   ui/config: url is "/"'
+	expect_line 'ok   ui/config: allUsers is "true"'
+	expect_line "ok   ui/config: icon is \"images/${FIXTURE_ID}_{0}.png\""
+	local size
+	for size in 16 24 32 48 64 72 256; do
+		expect_line "ok   ui/images/${FIXTURE_ID}_$size.png is a ${size}x$size PNG"
+	done
+}
+
+@test "a missing dsmuidir, ui/config or main menu icon fails" {
+	sed -i '/^dsmuidir=/d' "$tree/spk/INFO"
+	rm "$tree/pkg/ui/config" "$tree/pkg/ui/images/${FIXTURE_ID}_72.png"
+	inspect x86_64
+	expect_fail "INFO dsmuidir: present 0 times, want once"
+	expect_line "ui/config(expected once, found 0)"
+	expect_line "ui/images/${FIXTURE_ID}_72.png(expected once, found 0)"
+	refute_line "ui/config parses as JSON"
+}
+
+@test "dsmuidir naming another folder and an unexpected ui member fail" {
+	sed -i 's/^dsmuidir=.*/dsmuidir="app"/' "$tree/spk/INFO"
+	fake_png 128 >"$tree/pkg/ui/images/${FIXTURE_ID}_128.png"
+	chmod 0644 "$tree/pkg/ui/images/${FIXTURE_ID}_128.png"
+	inspect x86_64
+	expect_fail 'INFO dsmuidir="app" does not match ^ui$'
+	expect_line "ui/images/${FIXTURE_ID}_128.png(unexpected)"
+}
+
+@test "a ui/config that is no JSON or holds two entries fails" {
+	echo '{".url": ' >"$tree/pkg/ui/config"
+	inspect x86_64
+	expect_fail "ui/config does not parse as JSON"
+	fixture_desktop_config >"$tree/pkg/ui/config"
+	set_desktop '.".url".second = .".url"[]'
+	inspect x86_64
+	expect_fail "ui/config: top-level keys and .url entries are '.url 2', want '.url 1'"
+	fixture_desktop_config >"$tree/pkg/ui/config"
+	set_desktop '.other = {}'
+	inspect x86_64
+	expect_fail "ui/config: top-level keys and .url entries are '.url,other 1', want '.url 1'"
+}
+
+@test "every value of the main menu entry is judged" {
+	set_desktop '.".url"[] |= (.type = "legacy" | .title = "Other" | .protocol = "https" |
+		.port = "8080" | .url = "/web/" | .allUsers = false | .icon = "images/icon_{0}.png")'
+	inspect x86_64
+	expect_fail 'ui/config: type is "legacy", want "url"'
+	expect_line 'FAIL ui/config: title is "Other", want "Demo Server"'
+	expect_line 'FAIL ui/config: protocol is "https", want "http"'
+	expect_line "FAIL ui/config: port is \"8080\", want \"$FIXTURE_PORT\""
+	expect_line 'FAIL ui/config: url is "/web/", want "/"'
+	expect_line 'FAIL ui/config: allUsers is "false", want "true"'
+	expect_line "FAIL ui/config: icon is \"images/icon_{0}.png\", want \"images/${FIXTURE_ID}_{0}.png\""
+	set_desktop '.".url"[] |= del(.allUsers)'
+	inspect x86_64
+	expect_line 'FAIL ui/config: allUsers is "", want "true"'
+}
+
+@test "a main menu icon of the wrong size, CR and a token in ui/config fail" {
+	fake_png 32 >"$tree/pkg/ui/images/${FIXTURE_ID}_24.png"
+	echo "not a png" >"$tree/pkg/ui/images/${FIXTURE_ID}_256.png"
+	sed -i 's/"Demo Server"/"@DISPLAY_NAME@"/; s/$/\r/' "$tree/pkg/ui/config"
+	inspect x86_64
+	expect_fail "ui/images/${FIXTURE_ID}_24.png is not a 24x24 PNG (32x32)"
+	expect_line "FAIL ui/images/${FIXTURE_ID}_256.png is not a 256x256 PNG (not a PNG)"
+	expect_line "FAIL CR characters in: package.tgz:ui/config"
+	expect_line "FAIL unreplaced @NAME@ tokens in: package.tgz:ui/config"
+	expect_line 'FAIL ui/config: title is "@DISPLAY_NAME@", want "Demo Server"'
+}
+
 # --- member digests and usage -----------------------------------------------------------------
 
 @test "--members prints one digest line per file and two packs of one tree agree" {
@@ -532,7 +620,8 @@ make_tree_notice_interim() {
 	expect_line " 644 spk:INFO"
 	expect_line " 755 package.tgz:bin/ffmpeg"
 	expect_line " 644 package.tgz:share/licenses/ffmpeg/SOURCE.txt"
-	[ "$(wc -l <<<"$table_a")" -eq 25 ]
+	# 25 members before the main menu entry, plus ui/config and seven icons
+	[ "$(wc -l <<<"$table_a")" -eq 33 ]
 	sleep 1
 	inspect --members x86_64
 	table_b="$(grep -E '^[0-9a-f]{64} ' <<<"$output")"

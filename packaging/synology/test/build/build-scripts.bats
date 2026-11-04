@@ -14,27 +14,59 @@ readonly FAMILIES=(x86_64 armv8 armv7)
 readonly FAKE_VERSION="1.0-static1"
 readonly SOURCE_ARCHIVE="ffmpeg-$FAKE_VERSION-source.tar"
 
+# Commit recorded by builds in an image without git, where a release needs --revision.
+readonly FIXTURE_REVISION="0123456789abcdef0123456789abcdef01234567"
+
 setup() {
 	tree="$BATS_TEST_TMPDIR/repo"
+	unset CI SPK_BUILD_MODE SPK_PRIVILEGE SOURCE_DATE_EPOCH NODE_IMAGE GO_IMAGE SPK_FFMPEG_IMAGE \
+		FAKE_FFMPEG_STATUS FAKE_FFMPEG_LICENCE FAKE_FFMPEG_VERSION FAKE_FFMPEG_CHANGED FAKE_FFMPEG_OMIT \
+		FAKE_SOURCE_MISMATCH FAKE_NOTICE_EXTRA FAKE_STAGE_TEST_MODE FAKE_TOOLKIT_FAIL FAKE_TOOLKIT_SILENT \
+		FAKE_ID FAKE_SPKSTAGE_WARN FAKE_SPKSTAGE_FAIL FAKE_REVISION_SKEW
 	make_tree "$tree"
 	mkdir -p "$BATS_TEST_TMPDIR/bin"
 	cp "$BATS_TEST_DIRNAME/fake-docker.bash" "$BATS_TEST_TMPDIR/bin/docker"
-	chmod 0755 "$BATS_TEST_TMPDIR/bin/docker"
+	cp "$BATS_TEST_DIRNAME/fake-spkstage.bash" "$BATS_TEST_TMPDIR/bin/spkstage"
+	chmod 0755 "$BATS_TEST_TMPDIR/bin/docker" "$BATS_TEST_TMPDIR/bin/spkstage"
 	export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 	export FAKE_DOCKER_LOG="$BATS_TEST_TMPDIR/docker.log"
-	unset CI SPK_BUILD_MODE SPK_PRIVILEGE SOURCE_DATE_EPOCH NODE_IMAGE GO_IMAGE SPK_FFMPEG_IMAGE \
-		FAKE_FFMPEG_STATUS FAKE_FFMPEG_LICENCE FAKE_FFMPEG_VERSION FAKE_FFMPEG_CHANGED FAKE_FFMPEG_OMIT \
-		FAKE_SOURCE_MISMATCH FAKE_NOTICE_EXTRA FAKE_TOOLKIT_FAIL
 	export SPK_TOOLKIT_VOLUME=test-volume
 }
 
+have_git() { command -v git >/dev/null 2>&1; }
+
 # make_tree <root> puts copies of the scripts and an all-selected sources.lock below <root>.
+# Where git is installed the tree is a clean checkout, as a release needs one; dist/ is ignored
+# there as in the repository.
 make_tree() {
 	script_dir="$1/packaging/synology"
 	dist="$script_dir/dist"
 	mkdir -p "$script_dir/ffmpeg/build" "$script_dir/toolkit"
-	cp "$SYNOLOGY_DIR/build.sh" "$SYNOLOGY_DIR/build.ps1" "$script_dir/"
+	cp "$SYNOLOGY_DIR/build.sh" "$SYNOLOGY_DIR/build.ps1" "$SYNOLOGY_DIR/stage.sh" "$script_dir/"
+	if have_git; then
+		echo "/dist/" >"$script_dir/.gitignore"
+		git -C "$1" init -q
+	fi
 	write_lock selected
+}
+
+# commit_tree commits every change of the test tree, so a release finds it clean.
+commit_tree() {
+	[ -d "$tree/.git" ] || return 0
+	git -C "$tree" add -A
+	git -C "$tree" -c user.email=test@example.invalid -c user.name=test commit -qm fixture --allow-empty
+}
+
+# install_fake_git <script body> puts a fake git first in PATH; $1 sees git's arguments
+# without "-C <dir>".
+# shellcheck disable=SC2016 # the script body is written literally
+install_fake_git() {
+	{
+		echo '#!/bin/bash'
+		echo '[ "$1" != -C ] || shift 2'
+		echo "$1"
+	} >"$BATS_TEST_TMPDIR/bin/git"
+	chmod 0755 "$BATS_TEST_TMPDIR/bin/git"
 }
 
 # fake_hash <tool> <family> is the SHA-256 of the fake binary fake-docker writes.
@@ -50,13 +82,18 @@ write_lock() {
 			echo "$family $1 ${2:-$FAKE_VERSION} GPL-3.0-or-later $(fake_hash ffmpeg "$family") $(fake_hash ffprobe "$family")"
 		done
 	} >"$script_dir/ffmpeg/sources.lock"
+	commit_tree
 }
 
 # run_build <sh|ps1> [build.sh arguments] runs one implementation; for build.ps1 the build.sh
-# options are translated to its parameters.
+# options are translated to its parameters. Without git a release needs --revision, so the
+# fixture commit is added unless the case names a revision itself.
 run_build() {
 	local implementation="$1" arguments=()
 	shift
+	if ! have_git && [[ " $* " != *" --revision "* ]]; then
+		set -- --revision "$FIXTURE_REVISION" "$@"
+	fi
 	if [ "$implementation" = sh ]; then
 		run bash "$script_dir/build.sh" "$@"
 		return
@@ -180,13 +217,21 @@ case_release_refuses_dev_version() {
 	expect_no_docker
 }
 
+# Step 1 (stage.sh) refuses a non-free build of a release; build.sh checks the staged result
+# again (FAKE_STAGE_TEST_MODE lets step 1 pass to reach that check).
 case_release_refuses_staged_nonfree_ffmpeg() {
 	export FAKE_FFMPEG_LICENCE=GPL-3.0-or-later+nonfree
 	run_build "$1" --release 1.0.0
 	expect_failure
+	expect_output "release refused: the FFmpeg build of x86_64 is non-free (GPL-3.0-or-later+nonfree)"
+	expect_output "step 1 (docker build) failed"
+	expect_log "RELEASE=true"
+	refute_log "run "
+	export FAKE_STAGE_TEST_MODE=1
+	run_build "$1" --release 1.0.0
+	expect_failure
 	expect_output "release refused: FFmpeg builds not release-eligible"
 	expect_output "x86_64 (selected, GPL-3.0-or-later+nonfree)"
-	expect_log "RELEASE=true"
 	refute_log "run "
 	[ ! -e "$dist/SHA256SUMS" ]
 }
@@ -195,8 +240,70 @@ case_release_refuses_staged_interim_ffmpeg() {
 	export FAKE_FFMPEG_STATUS=interim
 	run_build "$1" --release 1.0.0
 	expect_failure
+	expect_output "release refused: the FFmpeg build of x86_64 has status 'interim', not 'selected'"
+	refute_log "run "
+	export FAKE_STAGE_TEST_MODE=1
+	run_build "$1" --release 1.0.0
+	expect_failure
 	expect_output "x86_64 (interim, GPL-3.0-or-later)"
 	refute_log "run "
+}
+
+# A warning of spkstage (interim or dynamic FFmpeg) stops a release in step 1; a test build
+# shows it and goes on.
+case_release_refuses_spkstage_warning() {
+	export FAKE_SPKSTAGE_WARN=armv8
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "spkstage: warning: fake warning for armv8"
+	expect_output "release refused: spkstage warned for armv8"
+	refute_log "run "
+	run_build "$1" --test 1.0.0
+	expect_status 0
+	expect_output "spkstage: warning: fake warning for armv8"
+}
+
+case_release_dies_on_failing_git() {
+	install_fake_git 'echo "fatal: detected dubious ownership in repository at /repo" >&2; exit 128'
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "release refused: git rev-parse --is-inside-work-tree failed"
+	expect_output "detected dubious ownership"
+	expect_no_docker
+	run_build "$1" --release --revision "$FIXTURE_REVISION" 1.0.0
+	expect_failure
+	expect_output "detected dubious ownership"
+	expect_no_docker
+	# A test build records no commit and goes on.
+	run_build "$1" --test 1.0.0
+	expect_status 0
+}
+
+case_release_refuses_empty_revision() {
+	# shellcheck disable=SC2016 # the fake's script, expanded when it runs
+	install_fake_git 'case "$1 $2" in "rev-parse --is-inside-work-tree") echo true ;; esac; exit 0'
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "release refused: git names no commit for the build (empty revision)"
+	expect_no_docker
+}
+
+# Without git the commit cannot be read: a release needs --revision and says the tree is not
+# checked. Runs where git is missing (the script test image).
+case_release_without_git_needs_revision() {
+	! have_git || skip "git is installed; the image without git runs this case"
+	run_build "$1" --release --revision "$FIXTURE_REVISION" 1.0.0
+	expect_status 0
+	expect_output "WARNING: git is not installed"
+	expect_log "REVISION=$FIXTURE_REVISION"
+	grep -qx "revision=$FIXTURE_REVISION" "$dist/stage/build-info.txt"
+}
+
+case_release_records_head_commit() {
+	have_git || skip "git is not installed"
+	run_build "$1" --release 1.0.0
+	expect_status 0
+	expect_log "REVISION=$(git -C "$tree" rev-parse HEAD)"
 }
 
 case_notice_needs_one_line_per_field() {
@@ -233,7 +340,7 @@ case_release_refuses_licence_mismatch() {
 	expect_failure
 	expect_output "x86_64 (licence GPL-2.0-or-later (pinned GPL-3.0-or-later))"
 	refute_log "run "
-	export FAKE_FFMPEG_LICENCE="GPL-3.0-or-later with nonfree parts"
+	export FAKE_FFMPEG_LICENCE="GPL-3.0-or-later with nonfree parts" FAKE_STAGE_TEST_MODE=1
 	run_build "$1" --release 1.0.0
 	expect_failure
 	expect_output "release refused: FFmpeg builds not release-eligible"
@@ -347,12 +454,63 @@ case_version_checked_early() {
 	expect_no_docker
 }
 
+# expect_value_refused <sh|ps1> <build.sh option> <build.ps1 parameter>: the last run refused
+# the value of that option, in each implementation's words.
+expect_value_refused() {
+	expect_failure
+	if [ "$1" = sh ]; then
+		expect_output "$2 needs a value"
+	else
+		# PowerShell's binder refuses it: "Cannot validate argument" or "Missing an argument".
+		expect_output "parameter '$3'"
+	fi
+}
+
 case_empty_option_values_refused() {
 	run_build "$1" --test --revision "" 1.0.0
-	expect_failure
+	expect_value_refused "$1" --revision Revision
 	run_build "$1" --test --privilege "" 1.0.0
-	expect_failure
+	expect_value_refused "$1" --privilege Privilege
 	expect_no_docker
+}
+
+# A value that starts with "-" is an option that lost its value.
+case_option_values_starting_with_dash_refused() {
+	run_build "$1" --test --revision --release 1.0.0
+	expect_value_refused "$1" --revision Revision
+	run_build "$1" --test --privilege -privileged 1.0.0
+	expect_value_refused "$1" --privilege Privilege
+	expect_no_docker
+}
+
+# The package name comes from the staged build.env, whatever it is; an invalid one stops the build.
+case_package_name_from_build_env() {
+	export FAKE_ID=other
+	run_build "$1" --test 1.0.0
+	expect_status 0
+	expect_spks other-1.0.0-x86_64.spk other-1.0.0-armv8.spk other-1.0.0-armv7.spk
+	export FAKE_ID="-bad"
+	: >"$FAKE_DOCKER_LOG"
+	run_build "$1" --test 1.0.0
+	expect_failure
+	expect_output "staged build.env of x86_64 has no valid ID ('-bad')"
+	refute_log "run "
+}
+
+case_staged_package_revision_must_match() {
+	export FAKE_REVISION_SKEW=1
+	run_build "$1" --test --package-revision 2 1.0.0
+	expect_failure
+	expect_output "staged DSM_VERSION 1.0.0-9003 of x86_64 encodes package revision 3, not 2"
+	refute_log "run "
+}
+
+case_toolkit_that_writes_nothing_fails() {
+	export FAKE_TOOLKIT_SILENT=armv8
+	run_build "$1" --test 1.0.0
+	expect_failure
+	expect_output "the toolkit did not write demo-armv8-1.0.0-9000.spk"
+	[ ! -e "$dist/SHA256SUMS" ]
 }
 
 case_stage_path_with_comma_and_blank() {
@@ -364,12 +522,8 @@ case_stage_path_with_comma_and_blank() {
 }
 
 case_release_refuses_dirty_tree() {
-	command -v git >/dev/null 2>&1 || skip "git not installed"
-	# As in the repository, dist/ is ignored and never makes the tree dirty.
-	echo "/dist/" >"$script_dir/.gitignore"
-	git -C "$tree" init -q
-	git -C "$tree" add -A
-	git -C "$tree" -c user.email=test@example.invalid -c user.name=test commit -qm fixture
+	have_git || skip "git not installed"
+	# make_tree committed the tree; dist/ is ignored and never makes it dirty.
 	run_build "$1" --release 1.0.0
 	expect_status 0
 	touch "$tree/untracked"
@@ -382,7 +536,10 @@ case_release_refuses_dirty_tree() {
 CASES=(
 	ci_defaults_to_release ci_values test_overrides_ci release_refuses_interim_lock
 	release_refuses_dev_version release_refuses_staged_nonfree_ffmpeg
-	release_refuses_staged_interim_ffmpeg notice_needs_one_line_per_field
+	release_refuses_staged_interim_ffmpeg release_refuses_spkstage_warning release_dies_on_failing_git
+	release_refuses_empty_revision release_without_git_needs_revision release_records_head_commit
+	notice_needs_one_line_per_field option_values_starting_with_dash_refused package_name_from_build_env
+	staged_package_revision_must_match toolkit_that_writes_nothing_fails
 	release_refuses_unpinned_ffmpeg release_refuses_licence_mismatch release_refuses_pin_version_mismatch
 	source_archive_mismatch_fails malformed_lock_refused ffmpeg_image_built_before_stage
 	failed_toolkit_run_writes_no_sums release_build_names_and_sums package_revision_in_name

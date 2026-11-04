@@ -89,8 +89,13 @@ toolkit_family="$(pkg_get_platform_family)" || info_fail "the toolkit cannot nam
 # pkg_dump_info skips empty variables: a release writes no beta key at all.
 # shellcheck disable=SC2034
 if [ "$BETA" = yes ]; then beta="yes"; else beta=""; fi
+# The DSM main menu entry: DSM links target/<dsmuidir> to its 3rdparty UI folder and reads the
+# application config there (README "Main menu entry"). SynoBuildConf/install packs the staged
+# prebuilt/ui as ui/ of package.tgz; a project staged without it gets no entry, like the icons.
+# shellcheck disable=SC2034
+if [ -d "$script_dir/prebuilt/ui" ]; then dsmuidir="ui"; else dsmuidir=""; fi
 
-pkg_dump_info
+pkg_dump_info || info_fail "pkg_dump_info failed; INFO would be incomplete"
 # Not in pkg_dump_info's key list; written explicitly so the intent is visible in INFO
 # (ADR 0026 section 10: moving the package to another volume stays off).
 echo 'support_move="no"'
