@@ -16,6 +16,7 @@ from **prebuilt** files. The toolkit compiles nothing; its chroot is only used t
 | `testdata/stage-demo.sh` | stages the placeholder project for one family (fast fixture of `test.sh`) |
 | `../cmd/spkstage` | stages the real project of a family from the templates and prebuilt files (SPK-14, see "Staging the real package") |
 | `../package/SynoBuildConf/{depends,build,install}`, `../package/INFO.sh` | the toolkit side of the real package |
+| `../test/inspect/` | `inspect-spk.sh`, its expected-member list, image and tests: checks a packed SPK (SPK-10, see "Output verification") |
 
 ## Quick start (PowerShell, repository root)
 
@@ -334,11 +335,9 @@ second run with `--network none` to prove that nothing is downloaded. Remove eve
 - `pkg_make_spk` appends `extractsize`, `toolkit_version` and `create_time` to INFO (`:307-311`)
   and packs the SPK with `tar cf ... $(ls)` (`:317`): an uncompressed tar, members in `ls`
   order, owner `root/root`, current file times (not reproducible byte for byte).
-- **Tar flavour unconfirmed**: only the commands are known (`tar cf` for the SPK, `tar cJf`
-  for `package.tgz`, run inside the chroot, whose `tar` is GNU tar 1.32 with the compiled-in
-  default `--format=gnu` per `tar --show-defaults`). The header format of the produced files has
-  not been read from the headers, and whether DSM requires a particular format is not
-  documented; SPK-10 records it from the headers.
+- **Tar flavour: GNU format** in both archives, read from the headers by SPK-10 (see "Output
+  verification"); no member needs a GNU or pax extension. Whether DSM requires a particular
+  format is not documented.
 - The collect stage copies `/image/packages/<package>*<version>*spk` of the chroot to
   `/toolkit/result_spk/<package>-<version>/` (`include/python/pkguniform.py:289-312`);
   `run.sh` takes it from there.
@@ -383,6 +382,114 @@ working directory, and runs of spaces collapse. `INFO.sh` rejects such values (a
 apostrophes, tabs and newlines) with an error; `test.sh` has one case per character, and
 `run.sh` already refuses an apostrophe in `build.env` (both `'It's'` and `'It'\''s'`). UTF-8
 text such as the umlaut above passes through unchanged.
+
+## Output verification
+
+`packaging/synology/test/inspect/inspect-spk.sh` (task SPK-10) checks one SPK the toolkit
+produced against ADR 0026 and its Notes; SPK-11, SPK-12 and SPK-13 run it on the files they
+test or publish. POSIX `sh`, run in the image of `test/inspect/Dockerfile` (`debian:stable-slim`
+plus `xz-utils`, `jq` and `bats`; the slim image has no `xz`). From the repository root:
+
+```powershell
+docker build -t spk-inspect:dev packaging/synology/test/inspect
+# one SPK; replace x86_64 by armv8 or armv7 (the family decides arch, ELF machine and kernel)
+docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
+# before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
+docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
+# tests of the script (34 cases on a synthetic SPK of fixture.bash) and shellcheck
+docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
+```
+
+In Git Bash prefix the commands with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)"` for `${PWD}`.
+
+```
+inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <family>
+```
+
+One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line; exit
+0 when nothing failed, 1 on any failure, 2 on a usage error or a missing tool. The 69 checks per
+SPK: the outer archive is an uncompressed tar (GNU or ustar/pax headers); its members equal
+`expected-members.txt` (names, file or directory, modes 0755/0644, no signature, no symbolic
+link, nothing from the build environment: `SynoBuildConf`, `build.env`, `prebuilt/`, hidden
+files, debug files, absolute paths, `..`); INFO is `key="value"` throughout without `"`, `\`,
+`$` or backquotes, with `package`, `displayname`, `version` (`a.b.c-build`, every number at most
+2^31-1), `beta="yes"` exactly when the build number is below 9000, `arch` of the family
+(`armv7 armada38x monaco` for armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default
+8460), `adminprotocol="http"`, no `adminurl`, `description`, `description_ger`, `maintainer`,
+`support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none of `thirdparty`,
+`startable`, `changelog`; `package.tgz` is xz, holds the expected members and `bin/<id>`,
+`bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the family's class and machine
+without a program interpreter, with a GNU ABI tag at most the family's oldest DSM 7.2 kernel
+(3.10.108, armv8 4.4.302; a binary without the note, such as the Go server, is recorded only);
+`SOURCE.txt` has one `Status:` and one `Licence:` line plus at least one licence file;
+`port_conf/<id>.sc` has the section, `title`, `desc`, `port_forward="no"` and
+`dst.ports="<port>/tcp"` and `conf/resource` names it; the seven lifecycle scripts start with
+`#!/bin/sh`; `scripts/*`, INFO, `conf/*`, the wizard files and the service file have no CR;
+every JSON member parses and `conf/privilege` runs as `package` without `root`; the icons are
+PNGs of 64 x 64 and 256 x 256 pixels; no text member holds an unreplaced `@NAME@` token.
+
+**Interim rule** (ADR 0026 Notes): while `SOURCE.txt` says `Status: interim` and `--release` is
+not given, the FFmpeg findings (interim status, a `+nonfree` licence, a dynamically linked
+`ffmpeg`/`ffprobe`, an ABI note above the kernel) are warnings, so a test build can be inspected
+and handed to the owner; with `--release`, or for any other status, they fail. The server
+binary is always held to the strict rule. `--members` appends one line per file of both archives
+(`<sha256> <mode> <archive>:<name>`), the content-level fingerprint SPK-13 compares between the
+inspected and the uploaded files.
+
+**Results on the SPK-07 build of 0.1.0-alpha.2 (2026-10-31, interim FFmpeg pins)**: all three
+SPKs pass in test mode (`69 checks, 0 failed`): x86_64 and armv8 with 6 warnings each (interim
+status, non-free licence, jellyfin's `ffmpeg` and `ffprobe` dynamically linked with ABI note
+4.18.20 above 3.10.108 / 4.4.302), armv7 with 1 warning (interim status; johnvansickle's build is
+static with ABI note 3.2.0). With `--release` the same SPKs fail with 6 / 6 / 1 failures, as
+required until SPK-16. Negative tests on mutated copies of the real SPKs each failed as expected:
+a removed `bin/ffmpeg`, `arch="armv8"` in the x86_64 SPK, an `adminurl="/"` line, a leftover
+`[@ID@]` in the service file, the dynamically linked jellyfin `ffmpeg` with `Status: selected`
+(x86_64 and placed into the armv7 SPK), a `syno_signature.asc` member, `build.env` and
+`SynoBuildConf/` leftovers, a `start-stop-status` without the executable bit, CRLF in
+`postinst`, `run-as` `root`, `version="0.1.0-4294967296"`, `beta="no"` on a pre-release, a
+broken wizard JSON, a gzip-compressed SPK, and `--release` on the unchanged test build.
+
+**Tar flavour (settles the "unconfirmed" item of ADR 0026 Notes)**: both the SPK and the tar
+inside `package.tgz` are **GNU format** - header magic `ustar  ` followed by NUL (bytes 257-264
+`75 73 74 61 72 20 20 00`), not the POSIX `ustar` NUL `00`. That is the compiled-in default of
+the chroot's tar: `tar --version` reports **GNU tar 1.32** and `tar --show-defaults`
+`--format=gnu -f- -b20 --quoting-style=escape ...` in all three environments (v1000, rtd1619b,
+alpine); `xz` is 5.2.1. **No member needs an extension**: no name is longer than 100 characters
+(no GNU `L`/`K` headers), no pax `x`/`g` headers, no base-256 size (the largest member,
+x86_64 `bin/ffmpeg`, is 109,525,528 bytes, far below the 8 GiB octal limit), so the archives
+also read as plain ustar. Owner `root/root`, uid/gid 0. Member order: the top level in `ls`
+order of the `POSIX` locale (`INFO LICENSE PACKAGE_ICON.PNG PACKAGE_ICON_256.PNG
+WIZARD_UIFILES/ conf/ package.tgz scripts/`, upper case first), inside directories in the order
+tar reads them from the file system (`scripts/postinst postuninst preuninst common.sh
+start-stop-status package.env postupgrade preinst preupgrade`, not sorted). Whether DSM cares
+about the format or the order is not documented; SPK-12 installs these files.
+
+**Reproducibility (two SPK-07 builds of commit 9ab6832 with the same inputs, same toolkit
+volume contents)**. Identical in both builds: the member lists and their order in both
+archives, every mode and owner, the size and SHA-256 of **every member except INFO** - the
+binaries, FFmpeg, licences, scripts, `package.env`, `conf/*`, wizard files, icons, LICENSE
+and the service file are byte-identical (the `--members` tables differ in the INFO line only),
+`extractsize` (from `du -sk`, `pkg_util.sh:228`) and `toolkit_version`. Different: (1) INFO
+`create_time`, written with `date +%Y%m%d-%T` by `pkg_make_spk` (`pkg_util.sh:311`, Taipei
+time); (2) the modification time of every member of both archives - it is the pack time, not the
+staged `SOURCE_DATE_EPOCH`, because `SynoBuildConf/install` copies with `install -m`, which
+stamps the copy time, and `tar cJf` (`pkg_util.sh:215`) and `tar cf` (`:317`) record it;
+hence (3) the decompressed inner tar differs in its header blocks only, (4) the xz stream of
+`package.tgz` differs and its size varies by a few KB (x86_64: 66,043,280 vs 66,046,500 bytes;
+xz 5.2.1 itself is deterministic for equal input), and (5) the SPK differs, so `SHA256SUMS`
+is per build (SPK-13 publishes the sums of the files it inspected and tested). `toolkit_version`
+is `72723` for x86_64 and `72726` for armv8 and armv7: the platform tarballs of the three
+environments report different DSM 7.2.2 builds (`PkgVersion`). Possible follow-up, not changed
+here: `install -p` in `SynoBuildConf/install` would keep the staged time and make `package.tgz`
+byte-identical between builds; the outer archive would still differ in `create_time` and the
+times of the top-level members.
+
+**Mode facts**: `scripts/package.env` is 0755 in the SPK although staged 0644, because
+`SynoBuildConf/install` sets every file of `scripts/` to 0755 (`expected-members.txt` expects
+that); the wizard JSON files are 0644, `INFO`, `LICENSE`, the icons and `conf/*` 0644,
+directories 0755.
 
 ## Pitfalls
 

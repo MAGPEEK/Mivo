@@ -1,0 +1,41 @@
+# Expected members of a server SPK (task SPK-10; ADR 0026 Notes, toolkit/README.md "Staged
+# project"). Read by inspect-spk.sh next to this file.
+#
+# Columns: archive (spk = the outer tar, package = package.tgz), mode of a file (0755 or
+# 0644; a directory entry is always 0755), member name. "<id>" stands for INFO's package
+# name. A name with "*" is a pattern: members matching it are allowed, any number of them,
+# also none; every other line is required exactly once. A member matching no line fails.
+spk 0644 INFO
+spk 0644 LICENSE
+spk 0644 PACKAGE_ICON.PNG
+spk 0644 PACKAGE_ICON_256.PNG
+spk 0644 package.tgz
+spk 0755 conf/
+spk 0644 conf/privilege
+spk 0644 conf/resource
+spk 0755 scripts/
+spk 0755 scripts/common.sh
+spk 0755 scripts/package.env
+spk 0755 scripts/postinst
+spk 0755 scripts/postuninst
+spk 0755 scripts/postupgrade
+spk 0755 scripts/preinst
+spk 0755 scripts/preuninst
+spk 0755 scripts/preupgrade
+spk 0755 scripts/start-stop-status
+spk 0755 WIZARD_UIFILES/
+spk 0644 WIZARD_UIFILES/install_uifile
+spk 0644 WIZARD_UIFILES/install_uifile_ger
+spk 0644 WIZARD_UIFILES/uninstall_uifile
+spk 0644 WIZARD_UIFILES/uninstall_uifile_ger
+package 0755 bin/
+package 0755 bin/<id>
+package 0755 bin/ffmpeg
+package 0755 bin/ffprobe
+package 0755 port_conf/
+package 0644 port_conf/<id>.sc
+package 0755 share/
+package 0755 share/licenses/
+package 0755 share/licenses/ffmpeg/
+package 0644 share/licenses/ffmpeg/SOURCE.txt
+package 0644 share/licenses/ffmpeg/*
