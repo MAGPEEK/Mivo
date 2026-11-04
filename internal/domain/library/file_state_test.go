@@ -65,6 +65,47 @@ func TestChanged(t *testing.T) {
 	}
 }
 
+func TestFileStatePathForParsing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		state library.FileState
+		want  string
+	}{
+		{name: "same as relative path", state: library.FileState{RelativePath: "Über.mkv"}, want: "Über.mkv"},
+		{
+			name:  "normalized path wins",
+			state: library.FileState{RelativePath: "Über.mkv", NormalizedPath: "Über.mkv"},
+			want:  "Über.mkv",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := test.state.PathForParsing(); got != test.want {
+				t.Errorf("PathForParsing() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestChangedIgnoresClassAndNormalizedPath(t *testing.T) {
+	t.Parallel()
+
+	// Change detection is about the bytes on disk; the class follows from the name and the
+	// normalized path from the relative path, so neither can differ on its own.
+	previous := library.FileState{RelativePath: "a.mkv", Size: 1, Class: library.FileClassVideo}
+	current := previous
+	current.Class, current.NormalizedPath = "", "a.mkv"
+
+	if library.Changed(previous, current) {
+		t.Error("Changed() = true for differing class or normalized path, want false")
+	}
+}
+
 func TestChangedTruncatesInsteadOfRounding(t *testing.T) {
 	t.Parallel()
 

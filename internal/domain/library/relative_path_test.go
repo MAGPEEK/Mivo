@@ -22,6 +22,14 @@ func TestParseRelativePathAcceptsSlashSeparatedRelativePaths(t *testing.T) {
 		"1:/movie.mkv",
 		"Season 1/S01E01.mkv",
 		"千と千尋/神隠し.mkv",
+		// Not traversal: the domain sees decoded names, so "%2e%2e" is a literal folder name,
+		// "..." an ordinary segment and full-width dots (U+FF0E) are not ".." to any OS API.
+		"%2e%2e/movie.mkv",
+		"a/%2E%2E/movie.mkv",
+		".../movie.mkv",
+		"a/.../b.mkv",
+		"．．/movie.mkv",
+		"a/．/b.mkv",
 	} {
 		t.Run(text, func(t *testing.T) {
 			t.Parallel()
@@ -53,6 +61,10 @@ func TestParseRelativePathRejectsUnsafePaths(t *testing.T) {
 		{name: "drive relative", text: "C:x"},
 		{name: "bare drive", text: "C:"},
 		{name: "unc path", text: `\\server\x`},
+		{name: "forward slash unc path", text: "//server/share/x.mkv"},
+		{name: "win32 file namespace", text: `\\?\C:\x.mkv`},
+		{name: "win32 device namespace", text: `\\.\pipe\x`},
+		{name: "forward slash device namespace", text: "//./pipe/x"},
 		{name: "backslash separator", text: `Movies\x.mkv`},
 		{name: "parent segment", text: "../x"},
 		{name: "inner parent segment", text: "a/../x"},

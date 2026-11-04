@@ -58,7 +58,7 @@ type Definition struct {
 }
 
 // Validate checks the rules that do not depend on the operating system: a non-blank UTF-8
-// name of at most MaxNameLength runes, a non-empty root without NUL bytes and a known kind.
+// name of at most MaxNameLength runes, a non-blank root without NUL bytes and a known kind.
 // Whether the root is absolute, unique and outside the server's own directories is checked
 // by the configuration, which knows the host OS. The error wraps domain.ErrInvalid.
 func (definition Definition) Validate() error {
@@ -95,7 +95,9 @@ func validateName(name string) error {
 }
 
 func validateRoot(root string) error {
-	if root == "" {
+	// A whitespace-only root can never be the absolute path the configuration requires, and
+	// rejecting it here gives a clearer message than the later "not absolute" check.
+	if strings.TrimSpace(root) == "" {
 		return fmt.Errorf("root is empty: %w", domain.ErrInvalid)
 	}
 

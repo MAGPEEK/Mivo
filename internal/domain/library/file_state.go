@@ -2,17 +2,35 @@ package library
 
 import "time"
 
-// FileState is what a scan knows about a video file without opening it: its path relative to
-// the library root (see ParseRelativePath), its size in bytes and its modification time.
+// FileState is what a scan knows about a library file without opening it: its path relative
+// to the library root (see ParseRelativePath), its size in bytes, its modification time and
+// its class (see ClassifyFile).
+//
+// RelativePath is the path exactly as the file system reports it; it opens the file and is
+// stored. NormalizedPath is the same path in Unicode NFC, produced by the adapter (ADR 0027
+// §3: the domain is standard-library only and expects NFC text); it is used for parsing and
+// match keys. An empty NormalizedPath means the relative path is already NFC.
 type FileState struct {
-	RelativePath string
-	Size         int64
-	ModifiedAt   time.Time
+	RelativePath   string
+	NormalizedPath string
+	Class          FileClass
+	Size           int64
+	ModifiedAt     time.Time
+}
+
+// PathForParsing returns the NFC path the name parser and match keys work on.
+func (state FileState) PathForParsing() string {
+	if state.NormalizedPath != "" {
+		return state.NormalizedPath
+	}
+
+	return state.RelativePath
 }
 
 // Changed reports whether a file must be probed again: its path, size or modification time
 // differs. Times are compared at millisecond precision, truncated, because the catalog stores
 // Unix milliseconds (ADR 0004); a finer comparison would re-probe every file on every scan.
+// Class and NormalizedPath are derived from the path, so they never change on their own.
 func Changed(previous, current FileState) bool {
 	return previous.RelativePath != current.RelativePath ||
 		previous.Size != current.Size ||

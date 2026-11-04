@@ -49,12 +49,52 @@ func TestSortTitle(t *testing.T) {
 		title string
 		want  string
 	}{
-		{name: "ascii", title: "The Big Movie", want: "the big movie"},
+		{name: "ascii", title: "Big Movie", want: "big movie"},
 		{name: "umlaut", title: "Über Film 2019", want: "über film 2019"},
 		{name: "greek final sigma", title: "ΟΔΥΣΣΕΥΣ ς", want: "οδυσσευσ σ"},
 		{name: "long s", title: "ſeason", want: "season"},
 		{name: "already folded", title: "abc", want: "abc"},
 		{name: "empty", title: "", want: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := library.SortTitle(test.title); got != test.want {
+				t.Errorf("SortTitle(%q) = %q, want %q", test.title, got, test.want)
+			}
+		})
+	}
+}
+
+func TestSortTitleDropsOneLeadingArticle(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		title string
+		want  string
+	}{
+		{name: "the", title: "The Matrix", want: "matrix"},
+		{name: "a", title: "A Beautiful Mind", want: "beautiful mind"},
+		{name: "an", title: "An American Werewolf", want: "american werewolf"},
+		{name: "der", title: "Der Untergang", want: "untergang"},
+		{name: "die", title: "Die Welle", want: "welle"},
+		{name: "das", title: "Das Boot", want: "boot"},
+		{name: "ein", title: "Ein Fisch namens Wanda", want: "fisch namens wanda"},
+		{name: "eine", title: "Eine Frage der Ehre", want: "frage der ehre"},
+		{name: "case-insensitive", title: "THE OFFICE", want: "office"},
+		{name: "only one article", title: "The A Team", want: "a team"},
+		{name: "several spaces", title: "The \t Wire", want: "wire"},
+		{name: "english die is still an article", title: "Die Hard", want: "hard"},
+		{name: "article alone stays", title: "The", want: "the"},
+		{name: "article with trailing space stays", title: "Das ", want: "das "},
+		{name: "not a whole word", title: "Theory of Everything", want: "theory of everything"},
+		{name: "prefix of eine", title: "Einer flog", want: "einer flog"},
+		{name: "article not first", title: "Into The Wild", want: "into the wild"},
+		{name: "leading space is kept", title: " The Matrix", want: " the matrix"},
+		{name: "punctuation is not a separator", title: "The-Matrix", want: "the-matrix"},
 	}
 
 	for _, test := range tests {

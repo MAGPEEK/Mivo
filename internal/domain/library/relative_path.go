@@ -11,7 +11,6 @@ import (
 const (
 	pathSeparator          = "/"
 	backslashCharacter     = '\\'
-	nulCharacter           = '\x00'
 	driveSeparator         = ':'
 	driveLetterPrefixBytes = 2
 	currentDirectory       = "."

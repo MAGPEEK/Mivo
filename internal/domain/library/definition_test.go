@@ -83,8 +83,10 @@ func TestDefinitionValidateAcceptsWellFormedDefinitions(t *testing.T) {
 			definition: library.Definition{Name: "Serien", Root: `D:\Serien`, Kind: library.KindShows},
 		},
 		{
-			name:       "unicode name at the rune limit",
-			definition: library.Definition{Name: strings.Repeat("ü", 128), Root: "/media", Kind: library.KindMovies},
+			name: "unicode name at the rune limit",
+			definition: library.Definition{
+				Name: strings.Repeat("ü", library.MaxNameLength), Root: "/media", Kind: library.KindMovies,
+			},
 		},
 		{
 			name:       "relative root is not checked here",
@@ -114,10 +116,11 @@ func TestDefinitionValidateRejectsMalformedDefinitions(t *testing.T) {
 	}{
 		{name: "empty name", mutate: func(d *library.Definition) { d.Name = "" }},
 		{name: "blank name", mutate: func(d *library.Definition) { d.Name = " \t " }},
-		{name: "name too long", mutate: func(d *library.Definition) { d.Name = strings.Repeat("a", 129) }},
-		{name: "name too many runes", mutate: func(d *library.Definition) { d.Name = strings.Repeat("ü", 129) }},
+		{name: "name too long", mutate: func(d *library.Definition) { d.Name = strings.Repeat("a", library.MaxNameLength+1) }},
+		{name: "name too many runes", mutate: func(d *library.Definition) { d.Name = strings.Repeat("ü", library.MaxNameLength+1) }},
 		{name: "name not utf-8", mutate: func(d *library.Definition) { d.Name = "bad\xff" }},
 		{name: "empty root", mutate: func(d *library.Definition) { d.Root = "" }},
+		{name: "whitespace-only root", mutate: func(d *library.Definition) { d.Root = " \t\n" }},
 		{name: "root with nul", mutate: func(d *library.Definition) { d.Root = "/media\x00/movies" }},
 		{name: "empty kind", mutate: func(d *library.Definition) { d.Kind = "" }},
 		{name: "unknown kind", mutate: func(d *library.Definition) { d.Kind = "music" }},

@@ -14,8 +14,12 @@ const hiddenEntryPrefix = "."
 // sidecar files such as .srt do not; a file whose probe finds no video stream is skipped
 // later by the scan.
 func IsVideoFileName(name string) bool {
-	extension := strings.ToLower(path.Ext(name))
+	return isVideoExtension(strings.ToLower(path.Ext(name)))
+}
 
+// isVideoExtension reports a lowercase video extension; IsVideoFileName and ClassifyFile
+// share it so the two policies cannot drift apart.
+func isVideoExtension(extension string) bool {
 	switch extension {
 	case ".mkv", ".mk3d", ".mp4", ".m4v", ".mov", ".avi", ".divx",
 		".ts", ".m2ts", ".mts", ".webm", ".flv", ".wmv", ".asf", ".ogv",

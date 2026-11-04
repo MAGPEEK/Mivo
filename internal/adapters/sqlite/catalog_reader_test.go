@@ -289,7 +289,7 @@ func TestReadingCorruptCatalogRowsIsAServerError(t *testing.T) {
 		name  string
 		query string
 	}{
-		{name: "unknown item kind", query: "UPDATE items SET kind = 'show'"},
+		{name: "unknown item kind", query: "UPDATE items SET kind = 'no_such_kind'"},
 		{name: "unknown container", query: "UPDATE media_files SET container = 'zip'"},
 		{name: "unknown stream kind", query: "UPDATE media_streams SET kind = 'data' WHERE stream_index = 1"},
 		{name: "unknown hdr format", query: "UPDATE media_streams SET hdr = 'dolby_vision' WHERE stream_index = 0"},
