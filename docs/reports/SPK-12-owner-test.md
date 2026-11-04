@@ -74,3 +74,16 @@ SPK: `mivo-0.1.0-alpha.2-x86_64.spk`, SHA-256
 
 The main-menu failure needs a fix before SPK-13 (see the SPK-13 prerequisites); the cause was
 not visible without SSH.
+
+## Run 3 (2026-11-04): test build 0.1.0-alpha.3 revision 1 (INFO dsmappname)
+
+SPK: `mivo-0.1.0-alpha.3-r1-x86_64.spk` (Package Center: 0.1.0-1031), SHA-256
+`82f06ae26ec6ccc5d21897e76a2fce2555b9cd4a65db9552fb3a313e8ef0b536` (test build, never published).
+
+| Step | Result |
+|---|---|
+| A13 Mivo icon in the DSM main menu, opens the web app | **pass** (owner: "works as it should") – confirms that INFO `dsmappname` equal to the `ui/config` key was the missing piece |
+| Main menu as a non-admin DSM user, removal on uninstall | not recorded |
+
+Hand-over note: uninstall this 0.1.0-1031 test build before installing the 0.1.0-alpha.3 release
+(0.1.0-1030), otherwise Package Center treats the release as a downgrade.
