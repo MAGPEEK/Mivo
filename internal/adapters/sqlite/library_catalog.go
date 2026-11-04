@@ -12,6 +12,7 @@ import (
 var (
 	_ scan.PlacedFileCatalog = (*LibraryCatalog)(nil)
 	_ scan.SidecarCatalog    = (*LibraryCatalog)(nil)
+	_ scan.CatalogV2         = (*LibraryCatalog)(nil)
 )
 
 // LibraryCatalog stores what the v2 scan finds: the item hierarchy with its files, sidecar
