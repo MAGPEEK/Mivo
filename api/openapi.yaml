@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.2.0"
+  version: "1.3.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -97,17 +97,54 @@ paths:
       summary: List the configured libraries
       description: >-
         Returns every library of the server configuration with its availability, item count
-        and the status of its current or last scan, ordered by name. Libraries are defined
-        in the configuration file or the environment, not through the API.
+        and the status of its current or last scan, ordered by name. Libraries come from the
+        configuration file or the environment (importedFromConfig) or are managed through
+        createLibrary, updateLibrary and deleteLibrary.
       tags:
         - libraries
       responses:
         "200":
-          description: All configured libraries; an empty list when none is configured.
+          description: All libraries; an empty list when none exists.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LibraryList"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createLibrary
+      summary: Add a library
+      description: >-
+        Creates a library of one kind from 1 to 16 server folders chosen with the folder
+        browser (listFolderRoots, listFolders). The folders must lie inside a folder root,
+        must not overlap a folder of another library and must not be reserved (the data
+        directory). Problem codes, with "field" naming the offending entry such as
+        "folders[1]": "folder_not_found", "folder_unreadable", "folder_overlap" (409; the
+        problem carries "libraryId" of the other library when there is one),
+        "folder_reserved", "folder_outside_roots", "too_many_folders", "kind_unsupported",
+        "name_invalid" and "language_invalid". A name that another library uses answers 409
+        "conflict". Name length is 1 to 128 characters. The library is scanned after it is
+        created.
+      tags:
+        - libraries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryCreate"
+      responses:
+        "201":
+          description: The new library.
+          headers:
+            Location:
+              description: URL of the new library.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Library"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/libraries/{libraryId}:
@@ -128,6 +165,96 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Library"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateLibrary
+      summary: Change a library
+      description: >-
+        Changes the name, folders, metadata language or options of a library; omitted
+        properties stay as they are. The kind cannot change, and a body with kind answers
+        400 "bad_request". "folders" replaces the whole ordered list: an entry with
+        folderId keeps that folder of this library, an entry with rootId and path adds a
+        folder. The problem codes of createLibrary apply. An unknown ID answers 404
+        "not_found". The library is scanned again when its folders changed.
+      tags:
+        - libraries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryUpdate"
+      responses:
+        "200":
+          description: The changed library.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Library"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteLibrary
+      summary: Remove a library
+      description: >-
+        Removes the library and its catalog entries from the server. Media files on disk
+        are never touched. An unknown ID answers 404 "not_found".
+      tags:
+        - libraries
+      responses:
+        "204":
+          description: The library is removed.
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/folder-roots:
+    get:
+      operationId: listFolderRoots
+      summary: List the folder roots a library folder may be chosen from
+      description: >-
+        Returns the server folders the folder browser starts from, how the server is
+        installed and the account it runs as, so the UI can explain permission problems.
+      tags:
+        - libraries
+      responses:
+        "200":
+          description: The folder roots.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderRootList"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/folder-roots/{rootId}/folders:
+    parameters:
+      - $ref: "#/components/parameters/RootId"
+    get:
+      operationId: listFolders
+      summary: List the sub-folders of a folder
+      description: >-
+        Returns the directories directly below path of a folder root; files are never
+        listed. At most 1000 entries are returned (truncated says more exist). A bad path
+        answers 400 "invalid"; an unknown root or a missing folder answers 404 "not_found";
+        a root that does not answer in time answers 503 "unavailable".
+      tags:
+        - libraries
+      parameters:
+        - name: path
+          in: query
+          required: false
+          description: >-
+            Folder to list, relative to the root and separated by "/". Empty or omitted
+            lists the root itself.
+          schema:
+            type: string
+            maxLength: 4096
+      responses:
+        "200":
+          description: The sub-folders.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderListing"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/libraries/{libraryId}/scan:
@@ -579,6 +706,15 @@ components:
         type: string
         format: uuid
       example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+    RootId:
+      name: rootId
+      in: path
+      required: true
+      description: ID of the folder root (FolderRoot.id).
+      schema:
+        type: string
+        format: uuid
+      example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
     ItemId:
       name: itemId
       in: path
@@ -694,7 +830,15 @@ components:
         - version
         - serverId
         - apiVersion
+        - libraryKinds
       properties:
+        libraryKinds:
+          type: array
+          description: >-
+            The library kinds this server accepts in createLibrary now; a subset of all
+            kinds while a kind is not supported yet.
+          items:
+            $ref: "#/components/schemas/LibraryKind"
         productName:
           type: string
           description: Configurable product name of the server.
@@ -742,7 +886,7 @@ components:
             $ref: "#/components/schemas/Library"
     Library:
       type: object
-      description: A folder of media files defined in the server configuration.
+      description: A set of server folders with media files of one kind.
       required:
         - id
         - name
@@ -750,7 +894,29 @@ components:
         - available
         - itemCount
         - scan
+        - folders
+        - metadataLanguage
+        - options
+        - importedFromConfig
       properties:
+        folders:
+          type: array
+          description: The folders of the library in their stored order; at least one.
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/LibraryFolder"
+        metadataLanguage:
+          type: string
+          description: Language for metadata lookups (a BCP 47 tag); empty uses the server default.
+          example: de
+        options:
+          $ref: "#/components/schemas/LibraryOptions"
+        importedFromConfig:
+          type: boolean
+          description: >-
+            Whether the library was created from the configuration file or environment
+            rather than through the API.
+          example: false
         id:
           type: string
           format: uuid
@@ -778,6 +944,247 @@ components:
           example: 42
         scan:
           $ref: "#/components/schemas/ScanStatus"
+    LibraryFolder:
+      type: object
+      description: One server folder of a library.
+      required:
+        - id
+        - path
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable ID of the folder; updateLibrary keeps a folder by this ID.
+          example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+        path:
+          type: string
+          description: Absolute path of the folder on the server, for display.
+          example: /media/movies
+        available:
+          type: boolean
+          description: Whether the folder is reachable now.
+          example: true
+    LibraryOptions:
+      type: object
+      description: Per-library switches for scanning and metadata.
+      required:
+        - scanExtras
+        - readNfo
+        - localArtwork
+      properties:
+        scanExtras:
+          type: boolean
+          description: Whether extras (trailers, featurettes) are scanned.
+          example: true
+        readNfo:
+          type: boolean
+          description: Whether NFO metadata files next to the media are read.
+          example: true
+        localArtwork:
+          type: boolean
+          description: Whether artwork files next to the media are used.
+          example: true
+    FolderRef:
+      type: object
+      description: >-
+        Names one folder of a library: either folderId (keep an existing folder of this
+        library) or rootId with path (a folder below a folder root). The server rejects
+        any other combination with the problem code "invalid".
+      additionalProperties: false
+      properties:
+        folderId:
+          type: string
+          format: uuid
+          description: ID of an existing folder of this library (LibraryFolder.id).
+          example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+        rootId:
+          type: string
+          format: uuid
+          description: ID of the folder root that contains the folder (FolderRoot.id).
+          example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+        path:
+          type: string
+          maxLength: 4096
+          description: >-
+            Folder relative to the root, separated by "/"; empty means the root itself.
+          example: Movies/Animation
+    LibraryCreate:
+      type: object
+      description: Request body of createLibrary.
+      additionalProperties: false
+      required:
+        - kind
+        - name
+        - folders
+      properties:
+        kind:
+          $ref: "#/components/schemas/LibraryKind"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Display name, 1 to 128 characters.
+          example: Movies
+        folders:
+          type: array
+          description: The folders of the library, 1 to 16 entries; each names a root and path.
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/FolderRef"
+        metadataLanguage:
+          type: string
+          description: Language for metadata lookups (a BCP 47 tag); omit for the server default.
+          example: de
+        options:
+          $ref: "#/components/schemas/LibraryOptions"
+    LibraryUpdate:
+      type: object
+      description: >-
+        Request body of updateLibrary; at least one property. The kind of a library cannot
+        change, so it is not part of this body.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: New display name, 1 to 128 characters.
+          example: Movies
+        folders:
+          type: array
+          description: The complete new ordered folder list, 1 to 16 entries.
+          minItems: 1
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/FolderRef"
+        metadataLanguage:
+          type: string
+          description: New metadata language; an empty string selects the server default.
+          example: de
+        options:
+          $ref: "#/components/schemas/LibraryOptions"
+    InstallKind:
+      type: string
+      description: >-
+        How the server is installed. Clients must tolerate values added in later versions.
+      enum:
+        - standard
+        - docker
+        - synology
+      example: standard
+    FolderRoot:
+      type: object
+      description: A server folder the folder browser may start from.
+      required:
+        - id
+        - path
+        - available
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the root; used in listFolders and FolderRef.rootId.
+          example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+        path:
+          type: string
+          description: Absolute path of the root on the server, for display.
+          example: /media
+        available:
+          type: boolean
+          description: Whether the root is reachable now.
+          example: true
+    FolderRootList:
+      type: object
+      description: The folder roots with facts about the installation.
+      required:
+        - roots
+        - installKind
+        - serviceUser
+      properties:
+        roots:
+          type: array
+          description: The folder roots, in display order.
+          items:
+            $ref: "#/components/schemas/FolderRoot"
+        installKind:
+          $ref: "#/components/schemas/InstallKind"
+        serviceUser:
+          type: string
+          description: Name of the account the server runs as; empty when unknown.
+          example: mivo
+    FolderReason:
+      type: string
+      description: >-
+        Why a folder cannot be chosen: "reserved" (the server uses it) or "in_use" (another
+        library holds it). Clients must tolerate values added in later versions.
+      enum:
+        - reserved
+        - in_use
+      example: in_use
+    FolderEntry:
+      type: object
+      description: One sub-folder in a folder listing.
+      required:
+        - name
+        - path
+        - selectable
+      properties:
+        name:
+          type: string
+          description: Name of the folder.
+          example: Animation
+        path:
+          type: string
+          description: Path relative to the root, separated by "/"; pass it to listFolders.
+          example: Movies/Animation
+        selectable:
+          type: boolean
+          description: Whether the folder may be chosen for a library.
+          example: true
+        reason:
+          $ref: "#/components/schemas/FolderReason"
+    FolderListing:
+      type: object
+      description: The sub-folders of one folder of a root.
+      required:
+        - rootId
+        - path
+        - folders
+        - unreadableCount
+        - truncated
+      properties:
+        rootId:
+          type: string
+          format: uuid
+          description: ID of the folder root.
+          example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+        path:
+          type: string
+          description: The listed folder, relative to the root; empty for the root itself.
+          example: Movies
+        parentPath:
+          type: string
+          nullable: true
+          description: The parent folder relative to the root; null when the root itself is listed.
+          example: ""
+        folders:
+          type: array
+          description: Sub-folders ordered by name; capped at 1000 entries.
+          items:
+            $ref: "#/components/schemas/FolderEntry"
+        unreadableCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of entries left out because the server cannot read them.
+          example: 0
+        truncated:
+          type: boolean
+          description: Whether more than 1000 folders exist and the list is cut.
+          example: false
     ScanState:
       type: string
       description: >-
@@ -846,7 +1253,14 @@ components:
       required:
         - state
         - counts
+        - unavailableFolderCount
       properties:
+        unavailableFolderCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of library folders that were not reachable during the scan.
+          example: 0
         state:
           $ref: "#/components/schemas/ScanState"
         startedAt:
@@ -1243,6 +1657,18 @@ components:
           type: string
           description: Display title from local metadata (NFO) or else the file or folder name.
           example: Big Buck Bunny
+        number:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Season number of a season (0 for specials) or episode number of an episode.
+          example: 1
+        numberEnd:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Last episode number of a file that holds several episodes (S01E01-E02).
+          example: 2
         originalTitle:
           type: string
           description: Title in the original language when it differs from the title.
@@ -1377,7 +1803,9 @@ components:
           example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
         fileName:
           type: string
-          description: Name of the file without any directory, for example "movie.mkv".
+          description: >-
+            Name of the file without any directory, for example "movie.mkv". A forward
+            slash and a backslash both count as a directory separator.
           example: Big.Buck.Bunny.mkv
         sizeBytes:
           type: integer
@@ -1981,6 +2409,22 @@ components:
             cannot encode), "internal_error" (500), "unavailable" (503, for example while
             the server shuts down), "session_limit_reached" (503, too many playback
             sessions; see Retry-After) and "stream_not_ready" (503, the stream has no
-            segment yet; see Retry-After). New codes may be added; clients show a generic
-            message for unknown codes.
+            segment yet; see Retry-After). Library management adds "folder_not_found"
+            (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved"
+            (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid"
+            (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be
+            added; clients show a generic message for unknown codes.
           example: not_found
+        field:
+          type: string
+          description: >-
+            Request property the problem is about, for example "folders[1]"; omitted when
+            it concerns no single property.
+          example: folders[1]
+        libraryId:
+          type: string
+          format: uuid
+          description: >-
+            For "folder_overlap", the library that already holds an overlapping folder;
+            omitted when there is none.
+          example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c

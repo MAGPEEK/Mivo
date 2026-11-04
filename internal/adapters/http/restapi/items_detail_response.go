@@ -151,6 +151,8 @@ func itemDetailResponse(detail applibrary.ItemDetail) (apigen.ItemDetail, error)
 		Kind:       identity.kind,
 		Title:      detail.Item.Title,
 		Year:       detailYear(detail),
+		Number:     optionalNumber(detail.Item.Number),
+		NumberEnd:  optionalNumber(detail.Item.NumberEnd),
 		ChildCount: optionalInt32(detail.ChildCount),
 		LeafCount:  optionalInt32(detail.LeafCount),
 	}

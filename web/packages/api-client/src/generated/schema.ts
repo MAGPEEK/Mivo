@@ -53,11 +53,15 @@ export interface paths {
         };
         /**
          * List the configured libraries
-         * @description Returns every library of the server configuration with its availability, item count and the status of its current or last scan, ordered by name. Libraries are defined in the configuration file or the environment, not through the API.
+         * @description Returns every library of the server configuration with its availability, item count and the status of its current or last scan, ordered by name. Libraries come from the configuration file or the environment (importedFromConfig) or are managed through createLibrary, updateLibrary and deleteLibrary.
          */
         get: operations["listLibraries"];
         put?: never;
-        post?: never;
+        /**
+         * Add a library
+         * @description Creates a library of one kind from 1 to 16 server folders chosen with the folder browser (listFolderRoots, listFolders). The folders must lie inside a folder root, must not overlap a folder of another library and must not be reserved (the data directory). Problem codes, with "field" naming the offending entry such as "folders[1]": "folder_not_found", "folder_unreadable", "folder_overlap" (409; the problem carries "libraryId" of the other library when there is one), "folder_reserved", "folder_outside_roots", "too_many_folders", "kind_unsupported", "name_invalid" and "language_invalid". A name that another library uses answers 409 "conflict". Name length is 1 to 128 characters. The library is scanned after it is created.
+         */
+        post: operations["createLibrary"];
         delete?: never;
         options?: never;
         head?: never;
@@ -82,6 +86,60 @@ export interface paths {
          * @description Returns one library with its availability, item count and scan status. Clients poll it while a scan runs. An unknown ID answers 404 with the problem code "not_found".
          */
         get: operations["getLibrary"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a library
+         * @description Removes the library and its catalog entries from the server. Media files on disk are never touched. An unknown ID answers 404 "not_found".
+         */
+        delete: operations["deleteLibrary"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a library
+         * @description Changes the name, folders, metadata language or options of a library; omitted properties stay as they are. The kind cannot change, and a body with kind answers 400 "bad_request". "folders" replaces the whole ordered list: an entry with folderId keeps that folder of this library, an entry with rootId and path adds a folder. The problem codes of createLibrary apply. An unknown ID answers 404 "not_found". The library is scanned again when its folders changed.
+         */
+        patch: operations["updateLibrary"];
+        trace?: never;
+    };
+    "/api/v1/folder-roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the folder roots a library folder may be chosen from
+         * @description Returns the server folders the folder browser starts from, how the server is installed and the account it runs as, so the UI can explain permission problems.
+         */
+        get: operations["listFolderRoots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folder-roots/{rootId}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the folder root (FolderRoot.id).
+                 * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+                 */
+                rootId: components["parameters"]["RootId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the sub-folders of a folder
+         * @description Returns the directories directly below path of a folder root; files are never listed. At most 1000 entries are returned (truncated says more exist). A bad path answers 400 "invalid"; an unknown root or a missing folder answers 404 "not_found"; a root that does not answer in time answers 503 "unavailable".
+         */
+        get: operations["listFolders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -363,6 +421,8 @@ export interface components {
         };
         /** @description Describes the running server. */
         SystemInfo: {
+            /** @description The library kinds this server accepts in createLibrary now; a subset of all kinds while a kind is not supported yet. */
+            libraryKinds: components["schemas"]["LibraryKind"][];
             /**
              * @description Configurable product name of the server.
              * @example Media Server
@@ -402,8 +462,21 @@ export interface components {
             /** @description Every configured library, ordered by name. */
             libraries: components["schemas"]["Library"][];
         };
-        /** @description A folder of media files defined in the server configuration. */
+        /** @description A set of server folders with media files of one kind. */
         Library: {
+            /** @description The folders of the library in their stored order; at least one. */
+            folders: components["schemas"]["LibraryFolder"][];
+            /**
+             * @description Language for metadata lookups (a BCP 47 tag); empty uses the server default.
+             * @example de
+             */
+            metadataLanguage: string;
+            options: components["schemas"]["LibraryOptions"];
+            /**
+             * @description Whether the library was created from the configuration file or environment rather than through the API.
+             * @example false
+             */
+            importedFromConfig: boolean;
             /**
              * Format: uuid
              * @description Stable ID of the library while its folder stays configured.
@@ -428,6 +501,189 @@ export interface components {
              */
             itemCount: number;
             scan: components["schemas"]["ScanStatus"];
+        };
+        /** @description One server folder of a library. */
+        LibraryFolder: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the folder; updateLibrary keeps a folder by this ID.
+             * @example 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+             */
+            id: string;
+            /**
+             * @description Absolute path of the folder on the server, for display.
+             * @example /media/movies
+             */
+            path: string;
+            /**
+             * @description Whether the folder is reachable now.
+             * @example true
+             */
+            available: boolean;
+        };
+        /** @description Per-library switches for scanning and metadata. */
+        LibraryOptions: {
+            /**
+             * @description Whether extras (trailers, featurettes) are scanned.
+             * @example true
+             */
+            scanExtras: boolean;
+            /**
+             * @description Whether NFO metadata files next to the media are read.
+             * @example true
+             */
+            readNfo: boolean;
+            /**
+             * @description Whether artwork files next to the media are used.
+             * @example true
+             */
+            localArtwork: boolean;
+        };
+        /** @description Names one folder of a library: either folderId (keep an existing folder of this library) or rootId with path (a folder below a folder root). The server rejects any other combination with the problem code "invalid". */
+        FolderRef: {
+            /**
+             * Format: uuid
+             * @description ID of an existing folder of this library (LibraryFolder.id).
+             * @example 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+             */
+            folderId?: string;
+            /**
+             * Format: uuid
+             * @description ID of the folder root that contains the folder (FolderRoot.id).
+             * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+             */
+            rootId?: string;
+            /**
+             * @description Folder relative to the root, separated by "/"; empty means the root itself.
+             * @example Movies/Animation
+             */
+            path?: string;
+        };
+        /** @description Request body of createLibrary. */
+        LibraryCreate: {
+            kind: components["schemas"]["LibraryKind"];
+            /**
+             * @description Display name, 1 to 128 characters.
+             * @example Movies
+             */
+            name: string;
+            /** @description The folders of the library, 1 to 16 entries; each names a root and path. */
+            folders: components["schemas"]["FolderRef"][];
+            /**
+             * @description Language for metadata lookups (a BCP 47 tag); omit for the server default.
+             * @example de
+             */
+            metadataLanguage?: string;
+            options?: components["schemas"]["LibraryOptions"];
+        };
+        /** @description Request body of updateLibrary; at least one property. The kind of a library cannot change, so it is not part of this body. */
+        LibraryUpdate: {
+            /**
+             * @description New display name, 1 to 128 characters.
+             * @example Movies
+             */
+            name?: string;
+            /** @description The complete new ordered folder list, 1 to 16 entries. */
+            folders?: components["schemas"]["FolderRef"][];
+            /**
+             * @description New metadata language; an empty string selects the server default.
+             * @example de
+             */
+            metadataLanguage?: string;
+            options?: components["schemas"]["LibraryOptions"];
+        };
+        /**
+         * @description How the server is installed. Clients must tolerate values added in later versions.
+         * @example standard
+         * @enum {string}
+         */
+        InstallKind: "standard" | "docker" | "synology";
+        /** @description A server folder the folder browser may start from. */
+        FolderRoot: {
+            /**
+             * Format: uuid
+             * @description ID of the root; used in listFolders and FolderRef.rootId.
+             * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+             */
+            id: string;
+            /**
+             * @description Absolute path of the root on the server, for display.
+             * @example /media
+             */
+            path: string;
+            /**
+             * @description Whether the root is reachable now.
+             * @example true
+             */
+            available: boolean;
+        };
+        /** @description The folder roots with facts about the installation. */
+        FolderRootList: {
+            /** @description The folder roots, in display order. */
+            roots: components["schemas"]["FolderRoot"][];
+            installKind: components["schemas"]["InstallKind"];
+            /**
+             * @description Name of the account the server runs as; empty when unknown.
+             * @example mivo
+             */
+            serviceUser: string;
+        };
+        /**
+         * @description Why a folder cannot be chosen: "reserved" (the server uses it) or "in_use" (another library holds it). Clients must tolerate values added in later versions.
+         * @example in_use
+         * @enum {string}
+         */
+        FolderReason: "reserved" | "in_use";
+        /** @description One sub-folder in a folder listing. */
+        FolderEntry: {
+            /**
+             * @description Name of the folder.
+             * @example Animation
+             */
+            name: string;
+            /**
+             * @description Path relative to the root, separated by "/"; pass it to listFolders.
+             * @example Movies/Animation
+             */
+            path: string;
+            /**
+             * @description Whether the folder may be chosen for a library.
+             * @example true
+             */
+            selectable: boolean;
+            reason?: components["schemas"]["FolderReason"];
+        };
+        /** @description The sub-folders of one folder of a root. */
+        FolderListing: {
+            /**
+             * Format: uuid
+             * @description ID of the folder root.
+             * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+             */
+            rootId: string;
+            /**
+             * @description The listed folder, relative to the root; empty for the root itself.
+             * @example Movies
+             */
+            path: string;
+            /**
+             * @description The parent folder relative to the root; null when the root itself is listed.
+             * @example
+             */
+            parentPath?: string | null;
+            /** @description Sub-folders ordered by name; capped at 1000 entries. */
+            folders: components["schemas"]["FolderEntry"][];
+            /**
+             * Format: int32
+             * @description Number of entries left out because the server cannot read them.
+             * @example 0
+             */
+            unreadableCount: number;
+            /**
+             * @description Whether more than 1000 folders exist and the list is cut.
+             * @example false
+             */
+            truncated: boolean;
         };
         /**
          * @description State of the current or last scan of a library: "idle" (no scan runs; the last one, if any, finished), "running" or "failed" (the last scan stopped early, see errorCode). Clients must tolerate values added in later versions.
@@ -476,6 +732,12 @@ export interface components {
         };
         /** @description Progress and result of the current or last scan of a library. */
         ScanStatus: {
+            /**
+             * Format: int32
+             * @description Number of library folders that were not reachable during the scan.
+             * @example 0
+             */
+            unavailableFolderCount: number;
             state: components["schemas"]["ScanState"];
             /**
              * Format: date-time
@@ -761,6 +1023,18 @@ export interface components {
              */
             title: string;
             /**
+             * Format: int32
+             * @description Season number of a season (0 for specials) or episode number of an episode.
+             * @example 1
+             */
+            number?: number;
+            /**
+             * Format: int32
+             * @description Last episode number of a file that holds several episodes (S01E01-E02).
+             * @example 2
+             */
+            numberEnd?: number;
+            /**
              * @description Title in the original language when it differs from the title.
              * @example Big Buck Bunny
              */
@@ -864,7 +1138,7 @@ export interface components {
              */
             id: string;
             /**
-             * @description Name of the file without any directory, for example "movie.mkv".
+             * @description Name of the file without any directory, for example "movie.mkv". A forward slash and a backslash both count as a directory separator.
              * @example Big.Buck.Bunny.mkv
              */
             fileName: string;
@@ -1322,10 +1596,21 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). New codes may be added; clients show a generic message for unknown codes.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
+            /**
+             * @description Request property the problem is about, for example "folders[1]"; omitted when it concerns no single property.
+             * @example folders[1]
+             */
+            field?: string;
+            /**
+             * Format: uuid
+             * @description For "folder_overlap", the library that already holds an overlapping folder; omitted when there is none.
+             * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+             */
+            libraryId?: string;
         };
     };
     responses: {
@@ -1345,6 +1630,11 @@ export interface components {
          * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
          */
         LibraryId: string;
+        /**
+         * @description ID of the folder root (FolderRoot.id).
+         * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+         */
+        RootId: string;
         /**
          * @description ID of the item.
          * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
@@ -1445,13 +1735,40 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description All configured libraries; an empty list when none is configured. */
+            /** @description All libraries; an empty list when none exists. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["LibraryList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryCreate"];
+            };
+        };
+        responses: {
+            /** @description The new library. */
+            201: {
+                headers: {
+                    /** @description URL of the new library. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Library"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -1479,6 +1796,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Library"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library is removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed library. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Library"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listFolderRoots: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folder roots. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderRootList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listFolders: {
+        parameters: {
+            query?: {
+                /** @description Folder to list, relative to the root and separated by "/". Empty or omitted lists the root itself. */
+                path?: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the folder root (FolderRoot.id).
+                 * @example 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+                 */
+                rootId: components["parameters"]["RootId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sub-folders. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderListing"];
                 };
             };
             default: components["responses"]["Problem"];

@@ -16,7 +16,12 @@ const library: Library = {
   scan: {
     state: "idle",
     counts: { added: 0, updated: 0, removed: 0, unchanged: 0, failed: 0, skipped: 0 },
+    unavailableFolderCount: 0,
   },
+  folders: [{ id: "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d", path: "/media/movies", available: true }],
+  metadataLanguage: "",
+  options: { scanExtras: true, readNfo: true, localArtwork: true },
+  importedFromConfig: false,
 };
 
 const items: ItemPage = {

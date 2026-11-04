@@ -55,6 +55,24 @@ func (e ExtraType) Valid() bool {
 	}
 }
 
+// Defines values for FolderReason.
+const (
+	FolderReasonInUse    FolderReason = "in_use"
+	FolderReasonReserved FolderReason = "reserved"
+)
+
+// Valid indicates whether the value is a known member of the FolderReason enum.
+func (e FolderReason) Valid() bool {
+	switch e {
+	case FolderReasonInUse:
+		return true
+	case FolderReasonReserved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HdrFormat.
 const (
 	HdrFormatHdr10 HdrFormat = "hdr10"
@@ -106,6 +124,27 @@ func (e HlsDelivery) Valid() bool {
 	case HlsDeliveryNative:
 		return true
 	case HlsDeliveryNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InstallKind.
+const (
+	InstallKindDocker   InstallKind = "docker"
+	InstallKindStandard InstallKind = "standard"
+	InstallKindSynology InstallKind = "synology"
+)
+
+// Valid indicates whether the value is a known member of the InstallKind enum.
+func (e InstallKind) Valid() bool {
+	switch e {
+	case InstallKindDocker:
+		return true
+	case InstallKindStandard:
+		return true
+	case InstallKindSynology:
 		return true
 	default:
 		return false
@@ -428,6 +467,117 @@ type DirectPlayProfile struct {
 // Example: trailer
 type ExtraType string
 
+// FolderEntry One sub-folder in a folder listing.
+type FolderEntry struct {
+	// Name Name of the folder.
+	//
+	// Example: Animation
+	Name string `json:"name"`
+
+	// Path Path relative to the root, separated by "/"; pass it to listFolders.
+	//
+	// Example: Movies/Animation
+	Path string `json:"path"`
+
+	// Reason Why a folder cannot be chosen: "reserved" (the server uses it) or "in_use" (another library holds it). Clients must tolerate values added in later versions.
+	//
+	// Example: in_use
+	Reason *FolderReason `json:"reason,omitempty"`
+
+	// Selectable Whether the folder may be chosen for a library.
+	//
+	// Example: true
+	Selectable bool `json:"selectable"`
+}
+
+// FolderListing The sub-folders of one folder of a root.
+type FolderListing struct {
+	// Folders Sub-folders ordered by name; capped at 1000 entries.
+	Folders []FolderEntry `json:"folders"`
+
+	// ParentPath The parent folder relative to the root; null when the root itself is listed.
+	//
+	// Example:
+	ParentPath *string `json:"parentPath,omitempty"`
+
+	// Path The listed folder, relative to the root; empty for the root itself.
+	//
+	// Example: Movies
+	Path string `json:"path"`
+
+	// RootID ID of the folder root.
+	//
+	// Example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+	RootID uuid.UUID `json:"rootId"`
+
+	// Truncated Whether more than 1000 folders exist and the list is cut.
+	//
+	// Example: false
+	Truncated bool `json:"truncated"`
+
+	// UnreadableCount Number of entries left out because the server cannot read them.
+	//
+	// Example: 0
+	UnreadableCount int32 `json:"unreadableCount"`
+}
+
+// FolderReason Why a folder cannot be chosen: "reserved" (the server uses it) or "in_use" (another library holds it). Clients must tolerate values added in later versions.
+//
+// Example: in_use
+type FolderReason string
+
+// FolderRef Names one folder of a library: either folderId (keep an existing folder of this library) or rootId with path (a folder below a folder root). The server rejects any other combination with the problem code "invalid".
+type FolderRef struct {
+	// FolderID ID of an existing folder of this library (LibraryFolder.id).
+	//
+	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+	FolderID *uuid.UUID `json:"folderId,omitempty"`
+
+	// Path Folder relative to the root, separated by "/"; empty means the root itself.
+	//
+	// Example: Movies/Animation
+	Path *string `json:"path,omitempty"`
+
+	// RootID ID of the folder root that contains the folder (FolderRoot.id).
+	//
+	// Example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+	RootID *uuid.UUID `json:"rootId,omitempty"`
+}
+
+// FolderRoot A server folder the folder browser may start from.
+type FolderRoot struct {
+	// Available Whether the root is reachable now.
+	//
+	// Example: true
+	Available bool `json:"available"`
+
+	// ID ID of the root; used in listFolders and FolderRef.rootId.
+	//
+	// Example: 0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f
+	ID uuid.UUID `json:"id"`
+
+	// Path Absolute path of the root on the server, for display.
+	//
+	// Example: /media
+	Path string `json:"path"`
+}
+
+// FolderRootList The folder roots with facts about the installation.
+type FolderRootList struct {
+	// InstallKind How the server is installed. Clients must tolerate values added in later versions.
+	//
+	// Example: standard
+	InstallKind InstallKind `json:"installKind"`
+
+	// Roots The folder roots, in display order.
+	Roots []FolderRoot `json:"roots"`
+
+	// ServiceUser Name of the account the server runs as; empty when unknown.
+	//
+	// Example: mivo
+	ServiceUser string `json:"serviceUser"`
+}
+
 // HdrFormat High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
 //
 // Example: hdr10
@@ -494,6 +644,11 @@ type ImageRef struct {
 	// Example: 9f86d081884c7d65
 	Tag string `json:"tag"`
 }
+
+// InstallKind How the server is installed. Clients must tolerate values added in later versions.
+//
+// Example: standard
+type InstallKind string
 
 // ItemAncestor An item above another one in the hierarchy, for breadcrumbs.
 type ItemAncestor struct {
@@ -576,6 +731,16 @@ type ItemDetail struct {
 	//
 	// Example: 9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d
 	NextID *uuid.UUID `json:"nextId,omitempty"`
+
+	// Number Season number of a season (0 for specials) or episode number of an episode.
+	//
+	// Example: 1
+	Number *int32 `json:"number,omitempty"`
+
+	// NumberEnd Last episode number of a file that holds several episodes (S01E01-E02).
+	//
+	// Example: 2
+	NumberEnd *int32 `json:"numberEnd,omitempty"`
 
 	// OriginalTitle Title in the original language when it differs from the title.
 	//
@@ -735,17 +900,25 @@ type ItemSummary struct {
 	Year *int32 `json:"year,omitempty"`
 }
 
-// Library A folder of media files defined in the server configuration.
+// Library A set of server folders with media files of one kind.
 type Library struct {
 	// Available Whether the library folder is reachable now. False for example while a network share is not mounted; its items stay listed but cannot be played.
 	//
 	// Example: true
 	Available bool `json:"available"`
 
+	// Folders The folders of the library in their stored order; at least one.
+	Folders []LibraryFolder `json:"folders"`
+
 	// ID Stable ID of the library while its folder stays configured.
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	ID uuid.UUID `json:"id"`
+
+	// ImportedFromConfig Whether the library was created from the configuration file or environment rather than through the API.
+	//
+	// Example: false
+	ImportedFromConfig bool `json:"importedFromConfig"`
 
 	// ItemCount Number of top-level items in the library (movies and shows), the items listLibraryItems returns; seasons, episodes and extras are not counted.
 	//
@@ -757,13 +930,63 @@ type Library struct {
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
 
+	// MetadataLanguage Language for metadata lookups (a BCP 47 tag); empty uses the server default.
+	//
+	// Example: de
+	MetadataLanguage string `json:"metadataLanguage"`
+
 	// Name Display name from the configuration.
 	//
 	// Example: Movies
 	Name string `json:"name"`
 
+	// Options Per-library switches for scanning and metadata.
+	Options LibraryOptions `json:"options"`
+
 	// Scan Progress and result of the current or last scan of a library.
 	Scan ScanStatus `json:"scan"`
+}
+
+// LibraryCreate Request body of createLibrary.
+type LibraryCreate struct {
+	// Folders The folders of the library, 1 to 16 entries; each names a root and path.
+	Folders []FolderRef `json:"folders"`
+
+	// Kind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
+	//
+	// Example: movies
+	Kind LibraryKind `json:"kind"`
+
+	// MetadataLanguage Language for metadata lookups (a BCP 47 tag); omit for the server default.
+	//
+	// Example: de
+	MetadataLanguage *string `json:"metadataLanguage,omitempty"`
+
+	// Name Display name, 1 to 128 characters.
+	//
+	// Example: Movies
+	Name string `json:"name"`
+
+	// Options Per-library switches for scanning and metadata.
+	Options *LibraryOptions `json:"options,omitempty"`
+}
+
+// LibraryFolder One server folder of a library.
+type LibraryFolder struct {
+	// Available Whether the folder is reachable now.
+	//
+	// Example: true
+	Available bool `json:"available"`
+
+	// ID Stable ID of the folder; updateLibrary keeps a folder by this ID.
+	//
+	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+	ID uuid.UUID `json:"id"`
+
+	// Path Absolute path of the folder on the server, for display.
+	//
+	// Example: /media/movies
+	Path string `json:"path"`
 }
 
 // LibraryKind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
@@ -775,6 +998,43 @@ type LibraryKind string
 type LibraryList struct {
 	// Libraries Every configured library, ordered by name.
 	Libraries []Library `json:"libraries"`
+}
+
+// LibraryOptions Per-library switches for scanning and metadata.
+type LibraryOptions struct {
+	// LocalArtwork Whether artwork files next to the media are used.
+	//
+	// Example: true
+	LocalArtwork bool `json:"localArtwork"`
+
+	// ReadNfo Whether NFO metadata files next to the media are read.
+	//
+	// Example: true
+	ReadNfo bool `json:"readNfo"`
+
+	// ScanExtras Whether extras (trailers, featurettes) are scanned.
+	//
+	// Example: true
+	ScanExtras bool `json:"scanExtras"`
+}
+
+// LibraryUpdate Request body of updateLibrary; at least one property. The kind of a library cannot change, so it is not part of this body.
+type LibraryUpdate struct {
+	// Folders The complete new ordered folder list, 1 to 16 entries.
+	Folders *[]FolderRef `json:"folders,omitempty"`
+
+	// MetadataLanguage New metadata language; an empty string selects the server default.
+	//
+	// Example: de
+	MetadataLanguage *string `json:"metadataLanguage,omitempty"`
+
+	// Name New display name, 1 to 128 characters.
+	//
+	// Example: Movies
+	Name *string `json:"name,omitempty"`
+
+	// Options Per-library switches for scanning and metadata.
+	Options *LibraryOptions `json:"options,omitempty"`
 }
 
 // MediaFile One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only.
@@ -804,7 +1064,7 @@ type MediaFile struct {
 	// Example: probe_failed
 	ErrorCode *string `json:"errorCode,omitempty"`
 
-	// FileName Name of the file without any directory, for example "movie.mkv".
+	// FileName Name of the file without any directory, for example "movie.mkv". A forward slash and a backslash both count as a directory separator.
 	//
 	// Example: Big.Buck.Bunny.mkv
 	FileName string `json:"fileName"`
@@ -1132,7 +1392,7 @@ type PlaybackSessionState string
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). New codes may be added; clients show a generic message for unknown codes.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -1140,8 +1400,18 @@ type Problem struct {
 	// Detail Human-readable English explanation of this occurrence.
 	Detail *string `json:"detail,omitempty"`
 
+	// Field Request property the problem is about, for example "folders[1]"; omitted when it concerns no single property.
+	//
+	// Example: folders[1]
+	Field *string `json:"field,omitempty"`
+
 	// Instance URI reference identifying this occurrence of the problem.
 	Instance *string `json:"instance,omitempty"`
+
+	// LibraryID For "folder_overlap", the library that already holds an overlapping folder; omitted when there is none.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID *uuid.UUID `json:"libraryId,omitempty"`
 
 	// Status HTTP status code of this occurrence.
 	Status int32 `json:"status"`
@@ -1233,6 +1503,11 @@ type ScanStatus struct {
 	//
 	// Example: idle
 	State ScanState `json:"state"`
+
+	// UnavailableFolderCount Number of library folders that were not reachable during the scan.
+	//
+	// Example: 0
+	UnavailableFolderCount int32 `json:"unavailableFolderCount"`
 }
 
 // SortOrder Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
@@ -1306,6 +1581,9 @@ type SystemInfo struct {
 	// Commit VCS revision the binary was built from; omitted when unknown.
 	Commit *string `json:"commit,omitempty"`
 
+	// LibraryKinds The library kinds this server accepts in createLibrary now; a subset of all kinds while a kind is not supported yet.
+	LibraryKinds []LibraryKind `json:"libraryKinds"`
+
 	// ProductName Configurable product name of the server.
 	//
 	// Example: Media Server
@@ -1329,8 +1607,17 @@ type ItemID = uuid.UUID
 // LibraryID defines model for LibraryId.
 type LibraryID = uuid.UUID
 
+// RootID defines model for RootId.
+type RootID = uuid.UUID
+
 // SessionID defines model for SessionId.
 type SessionID = uuid.UUID
+
+// ListFoldersParams defines parameters for ListFolders.
+type ListFoldersParams struct {
+	// Path Folder to list, relative to the root and separated by "/". Empty or omitted lists the root itself.
+	Path *string `form:"path,omitempty" json:"path,omitempty"`
+}
 
 // ListItemChildrenParams defines parameters for ListItemChildren.
 type ListItemChildrenParams struct {
@@ -1353,11 +1640,23 @@ type ListLibraryItemsParams struct {
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
+// CreateLibraryJSONRequestBody defines body for CreateLibrary for application/json ContentType.
+type CreateLibraryJSONRequestBody = LibraryCreate
+
+// UpdateLibraryJSONRequestBody defines body for UpdateLibrary for application/json ContentType.
+type UpdateLibraryJSONRequestBody = LibraryUpdate
+
 // CreatePlaybackSessionJSONRequestBody defines body for CreatePlaybackSession for application/json ContentType.
 type CreatePlaybackSessionJSONRequestBody = PlaybackRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListFolderRoots List the folder roots a library folder may be chosen from
+	// (GET /api/v1/folder-roots)
+	ListFolderRoots(w http.ResponseWriter, r *http.Request)
+	// ListFolders List the sub-folders of a folder
+	// (GET /api/v1/folder-roots/{rootId}/folders)
+	ListFolders(w http.ResponseWriter, r *http.Request, rootID RootID, params ListFoldersParams)
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1370,9 +1669,18 @@ type ServerInterface interface {
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// CreateLibrary Add a library
+	// (POST /api/v1/libraries)
+	CreateLibrary(w http.ResponseWriter, r *http.Request)
+	// DeleteLibrary Remove a library
+	// (DELETE /api/v1/libraries/{libraryId})
+	DeleteLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
 	// GetLibrary Describe one library
 	// (GET /api/v1/libraries/{libraryId})
 	GetLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// UpdateLibrary Change a library
+	// (PATCH /api/v1/libraries/{libraryId})
+	UpdateLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams)
@@ -1401,6 +1709,62 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListFolderRoots operation middleware
+func (siw *ServerInterfaceWrapper) ListFolderRoots(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFolderRoots(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFolders operation middleware
+func (siw *ServerInterfaceWrapper) ListFolders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "rootId" -------------
+	var rootID RootID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "rootId", r.PathValue("rootId"), &rootID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "rootId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFoldersParams
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFolders(w, r, rootID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
@@ -1524,6 +1888,46 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// CreateLibrary operation middleware
+func (siw *ServerInterfaceWrapper) CreateLibrary(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateLibrary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteLibrary operation middleware
+func (siw *ServerInterfaceWrapper) DeleteLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteLibrary(w, r, libraryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetLibrary operation middleware
 func (siw *ServerInterfaceWrapper) GetLibrary(w http.ResponseWriter, r *http.Request) {
 
@@ -1541,6 +1945,32 @@ func (siw *ServerInterfaceWrapper) GetLibrary(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetLibrary(w, r, libraryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateLibrary operation middleware
+func (siw *ServerInterfaceWrapper) UpdateLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateLibrary(w, r, libraryID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1834,7 +2264,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system/info", wrapper.GetSystemInfo)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries", wrapper.ListLibraries)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries", wrapper.CreateLibrary)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.DeleteLibrary)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.GetLibrary)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.UpdateLibrary)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/folder-roots", wrapper.ListFolderRoots)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/folder-roots/{rootId}/folders", wrapper.ListFolders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/scan", wrapper.StartLibraryScan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/items", wrapper.ListLibraryItems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
@@ -1847,6 +2282,84 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ListFolderRootsRequestObject struct {
+}
+
+type ListFolderRootsResponseObject interface {
+	VisitListFolderRootsResponse(w http.ResponseWriter) error
+}
+
+type ListFolderRoots200JSONResponse FolderRootList
+
+func (response ListFolderRoots200JSONResponse) VisitListFolderRootsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFolderRootsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListFolderRootsdefaultApplicationProblemPlusJSONResponse) VisitListFolderRootsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFoldersRequestObject struct {
+	RootID RootID `json:"rootId"`
+	Params ListFoldersParams
+}
+
+type ListFoldersResponseObject interface {
+	VisitListFoldersResponse(w http.ResponseWriter) error
+}
+
+type ListFolders200JSONResponse FolderListing
+
+func (response ListFolders200JSONResponse) VisitListFoldersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFoldersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListFoldersdefaultApplicationProblemPlusJSONResponse) VisitListFoldersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetHealthRequestObject struct {
 }
@@ -2017,6 +2530,88 @@ func (response ListLibrariesdefaultApplicationProblemPlusJSONResponse) VisitList
 	return err
 }
 
+type CreateLibraryRequestObject struct {
+	Body *CreateLibraryJSONRequestBody
+}
+
+type CreateLibraryResponseObject interface {
+	VisitCreateLibraryResponse(w http.ResponseWriter) error
+}
+
+type CreateLibrary201ResponseHeaders struct {
+	Location *string
+}
+
+type CreateLibrary201JSONResponse struct {
+	Body    Library
+	Headers CreateLibrary201ResponseHeaders
+}
+
+func (response CreateLibrary201JSONResponse) VisitCreateLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLibrarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateLibrarydefaultApplicationProblemPlusJSONResponse) VisitCreateLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLibraryRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+}
+
+type DeleteLibraryResponseObject interface {
+	VisitDeleteLibraryResponse(w http.ResponseWriter) error
+}
+
+type DeleteLibrary204Response struct {
+}
+
+func (response DeleteLibrary204Response) VisitDeleteLibraryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteLibrarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteLibrarydefaultApplicationProblemPlusJSONResponse) VisitDeleteLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetLibraryRequestObject struct {
 	LibraryID LibraryID `json:"libraryId"`
 }
@@ -2045,6 +2640,46 @@ type GetLibrarydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetLibrarydefaultApplicationProblemPlusJSONResponse) VisitGetLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLibraryRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Body      *UpdateLibraryJSONRequestBody
+}
+
+type UpdateLibraryResponseObject interface {
+	VisitUpdateLibraryResponse(w http.ResponseWriter) error
+}
+
+type UpdateLibrary200JSONResponse Library
+
+func (response UpdateLibrary200JSONResponse) VisitUpdateLibraryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLibrarydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateLibrarydefaultApplicationProblemPlusJSONResponse) VisitUpdateLibraryResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2320,6 +2955,12 @@ func (response GetSystemInfodefaultApplicationProblemPlusJSONResponse) VisitGetS
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListFolderRoots List the folder roots a library folder may be chosen from
+	// (GET /api/v1/folder-roots)
+	ListFolderRoots(ctx context.Context, request ListFolderRootsRequestObject) (ListFolderRootsResponseObject, error)
+	// ListFolders List the sub-folders of a folder
+	// (GET /api/v1/folder-roots/{rootId}/folders)
+	ListFolders(ctx context.Context, request ListFoldersRequestObject) (ListFoldersResponseObject, error)
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -2332,9 +2973,18 @@ type StrictServerInterface interface {
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(ctx context.Context, request ListLibrariesRequestObject) (ListLibrariesResponseObject, error)
+	// CreateLibrary Add a library
+	// (POST /api/v1/libraries)
+	CreateLibrary(ctx context.Context, request CreateLibraryRequestObject) (CreateLibraryResponseObject, error)
+	// DeleteLibrary Remove a library
+	// (DELETE /api/v1/libraries/{libraryId})
+	DeleteLibrary(ctx context.Context, request DeleteLibraryRequestObject) (DeleteLibraryResponseObject, error)
 	// GetLibrary Describe one library
 	// (GET /api/v1/libraries/{libraryId})
 	GetLibrary(ctx context.Context, request GetLibraryRequestObject) (GetLibraryResponseObject, error)
+	// UpdateLibrary Change a library
+	// (PATCH /api/v1/libraries/{libraryId})
+	UpdateLibrary(ctx context.Context, request UpdateLibraryRequestObject) (UpdateLibraryResponseObject, error)
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(ctx context.Context, request ListLibraryItemsRequestObject) (ListLibraryItemsResponseObject, error)
@@ -2392,6 +3042,57 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListFolderRoots operation middleware
+func (sh *strictHandler) ListFolderRoots(w http.ResponseWriter, r *http.Request) {
+	var request ListFolderRootsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFolderRoots(ctx, request.(ListFolderRootsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFolderRoots")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFolderRootsResponseObject); ok {
+		if err := validResponse.VisitListFolderRootsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFolders operation middleware
+func (sh *strictHandler) ListFolders(w http.ResponseWriter, r *http.Request, rootID RootID, params ListFoldersParams) {
+	var request ListFoldersRequestObject
+
+	request.RootID = rootID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFolders(ctx, request.(ListFoldersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFolders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFoldersResponseObject); ok {
+		if err := validResponse.VisitListFoldersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // GetHealth operation middleware
@@ -2495,6 +3196,63 @@ func (sh *strictHandler) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateLibrary operation middleware
+func (sh *strictHandler) CreateLibrary(w http.ResponseWriter, r *http.Request) {
+	var request CreateLibraryRequestObject
+
+	var body CreateLibraryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateLibrary(ctx, request.(CreateLibraryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateLibrary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateLibraryResponseObject); ok {
+		if err := validResponse.VisitCreateLibraryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteLibrary operation middleware
+func (sh *strictHandler) DeleteLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
+	var request DeleteLibraryRequestObject
+
+	request.LibraryID = libraryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteLibrary(ctx, request.(DeleteLibraryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteLibrary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteLibraryResponseObject); ok {
+		if err := validResponse.VisitDeleteLibraryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetLibrary operation middleware
 func (sh *strictHandler) GetLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
 	var request GetLibraryRequestObject
@@ -2514,6 +3272,39 @@ func (sh *strictHandler) GetLibrary(w http.ResponseWriter, r *http.Request, libr
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetLibraryResponseObject); ok {
 		if err := validResponse.VisitGetLibraryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateLibrary operation middleware
+func (sh *strictHandler) UpdateLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
+	var request UpdateLibraryRequestObject
+
+	request.LibraryID = libraryID
+
+	var body UpdateLibraryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateLibrary(ctx, request.(UpdateLibraryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateLibrary")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateLibraryResponseObject); ok {
+		if err := validResponse.VisitUpdateLibraryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -21,13 +21,18 @@ export const zeroScanCounts: ScanCounts = {
 };
 
 /** Status of a library that was never scanned. */
-export const neverScanned: ScanStatus = { state: "idle", counts: zeroScanCounts };
+export const neverScanned: ScanStatus = {
+  state: "idle",
+  counts: zeroScanCounts,
+  unavailableFolderCount: 0,
+};
 
 /** A scan that is running. */
 export const runningScan: ScanStatus = {
   state: "running",
   startedAt: "2026-10-30T18:04:05Z",
   counts: { ...zeroScanCounts, added: 1 },
+  unavailableFolderCount: 0,
 };
 
 /** A scan that finished with every kind of count set. */
@@ -36,6 +41,7 @@ export const finishedScan: ScanStatus = {
   startedAt: "2026-10-30T18:04:05Z",
   finishedAt: "2026-10-30T18:04:31Z",
   counts: { added: 3, updated: 1, removed: 2, unchanged: 29, failed: 1, skipped: 4 },
+  unavailableFolderCount: 0,
 };
 
 /** A scan that stopped because the library folder is missing. */
@@ -45,6 +51,7 @@ export const rootUnavailableScan: ScanStatus = {
   finishedAt: "2026-10-30T18:04:06Z",
   counts: zeroScanCounts,
   errorCode: "root_unavailable",
+  unavailableFolderCount: 1,
 };
 
 /** A movies library with two items, never scanned. Override fields per test. */
@@ -56,6 +63,12 @@ export function fakeLibrary(overrides: Partial<Library> = {}): Library {
     available: true,
     itemCount: 2,
     scan: neverScanned,
+    folders: [
+      { id: "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d", path: "/media/movies", available: true },
+    ],
+    metadataLanguage: "",
+    options: { scanExtras: true, readNfo: true, localArtwork: true },
+    importedFromConfig: false,
     ...overrides,
   };
 }

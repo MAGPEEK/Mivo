@@ -10,7 +10,7 @@ import { itemNamespace } from "../locales";
 /**
  * The `S1 · E3` label of an episode, or `undefined` while its numbers are unknown.
  *
- * The item detail carries no episode number (API 1.2.0), so the number is read from the
+ * The item detail carries no episode number (API 1.2.0; ItemDetail has number since 1.3.0), so the number is read from the
  * season's children, the list the season page loads anyway and the query cache shares. An
  * episode beyond the first page of a large season gets no label until the contract adds the
  * numbers to `ItemDetail`.

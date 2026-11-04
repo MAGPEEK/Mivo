@@ -210,6 +210,11 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: "/api/v1/health", operationID: "getHealth", tag: "system", statuses: []int{http.StatusOK, http.StatusServiceUnavailable}, mediaType: jsonMediaType, schema: "HealthResponse", unauthenticated: true},
 		{method: http.MethodGet, path: "/api/v1/system/info", operationID: "getSystemInfo", tag: "system", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "SystemInfo", unauthenticated: true},
 		{method: http.MethodGet, path: "/api/v1/libraries", operationID: "listLibraries", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LibraryList"},
+		{method: http.MethodPost, path: "/api/v1/libraries", operationID: "createLibrary", tag: "libraries", statuses: []int{http.StatusCreated}, mediaType: jsonMediaType, schema: "Library"},
+		{method: http.MethodPatch, path: library, operationID: "updateLibrary", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "Library"},
+		{method: http.MethodDelete, path: library, operationID: "deleteLibrary", tag: "libraries"},
+		{method: http.MethodGet, path: "/api/v1/folder-roots", operationID: "listFolderRoots", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "FolderRootList"},
+		{method: http.MethodGet, path: "/api/v1/folder-roots/{rootId}/folders", operationID: "listFolders", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "FolderListing"},
 		{method: http.MethodGet, path: library, operationID: "getLibrary", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "Library"},
 		{method: http.MethodPost, path: library + "/scan", operationID: "startLibraryScan", tag: "libraries", statuses: []int{http.StatusAccepted}, mediaType: jsonMediaType, schema: "ScanStatus"},
 		{method: http.MethodGet, path: library + "/items", operationID: "listLibraryItems", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
@@ -412,6 +417,11 @@ func TestPublishedProblemCodesAreDocumented(t *testing.T) {
 		"no_compatible_format": http.StatusUnprocessableEntity, "transcode_unavailable": http.StatusUnprocessableEntity,
 		"internal_error": http.StatusInternalServerError, "unavailable": http.StatusServiceUnavailable,
 		"session_limit_reached": http.StatusServiceUnavailable, "stream_not_ready": http.StatusServiceUnavailable,
+		"folder_not_found": http.StatusBadRequest, "folder_unreadable": http.StatusBadRequest,
+		"folder_overlap": http.StatusConflict, "folder_reserved": http.StatusBadRequest,
+		"folder_outside_roots": http.StatusBadRequest, "kind_unsupported": http.StatusBadRequest,
+		"name_invalid": http.StatusBadRequest, "language_invalid": http.StatusBadRequest,
+		"too_many_folders": http.StatusBadRequest,
 	}
 
 	for code, status := range codes {
@@ -784,11 +794,83 @@ func TestMediaFileExposesNoPath(t *testing.T) {
 	spec := loadSpec(t)
 
 	for name, schema := range spec.Components.Schemas {
+		if slices.Contains(folderBrowserSchemas(), name) {
+			continue
+		}
+
 		for propertyName := range schema.Value.Properties {
 			if strings.Contains(strings.ToLower(propertyName), "path") {
 				t.Errorf("%s.%s looks like a file system path", name, propertyName)
 			}
 		}
+	}
+}
+
+// folderBrowserSchemas are the schemas that carry root-relative folder paths of the library
+// management API (ADR 0028); they never hold an absolute media file path.
+func folderBrowserSchemas() []string {
+	return []string{"LibraryFolder", "FolderRef", "FolderRoot", "FolderEntry", "FolderListing"}
+}
+
+// TestLibraryManagementContract pins the schemas of task M3-19a (ADR 0028).
+func TestLibraryManagementContract(t *testing.T) {
+	spec := loadSpec(t)
+
+	shapes := map[string]schemaShape{
+		"Library":        {required: []string{"folders", "metadataLanguage", "options", "importedFromConfig"}},
+		"LibraryFolder":  {required: []string{"id", "path", "available"}},
+		"LibraryOptions": {required: []string{"scanExtras", "readNfo", "localArtwork"}},
+		"LibraryCreate":  {required: []string{"kind", "name", "folders"}, optional: []string{"metadataLanguage", "options"}},
+		"LibraryUpdate":  {optional: []string{"name", "folders", "metadataLanguage", "options"}},
+		"FolderRef":      {optional: []string{"folderId", "rootId", "path"}},
+		"FolderRoot":     {required: []string{"id", "path", "available"}},
+		"FolderRootList": {required: []string{"roots", "installKind", "serviceUser"}},
+		"FolderListing":  {required: []string{"rootId", "path", "folders", "unreadableCount", "truncated"}, optional: []string{"parentPath"}},
+		"FolderEntry":    {required: []string{"name", "path", "selectable"}, optional: []string{"reason"}},
+		"ScanStatus":     {required: []string{"state", "counts", "unavailableFolderCount"}},
+		"SystemInfo":     {required: []string{"libraryKinds"}},
+		"ItemDetail":     {optional: []string{"number", "numberEnd"}},
+	}
+
+	for name, shape := range shapes {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		assertSchemaShape(t, name, schema.Value, shape)
+	}
+
+	for _, name := range []string{"LibraryCreate", "LibraryUpdate"} {
+		additional := spec.Components.Schemas[name].Value.AdditionalProperties
+		if additional.Has == nil || *additional.Has {
+			t.Errorf("%s must set additionalProperties: false", name)
+		}
+	}
+
+	if spec.Components.Schemas["LibraryUpdate"].Value.Properties["kind"] != nil {
+		t.Error("LibraryUpdate must not offer kind")
+	}
+
+	if minProps := spec.Components.Schemas["LibraryUpdate"].Value.MinProps; minProps < 1 {
+		t.Errorf("LibraryUpdate.minProperties = %d, want at least 1", minProps)
+	}
+
+	folders := propertySchema(spec, "LibraryCreate.folders").Value
+	if folders.MinItems != 1 || folders.MaxItems == nil || *folders.MaxItems != 16 {
+		t.Errorf("LibraryCreate.folders bounds = %d..%v, want 1..16", folders.MinItems, folders.MaxItems)
+	}
+}
+
+// TestFileNameDescriptionNamesBackslash pins the BACKLOG note of M3-06b.
+func TestFileNameDescriptionNamesBackslash(t *testing.T) {
+	spec := loadSpec(t)
+
+	description := propertySchema(spec, "MediaFile.fileName").Value.Description
+	if !strings.Contains(description, "backslash") {
+		t.Errorf("MediaFile.fileName does not say that a backslash separates directories: %q", description)
 	}
 }
 

@@ -162,6 +162,8 @@ func TestItemDetailResponseEpisode(t *testing.T) {
 
 	episode := mapperItem(idEpisode, library.ItemKindEpisode)
 	episode.Year = library.NumberOf(2010)
+	episode.Number = library.NumberOf(3)
+	episode.NumberEnd = library.NumberOf(4)
 
 	file := media.File{
 		ID: idFile, RelativePath: "Shows/Show/S01/ep1.mkv", Size: 10,
@@ -211,7 +213,7 @@ func TestItemDetailResponseEpisode(t *testing.T) {
 		`"countries":["US"]`, `"role":"actor"`, `"character":"Zed"`, `"imdb":"tt1234567"`,
 		`"previousId":"` + idPrev + `"`, `"nextId":"` + idNext + `"`, `"playItemId":"` + idEpisode + `"`,
 		`"number":0`, `"versionLabel":"4K"`, `"partNumber":2`, `"extras":[`, `"tag":"t4"`,
-		`"fileName":"ep1.mkv"`,
+		`"fileName":"ep1.mkv"`, `"numberEnd":4`, `"number":3,`,
 	} {
 		if !strings.Contains(body, fragment) {
 			t.Errorf("body %s lacks %s", body, fragment)
@@ -233,7 +235,7 @@ func TestItemDetailResponseOmitsAbsentValues(t *testing.T) {
 
 	for _, fragment := range []string{
 		`"ancestors"`, `"artwork"`, `"extras"`, `"genres"`, `"people"`, `"providerIds"`, `"releaseDate"`,
-		`"summary"`, `"nextId"`, `"previousId"`, `"playItemId"`, `"childCount"`, `"year"`,
+		`"summary"`, `"nextId"`, `"previousId"`, `"playItemId"`, `"childCount"`, `"year"`, `"numberEnd"`,
 	} {
 		if strings.Contains(body, fragment) {
 			t.Errorf("body %s contains %s", body, fragment)

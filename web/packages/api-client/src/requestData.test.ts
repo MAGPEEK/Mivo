@@ -19,6 +19,7 @@ const systemInfo: SystemInfo = {
   version: "0.1.0",
   serverId: "6f1c2a4e-8d3b-4c55-9a7e-0b2d4f6a8c10",
   apiVersion: "1",
+  libraryKinds: ["movies", "shows"],
 };
 
 const notFound: Problem = {
