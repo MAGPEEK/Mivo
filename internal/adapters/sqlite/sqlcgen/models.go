@@ -8,15 +8,74 @@ import (
 	"database/sql"
 )
 
+type Artwork struct {
+	ID           string
+	ItemID       string
+	Kind         string
+	Source       string
+	LibraryID    sql.NullString
+	RelativePath sql.NullString
+	MediaFileID  sql.NullString
+	StreamIndex  sql.NullInt64
+	DataPath     sql.NullString
+	Provider     sql.NullString
+	RemoteUrl    sql.NullString
+	SizeBytes    int64
+	ModifiedAt   int64
+	Width        int64
+	Height       int64
+	Tag          string
+	Selected     int64
+	CreatedAt    int64
+}
+
 type Item struct {
-	ID        string
-	LibraryID string
-	ParentID  sql.NullString
-	Kind      string
-	Title     string
-	SortTitle string
-	CreatedAt int64
-	UpdatedAt int64
+	ID               string
+	LibraryID        string
+	ParentID         sql.NullString
+	Kind             string
+	MatchKey         string
+	Title            string
+	SortTitle        string
+	OriginalTitle    string
+	Year             int64
+	ReleaseDate      string
+	Summary          string
+	Tagline          string
+	ContentRating    string
+	Number           sql.NullInt64
+	NumberEnd        sql.NullInt64
+	AbsoluteNumber   sql.NullInt64
+	DiscNumber       sql.NullInt64
+	ExtraType        sql.NullString
+	MetadataLanguage string
+	CreatedAt        int64
+	UpdatedAt        int64
+}
+
+type ItemFieldLock struct {
+	ItemID string
+	Field  string
+}
+
+type ItemPerson struct {
+	ItemID    string
+	PersonID  string
+	Role      string
+	Character string
+	Position  int64
+}
+
+type ItemProviderID struct {
+	ItemID     string
+	Provider   string
+	ExternalID string
+}
+
+type ItemTag struct {
+	ItemID   string
+	TagID    string
+	Position int64
 }
 
 type Library struct {
@@ -26,6 +85,14 @@ type Library struct {
 	RootPath  string
 	CreatedAt int64
 	UpdatedAt int64
+}
+
+type LibrarySidecar struct {
+	LibraryID    string
+	RelativePath string
+	Kind         string
+	SizeBytes    int64
+	ModifiedAt   int64
 }
 
 type MediaFile struct {
@@ -41,6 +108,9 @@ type MediaFile struct {
 	BitRate      int64
 	ProbedAt     int64
 	ProbeError   sql.NullString
+	VersionLabel string
+	PartNumber   int64
+	Layout       string
 }
 
 type MediaStream struct {
@@ -71,8 +141,20 @@ type MediaStream struct {
 	BitRate           int64
 }
 
+type Person struct {
+	ID       string
+	Name     string
+	SortName string
+}
+
 type ServerIdentity struct {
 	ID        int64
 	ServerID  string
 	CreatedAt int64
+}
+
+type Tag struct {
+	ID   string
+	Kind string
+	Name string
 }

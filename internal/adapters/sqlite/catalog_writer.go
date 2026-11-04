@@ -72,14 +72,18 @@ func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) (
 // and no streams. probed_at is record.ProbedAt. Times are stored in Unix milliseconds
 // (ADR 0004). IDs come from the caller.
 //
+// A new item gets the file's relative path as its match key: in milestone 2 one item
+// stands for one file.
+//
 // It changes nothing and returns an error wrapping (the contract of
 // scan.CatalogWriter.SaveProbedFile)
 //   - domain.ErrInvalid for a record that breaks the rules of scan.ProbedFile (including a
-//     zero ProbedAt, a zero CreatedAt of a new item, and a new item whose kind does not
-//     follow from its library's kind, library.ItemKindForLibrary),
+//     zero ProbedAt, a zero CreatedAt or an empty sort title of a new item, and a new item
+//     whose kind does not follow from its library's kind, library.ItemKindForLibrary),
 //   - domain.ErrNotFound for an unknown library,
 //   - domain.ErrConflict when another file ID is stored at the same relative path of the
-//     library (UNIQUE(library_id, relative_path)),
+//     library (UNIQUE(library_id, relative_path)), or another item of the library already
+//     has that path as its match key,
 //   - domain.ErrInvalid when a stored file ID belongs to another item or library, or a
 //     stored item to another library.
 func (writer *CatalogWriter) SaveProbedFile(ctx context.Context, record scan.ProbedFile) error {
@@ -209,15 +213,23 @@ func (run catalogSave) insertItem(ctx context.Context) error {
 
 	createdAt := item.CreatedAt.UnixMilli()
 
+	// Milestone 2 stores one item per file, so the file's path identifies the item among
+	// the library's top-level items until the v2 writer computes real match keys (ADR 0027 §3).
 	err := run.queries.InsertItem(ctx, sqlcgen.InsertItemParams{
 		ID:        item.ID,
 		LibraryID: item.LibraryID,
 		Kind:      item.Kind.String(),
+		MatchKey:  run.record.File.RelativePath,
 		Title:     item.Title,
 		SortTitle: item.SortTitle,
 		CreatedAt: createdAt,
 		UpdatedAt: createdAt,
 	})
+	if isUniqueViolation(err) {
+		return fmt.Errorf("insert item %q: another item has the match key %q: %w",
+			item.ID, run.record.File.RelativePath, domain.ErrConflict)
+	}
+
 	if err != nil {
 		return fmt.Errorf("insert item %q: %w", item.ID, err)
 	}
@@ -232,6 +244,10 @@ func (run catalogSave) checkNewItem(ctx context.Context) error {
 
 	if strings.TrimSpace(item.Title) == "" {
 		return fmt.Errorf("empty title: %w", domain.ErrInvalid)
+	}
+
+	if item.SortTitle == "" {
+		return fmt.Errorf("empty sort title: %w", domain.ErrInvalid)
 	}
 
 	if item.CreatedAt.IsZero() {

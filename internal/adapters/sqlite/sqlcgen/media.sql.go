@@ -112,7 +112,7 @@ func (q *Queries) GetFileOwner(ctx context.Context, id string) (GetFileOwnerRow,
 }
 
 const getFileWithRoot = `-- name: GetFileWithRoot :one
-SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, libraries.root_path
+SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout, libraries.root_path
 FROM media_files
 JOIN libraries ON libraries.id = media_files.library_id
 WHERE media_files.id = ?
@@ -139,13 +139,16 @@ func (q *Queries) GetFileWithRoot(ctx context.Context, id string) (GetFileWithRo
 		&i.MediaFile.BitRate,
 		&i.MediaFile.ProbedAt,
 		&i.MediaFile.ProbeError,
+		&i.MediaFile.VersionLabel,
+		&i.MediaFile.PartNumber,
+		&i.MediaFile.Layout,
 		&i.RootPath,
 	)
 	return i, err
 }
 
 const getItem = `-- name: GetItem :one
-SELECT id, library_id, parent_id, kind, title, sort_title, created_at, updated_at
+SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at
 FROM items
 WHERE id = ?
 `
@@ -158,8 +161,21 @@ func (q *Queries) GetItem(ctx context.Context, id string) (Item, error) {
 		&i.LibraryID,
 		&i.ParentID,
 		&i.Kind,
+		&i.MatchKey,
 		&i.Title,
 		&i.SortTitle,
+		&i.OriginalTitle,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Summary,
+		&i.Tagline,
+		&i.ContentRating,
+		&i.Number,
+		&i.NumberEnd,
+		&i.AbsoluteNumber,
+		&i.DiscNumber,
+		&i.ExtraType,
+		&i.MetadataLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -193,25 +209,29 @@ func (q *Queries) GetLibraryKind(ctx context.Context, id string) (string, error)
 }
 
 const insertItem = `-- name: InsertItem :exec
-INSERT INTO items (id, library_id, kind, title, sort_title, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertItemParams struct {
 	ID        string
 	LibraryID string
 	Kind      string
+	MatchKey  string
 	Title     string
 	SortTitle string
 	CreatedAt int64
 	UpdatedAt int64
 }
 
+// InsertItem stores a top-level item of the milestone-2 model (one item per file); the
+// columns of the library model v2 keep their defaults.
 func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
 	_, err := q.db.ExecContext(ctx, insertItem,
 		arg.ID,
 		arg.LibraryID,
 		arg.Kind,
+		arg.MatchKey,
 		arg.Title,
 		arg.SortTitle,
 		arg.CreatedAt,
@@ -345,13 +365,14 @@ func (q *Queries) ListFileStates(ctx context.Context, libraryID string) ([]ListF
 }
 
 const listItemFiles = `-- name: ListItemFiles :many
-SELECT id, item_id, library_id, relative_path, size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error
+SELECT id, item_id, library_id, relative_path, size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error, version_label, part_number, layout
 FROM media_files
 WHERE item_id = ?
-ORDER BY relative_path, id
+ORDER BY part_number, relative_path, id
 `
 
-// ListItemFiles returns an item's files, the primary file (first by relative path) first.
+// ListItemFiles returns an item's files, the primary file (first by part number and
+// relative path) first.
 func (q *Queries) ListItemFiles(ctx context.Context, itemID string) ([]MediaFile, error) {
 	rows, err := q.db.QueryContext(ctx, listItemFiles, itemID)
 	if err != nil {
@@ -374,6 +395,9 @@ func (q *Queries) ListItemFiles(ctx context.Context, itemID string) ([]MediaFile
 			&i.BitRate,
 			&i.ProbedAt,
 			&i.ProbeError,
+			&i.VersionLabel,
+			&i.PartNumber,
+			&i.Layout,
 		); err != nil {
 			return nil, err
 		}
@@ -389,15 +413,17 @@ func (q *Queries) ListItemFiles(ctx context.Context, itemID string) ([]MediaFile
 }
 
 const listItemPage = `-- name: ListItemPage :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.title, items.sort_title, items.created_at, items.updated_at, media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout
 FROM items
 JOIN media_files ON media_files.id = (
     SELECT candidates.id
     FROM media_files AS candidates
     WHERE candidates.item_id = items.id
-    ORDER BY candidates.relative_path, candidates.id
+    ORDER BY candidates.part_number, candidates.relative_path, candidates.id
     LIMIT 1)
 WHERE items.library_id = ?1
+  AND items.parent_id IS NULL
+  AND items.kind <> 'extra'
   AND items.sort_title >= ?2
   AND (items.sort_title > ?2 OR items.id > ?3)
 ORDER BY items.sort_title, items.id
@@ -416,11 +442,12 @@ type ListItemPageRow struct {
 	MediaFile MediaFile
 }
 
-// ListItemPage returns the items after the key (after_sort_title, after_id) in keyset order
-// with each item's primary file: the first of its files by relative path. A key of two
-// empty strings lies before every item, because IDs are never empty. The two conditions on
-// sort_title let SQLite scan items_library_sort_title as a range instead of filtering the
-// whole library.
+// ListItemPage returns the top-level items after the key (after_sort_title, after_id) in
+// keyset order with each item's primary file: the first of its files by (part number,
+// relative path). A key of two empty strings lies before every item, because IDs are never
+// empty. The conditions on parent_id and kind repeat the WHERE clause of the partial index
+// items_top_level, so SQLite can use it; the two conditions on sort_title let it scan that
+// index as a range instead of filtering the whole library.
 func (q *Queries) ListItemPage(ctx context.Context, arg ListItemPageParams) ([]ListItemPageRow, error) {
 	rows, err := q.db.QueryContext(ctx, listItemPage,
 		arg.LibraryID,
@@ -440,8 +467,21 @@ func (q *Queries) ListItemPage(ctx context.Context, arg ListItemPageParams) ([]L
 			&i.Item.LibraryID,
 			&i.Item.ParentID,
 			&i.Item.Kind,
+			&i.Item.MatchKey,
 			&i.Item.Title,
 			&i.Item.SortTitle,
+			&i.Item.OriginalTitle,
+			&i.Item.Year,
+			&i.Item.ReleaseDate,
+			&i.Item.Summary,
+			&i.Item.Tagline,
+			&i.Item.ContentRating,
+			&i.Item.Number,
+			&i.Item.NumberEnd,
+			&i.Item.AbsoluteNumber,
+			&i.Item.DiscNumber,
+			&i.Item.ExtraType,
+			&i.Item.MetadataLanguage,
 			&i.Item.CreatedAt,
 			&i.Item.UpdatedAt,
 			&i.MediaFile.ID,
@@ -456,6 +496,9 @@ func (q *Queries) ListItemPage(ctx context.Context, arg ListItemPageParams) ([]L
 			&i.MediaFile.BitRate,
 			&i.MediaFile.ProbedAt,
 			&i.MediaFile.ProbeError,
+			&i.MediaFile.VersionLabel,
+			&i.MediaFile.PartNumber,
+			&i.MediaFile.Layout,
 		); err != nil {
 			return nil, err
 		}

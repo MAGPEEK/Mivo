@@ -145,9 +145,10 @@ model above without changing the decision.
   code with `container = 'unknown'` and no streams.
 - Closed sets have `CHECK` constraints: library kinds `movies|shows`, item kinds
   `movie|episode` (`library.ItemKind`), stream kinds `video|audio|subtitle|other`. Sets that
-  grow with later milestones (containers, HDR formats, probe error codes) are only checked for
-  non-empty text, because SQLite cannot change a `CHECK` without rebuilding the table; the
-  adapter validates them with the domain parsers.
+  grow with later milestones (containers, probe error codes) are only checked for non-empty
+  text, because SQLite cannot change a `CHECK` without rebuilding the table; the adapter
+  validates them with the domain parsers. `media_streams.hdr` is not checked at all (`''`
+  means no HDR format).
 - Every foreign key column leads an index (`items(parent_id)` added), so a cascading delete
   never scans a whole child table per parent row.
 - In milestone 2 an item's kind follows from its library's kind (`library.ItemKindForLibrary`):

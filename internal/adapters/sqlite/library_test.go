@@ -685,9 +685,9 @@ func insertCatalogTree(t *testing.T, inspection *sql.DB, libraryID, suffix strin
 		args  []any
 	}{
 		{
-			query: `INSERT INTO items (id, library_id, kind, title, sort_title, created_at, updated_at)
-				VALUES (?, ?, 'movie', ?, ?, 0, 0)`,
-			args: []any{itemID, libraryID, "Title " + suffix, "title " + suffix},
+			query: `INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
+				VALUES (?, ?, 'movie', ?, ?, ?, 0, 0)`,
+			args: []any{itemID, libraryID, suffix + ".mkv", "Title " + suffix, "title " + suffix},
 		},
 		{query: insertMediaFileQuery, args: []any{fileID, itemID, libraryID, suffix + ".mkv"}},
 		{query: insertMediaStreamQuery, args: []any{fileID, 0, "video"}},

@@ -147,6 +147,7 @@ func TestSaveProbedFileRejectsInvalidRecordsAndChangesNothing(t *testing.T) {
 			record.File.ProbeError = media.ProbeErrorFailed
 		})},
 		{name: "blank title of a new item", record: changeRecord(valid, func(record *scan.ProbedFile) { record.Item.Title = " " })},
+		{name: "empty sort title of a new item", record: changeRecord(valid, func(record *scan.ProbedFile) { record.Item.SortTitle = "" })},
 		{name: "episode in a movies library", record: changeRecord(valid, func(record *scan.ProbedFile) {
 			record.Item.Kind = library.ItemKindEpisode
 		})},
@@ -490,8 +491,8 @@ func insertManyItems(t *testing.T, inspection *sql.DB, libraryID string, count i
 			query string
 			args  []any
 		}{
-			{query: `INSERT INTO items (id, library_id, kind, title, sort_title, created_at, updated_at)
-				VALUES (?, ?, 'movie', ?, ?, 0, 0)`, args: []any{itemID, libraryID, title, title}},
+			{query: `INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
+				VALUES (?, ?, 'movie', ?, ?, ?, 0, 0)`, args: []any{itemID, libraryID, fileID + ".mkv", title, title}},
 			{query: insertMediaFileQuery, args: []any{fileID, itemID, libraryID, fileID + ".mkv"}},
 			{query: insertMediaStreamQuery, args: []any{fileID, 0, "video"}},
 			{query: insertMediaStreamQuery, args: []any{fileID, 1, "audio"}},
@@ -567,4 +568,74 @@ func TestSaveProbedFileOfAnotherFileAtAStoredPathIsAConflict(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Until the v2 writer computes match keys, a new item is keyed by its file's path and the
+// columns of the library model v2 keep their defaults: a top-level item without numbers,
+// metadata or extra type, and a single-file version.
+func TestSaveProbedFileKeysANewItemByItsFilePathAndKeepsTheV2Defaults(t *testing.T) {
+	t.Parallel()
+
+	fixture := newCatalogFixture(t)
+	record := probedRecord(showsLibraryID, testID('i', 1), testID('f', 1), "Show/S01E01.mkv")
+	mustSave(t, fixture.writer, record)
+
+	var matchKey string
+
+	var unset int
+
+	err := fixture.inspection.QueryRowContext(t.Context(), `
+		SELECT match_key,
+		       (parent_id IS NULL) + (number IS NULL) + (number_end IS NULL) + (absolute_number IS NULL)
+		       + (disc_number IS NULL) + (extra_type IS NULL) + (year = 0) + (original_title = '')
+		       + (release_date = '') + (summary = '') + (tagline = '') + (content_rating = '')
+		       + (metadata_language = '')
+		FROM items WHERE id = ?`, record.Item.ID).Scan(&matchKey, &unset)
+	if err != nil {
+		t.Fatalf("read stored item: %v", err)
+	}
+
+	const v2ItemColumns = 13
+	if matchKey != record.File.RelativePath || unset != v2ItemColumns {
+		t.Errorf("match_key = %q, columns at their default = %d, want %q and %d",
+			matchKey, unset, record.File.RelativePath, v2ItemColumns)
+	}
+
+	var versionLabel, layout string
+
+	var partNumber int
+
+	err = fixture.inspection.QueryRowContext(t.Context(),
+		"SELECT version_label, part_number, layout FROM media_files WHERE id = ?", record.File.ID).
+		Scan(&versionLabel, &partNumber, &layout)
+	if err != nil {
+		t.Fatalf("read stored file: %v", err)
+	}
+
+	if versionLabel != "" || partNumber != 0 || layout != "file" {
+		t.Errorf("version_label, part_number, layout = %q, %d, %q, want \"\", 0, file", versionLabel, partNumber, layout)
+	}
+}
+
+// A stored file may get a new path while it keeps its item, whose match key stays the old
+// path. A new item for a new file at that old path is a conflict, not a constraint error.
+func TestSaveProbedFileOfANewItemWithATakenMatchKeyIsAConflict(t *testing.T) {
+	t.Parallel()
+
+	fixture := newCatalogFixture(t)
+	moved := probedRecord(moviesLibraryID, testID('i', 1), testID('f', 1), "a.mkv")
+	mustSave(t, fixture.writer, moved)
+
+	moved.File.RelativePath = "b.mkv"
+	mustSave(t, fixture.writer, moved)
+
+	before := catalogRowCounts(t, fixture.inspection)
+
+	err := fixture.writer.SaveProbedFile(withWriteTimeout(t),
+		probedRecord(moviesLibraryID, testID('i', 2), testID('f', 2), "a.mkv"))
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("SaveProbedFile error = %v, want domain.ErrConflict", err)
+	}
+
+	assertDeepEqual(t, "row counts after the conflict", catalogRowCounts(t, fixture.inspection), before)
 }

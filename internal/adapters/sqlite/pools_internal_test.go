@@ -232,8 +232,8 @@ func TestWriterEnforcesForeignKeysOfTheCatalog(t *testing.T) {
 	}
 
 	_, err := db.writer.ExecContext(t.Context(),
-		`INSERT INTO items (id, library_id, kind, title, sort_title, created_at, updated_at)
-		VALUES ('item-1', 'missing-library', 'movie', 'A', 'a', 0, 0)`)
+		`INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
+		VALUES ('item-1', 'missing-library', 'movie', 'a.mkv', 'A', 'a', 0, 0)`)
 	if err == nil || !strings.Contains(strings.ToUpper(err.Error()), "FOREIGN KEY") {
 		t.Errorf("insert of an orphan item error = %v, want a FOREIGN KEY constraint error", err)
 	}

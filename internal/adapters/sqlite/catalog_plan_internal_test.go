@@ -43,7 +43,7 @@ type planStep struct {
 	detail string
 }
 
-// The keyset page must be a range search on items_library_sort_title in index order: a
+// The keyset page must be a range search on items_top_level in index order: a
 // sort of the library's items in a temporary B-tree would read the whole library for every
 // page. The only sort allowed is the one inside the correlated subquery that picks an
 // item's primary file among its (in milestone 2: one) files.
@@ -70,7 +70,7 @@ func TestListItemPageSearchesTheSortTitleIndexWithoutSortingItems(t *testing.T) 
 
 	for id, step := range steps {
 		usesIndex = usesIndex || (strings.HasPrefix(step.detail, "SEARCH items USING ") &&
-			strings.Contains(step.detail, "INDEX items_library_sort_title (library_id=? AND sort_title>"))
+			strings.Contains(step.detail, "INDEX items_top_level (library_id=? AND sort_title>"))
 
 		if strings.Contains(step.detail, "USE TEMP B-TREE FOR ORDER BY") && !insideSubquery(steps, id) {
 			t.Errorf("plan step %q sorts outside the primary-file subquery; plan: %+v", step.detail, steps)
@@ -78,7 +78,7 @@ func TestListItemPageSearchesTheSortTitleIndexWithoutSortingItems(t *testing.T) 
 	}
 
 	if !usesIndex {
-		t.Errorf("plan does not search items_library_sort_title; plan: %+v", steps)
+		t.Errorf("plan does not search items_top_level; plan: %+v", steps)
 	}
 }
 
