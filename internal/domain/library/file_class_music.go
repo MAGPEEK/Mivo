@@ -29,15 +29,25 @@ func (class FileClass) AllowedIn(kind Kind) bool {
 		return kind == KindMusic
 	}
 
+	if class == FileClassPhoto {
+		return kind == KindPhotos
+	}
+
 	return class.IsValid()
 }
 
 // ClassifyFileIn classifies a file for a library of the given kind: audio files in music
-// libraries, otherwise the result of ClassifyFile. A music library holds no video files; NFO
+// libraries, images and videos in photos libraries (images are photos there), otherwise the result of ClassifyFile. A music library holds no video files; NFO
 // and image sidecars stay valid.
 func ClassifyFileIn(kind Kind, name string) (class FileClass, ok bool) {
 	if FileClassAudio.AllowedIn(kind) && IsAudioFileName(name) {
 		return FileClassAudio, true
+	}
+
+	if kind == KindPhotos {
+		if class, ok = classifyPhotoFile(name); ok {
+			return class, ok
+		}
 	}
 
 	class, ok = ClassifyFile(name)

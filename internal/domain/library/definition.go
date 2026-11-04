@@ -37,7 +37,7 @@ func ParseKind(text string) (Kind, error) {
 // IsValid reports whether the kind is one of the known kinds.
 func (kind Kind) IsValid() bool {
 	switch kind {
-	case KindMovies, KindShows, KindMusic:
+	case KindMovies, KindShows, KindMusic, KindPhotos:
 		return true
 	default:
 		return false
