@@ -18,35 +18,60 @@
 #
 # Prints one line per check: "ok", "WARN" or "FAIL" followed by the check, "info" lines for
 # facts that are recorded but not judged, and a summary. Exit 0 when nothing failed, 1 when a
-# check failed, 2 on a usage error or a missing tool.
+# check failed (also when an archive cannot be read or holds members that are unsafe to
+# extract; nothing of such an archive is extracted), 2 on a usage error or a missing tool.
 #
 # Runs in a debian:stable-slim based container (Dockerfile in this directory: tar, xz, jq;
-# how to run: ../../toolkit/README.md "Output verification"); POSIX sh, no bash. Needs tar
-# (GNU), xz, od, dd, awk, sed, grep, sort, mktemp, sha256sum and jq. Nothing here names the
-# product: the package name comes from INFO.
+# how to run: ../../toolkit/README.md "Output verification"); POSIX sh, no bash. Needs GNU
+# tar, xz, jq, od, dd, awk, sed, grep, sort, uniq, find, du, cut, wc, tr, head, mkdir, rm,
+# mktemp and sha256sum. Nothing here names the product: the package name comes from INFO.
+#
+# No "set -e": most commands here are checks whose non-zero exit is a finding, not an error
+# (grep without a match, a missing member), so every exit status is handled where it occurs.
 set -u
 
 readonly EXIT_FAILURE=1
 readonly EXIT_USAGE=2
+# Shell convention: 128 + signal number (SIGINT 2, SIGTERM 15).
+readonly EXIT_INTERRUPTED=130
+readonly EXIT_TERMINATED=143
 readonly DEFAULT_PORT=8460
+readonly MAX_PORT=65535
 readonly OS_MIN_VER="7.2-64570"
 # Largest number of an INFO version part (the guide: each part at most 2^31-1).
 readonly MAX_VERSION_NUMBER=2147483647
+readonly MAX_VERSION_DIGITS=10
 # Build numbers below this encode a pre-release (OD-SPK-5: stage 1-3 alpha/beta/rc, 0 dev).
 readonly FINAL_BUILD_NUMBER=9000
 readonly PACKAGE_NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
-# ELF constants: program header types and e_machine values.
+readonly REQUIRED_TOOLS="tar xz jq od dd awk sed grep sort uniq find du cut wc tr head mkdir rm \
+mktemp sha256sum"
+# ELF constants: program header types, note type, note alignments.
 readonly PT_INTERP=3
 readonly PT_NOTE=4
 readonly NT_GNU_ABI_TAG=1
+readonly NOTE_ALIGN_DEFAULT=4
+readonly NOTE_ALIGN_WIDE=8
+readonly NOTE_HEADER_BYTES=12
+# Upper bounds of a note's name and descriptor; a larger value means a broken note segment.
+readonly NOTE_MAX_NAME=64
+readonly NOTE_MAX_DESC=4096
 # Bytes of a tar header block and the offsets of its fields (POSIX ustar layout).
 readonly TAR_BLOCK=512
 readonly TAR_SIZE_OFFSET=124
+readonly TAR_SIZE_BYTES=12
 readonly TAR_TYPEFLAG_OFFSET=156
 readonly TAR_MAGIC_OFFSET=257
+# A numeric field whose first byte is 0x80 holds a positive big-endian base-256 number in
+# the remaining bytes (GNU extension, used for members of 8 GiB and more); 0xff is negative.
+readonly TAR_BASE256_POSITIVE=128
+readonly TAR_BASE256_NEGATIVE=255
+readonly TAR_BASE256_HIGH_BYTES=4
 # Members of a text kind are checked for CR characters and leftover @NAME@ tokens.
 readonly TOKEN_PATTERN='@[A-Z][A-Z0-9_]*@'
-readonly LIFECYCLE_SCRIPTS="preinst postinst preuninst postuninst preupgrade postupgrade start-stop-status"
+readonly LIFECYCLE_SCRIPTS="preinst postinst preuninst postuninst preupgrade postupgrade \
+start-stop-status"
+readonly SCRIPT_SHEBANG='#!/bin/sh'
 readonly ICON_SIZES="PACKAGE_ICON.PNG:64 PACKAGE_ICON_256.PNG:256"
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
@@ -97,6 +122,19 @@ warn() {
 
 info() { printf 'info %s\n' "$*"; }
 
+summary() {
+	printf 'inspect-spk: %s checks, %s failed, %s warnings (%s)\n' \
+		"$checks" "$failures" "$warnings" "$spk"
+}
+
+# abort <description>: a failure after which no further check makes sense (the archive is
+# not readable or not safe to extract); prints the summary and exits 1.
+abort() {
+	failed "$*"
+	summary
+	exit "$EXIT_FAILURE"
+}
+
 # check <description> <command...>: ok when the command succeeds, FAIL otherwise.
 check() {
 	check_description=$1
@@ -135,46 +173,61 @@ parse_args() {
 				;;
 			-h | --help) usage ;;
 			-*) die "unknown option $1" ;;
-			*)
-				if [ -z "$spk" ]; then spk=$1; elif [ -z "$family" ]; then family=$1; else die "too many arguments: $1"; fi
-				;;
+			*) set_operand "$1" ;;
 		esac
 		shift
 	done
 	[ -n "$spk" ] && [ -n "$family" ] || usage
 	[ -f "$spk" ] || die "$spk is not a file"
 	[ -f "$expected_file" ] || die "expected-member list $expected_file not found"
-	echo "$port" | grep -Eq '^[1-9][0-9]{0,4}$' && [ "$port" -le 65535 ] || die "--port must be 1-65535, not '$port'"
-	case "$family" in x86_64 | armv8 | armv7) ;; *) die "family must be x86_64, armv8 or armv7, not '$family'" ;; esac
+	if ! printf '%s\n' "$port" | grep -Eqx '[1-9][0-9]{0,4}' || [ "$port" -gt "$MAX_PORT" ]; then
+		die "--port must be 1-$MAX_PORT, not '$port'"
+	fi
+	case "$family" in
+		x86_64 | armv8 | armv7) ;;
+		*) die "family must be x86_64, armv8 or armv7, not '$family'" ;;
+	esac
+}
+
+# set_operand <word>: the first operand is the SPK, the second the family.
+set_operand() {
+	if [ -z "$spk" ]; then
+		spk=$1
+	elif [ -z "$family" ]; then
+		family=$1
+	else
+		die "too many arguments: $1"
+	fi
 }
 
 require_tools() {
-	for tool in tar xz od dd awk sed grep sort mktemp sha256sum jq; do
-		command -v "$tool" >/dev/null 2>&1 || die "$tool is required (run in the image of the Dockerfile next to this script)"
+	for tool in $REQUIRED_TOOLS; do
+		command -v "$tool" >/dev/null 2>&1 ||
+			die "$tool is required (run in the image of the Dockerfile next to this script)"
 	done
 }
 
 # Facts of the family (ADR 0026 Notes): INFO arch, ELF class and machine, oldest DSM 7.2 kernel.
 family_arch() {
 	case "$1" in
-		x86_64) echo "x86_64" ;;
-		armv8) echo "armv8" ;;
-		armv7) echo "armv7 armada38x monaco" ;;
+		x86_64) printf '%s\n' "x86_64" ;;
+		armv8) printf '%s\n' "armv8" ;;
+		armv7) printf '%s\n' "armv7 armada38x monaco" ;;
 	esac
 }
 
 family_elf() {
 	case "$1" in
-		x86_64) echo "2 62" ;;  # ELFCLASS64, EM_X86_64
-		armv8) echo "2 183" ;;  # ELFCLASS64, EM_AARCH64
-		armv7) echo "1 40" ;;   # ELFCLASS32, EM_ARM
+		x86_64) printf '%s\n' "2 62" ;;  # ELFCLASS64, EM_X86_64
+		armv8) printf '%s\n' "2 183" ;;  # ELFCLASS64, EM_AARCH64
+		armv7) printf '%s\n' "1 40" ;;   # ELFCLASS32, EM_ARM
 	esac
 }
 
 family_kernel() {
 	case "$1" in
-		x86_64 | armv7) echo "3.10.108" ;;
-		armv8) echo "4.4.302" ;;
+		x86_64 | armv7) printf '%s\n' "3.10.108" ;;
+		armv8) printf '%s\n' "4.4.302" ;;
 	esac
 }
 
@@ -182,7 +235,15 @@ family_kernel() {
 
 # read_u <file> <offset> <bytes>: unsigned little-endian integer of up to 8 bytes.
 read_u() {
-	od -An -v -tu1 -j "$2" -N "$3" "$1" | awk 'BEGIN { p = 1 } { for (i = 1; i <= NF; i++) { v += $i * p; p *= 256 } } END { printf "%d", v }'
+	od -An -v -tu1 -j "$2" -N "$3" "$1" |
+		awk 'BEGIN { p = 1 } { for (i = 1; i <= NF; i++) { v += $i * p; p *= 256 } }
+			END { printf "%.0f", v }'
+}
+
+# read_be <file> <offset> <bytes>: unsigned big-endian integer (exact up to 2^53).
+read_be() {
+	od -An -v -tu1 -j "$2" -N "$3" "$1" |
+		awk '{ for (i = 1; i <= NF; i++) v = v * 256 + $i } END { printf "%.0f", v }'
 }
 
 # read_hex <file> <offset> <bytes>: the bytes as lowercase hex without blanks.
@@ -197,56 +258,134 @@ read_text() {
 
 # octal <digits>: decimal value of an octal digit string (tar size fields).
 octal() {
-	echo "$1" | awk '{ for (i = 1; i <= length($0); i++) v = v * 8 + substr($0, i, 1); printf "%d", v }'
+	printf '%s\n' "$1" |
+		awk '{ for (i = 1; i <= length($0); i++) v = v * 8 + substr($0, i, 1); printf "%.0f", v }'
+}
+
+# file_size <file>: size in bytes.
+file_size() {
+	wc -c <"$1" | tr -d ' '
 }
 
 # --- tar format ---------------------------------------------------------------------------
 
-# tar_format <file>: prints "<flavour> <extensions>" for an uncompressed tar: flavour gnu
-# (magic "ustar  " NUL), posix (magic "ustar" NUL "00", ustar or pax) or unknown; extensions
-# are the header types that go beyond plain ustar (gnu-longname, gnu-longlink, pax-extended,
-# pax-global, base-256-size) or "none". Walks the header blocks, so every member is seen.
+# tar_member_size <file> <header offset>: the size field of a header; octal, or base-256
+# (first byte 0x80, the other eleven bytes big-endian). Prints "-1" for a negative
+# base-256 value and for one of 2^56 bytes or more (the high bytes +1..+4 not zero), which
+# no member can have and the shell could not add.
+tar_member_size() {
+	size_first=$(read_u "$1" "$(($2 + TAR_SIZE_OFFSET))" 1)
+	if [ "$size_first" -eq "$TAR_BASE256_POSITIVE" ]; then
+		if [ "$(read_hex "$1" "$(($2 + TAR_SIZE_OFFSET + 1))" "$TAR_BASE256_HIGH_BYTES")" = 00000000 ]
+		then
+			read_be "$1" "$(($2 + TAR_SIZE_OFFSET + 1 + TAR_BASE256_HIGH_BYTES))" \
+				"$((TAR_SIZE_BYTES - 1 - TAR_BASE256_HIGH_BYTES))"
+		else
+			printf '%s' -1
+		fi
+	elif [ "$size_first" -eq "$TAR_BASE256_NEGATIVE" ]; then
+		printf '%s' -1
+	else
+		octal "$(read_text "$1" "$(($2 + TAR_SIZE_OFFSET))" "$((TAR_SIZE_BYTES - 1))" | tr -d ' ')"
+	fi
+}
+
+# tar_header_kind <file> <header offset>: gnu (magic "ustar  " NUL), posix ("ustar" NUL "00",
+# ustar or pax), end (a zero block) or unknown.
+tar_header_kind() {
+	case "$(read_hex "$1" "$(($2 + TAR_MAGIC_OFFSET))" 8)" in
+		7573746172202000) printf '%s\n' gnu ;;
+		7573746172003030) printf '%s\n' posix ;;
+		0000000000000000) printf '%s\n' end ;;
+		*) printf '%s\n' unknown ;;
+	esac
+}
+
+# tar_extension <file> <header offset>: the extension a header type stands for, if any.
+tar_extension() {
+	case "$(read_text "$1" "$(($2 + TAR_TYPEFLAG_OFFSET))" 1)" in
+		L) printf '%s\n' gnu-longname ;;
+		K) printf '%s\n' gnu-longlink ;;
+		x) printf '%s\n' pax-extended ;;
+		g) printf '%s\n' pax-global ;;
+	esac
+	[ "$(read_u "$1" "$(($2 + TAR_SIZE_OFFSET))" 1)" -lt "$TAR_BASE256_POSITIVE" ] ||
+		printf '%s\n' base-256-size
+}
+
+# tar_format <file>: prints "<flavour> <extensions>" for an uncompressed tar: flavour gnu,
+# posix, mixed, unknown or empty; extensions are the header types that go beyond plain ustar
+# (gnu-longname, gnu-longlink, pax-extended, pax-global, base-256-size) or "none". Walks
+# the header blocks, so every member is seen.
 tar_format() {
 	tar_file=$1
-	tar_total=$(wc -c <"$tar_file")
+	tar_total=$(file_size "$tar_file")
 	tar_offset=0
 	tar_flavour=""
 	tar_extensions=""
 	while [ "$((tar_offset + TAR_BLOCK))" -le "$tar_total" ]; do
-		tar_magic=$(read_hex "$tar_file" "$((tar_offset + TAR_MAGIC_OFFSET))" 8)
-		case "$tar_magic" in
-			7573746172202000) tar_this=gnu ;;
-			7573746172003030) tar_this=posix ;;
-			0000000000000000) break ;; # end-of-archive block
-			*) tar_this=unknown ;;
-		esac
-		[ -n "$tar_flavour" ] && [ "$tar_flavour" != "$tar_this" ] && tar_flavour=mixed || tar_flavour=${tar_flavour:-$tar_this}
-		tar_type=$(read_text "$tar_file" "$((tar_offset + TAR_TYPEFLAG_OFFSET))" 1)
-		case "$tar_type" in
-			L) tar_extensions="$tar_extensions gnu-longname" ;;
-			K) tar_extensions="$tar_extensions gnu-longlink" ;;
-			x) tar_extensions="$tar_extensions pax-extended" ;;
-			g) tar_extensions="$tar_extensions pax-global" ;;
-		esac
-		tar_size_first=$(read_u "$tar_file" "$((tar_offset + TAR_SIZE_OFFSET))" 1)
-		if [ "$tar_size_first" -ge 128 ]; then
-			tar_extensions="$tar_extensions base-256-size"
-			tar_size=$(read_u "$tar_file" "$((tar_offset + TAR_SIZE_OFFSET + 4))" 8)
-		else
-			tar_size=$(octal "$(read_text "$tar_file" "$((tar_offset + TAR_SIZE_OFFSET))" 11 | tr -d ' ')")
+		tar_this=$(tar_header_kind "$tar_file" "$tar_offset")
+		[ "$tar_this" != end ] || break
+		if [ -z "$tar_flavour" ]; then
+			tar_flavour=$tar_this
+		elif [ "$tar_flavour" != "$tar_this" ]; then
+			tar_flavour=mixed
 		fi
+		tar_extensions="$tar_extensions $(tar_extension "$tar_file" "$tar_offset")"
+		tar_size=$(tar_member_size "$tar_file" "$tar_offset")
+		[ "$tar_size" -ge 0 ] || { tar_flavour=unknown; break; }
 		tar_offset=$((tar_offset + TAR_BLOCK + (tar_size + TAR_BLOCK - 1) / TAR_BLOCK * TAR_BLOCK))
 	done
-	tar_extensions=$(echo "$tar_extensions" | tr ' ' '\n' | grep -v '^$' | sort -u | tr '\n' ',' | sed 's/,$//')
-	echo "${tar_flavour:-empty} ${tar_extensions:-none}"
+	# shellcheck disable=SC2086 # one extension per word on purpose
+	tar_extensions=$(printf '%s\n' $tar_extensions | LC_ALL=C sort -u | tr '\n' ',' | sed 's/,$//')
+	printf '%s %s\n' "${tar_flavour:-empty}" "${tar_extensions:-none}"
 }
 
 # --- member lists -------------------------------------------------------------------------
 
-# list_members <tar> [xz]: "<mode> <owner> <name>" per member, "./" prefixes stripped.
+# list_members <tar> <out>: writes "<mode> <owner> <name>" per member to <out>, "./"
+# prefixes and the link targets of hard and symbolic links stripped. Fails when tar cannot
+# read the archive.
 list_members() {
-	if [ "${2:-}" = xz ]; then tar -tvJf "$1"; else tar -tvf "$1"; fi |
-		awk '{ name = $0; for (i = 1; i <= 5; i++) sub(/^[^ ]+ +/, "", name); sub(/^\.\//, "", name); sub(/ -> .*$/, "", name); print $1, $2, name }'
+	tar -tvf "$1" >"$2.raw" || return 1
+	awk '{
+		name = $0
+		for (i = 1; i <= 5; i++) sub(/^[^ ]+ +/, "", name)
+		sub(/^\.\//, "", name)
+		if ($1 ~ /^h/) sub(/ link to .*$/, "", name)
+		if ($1 ~ /^l/) sub(/ -> .*$/, "", name)
+		print $1, $2, name
+	}' "$2.raw" >"$2"
+}
+
+# unsafe_members <listing>: one "name(reason)" per member that must not be extracted:
+# anything but a file or directory (links, devices, FIFOs), an absolute name, a ".."
+# component, or a name tar printed with escapes (control characters, backslashes).
+unsafe_members() {
+	while read -r unsafe_mode _ unsafe_name; do
+		case "$unsafe_mode" in
+			d* | -*) ;;
+			*) printf '%s(link or special file: %s) ' "$unsafe_name" "$unsafe_mode"; continue ;;
+		esac
+		case "$unsafe_name" in
+			/* | .. | ../* | */../* | */..)
+				printf '%s(absolute or outside the archive) ' "$unsafe_name"
+				;;
+			*\\*) printf '%s(name with escaped characters) ' "$unsafe_name" ;;
+		esac
+	done <"$1"
+}
+
+# read_archive <label> <tar> <listing> <dir>: lists the archive, refuses unsafe members and
+# extracts it without owners and stored permissions (the modes are judged from the listing).
+read_archive() {
+	list_members "$2" "$3" || abort "$1: tar cannot list the archive"
+	archive_unsafe=$(unsafe_members "$3")
+	[ -z "$archive_unsafe" ] || abort "$1: unsafe members, nothing extracted: ${archive_unsafe% }"
+	pass "$1: no link, special file, absolute name or .. component among the members"
+	mkdir -p "$4" || die "cannot create $4"
+	tar -xf "$2" -C "$4" --no-same-owner --no-same-permissions ||
+		abort "$1: tar cannot extract the archive"
 }
 
 # mode_matches <mode-column> <expected 0755|0644>
@@ -257,6 +396,11 @@ mode_matches() {
 	esac
 }
 
+# rule_name <member column>: the member column of a rule with "<id>" replaced.
+rule_name() {
+	printf '%s\n' "$1" | sed "s|<id>|$id|g"
+}
+
 # expected_rule <archive> <name>: prints "<mode> <rule>" of the first matching rule of the
 # expected-member list, exact names first, then patterns; nothing when there is none.
 expected_rule() {
@@ -265,35 +409,73 @@ expected_rule() {
 	rule_found=""
 	while read -r rule_kind rule_mode rule_member; do
 		[ "$rule_kind" = "$rule_archive" ] || continue
-		rule_member=$(echo "$rule_member" | sed "s|<id>|$id|g")
+		rule_member=$(rule_name "$rule_member")
 		if [ "$rule_member" = "$rule_name" ]; then
-			echo "$rule_mode $rule_member"
+			printf '%s %s\n' "$rule_mode" "$rule_member"
 			return 0
 		fi
 		case "$rule_member" in
 			*\**)
 				# shellcheck disable=SC2254 # the rule is a pattern on purpose
-				case "$rule_name" in $rule_member) [ -n "$rule_found" ] || rule_found="$rule_mode $rule_member" ;; esac
+				case "$rule_name" in
+					$rule_member) [ -n "$rule_found" ] || rule_found="$rule_mode $rule_member" ;;
+				esac
 				;;
 		esac
 	done <"$expected_rules"
-	[ -z "$rule_found" ] || echo "$rule_found"
+	[ -z "$rule_found" ] || printf '%s\n' "$rule_found"
 }
 
-# suspicious_name <name>: true for names that come from the build environment or escape the
-# package directory.
+# suspicious_name <name>: true for names that come from the build environment.
 suspicious_name() {
 	case "$1" in
-		/* | ../* | */../* | *..) return 0 ;;
-		*SynoBuildConf* | build.env | *INFO.sh | prebuilt/* | .spkstage* | .fetch-manifest | */.fetch-manifest) return 0 ;;
+		*SynoBuildConf* | build.env | *INFO.sh | prebuilt/*) return 0 ;;
+		.spkstage* | .fetch-manifest | */.fetch-manifest) return 0 ;;
 		*_debug* | *.debug | *.dbg | *.orig | *.rej | *~) return 0 ;;
 		.* | */.*) return 0 ;;
 	esac
 	return 1
 }
 
-# check_members <archive> <listing>: every member against the expected list (name, mode,
-# type), every required rule present exactly once, nothing suspicious, no signature.
+# member_problem <archive> <mode> <name>: the problem of one member as "name(reason)", or
+# nothing; records the matched rule in $members_seen.
+member_problem() {
+	if suspicious_name "$3"; then
+		printf '%s(build leftover or hidden file)' "$3"
+		return
+	fi
+	problem_rule=$(expected_rule "$1" "$3")
+	if [ -z "$problem_rule" ]; then
+		printf '%s(unexpected)' "$3"
+		return
+	fi
+	problem_mode=${problem_rule%% *}
+	case "$3" in */) problem_mode=0755 ;; esac
+	mode_matches "$2" "$problem_mode" || printf '%s(mode %s, want %s)' "$3" "$2" "$problem_mode"
+	printf '%s\n' "${problem_rule#* }" >>"$members_seen"
+}
+
+# missing_members <archive>: "rule(expected once, found 0)" for every exact rule no member
+# matched (a second member of the same name is a duplicate, see duplicate_members).
+missing_members() {
+	while read -r rule_kind _ rule_member; do
+		[ "$rule_kind" = "$1" ] || continue
+		case "$rule_member" in *\**) continue ;; esac
+		rule_member=$(rule_name "$rule_member")
+		grep -qxF -- "$rule_member" "$members_seen" ||
+			printf '%s(expected once, found 0) ' "$rule_member"
+	done <"$expected_rules"
+}
+
+# duplicate_members <listing>: "name(duplicate, N times)" for every name stored more than
+# once, whether an exact rule or a pattern allows it (tar keeps only the last copy).
+duplicate_members() {
+	awk '{ print $3 }' "$1" | LC_ALL=C sort | uniq -c |
+		awk '$1 > 1 { count = $1; sub(/^ *[0-9]+ /, ""); printf "%s(duplicate, %d times) ", $0, count }'
+}
+
+# check_members <archive> <listing>: every member against the expected list (name, mode),
+# every required rule present, no duplicate, nothing from the build, no signature.
 check_members() {
 	members_archive=$1
 	members_listing=$2
@@ -302,67 +484,43 @@ check_members() {
 	: >"$members_seen"
 	while read -r member_mode _ member_name; do
 		[ -n "$member_name" ] || continue
-		case "$member_mode" in
-			d* | -*) ;;
-			*) members_problems="$members_problems ${member_name}(not a file or directory: $member_mode)"; continue ;;
-		esac
-		if suspicious_name "$member_name"; then
-			members_problems="$members_problems ${member_name}(build leftover or unsafe name)"
-			continue
-		fi
-		member_rule=$(expected_rule "$members_archive" "$member_name")
-		if [ -z "$member_rule" ]; then
-			members_problems="$members_problems ${member_name}(unexpected)"
-			continue
-		fi
-		member_expected_mode=${member_rule%% *}
-		case "$member_name" in */) member_expected_mode=0755 ;; esac
-		mode_matches "$member_mode" "$member_expected_mode" ||
-			members_problems="$members_problems ${member_name}(mode $member_mode, want $member_expected_mode)"
-		echo "${member_rule#* }" >>"$members_seen"
-	done <<EOF
-$members_listing
-EOF
-	members_missing=$(while read -r rule_kind rule_mode rule_member; do
-		[ "$rule_kind" = "$members_archive" ] || continue
-		case "$rule_member" in *\**) continue ;; esac
-		rule_member=$(echo "$rule_member" | sed "s|<id>|$id|g")
-		rule_count=$(grep -cxF -- "$rule_member" "$members_seen")
-		[ "$rule_count" -eq 1 ] || echo "${rule_member}(expected once, found $rule_count)"
-	done <"$expected_rules" | tr '\n' ' ')
-	if [ -z "$members_problems" ] && [ -z "$members_missing" ]; then
+		member_text=$(member_problem "$members_archive" "$member_mode" "$member_name")
+		[ -z "$member_text" ] || members_problems="$members_problems $member_text"
+	done <"$members_listing"
+	members_problems="$members_problems $(missing_members "$members_archive")"
+	members_problems="$members_problems $(duplicate_members "$members_listing")"
+	members_problems=$(printf '%s\n' "$members_problems" | sed 's/^ *//;s/ *$//;s/  */ /g')
+	if [ -z "$members_problems" ]; then
 		pass "$members_archive: members, modes and types match the expected list"
 	else
-		failed "$members_archive: members differ from the expected list:$members_problems ${members_missing% }"
+		failed "$members_archive: members differ from the expected list: $members_problems"
 	fi
-	if echo "$members_listing" | grep -qi 'signature'; then
+	if grep -qi 'signature' "$members_listing"; then
 		failed "$members_archive: a signature member is present (signing is deprecated since DSM 7)"
 	else
 		pass "$members_archive: no signature member"
 	fi
-	members_owners=$(echo "$members_listing" | awk '{ print $2 }' | sort -u | tr '\n' ' ')
+	members_owners=$(awk '{ print $2 }' "$members_listing" | LC_ALL=C sort -u | tr '\n' ' ')
 	info "$members_archive: owners ${members_owners% }"
 }
 
 # --- the outer archive ----------------------------------------------------------------------
 
 check_outer_archive() {
-	outer_magic=$(read_hex "$spk" 0 6)
-	case "$outer_magic" in
-		1f8b*) failed "SPK is gzip-compressed, not an uncompressed tar"; exit "$EXIT_FAILURE" ;;
-		fd377a585a00) failed "SPK is xz-compressed, not an uncompressed tar"; exit "$EXIT_FAILURE" ;;
+	case "$(read_hex "$spk" 0 6)" in
+		1f8b*) abort "SPK is gzip-compressed, not an uncompressed tar" ;;
+		fd377a585a00) abort "SPK is xz-compressed, not an uncompressed tar" ;;
 	esac
 	outer_format=$(tar_format "$spk")
 	case "$outer_format" in
 		gnu\ * | posix\ *) pass "SPK is an uncompressed tar (format ${outer_format%% *})" ;;
-		*) failed "SPK is not a tar archive with ustar or GNU headers (${outer_format%% *})"; exit "$EXIT_FAILURE" ;;
+		*) abort "SPK is not a tar archive with ustar or GNU headers (${outer_format%% *})" ;;
 	esac
 	info "SPK tar extensions beyond plain ustar: ${outer_format#* }"
-	outer_listing=$(list_members "$spk")
-	info "SPK member order: $(echo "$outer_listing" | awk '{ print $3 }' | tr '\n' ' ')"
-	mkdir -p "$work/spk"
-	tar -xf "$spk" -C "$work/spk" || die "cannot extract $spk"
-	[ -f "$work/spk/INFO" ] || { failed "INFO is missing"; exit "$EXIT_FAILURE"; }
+	outer_listing="$work/listing-spk"
+	read_archive spk "$spk" "$outer_listing" "$work/spk"
+	info "SPK member order: $(awk '{ print $3 }' "$outer_listing" | tr '\n' ' ')"
+	[ -f "$work/spk/INFO" ] || abort "INFO is missing"
 	read_package_name
 	check_members spk "$outer_listing"
 }
@@ -388,7 +546,7 @@ info_required() {
 		return
 	fi
 	info_actual=$(info_value "$info_key")
-	if echo "$info_actual" | grep -Eq "$info_pattern"; then
+	if printf '%s\n' "$info_actual" | grep -Eq "$info_pattern"; then
 		pass "INFO $info_key=\"$info_actual\""
 	else
 		failed "INFO $info_key=\"$info_actual\" does not match $info_pattern"
@@ -396,35 +554,57 @@ info_required() {
 }
 
 info_absent() {
-	if [ "$(info_count "$1")" -eq 0 ]; then pass "INFO has no $1"; else failed "INFO has $1 ($(grep "^$1=" "$work/spk/INFO" | head -n 1))"; fi
+	if [ "$(info_count "$1")" -eq 0 ]; then
+		pass "INFO has no $1"
+	else
+		failed "INFO has $1 ($(grep "^$1=" "$work/spk/INFO" | head -n 1))"
+	fi
 }
 
 read_package_name() {
 	id=$(info_value package | head -n 1)
-	echo "$id" | grep -Eq "$PACKAGE_NAME_PATTERN" || { failed "INFO package=\"$id\" is not a package name"; exit "$EXIT_FAILURE"; }
+	printf '%s\n' "$id" | grep -Eq "$PACKAGE_NAME_PATTERN" ||
+		abort "INFO package=\"$id\" is not a package name"
 }
 
 # version_parts_in_range <a.b.c-d>: every number at most 2^31-1.
 version_parts_in_range() {
-	for version_part in $(echo "$1" | tr '.-' '  '); do
-		[ "${#version_part}" -le 10 ] && [ "$version_part" -le "$MAX_VERSION_NUMBER" ] || return 1
+	for version_part in $(printf '%s\n' "$1" | tr '.-' '  '); do
+		[ "${#version_part}" -le "$MAX_VERSION_DIGITS" ] &&
+			[ "$version_part" -le "$MAX_VERSION_NUMBER" ] || return 1
 	done
 }
 
-check_info() {
+check_info_lines() {
 	info_bad_lines=$(grep -Env '^[a-z_]+="[^"\\$`]*"$' "$work/spk/INFO" | head -n 3 | tr '\n' ' ')
-	if [ -z "$info_bad_lines" ]; then pass "INFO: every line is key=\"value\" without shell-active characters"; else failed "INFO: lines that are not key=\"value\": $info_bad_lines"; fi
-	info_required package "$PACKAGE_NAME_PATTERN"
-	info_required displayname '^.+$'
+	if [ -z "$info_bad_lines" ]; then
+		pass "INFO: every line is key=\"value\" without shell-active characters"
+	else
+		failed "INFO: lines that are not key=\"value\": $info_bad_lines"
+	fi
+}
+
+check_info_version() {
 	info_required version '^[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$'
 	info_version=$(info_value version)
-	if version_parts_in_range "$info_version"; then pass "INFO version parts are at most $MAX_VERSION_NUMBER"; else failed "INFO version $info_version has a part above $MAX_VERSION_NUMBER"; fi
+	if version_parts_in_range "$info_version"; then
+		pass "INFO version parts are at most $MAX_VERSION_NUMBER"
+	else
+		failed "INFO version $info_version has a part above $MAX_VERSION_NUMBER"
+	fi
 	info_build=${info_version##*-}
 	if [ "${info_build:-9999}" -lt "$FINAL_BUILD_NUMBER" ] 2>/dev/null; then
 		info_required beta '^yes$'
 	else
 		info_absent beta
 	fi
+}
+
+check_info() {
+	check_info_lines
+	info_required package "$PACKAGE_NAME_PATTERN"
+	info_required displayname '^.+$'
+	check_info_version
 	info_required arch "^$(family_arch "$family")\$"
 	info_required os_min_ver "^$OS_MIN_VER\$"
 	info_required adminport "^$port\$"
@@ -447,121 +627,187 @@ check_info() {
 check_package_tgz() {
 	package_tgz="$work/spk/package.tgz"
 	package_magic=$(read_hex "$package_tgz" 0 6)
-	if [ "$package_magic" = fd377a585a00 ]; then pass "package.tgz is xz-compressed"; else failed "package.tgz is not xz-compressed (magic $package_magic)"; exit "$EXIT_FAILURE"; fi
-	xz -dc "$package_tgz" >"$work/package.tar" || { failed "package.tgz does not decompress"; exit "$EXIT_FAILURE"; }
+	if [ "$package_magic" = fd377a585a00 ]; then
+		pass "package.tgz is xz-compressed"
+	else
+		abort "package.tgz is not xz-compressed (magic $package_magic)"
+	fi
+	xz -dc "$package_tgz" >"$work/package.tar" || abort "package.tgz does not decompress"
 	package_format=$(tar_format "$work/package.tar")
 	case "$package_format" in
 		gnu\ * | posix\ *) pass "package.tgz holds a tar (format ${package_format%% *})" ;;
-		*) failed "package.tgz does not hold a tar with ustar or GNU headers (${package_format%% *})"; exit "$EXIT_FAILURE" ;;
+		*) abort "package.tgz does not hold a tar with ustar or GNU headers (${package_format%% *})" ;;
 	esac
 	info "package.tgz tar extensions beyond plain ustar: ${package_format#* }"
-	package_listing=$(list_members "$work/package.tar")
+	package_listing="$work/listing-package"
+	read_archive package.tgz "$work/package.tar" "$package_listing" "$work/pkg"
 	check_members package "$package_listing"
-	mkdir -p "$work/pkg"
-	tar -xf "$work/package.tar" -C "$work/pkg" || die "cannot extract package.tgz"
 	package_kib=$(du -sk "$work/pkg" | cut -f1)
 	info "package.tgz extracts to $package_kib KiB (INFO extractsize=\"$(info_value extractsize)\")"
 }
 
 # --- ELF binaries ---------------------------------------------------------------------------
 
+# elf_header <file>: sets elf_class, elf_type, elf_machine, elf_flags, elf_phoff,
+# elf_phentsize and elf_phnum; fails when the file is not a little-endian ELF.
+elf_header() {
+	[ "$(read_hex "$1" 0 4)" = 7f454c46 ] || return 1
+	[ "$(read_u "$1" 5 1)" -eq 1 ] || return 1
+	elf_class=$(read_u "$1" 4 1)
+	elf_type=$(read_u "$1" 16 2)
+	elf_machine=$(read_u "$1" 18 2)
+	if [ "$elf_class" -eq 2 ]; then
+		elf_phoff=$(read_u "$1" 32 8)
+		elf_flags=$(read_u "$1" 48 4)
+		elf_phentsize=$(read_u "$1" 54 2)
+		elf_phnum=$(read_u "$1" 56 2)
+	else
+		elf_phoff=$(read_u "$1" 28 4)
+		elf_flags=$(read_u "$1" 36 4)
+		elf_phentsize=$(read_u "$1" 42 2)
+		elf_phnum=$(read_u "$1" 44 2)
+	fi
+}
+
+# elf_note_segment <file> <program header offset>: prints "offset size align" of a PT_NOTE
+# program header (p_offset, p_filesz, p_align) for the class in $elf_class.
+elf_note_segment() {
+	if [ "$elf_class" -eq 2 ]; then
+		printf '%s %s %s\n' "$(read_u "$1" "$(($2 + 8))" 8)" "$(read_u "$1" "$(($2 + 32))" 8)" \
+			"$(read_u "$1" "$(($2 + 48))" 8)"
+	else
+		printf '%s %s %s\n' "$(read_u "$1" "$(($2 + 4))" 4)" "$(read_u "$1" "$(($2 + 16))" 4)" \
+			"$(read_u "$1" "$(($2 + 28))" 4)"
+	fi
+}
+
 # elf_facts <file>: prints "class machine type interp abi flags" (interp yes/no; abi is the
 # GNU ABI tag as major.minor.patch or "none"); nothing when the file is not a little-endian ELF.
 elf_facts() {
 	elf=$1
-	[ "$(read_hex "$elf" 0 4)" = 7f454c46 ] || return 0
-	elf_class=$(read_u "$elf" 4 1)
-	[ "$(read_u "$elf" 5 1)" -eq 1 ] || return 0
-	elf_type=$(read_u "$elf" 16 2)
-	elf_machine=$(read_u "$elf" 18 2)
-	if [ "$elf_class" -eq 2 ]; then
-		elf_phoff=$(read_u "$elf" 32 8); elf_phentsize=$(read_u "$elf" 54 2); elf_phnum=$(read_u "$elf" 56 2); elf_flags=$(read_u "$elf" 48 4)
-	else
-		elf_phoff=$(read_u "$elf" 28 4); elf_phentsize=$(read_u "$elf" 42 2); elf_phnum=$(read_u "$elf" 44 2); elf_flags=$(read_u "$elf" 36 4)
-	fi
-	elf_flags=$(printf '0x%08x' "$elf_flags")
+	elf_header "$elf" || return 0
 	elf_interp=no
 	elf_abi=none
 	elf_index=0
 	while [ "$elf_index" -lt "$elf_phnum" ]; do
 		elf_ph=$((elf_phoff + elf_index * elf_phentsize))
 		elf_ptype=$(read_u "$elf" "$elf_ph" 4)
-		if [ "$elf_ptype" -eq "$PT_INTERP" ]; then elf_interp=yes; fi
+		[ "$elf_ptype" -ne "$PT_INTERP" ] || elf_interp=yes
 		if [ "$elf_ptype" -eq "$PT_NOTE" ]; then
-			if [ "$elf_class" -eq 2 ]; then
-				elf_note_offset=$(read_u "$elf" "$((elf_ph + 8))" 8); elf_note_size=$(read_u "$elf" "$((elf_ph + 32))" 8)
-			else
-				elf_note_offset=$(read_u "$elf" "$((elf_ph + 4))" 4); elf_note_size=$(read_u "$elf" "$((elf_ph + 16))" 4)
-			fi
-			elf_tag=$(elf_abi_tag "$elf" "$elf_note_offset" "$elf_note_size")
+			# shellcheck disable=SC2046 # three numbers on purpose
+			elf_tag=$(elf_abi_tag "$elf" $(elf_note_segment "$elf" "$elf_ph"))
 			[ -z "$elf_tag" ] || elf_abi=$elf_tag
 		fi
 		elf_index=$((elf_index + 1))
 	done
-	echo "$elf_class $elf_machine $elf_type $elf_interp $elf_abi $elf_flags"
+	printf '%s %s %s %s %s 0x%08x\n' "$elf_class" "$elf_machine" "$elf_type" "$elf_interp" \
+		"$elf_abi" "$elf_flags"
 }
 
-# elf_abi_tag <file> <offset> <size>: the GNU ABI tag of a note segment (NT_GNU_ABI_TAG,
-# name "GNU"), as major.minor.patch; nothing when the segment has none.
+# align_up <value> <alignment>
+align_up() {
+	printf '%s\n' "$((($1 + $2 - 1) / $2 * $2))"
+}
+
+# elf_abi_tag <file> <offset> <size> <align>: the GNU ABI tag of a note segment
+# (NT_GNU_ABI_TAG, name "GNU"), as major.minor.patch; nothing when the segment has none.
+# Name and descriptor are padded to the segment's alignment: 8 for p_align 8 (as glibc's
+# ELF_NOTE_DESC_OFFSET/ELF_NOTE_NEXT_OFFSET and readelf do), else 4.
 elf_abi_tag() {
+	note_align=$NOTE_ALIGN_DEFAULT
+	[ "$4" -ne "$NOTE_ALIGN_WIDE" ] || note_align=$NOTE_ALIGN_WIDE
 	note_pos=$2
 	note_end=$(($2 + $3))
-	while [ "$((note_pos + 12))" -le "$note_end" ]; do
+	note_file_end=$(file_size "$1")
+	[ "$note_end" -le "$note_file_end" ] || note_end=$note_file_end
+	while [ "$((note_pos + NOTE_HEADER_BYTES))" -le "$note_end" ]; do
 		note_namesz=$(read_u "$1" "$note_pos" 4)
 		note_descsz=$(read_u "$1" "$((note_pos + 4))" 4)
 		note_type=$(read_u "$1" "$((note_pos + 8))" 4)
-		[ "$note_namesz" -le 64 ] && [ "$note_descsz" -le 4096 ] || return 0
-		note_name=$(read_text "$1" "$((note_pos + 12))" "$note_namesz")
-		note_desc=$((note_pos + 12 + (note_namesz + 3) / 4 * 4))
-		if [ "$note_name" = GNU ] && [ "$note_type" -eq "$NT_GNU_ABI_TAG" ] && [ "$note_descsz" -ge 16 ]; then
-			echo "$(read_u "$1" "$((note_desc + 4))" 4).$(read_u "$1" "$((note_desc + 8))" 4).$(read_u "$1" "$((note_desc + 12))" 4)"
+		[ "$note_namesz" -le "$NOTE_MAX_NAME" ] && [ "$note_descsz" -le "$NOTE_MAX_DESC" ] || return 0
+		note_name=$(read_text "$1" "$((note_pos + NOTE_HEADER_BYTES))" "$note_namesz")
+		note_desc=$((note_pos + $(align_up "$((NOTE_HEADER_BYTES + note_namesz))" "$note_align")))
+		if [ "$note_name" = GNU ] && [ "$note_type" -eq "$NT_GNU_ABI_TAG" ] &&
+			[ "$note_descsz" -ge 16 ]; then
+			printf '%s.%s.%s\n' "$(read_u "$1" "$((note_desc + 4))" 4)" \
+				"$(read_u "$1" "$((note_desc + 8))" 4)" "$(read_u "$1" "$((note_desc + 12))" 4)"
 			return 0
 		fi
-		note_pos=$((note_desc + (note_descsz + 3) / 4 * 4))
+		note_pos=$((note_pos + $(align_up "$((note_desc - note_pos + note_descsz))" "$note_align")))
 	done
 }
 
 # version_at_most <a.b.c> <x.y.z>: true when the first kernel version is not newer.
 version_at_most() {
-	awk -v a="$1" -v b="$2" 'BEGIN { split(a, x, "."); split(b, y, "."); for (i = 1; i <= 3; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 } exit 0 }'
+	awk -v a="$1" -v b="$2" 'BEGIN {
+		split(a, x, "."); split(b, y, ".")
+		for (i = 1; i <= 3; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }
+		exit 0
+	}'
+}
+
+# binary_verdict <kind> <description>: FFmpeg findings follow ffmpeg_verdict, the server
+# binary always fails.
+binary_verdict() {
+	if [ "$1" = ffmpeg ]; then ffmpeg_verdict "$2"; else failed "$2"; fi
+}
+
+# check_binary_abi <name> <kind> <abi>: the GNU ABI note against the family's oldest kernel.
+# Without the note the kernel floor cannot be read from the file: the Go server carries
+# none (recorded), and neither does a static musl FFmpeg (SPK-15; a warning, its kernel
+# floor is checked by the SPK-11 smoke test under kernelsim).
+check_binary_abi() {
+	abi_kernel=$(family_kernel "$family")
+	if [ "$3" = none ] && [ "$2" = server ]; then
+		info "bin/$1: no GNU ABI note (runs on any kernel the libc supports)"
+	elif [ "$3" = none ]; then
+		warn "bin/$1: no GNU ABI note, kernel floor not checked here" \
+			"(the SPK-11 smoke test runs it under kernelsim)"
+	elif version_at_most "$3" "$abi_kernel"; then
+		pass "bin/$1: ELF ABI note $3 is at most the oldest DSM 7.2 kernel $abi_kernel"
+	else
+		binary_verdict "$2" "bin/$1: ELF ABI note $3 is above the oldest DSM 7.2 kernel $abi_kernel"
+	fi
 }
 
 # check_binary <name> <kind>: kind "server" (always strict) or "ffmpeg" (ffmpeg_verdict).
 check_binary() {
-	binary="$work/pkg/bin/$1"
-	binary_kind=$2
-	binary_facts=$(elf_facts "$binary")
+	# a missing binary is reported by the member check already
+	[ -f "$work/pkg/bin/$1" ] || return 0
+	binary_facts=$(elf_facts "$work/pkg/bin/$1")
 	if [ -z "$binary_facts" ]; then
 		failed "bin/$1 is not a little-endian ELF file"
 		return
 	fi
 	# shellcheck disable=SC2086 # the facts are six blank-separated words on purpose
-	set -- "$1" "$binary_kind" $binary_facts
+	set -- "$1" "$2" $binary_facts
 	# $3 class, $4 machine, $5 type, $6 interp, $7 abi, $8 flags
 	binary_expected=$(family_elf "$family")
-	if [ "$3 $4" = "$binary_expected" ]; then pass "bin/$1: ELF class $3, machine $4 (family $family)"; else failed "bin/$1: ELF class $3, machine $4, want $binary_expected for $family"; fi
-	case "$5" in 2 | 3) pass "bin/$1: ELF type $5 (executable)" ;; *) failed "bin/$1: ELF type $5 is not an executable (2 or 3)" ;; esac
+	if [ "$3 $4" = "$binary_expected" ]; then
+		pass "bin/$1: ELF class $3, machine $4 (family $family)"
+	else
+		failed "bin/$1: ELF class $3, machine $4, want $binary_expected for $family"
+	fi
+	case "$5" in
+		2 | 3) pass "bin/$1: ELF type $5 (executable)" ;;
+		*) failed "bin/$1: ELF type $5 is not an executable (2 or 3)" ;;
+	esac
 	if [ "$6" = no ]; then
 		pass "bin/$1: statically linked (no program interpreter)"
-	elif [ "$2" = ffmpeg ]; then
-		ffmpeg_verdict "bin/$1: dynamically linked (has a program interpreter)"
 	else
-		failed "bin/$1: dynamically linked (has a program interpreter)"
+		binary_verdict "$2" "bin/$1: dynamically linked (has a program interpreter)"
 	fi
-	binary_kernel=$(family_kernel "$family")
-	if [ "$7" = none ]; then
-		info "bin/$1: no GNU ABI note (runs on any kernel the libc supports)"
-	elif version_at_most "$7" "$binary_kernel"; then
-		pass "bin/$1: ELF ABI note $7 is at most the oldest DSM 7.2 kernel $binary_kernel"
-	elif [ "$2" = ffmpeg ]; then
-		ffmpeg_verdict "bin/$1: ELF ABI note $7 is above the oldest DSM 7.2 kernel $binary_kernel"
-	else
-		failed "bin/$1: ELF ABI note $7 is above the oldest DSM 7.2 kernel $binary_kernel"
-	fi
-	[ "$family" != armv7 ] || info "bin/$1: ELF e_flags $8 (EABI version in the top byte; 0x400 = EF_ARM_ABI_FLOAT_HARD)"
+	check_binary_abi "$1" "$2" "$7"
+	[ "$family" != armv7 ] ||
+		info "bin/$1: ELF e_flags $8 (EABI version in the top byte; 0x400 = EF_ARM_ABI_FLOAT_HARD)"
 }
 
 # --- FFmpeg notice -----------------------------------------------------------------------
+
+# notice_field <file> <key>: the first word after "<key>:".
+notice_field() {
+	sed -n "s/^$2:[[:space:]]*\([^[:space:]]*\).*/\1/p" "$1" | head -n 1
+}
 
 read_ffmpeg_notice() {
 	notice="$work/pkg/share/licenses/ffmpeg/SOURCE.txt"
@@ -575,11 +821,13 @@ read_ffmpeg_notice() {
 	if [ "$notice_status_lines" -eq 1 ] && [ "$notice_licence_lines" -eq 1 ]; then
 		pass "SOURCE.txt has one Status: and one Licence: line"
 	else
-		failed "SOURCE.txt has $notice_status_lines Status: and $notice_licence_lines Licence: lines, want one each"
+		failed "SOURCE.txt has $notice_status_lines Status: and $notice_licence_lines Licence:" \
+			"lines, want one each"
 	fi
-	ffmpeg_status=$(sed -n 's/^Status:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$notice" | head -n 1)
-	ffmpeg_licence=$(sed -n 's/^Licence:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$notice" | head -n 1)
-	info "FFmpeg build: version $(sed -n 's/^Version:[[:space:]]*//p' "$notice" | head -n 1), status ${ffmpeg_status:-none}, licence ${ffmpeg_licence:-none}"
+	ffmpeg_status=$(notice_field "$notice" Status)
+	ffmpeg_licence=$(notice_field "$notice" Licence)
+	info "FFmpeg build: version $(notice_field "$notice" Version)," \
+		"status ${ffmpeg_status:-none}, licence ${ffmpeg_licence:-none}"
 }
 
 check_ffmpeg_notice() {
@@ -590,12 +838,19 @@ check_ffmpeg_notice() {
 		*) failed "SOURCE.txt status is '$ffmpeg_status', want selected" ;;
 	esac
 	case "$ffmpeg_licence" in
-		*nonfree*) ffmpeg_verdict "SOURCE.txt licence $ffmpeg_licence is non-free (not redistributable)" ;;
+		*nonfree*)
+			ffmpeg_verdict "SOURCE.txt licence $ffmpeg_licence is non-free (not redistributable)"
+			;;
 		GPL-*) pass "SOURCE.txt licence $ffmpeg_licence" ;;
 		*) failed "SOURCE.txt licence '$ffmpeg_licence' is not a GPL identifier" ;;
 	esac
-	licence_files=$(find "$work/pkg/share/licenses/ffmpeg" -type f ! -name SOURCE.txt | wc -l)
-	if [ "$licence_files" -ge 1 ]; then pass "share/licenses/ffmpeg has $licence_files licence file(s) besides SOURCE.txt"; else failed "share/licenses/ffmpeg has no licence file besides SOURCE.txt"; fi
+	licence_files=$(awk '$1 ~ /^-/ && $3 ~ /^share\/licenses\/ffmpeg\// && $3 !~ /\/SOURCE\.txt$/' \
+		"$work/listing-package" | wc -l | tr -d ' ')
+	if [ "$licence_files" -ge 1 ]; then
+		pass "share/licenses/ffmpeg has $licence_files licence file(s) besides SOURCE.txt"
+	else
+		failed "share/licenses/ffmpeg has no licence file besides SOURCE.txt"
+	fi
 }
 
 # --- firewall service file --------------------------------------------------------------
@@ -603,26 +858,94 @@ check_ffmpeg_notice() {
 check_service_file() {
 	service="$work/pkg/port_conf/$id.sc"
 	[ -f "$service" ] || { failed "port_conf/$id.sc is missing"; return; }
-	check "port_conf/$id.sc: section [$id]" grep -qx "\[$id\]" "$service"
+	check "port_conf/$id.sc: section [$id]" grep -qxF "[$id]" "$service"
 	check "port_conf/$id.sc: title" grep -Eq '^title="[^"]+"$' "$service"
 	check "port_conf/$id.sc: desc" grep -Eq '^desc="[^"]+"$' "$service"
-	check "port_conf/$id.sc: port_forward=\"no\"" grep -qx 'port_forward="no"' "$service"
-	check "port_conf/$id.sc: dst.ports=\"$port/tcp\"" grep -qx "dst.ports=\"$port/tcp\"" "$service"
+	check "port_conf/$id.sc: port_forward=\"no\"" grep -qxF 'port_forward="no"' "$service"
+	check "port_conf/$id.sc: dst.ports=\"$port/tcp\"" grep -qxF "dst.ports=\"$port/tcp\"" "$service"
 	resource_file=$(jq -r '."port-config"."protocol-file" // ""' "$work/spk/conf/resource" 2>/dev/null)
-	if [ "$resource_file" = "port_conf/$id.sc" ]; then pass "conf/resource port-config names port_conf/$id.sc"; else failed "conf/resource port-config names '$resource_file', want port_conf/$id.sc"; fi
+	if [ "$resource_file" = "port_conf/$id.sc" ]; then
+		pass "conf/resource port-config names port_conf/$id.sc"
+	else
+		failed "conf/resource port-config names '$resource_file', want port_conf/$id.sc"
+	fi
 }
 
-# --- scripts, resources, wizard, icons -----------------------------------------------------
+# --- text members -------------------------------------------------------------------------
 
-check_scripts() {
-	cr=$(printf '\r')
-	scripts_with_cr=$(grep -l "$cr" "$work/spk/scripts"/* 2>/dev/null | sed "s|$work/spk/||" | tr '\n' ' ')
-	if [ -z "$scripts_with_cr" ]; then pass "scripts/*: LF line endings"; else failed "scripts with CR characters: $scripts_with_cr"; fi
-	for script in $LIFECYCLE_SCRIPTS; do
-		[ -f "$work/spk/scripts/$script" ] || continue
-		if head -n 1 "$work/spk/scripts/$script" | grep -q '^#!/bin/sh'; then pass "scripts/$script starts with #!/bin/sh"; else failed "scripts/$script does not start with #!/bin/sh"; fi
+# list_files <out> <root...>: writes the regular files below the roots that exist to <out>,
+# one per line (the member names were checked for escapes before extraction). A missing
+# root is a missing member, which the member check reports.
+list_files() {
+	list_out=$1
+	shift
+	: >"$list_out"
+	for list_root in "$@"; do
+		[ -e "$list_root" ] || continue
+		find "$list_root" -type f >>"$list_out" || abort "find cannot list $list_root"
 	done
 }
+
+# files_matching <pattern> <file list>: sets matching_names to the files of the list that
+# contain a match of the extended regular expression, as member names ("package.tgz:" for
+# the payload), sorted and blank-separated. A file grep cannot read is a failure, not a
+# silent "no match". Sets a variable instead of printing, so the failure counts.
+files_matching() {
+	: >"$work/matches"
+	while IFS= read -r matching_file; do
+		grep -Eq -- "$1" "$matching_file"
+		case "$?" in
+			0) printf '%s\n' "$matching_file" >>"$work/matches" ;;
+			1) ;;
+			*) failed "grep cannot read $matching_file" ;;
+		esac
+	done <"$2"
+	matching_names=$(sed "s|^$work/spk/||;s|^$work/pkg/|package.tgz:|" "$work/matches" |
+		LC_ALL=C sort | tr '\n' ' ')
+	matching_names=${matching_names% }
+}
+
+check_scripts() {
+	list_files "$work/files-scripts" "$work/spk/scripts"
+	files_matching "$(printf '\r')" "$work/files-scripts"
+	if [ -z "$matching_names" ]; then
+		pass "scripts/*: LF line endings"
+	else
+		failed "scripts with CR characters: $matching_names"
+	fi
+	for script in $LIFECYCLE_SCRIPTS; do
+		[ -f "$work/spk/scripts/$script" ] || continue
+		if [ "$(head -n 1 "$work/spk/scripts/$script")" = "$SCRIPT_SHEBANG" ]; then
+			pass "scripts/$script starts with $SCRIPT_SHEBANG"
+		else
+			failed "scripts/$script does not start with $SCRIPT_SHEBANG"
+		fi
+	done
+}
+
+# check_tokens: every text file of both archives (everything but the binaries, icons and
+# package.tgz) without @NAME@ tokens; INFO, conf, wizard and service files without CR.
+check_tokens() {
+	list_files "$work/files-all" "$work/spk" "$work/pkg"
+	awk -v binaries="$work/pkg/bin/" '!/\.PNG$/ && !/\/package\.tgz$/ && index($0, binaries) != 1' \
+		"$work/files-all" >"$work/files-text"
+	files_matching "$TOKEN_PATTERN" "$work/files-text"
+	if [ -z "$matching_names" ]; then
+		pass "no unreplaced @NAME@ token in any text member"
+	else
+		failed "unreplaced @NAME@ tokens in: $matching_names"
+	fi
+	list_files "$work/files-lf" "$work/spk/INFO" "$work/spk/conf" "$work/spk/WIZARD_UIFILES" \
+		"$work/pkg/port_conf"
+	files_matching "$(printf '\r')" "$work/files-lf"
+	if [ -z "$matching_names" ]; then
+		pass "INFO, conf/*, WIZARD_UIFILES/* and port_conf/*: LF line endings"
+	else
+		failed "CR characters in: $matching_names"
+	fi
+}
+
+# --- resources, wizard, icons ---------------------------------------------------------------
 
 json_valid() {
 	jq -e . "$1" >/dev/null 2>&1
@@ -636,14 +959,22 @@ check_json_files() {
 	done
 	privilege="$work/spk/conf/privilege"
 	[ -f "$privilege" ] || return 0
-	if [ "$(jq -r '.defaults."run-as" // ""' "$privilege" 2>/dev/null)" = package ]; then pass "conf/privilege run-as is package"; else failed "conf/privilege run-as is not package"; fi
-	if jq -e '[.. | strings | select(. == "root")] | length == 0' "$privilege" >/dev/null 2>&1; then pass "conf/privilege mentions no root"; else failed "conf/privilege mentions root"; fi
+	if [ "$(jq -r '.defaults."run-as" // ""' "$privilege" 2>/dev/null)" = package ]; then
+		pass "conf/privilege run-as is package"
+	else
+		failed "conf/privilege run-as is not package"
+	fi
+	if jq -e '[.. | strings | select(. == "root")] | length == 0' "$privilege" >/dev/null 2>&1; then
+		pass "conf/privilege mentions no root"
+	else
+		failed "conf/privilege mentions root"
+	fi
 }
 
 # png_size <file>: "<width>x<height>" of a PNG, nothing for another file type.
 png_size() {
 	[ "$(read_hex "$1" 0 8)" = 89504e470d0a1a0a ] || return 0
-	od -An -v -tu1 -j 16 -N 8 "$1" | awk '{ printf "%dx%d", (($1 * 256 + $2) * 256 + $3) * 256 + $4, (($5 * 256 + $6) * 256 + $7) * 256 + $8 }'
+	printf '%sx%s' "$(read_be "$1" 16 4)" "$(read_be "$1" 20 4)"
 }
 
 check_icons() {
@@ -652,43 +983,52 @@ check_icons() {
 		icon_side=${icon_size#*:}
 		[ -f "$work/spk/$icon" ] || { failed "$icon is missing"; continue; }
 		icon_actual=$(png_size "$work/spk/$icon")
-		if [ "$icon_actual" = "${icon_side}x${icon_side}" ]; then pass "$icon is a ${icon_side}x${icon_side} PNG"; else failed "$icon is not a ${icon_side}x${icon_side} PNG (${icon_actual:-not a PNG})"; fi
+		if [ "$icon_actual" = "${icon_side}x${icon_side}" ]; then
+			pass "$icon is a ${icon_side}x${icon_side} PNG"
+		else
+			failed "$icon is not a ${icon_side}x${icon_side} PNG (${icon_actual:-not a PNG})"
+		fi
 	done
-}
-
-# text_members <find actions...>: runs find over every text file of both archives (everything
-# but the binaries and icons) with the given actions.
-text_members() {
-	find "$work/spk" "$work/pkg" -type f ! -name '*.PNG' ! -name package.tgz ! -path "$work/pkg/bin/*" "$@"
-}
-
-check_tokens() {
-	tokens=$(text_members -exec grep -El "$TOKEN_PATTERN" {} + 2>/dev/null | sed "s|$work/spk/||;s|$work/pkg/|package.tgz:|" | LC_ALL=C sort | tr '\n' ' ')
-	if [ -z "$tokens" ]; then pass "no unreplaced @NAME@ token in any text member"; else failed "unreplaced @NAME@ tokens in: $tokens"; fi
-	cr=$(printf '\r')
-	text_with_cr=$(find "$work/spk/conf" "$work/spk/WIZARD_UIFILES" "$work/pkg/port_conf" "$work/spk/INFO" -type f -exec grep -l "$cr" {} + 2>/dev/null | sed "s|$work/spk/||;s|$work/pkg/|package.tgz:|" | LC_ALL=C sort | tr '\n' ' ')
-	if [ -z "$text_with_cr" ]; then pass "INFO, conf/*, WIZARD_UIFILES/* and port_conf/*: LF line endings"; else failed "CR characters in: $text_with_cr"; fi
 }
 
 # --- member digests --------------------------------------------------------------------------
 
+# print_digests <label> <dir> <listing>: "<sha256> <mode> <label>:<name>" per file member,
+# sorted by name; the mode is the one stored in the archive (extraction ignores it).
+print_digests() {
+	awk '$1 ~ /^-/ {
+		name = $0; sub(/^[^ ]+ [^ ]+ /, "", name)
+		mode = 0
+		for (i = 2; i <= 10; i++) mode = mode * 2 + (substr($1, i, 1) !~ /^[-ST]$/)
+		if (substr($1, 4, 1) ~ /[sS]/) mode += 2048
+		if (substr($1, 7, 1) ~ /[sS]/) mode += 1024
+		if (substr($1, 10, 1) ~ /[tT]/) mode += 512
+		printf "%o %s\n", mode, name
+	}' "$3" | LC_ALL=C sort -k2 | while read -r digest_mode digest_name; do
+		[ "$1:$digest_name" != spk:package.tgz ] || continue
+		digest=$(sha256sum <"$2/$digest_name" | cut -d' ' -f1)
+		printf '%s %s %s:%s\n' "$digest" "$digest_mode" "$1" "$digest_name"
+	done
+}
+
 print_member_digests() {
-	(cd "$work/spk" && find . -type f ! -name package.tgz | sed 's|^\./||' | LC_ALL=C sort | while read -r digest_name; do
-		printf '%s %s spk:%s\n' "$(sha256sum "$digest_name" | cut -d' ' -f1)" "$(stat -c %a "$digest_name")" "$digest_name"
-	done)
-	(cd "$work/pkg" && find . -type f | sed 's|^\./||' | LC_ALL=C sort | while read -r digest_name; do
-		printf '%s %s package.tgz:%s\n' "$(sha256sum "$digest_name" | cut -d' ' -f1)" "$(stat -c %a "$digest_name")" "$digest_name"
-	done)
+	print_digests spk "$work/spk" "$work/listing-spk"
+	print_digests package.tgz "$work/pkg" "$work/listing-package"
 }
 
 main() {
 	parse_args "$@"
 	require_tools
 	work=$(mktemp -d) || die "cannot create a work directory"
-	trap cleanup EXIT INT TERM
+	# An interrupt leaves through exit, so the EXIT trap removes the work directory.
+	trap cleanup EXIT
+	trap 'exit "$EXIT_INTERRUPTED"' INT
+	trap 'exit "$EXIT_TERMINATED"' TERM
 	expected_rules="$work/rules"
 	grep -Ev '^[[:space:]]*(#|$)' "$expected_file" >"$expected_rules"
-	info "inspecting $spk for family $family ($([ "$release" = yes ] && echo release || echo test) mode, port $port)"
+	mode_name="test"
+	[ "$release" = no ] || mode_name="release"
+	info "inspecting $spk for family $family ($mode_name mode, port $port)"
 	check_outer_archive
 	check_info
 	check_package_tgz
@@ -703,7 +1043,7 @@ main() {
 	check_icons
 	check_tokens
 	[ "$print_members" = no ] || print_member_digests
-	printf 'inspect-spk: %s checks, %s failed, %s warnings (%s)\n' "$checks" "$failures" "$warnings" "$spk"
+	summary
 	[ "$failures" -eq 0 ] || exit "$EXIT_FAILURE"
 }
 

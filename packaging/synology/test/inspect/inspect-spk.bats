@@ -2,8 +2,9 @@
 # Tests of inspect-spk.sh (task SPK-10) on the synthetic SPK of fixture.bash: a complete SPK
 # passes, the interim and release rules hold, and every defect the acceptance criteria name
 # (a removed binary, a wrong arch, adminurl, a leftover token, a dynamically linked ffmpeg,
-# build leftovers, modes, line endings, JSON, icons, ...) fails. How to run them:
-# ../../toolkit/README.md "Output verification".
+# build leftovers, modes, line endings, JSON, icons, ...) fails; unsafe, duplicate and
+# unreadable members, base-256 sizes and note padding are covered as well (SPK-10 review
+# leftovers). How to run them: ../../toolkit/README.md "Output verification".
 
 INSPECT="$BATS_TEST_DIRNAME/inspect-spk.sh"
 
@@ -17,10 +18,26 @@ setup() {
 
 # inspect [options] <family>: packs the tree and runs the inspection with the fixture port.
 inspect() {
+	pack_spk "$tree" "$out"
+	inspect_packed "$@"
+}
+
+# inspect_packed [options] <family>: runs the inspection on $out as it is.
+inspect_packed() {
 	local family="${*: -1}"
 	set -- "${@:1:$#-1}"
-	pack_spk "$tree" "$out"
 	run sh "$INSPECT" --port "$FIXTURE_PORT" "$@" "$out" "$family"
+}
+
+# repack_payload <command...>: runs the command in a directory holding the payload tar of
+# the tree as payload.tar, then compresses that tar into the tree's package.tgz.
+repack_payload() {
+	local scratch="$BATS_TEST_TMPDIR/payload"
+	rm -rf "$scratch" && mkdir -p "$scratch"
+	# shellcheck disable=SC2012 # ls order on purpose, as pkg_make_package packs
+	(cd "$tree/pkg" && ls | tar cf "$scratch/payload.tar" -T /dev/stdin)
+	(cd "$scratch" && "$@")
+	xz -c "$scratch/payload.tar" >"$tree/spk/package.tgz"
 }
 
 # shellcheck disable=SC2154 # status and output are set by bats' run
@@ -109,10 +126,11 @@ expect_fail() {
 @test "an interim dynamically linked FFmpeg warns in test mode and fails in release mode" {
 	make_tree "$tree" x86_64 interim dynamic 4.18.20
 	inspect x86_64
+	local interim="(interim FFmpeg build, test build only)"
 	expect_status 0
-	expect_line "WARN SOURCE.txt status is interim (interim FFmpeg build, test build only)"
-	expect_line "WARN bin/ffmpeg: dynamically linked (has a program interpreter) (interim FFmpeg build, test build only)"
-	expect_line "WARN bin/ffprobe: ELF ABI note 4.18.20 is above the oldest DSM 7.2 kernel 3.10.108 (interim FFmpeg build, test build only)"
+	expect_line "WARN SOURCE.txt status is interim $interim"
+	expect_line "WARN bin/ffmpeg: dynamically linked (has a program interpreter) $interim"
+	expect_line "WARN bin/ffprobe: ELF ABI note 4.18.20 is above the oldest DSM 7.2 kernel 3.10.108 $interim"
 	expect_line "0 failed, 5 warnings"
 	inspect --release x86_64
 	expect_fail "SOURCE.txt status is interim"
@@ -171,6 +189,33 @@ make_tree_notice_interim() {
 
 # --- members ------------------------------------------------------------------------------
 
+@test "a missing SOURCE.txt fails" {
+	rm "$tree/pkg/share/licenses/ffmpeg/SOURCE.txt"
+	inspect x86_64
+	expect_fail "share/licenses/ffmpeg/SOURCE.txt is missing"
+	expect_line "share/licenses/ffmpeg/SOURCE.txt(expected once, found 0)"
+}
+
+@test "a missing FFmpeg licence file fails" {
+	rm "$tree/pkg/share/licenses/ffmpeg/LICENSE.md"
+	inspect --release x86_64
+	expect_fail "share/licenses/ffmpeg has no licence file besides SOURCE.txt"
+	expect_line "1 failed, 0 warnings"
+}
+
+@test "--expected replaces the expected-member list" {
+	local list="$BATS_TEST_TMPDIR/expected.txt"
+	cp "$BATS_TEST_DIRNAME/expected-members.txt" "$list"
+	echo "spk 0644 NOTES.txt" >>"$list"
+	inspect --expected "$list" x86_64
+	expect_fail "spk: members differ from the expected list: NOTES.txt(expected once, found 0)"
+	echo notes >"$tree/spk/NOTES.txt"
+	inspect --expected "$list" x86_64
+	expect_clean
+	inspect x86_64
+	expect_fail "spk: members differ from the expected list: NOTES.txt(unexpected)"
+}
+
 @test "a removed bin/ffmpeg fails" {
 	rm "$tree/pkg/bin/ffmpeg"
 	inspect x86_64
@@ -187,10 +232,10 @@ make_tree_notice_interim() {
 	inspect x86_64
 	expect_status 1
 	expect_line "bin/extra(unexpected)"
-	expect_line "share/licenses/ffmpeg/.fetch-manifest(build leftover or unsafe name)"
-	expect_line "build.env(build leftover or unsafe name)"
-	expect_line "SynoBuildConf/build(build leftover or unsafe name)"
-	expect_line "prebuilt/bin/demo(build leftover or unsafe name)"
+	expect_line "share/licenses/ffmpeg/.fetch-manifest(build leftover or hidden file)"
+	expect_line "build.env(build leftover or hidden file)"
+	expect_line "SynoBuildConf/build(build leftover or hidden file)"
+	expect_line "prebuilt/bin/demo(build leftover or hidden file)"
 }
 
 @test "a signature member fails" {
@@ -208,11 +253,82 @@ make_tree_notice_interim() {
 	expect_line "WIZARD_UIFILES/install_uifile(mode -rwxr-xr-x, want 0644)"
 }
 
-@test "a symbolic link member fails" {
+@test "links and special files fail before anything is extracted" {
 	ln -s start-stop-status "$tree/spk/scripts/link"
+	ln "$tree/spk/LICENSE" "$tree/spk/LICENSE.hard"
+	mkfifo "$tree/spk/fifo"
 	inspect x86_64
+	expect_fail "spk: unsafe members, nothing extracted:"
+	expect_line "scripts/link(link or special file: lrwxrwxrwx)"
+	expect_line "LICENSE.hard(link or special file: hrw-r--r--)"
+	expect_line "fifo(link or special file: prw-r--r--)"
+	refute_line "INFO"
+	expect_line "1 failed, 0 warnings"
+}
+
+@test "an absolute member and a .. member fail before anything is extracted" {
+	echo outside >"$tree/outside"
+	echo absolute >"$BATS_TEST_TMPDIR/absolute"
+	pack_spk "$tree" "$out"
+	(cd "$tree/spk" && tar rf "$out" -P ../outside "$BATS_TEST_TMPDIR/absolute")
+	inspect_packed x86_64
+	expect_fail "spk: unsafe members, nothing extracted:"
+	expect_line "../outside(absolute or outside the archive)"
+	expect_line "$BATS_TEST_TMPDIR/absolute(absolute or outside the archive)"
+	refute_line "ok   spk: no link"
+}
+
+@test "a .. member inside package.tgz fails before the payload is extracted" {
+	echo outside >"$BATS_TEST_TMPDIR/escape"
+	repack_payload tar rf payload.tar -P ../escape
+	pack_outer "$tree" "$out"
+	inspect_packed x86_64
+	expect_line "ok   spk: no link, special file, absolute name or .. component among the members"
+	expect_fail "package.tgz: unsafe members, nothing extracted:"
+	expect_line "../escape(absolute or outside the archive)"
+}
+
+@test "duplicate members fail, also those a pattern rule allows" {
+	pack_spk "$tree" "$out"
+	tar rf "$out" -C "$tree/spk" INFO
+	inspect_packed x86_64
+	expect_fail "spk: members differ from the expected list: INFO(duplicate, 2 times)"
+	# A separate tar call stores the copy as a file; within one call GNU tar makes it a hard link.
+	repack_payload tar rf payload.tar -C "$tree/pkg" share/licenses/ffmpeg/LICENSE.md
+	pack_outer "$tree" "$out"
+	inspect_packed x86_64
+	expect_fail "package: members differ from the expected list:"
+	expect_line "share/licenses/ffmpeg/LICENSE.md(duplicate, 2 times)"
+}
+
+@test "an archive tar cannot read is a finding (exit 1), not a usage error" {
+	pack_spk "$tree" "$out"
+	head -c 1000 "$out" >"$BATS_TEST_TMPDIR/truncated.spk"
+	mv "$BATS_TEST_TMPDIR/truncated.spk" "$out"
+	inspect_packed x86_64
+	expect_fail "spk: tar cannot list the archive"
+	expect_line "1 failed, 0 warnings"
+	# cut inside the data of bin/demo (a cut inside a header block reads as the end of the
+	# archive and shows up as missing members instead)
+	repack_payload truncate -s 1100 payload.tar
+	pack_outer "$tree" "$out"
+	inspect_packed x86_64
+	expect_fail "package.tgz: tar cannot list the archive"
+}
+
+@test "a base-256 size field is read big-endian, so the header walk sees every member" {
+	pack_spk "$tree" "$out"
+	base256_size "$out"
+	inspect_packed x86_64
+	expect_clean
+	expect_line "info SPK tar extensions beyond plain ustar: base-256-size"
+	long_name="$(printf 'n%.0s' {1..110})"
+	echo x >"$tree/spk/$long_name"
+	pack_spk "$tree" "$out"
+	base256_size "$out"
+	inspect_packed x86_64
 	expect_status 1
-	expect_line "scripts/link(not a file or directory: lrwxrwxrwx)"
+	expect_line "info SPK tar extensions beyond plain ustar: base-256-size,gnu-longname"
 }
 
 @test "a gzip-compressed SPK and a gzip-compressed package.tgz fail" {
@@ -313,6 +429,45 @@ make_tree_notice_interim() {
 	expect_fail "bin/ffmpeg is not a little-endian ELF file"
 }
 
+@test "a big-endian ELF fails" {
+	FAKE_ELF_DATA=2 fake_elf x86_64 static 3.2.0 >"$tree/pkg/bin/ffprobe"
+	inspect x86_64
+	expect_fail "bin/ffprobe is not a little-endian ELF file"
+}
+
+@test "an ELF file that is not an executable fails" {
+	FAKE_ELF_TYPE=1 fake_elf x86_64 static 3.2.0 >"$tree/pkg/bin/ffmpeg"
+	inspect x86_64
+	expect_fail "bin/ffmpeg: ELF type 1 is not an executable (2 or 3)"
+	FAKE_ELF_TYPE=3 fake_elf x86_64 static 3.2.0 >"$tree/pkg/bin/ffmpeg"
+	inspect x86_64
+	expect_clean
+	expect_line "ok   bin/ffmpeg: ELF type 3 (executable)"
+}
+
+@test "the ABI tag is found after a build-id note in 8-byte aligned note segments" {
+	FAKE_ELF_NOTE_ALIGN=8 fake_elf armv8 static 4.18.20 >"$tree/pkg/bin/ffmpeg"
+	FAKE_ELF_NOTE_ALIGN=8 fake_elf armv8 static 4.4.0 >"$tree/pkg/bin/ffprobe"
+	FAKE_ELF_NOTE_ALIGN=8 fake_elf armv8 static none >"$tree/pkg/bin/$FIXTURE_ID"
+	sed -i 's/^arch=.*/arch="armv8"/' "$tree/spk/INFO"
+	inspect armv8
+	expect_fail "bin/ffmpeg: ELF ABI note 4.18.20 is above the oldest DSM 7.2 kernel 4.4.302"
+	expect_line "ok   bin/ffprobe: ELF ABI note 4.4.0 is at most the oldest DSM 7.2 kernel 4.4.302"
+	expect_line "info bin/$FIXTURE_ID: no GNU ABI note"
+}
+
+@test "an ffmpeg without an ABI note warns in test and release mode" {
+	make_tree "$tree" x86_64 selected static none
+	inspect x86_64
+	expect_status 0
+	expect_line "WARN bin/ffmpeg: no GNU ABI note, kernel floor not checked here"
+	expect_line "WARN bin/ffprobe: no GNU ABI note, kernel floor not checked here"
+	expect_line "0 failed, 2 warnings"
+	inspect --release x86_64
+	expect_status 0
+	expect_line "0 failed, 2 warnings"
+}
+
 @test "a leftover token fails and names the member" {
 	sed -i "s/^\[demo\]/[@ID@]/" "$tree/pkg/port_conf/demo.sc"
 	echo '# @DISPLAY_NAME@' >>"$tree/spk/scripts/postinst"
@@ -384,6 +539,29 @@ make_tree_notice_interim() {
 	[ "$table_a" = "$table_b" ]
 }
 
+@test "TERM ends the inspection with exit 143 and removes the work directory" {
+	pack_spk "$tree" "$out"
+	local stubs="$BATS_TEST_TMPDIR/stubs" tmp="$BATS_TEST_TMPDIR/tmp"
+	local marker="$BATS_TEST_TMPDIR/xz-started" pid tries=0 code=0
+	mkdir -p "$stubs" "$tmp"
+	# an xz that blocks, so the signal arrives while package.tgz is being decompressed
+	printf '#!/bin/sh\n: >"%s"\nexec sleep 30\n' "$marker" >"$stubs/xz"
+	chmod 0755 "$stubs/xz"
+	# setsid: an own process group, so the signal reaches the script and the stub together
+	TMPDIR="$tmp" PATH="$stubs:$PATH" setsid sh "$INSPECT" --port "$FIXTURE_PORT" "$out" x86_64 \
+		>"$BATS_TEST_TMPDIR/log" 2>&1 &
+	pid=$!
+	while [ ! -e "$marker" ] && [ "$tries" -lt 100 ]; do
+		sleep 0.1
+		tries=$((tries + 1))
+	done
+	[ -e "$marker" ]
+	kill -TERM -- "-$pid"
+	wait "$pid" || code=$?
+	[ "$code" -eq 143 ] || { cat "$BATS_TEST_TMPDIR/log" >&2; echo "exit $code" >&2; return 1; }
+	[ -z "$(ls -A "$tmp")" ]
+}
+
 @test "usage errors exit 2" {
 	run sh "$INSPECT"
 	expect_status 2
@@ -395,5 +573,9 @@ make_tree_notice_interim() {
 	run sh "$INSPECT" --port 0 "$out" x86_64
 	expect_status 2
 	run sh "$INSPECT" --bogus "$out" x86_64
+	expect_status 2
+	run sh "$INSPECT" --expected "$BATS_TEST_TMPDIR/missing.txt" "$out" x86_64
+	expect_status 2
+	run sh "$INSPECT" --port 65536 "$out" x86_64
 	expect_status 2
 }

@@ -34,46 +34,99 @@ be() {
 	done
 }
 
-# fake_elf <family> <static|dynamic> <none|major.minor.patch>: a minimal little-endian ELF
-# executable of the family's class and machine, with a PT_INTERP segment when dynamic and a
-# GNU ABI tag note when an ABI version is given. Written to stdout.
+# ELF facts of the fake binaries: program header and note types, the GNU build-id length.
+readonly PT_INTERP=3
+readonly PT_NOTE=4
+readonly NT_GNU_ABI_TAG=1
+readonly NT_GNU_BUILD_ID=3
+readonly BUILD_ID_BYTES=20
+readonly ABI_TAG_BYTES=16
+readonly ARM_EABI5_HARD_FLOAT=$((0x05000400))
+
+# align_up <value> <alignment>
+align_up() {
+	echo $((($1 + $2 - 1) / $2 * $2))
+}
+
+# fake_note_size <align> <descsz>: bytes of a note named "GNU" (12-byte header, name and
+# descriptor each padded to the alignment, as glibc's ELF_NOTE_NEXT_OFFSET computes).
+fake_note_size() {
+	align_up $(($(align_up 16 "$1") + $2)) "$1"
+}
+
+# fake_note <align> <type> <descsz> <word...>: one note named "GNU" whose descriptor is the
+# 32-bit words given (or 0xab bytes when none are given), padded to the alignment.
+fake_note() {
+	local align=$1 type=$2 descsz=$3 index desc_offset end
+	shift 3
+	desc_offset=$(align_up 16 "$align")
+	end=$(fake_note_size "$align" "$descsz")
+	le 4 4; le 4 "$descsz"; le 4 "$type"; printf 'GNU\000'
+	for ((index = 16; index < desc_offset; index++)); do byte 0; done
+	if [ "$#" -gt 0 ]; then
+		for index in "$@"; do le 4 "$index"; done
+	else
+		for ((index = 0; index < descsz; index++)); do byte 171; done
+	fi
+	for ((index = desc_offset + descsz; index < end; index++)); do byte 0; done
+}
+
+# fake_elf <family> <static|dynamic> <none|major.minor.patch>: a minimal ELF executable of
+# the family's class and machine on stdout. One PT_NOTE segment holds a GNU build-id note
+# and, when an ABI version is given, the GNU ABI tag after it (as real binaries order them);
+# a PT_INTERP segment follows when dynamic. Variables tune the negative cases:
+# FAKE_ELF_DATA (EI_DATA, default 1 little-endian; 2 marks the file big-endian),
+# FAKE_ELF_TYPE (e_type, default 2 ET_EXEC) and FAKE_ELF_NOTE_ALIGN (p_align of the note
+# segment and the padding of its notes, 4 or 8; default 4).
 fake_elf() {
-	local family=$1 linkage=$2 abi=$3 class machine ehsize phentsize phnum=0 note_size=0
+	local family=$1 linkage=$2 abi=$3 class machine ehsize phentsize phnum=1 note_size flags=0
+	local data=${FAKE_ELF_DATA:-1} type=${FAKE_ELF_TYPE:-2} align=${FAKE_ELF_NOTE_ALIGN:-4}
 	case "$family" in
 		x86_64) class=2 machine=62 ;;
 		armv8) class=2 machine=183 ;;
-		armv7) class=1 machine=40 ;;
+		armv7) class=1 machine=40 flags=$ARM_EABI5_HARD_FLOAT ;;
 		*) echo "fake_elf: unknown family $family" >&2 && return 1 ;;
 	esac
 	if [ "$class" -eq 2 ]; then ehsize=64 phentsize=56; else ehsize=52 phentsize=32; fi
-	[ "$abi" = none ] || { phnum=$((phnum + 1)); note_size=32; }
-	[ "$linkage" = static ] || phnum=$((phnum + 1))
-	local note_offset=$((ehsize + phnum * phentsize)) interp_offset=$((ehsize + phnum * phentsize + note_size))
+	note_size=$(fake_note_size "$align" "$BUILD_ID_BYTES")
+	[ "$abi" = none ] || note_size=$((note_size + $(fake_note_size "$align" "$ABI_TAG_BYTES")))
+	[ "$linkage" = static ] || phnum=2
+	local note_offset=$((ehsize + phnum * phentsize))
 	printf '\177ELF'
-	le 1 "$class"; le 1 1; le 1 1; le 1 0; le 8 0
-	le 2 2; le 2 "$machine"; le 4 1
-	if [ "$class" -eq 2 ]; then
-		le 8 0; le 8 "$ehsize"; le 8 0; le 4 0; le 2 "$ehsize"; le 2 "$phentsize"; le 2 "$phnum"; le 2 0; le 2 0; le 2 0
-	else
-		le 4 0; le 4 "$ehsize"; le 4 0; le 4 $((0x05000400)); le 2 "$ehsize"; le 2 "$phentsize"; le 2 "$phnum"; le 2 0; le 2 0; le 2 0
-	fi
-	[ "$abi" = none ] || fake_phdr "$class" 4 "$note_offset" "$note_size"
-	[ "$linkage" = static ] || fake_phdr "$class" 3 "$interp_offset" $((${#FIXTURE_INTERPRETER} + 1))
+	le 1 "$class"; le 1 "$data"; le 1 1; le 1 0; le 8 0
+	le 2 "$type"; le 2 "$machine"; le 4 1
+	fake_ehdr_rest "$class" "$ehsize" "$phentsize" "$phnum" "$flags"
+	fake_phdr "$class" "$PT_NOTE" "$note_offset" "$note_size" "$align"
+	[ "$linkage" = static ] ||
+		fake_phdr "$class" "$PT_INTERP" $((note_offset + note_size)) $((${#FIXTURE_INTERPRETER} + 1)) 1
+	fake_note "$align" "$NT_GNU_BUILD_ID" "$BUILD_ID_BYTES"
 	if [ "$abi" != none ]; then
 		local major=${abi%%.*} rest=${abi#*.} minor patch
 		minor=${rest%%.*}
 		patch=${rest#*.}
-		le 4 4; le 4 16; le 4 1; printf 'GNU\000'; le 4 0; le 4 "$major"; le 4 "$minor"; le 4 "$patch"
+		fake_note "$align" "$NT_GNU_ABI_TAG" "$ABI_TAG_BYTES" 0 "$major" "$minor" "$patch"
 	fi
 	[ "$linkage" = static ] || printf '%s\000' "$FIXTURE_INTERPRETER"
 }
 
-# fake_phdr <class> <type> <offset> <size>: one program header.
+# fake_ehdr_rest <class> <ehsize> <phentsize> <phnum> <flags>: the ELF header after e_version
+# (entry, program and section header offsets, flags, sizes and counts).
+fake_ehdr_rest() {
+	local class=$1 ehsize=$2 phentsize=$3 phnum=$4 flags=$5
+	if [ "$class" -eq 2 ]; then
+		le 8 0; le 8 "$ehsize"; le 8 0; le 4 "$flags"
+	else
+		le 4 0; le 4 "$ehsize"; le 4 0; le 4 "$flags"
+	fi
+	le 2 "$ehsize"; le 2 "$phentsize"; le 2 "$phnum"; le 2 0; le 2 0; le 2 0
+}
+
+# fake_phdr <class> <type> <offset> <size> <align>: one program header.
 fake_phdr() {
 	if [ "$1" -eq 2 ]; then
-		le 4 "$2"; le 4 5; le 8 "$3"; le 8 0; le 8 0; le 8 "$4"; le 8 "$4"; le 8 4
+		le 4 "$2"; le 4 5; le 8 "$3"; le 8 0; le 8 0; le 8 "$4"; le 8 "$4"; le 8 "$5"
 	else
-		le 4 "$2"; le 4 "$3"; le 4 0; le 4 0; le 4 "$4"; le 4 "$4"; le 4 5; le 4 4
+		le 4 "$2"; le 4 "$3"; le 4 0; le 4 0; le 4 "$4"; le 4 "$4"; le 4 5; le 4 "$5"
 	fi
 }
 
@@ -133,14 +186,16 @@ make_tree() {
 	local dir=$1 family=$2 status=$3 linkage=$4 abi=$5 script
 	local spk="$dir/spk" pkg="$dir/pkg"
 	rm -rf "$dir"
-	mkdir -p "$spk/conf" "$spk/scripts" "$spk/WIZARD_UIFILES" "$pkg/bin" "$pkg/port_conf" "$pkg/share/licenses/ffmpeg"
+	mkdir -p "$spk/conf" "$spk/scripts" "$spk/WIZARD_UIFILES" \
+		"$pkg/bin" "$pkg/port_conf" "$pkg/share/licenses/ffmpeg"
 	fixture_info "$family" >"$spk/INFO"
 	echo "GNU GENERAL PUBLIC LICENSE (fixture)" >"$spk/LICENSE"
 	fake_png 64 >"$spk/PACKAGE_ICON.PNG"
 	fake_png 256 >"$spk/PACKAGE_ICON_256.PNG"
 	echo '{"defaults": {"run-as": "package"}}' >"$spk/conf/privilege"
-	printf '{"data-share": {"shares": [{"name": "{{wizard_media_share}}", "permission": {"ro": ["%s"]}}]}, "port-config": {"protocol-file": "port_conf/%s.sc"}}\n' \
-		"$FIXTURE_ID" "$FIXTURE_ID" >"$spk/conf/resource"
+	printf '{"data-share": {"shares": [{"name": "{{wizard_media_share}}", %s}]}, %s}\n' \
+		"\"permission\": {\"ro\": [\"$FIXTURE_ID\"]}" \
+		"\"port-config\": {\"protocol-file\": \"port_conf/$FIXTURE_ID.sc\"}" >"$spk/conf/resource"
 	for script in preinst postinst preuninst postuninst preupgrade postupgrade start-stop-status; do
 		printf '#!/bin/sh\nexit 0\n' >"$spk/scripts/$script"
 	done
@@ -152,8 +207,8 @@ make_tree() {
 	fake_elf "$family" static none >"$pkg/bin/$FIXTURE_ID"
 	fake_elf "$family" "$linkage" "$abi" >"$pkg/bin/ffmpeg"
 	fake_elf "$family" "$linkage" "$abi" >"$pkg/bin/ffprobe"
-	printf '[%s]\ntitle="Demo Server"\ndesc="Demo Server media server"\nport_forward="no"\ndst.ports="%s/tcp"\n' \
-		"$FIXTURE_ID" "$FIXTURE_PORT" >"$pkg/port_conf/$FIXTURE_ID.sc"
+	printf '%s\n' "[$FIXTURE_ID]" 'title="Demo Server"' 'desc="Demo Server media server"' \
+		'port_forward="no"' "dst.ports=\"$FIXTURE_PORT/tcp\"" >"$pkg/port_conf/$FIXTURE_ID.sc"
 	fixture_notice "$status" GPL-3.0-or-later >"$pkg/share/licenses/ffmpeg/SOURCE.txt"
 	echo "licence text (fixture)" >"$pkg/share/licenses/ffmpeg/LICENSE.md"
 	set_modes "$dir"
@@ -169,10 +224,35 @@ set_modes() {
 # pack_spk <dir> <out.spk> [tar options for the outer archive]: package.tgz with xz and the
 # outer tar in ls order, as pkg_make_package and pkg_make_spk of the toolkit do.
 pack_spk() {
-	local dir=$1 out=$2
-	shift 2
+	local dir=$1
 	# shellcheck disable=SC2012 # ls order on purpose, as pkg_make_package packs
 	(cd "$dir/pkg" && ls | tar cJf "$dir/spk/package.tgz" -T /dev/stdin)
+	pack_outer "$@"
+}
+
+# pack_outer <dir> <out.spk> [tar options]: only the outer tar, package.tgz as it is.
+pack_outer() {
+	local dir=$1 out=$2
+	shift 2
 	# shellcheck disable=SC2046 # ls order on purpose, as the toolkit packs
 	(cd "$dir/spk" && tar cf "$out" "$@" $(ls))
+}
+
+# base256_size <tar> [header offset]: rewrites the size field of the header at the offset
+# (default 0, the first member) in GNU base-256 form - 0x80, three zero bytes, then the
+# size as eight big-endian bytes - and fixes the header checksum. GNU tar still reads the
+# member; the form normally appears only for members of 8 GiB and more.
+base256_size() {
+	local tar=$1 header=${2:-0} size sum
+	size=$((8#$(dd if="$tar" bs=1 skip=$((header + 124)) count=11 2>/dev/null)))
+	{ byte 128; be 3 0; be 8 "$size"; } | patch_bytes "$tar" $((header + 124))
+	printf '        ' | patch_bytes "$tar" $((header + 148))
+	sum=$(od -An -v -tu1 -j "$header" -N 512 "$tar" |
+		awk '{ for (i = 1; i <= NF; i++) s += $i } END { print s }')
+	printf '%06o\000 ' "$sum" | patch_bytes "$tar" $((header + 148))
+}
+
+# patch_bytes <file> <offset>: overwrites the file at the offset with stdin.
+patch_bytes() {
+	dd of="$1" bs=1 seek="$2" conv=notrunc 2>/dev/null
 }

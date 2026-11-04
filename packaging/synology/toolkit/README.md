@@ -390,7 +390,9 @@ text such as the umlaut above passes through unchanged.
 `packaging/synology/test/inspect/inspect-spk.sh` (task SPK-10) checks one SPK the toolkit
 produced against ADR 0026 and its Notes; SPK-11, SPK-12 and SPK-13 run it on the files they
 test or publish. POSIX `sh`, run in the image of `test/inspect/Dockerfile` (`debian:stable-slim`
-plus `xz-utils`, `jq` and `bats`; the slim image has no `xz`). From the repository root:
+plus `xz-utils`, `jq` and `bats`; the slim image has no `xz`). The script needs GNU tar, xz, jq,
+od, dd, awk, sed, grep, sort, uniq, find, du, cut, wc, tr, head, mkdir, rm, mktemp and sha256sum
+and checks for all of them before it starts (exit 2 when one is missing). From the repository root:
 
 ```powershell
 docker build -t spk-inspect:dev packaging/synology/test/inspect
@@ -398,7 +400,7 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (34 cases on a synthetic SPK of fixture.bash) and shellcheck
+# tests of the script (47 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -411,11 +413,17 @@ inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <
 ```
 
 One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line; exit
-0 when nothing failed, 1 on any failure, 2 on a usage error or a missing tool. The 69 checks per
-SPK: the outer archive is an uncompressed tar (GNU or ustar/pax headers); its members equal
-`expected-members.txt` (names, file or directory, modes 0755/0644, no signature, no symbolic
-link, nothing from the build environment: `SynoBuildConf`, `build.env`, `prebuilt/`, hidden
-files, debug files, absolute paths, `..`); INFO is `key="value"` throughout without `"`, `\`,
+0 when nothing failed, 1 on any failure, 2 on a usage error or a missing tool. An archive tar
+cannot list or extract is a failure (exit 1), not a usage error. The 71 checks per SPK: the
+outer archive is an uncompressed tar (GNU or ustar/pax headers; the header walk reads GNU
+base-256 sizes big-endian); before anything is extracted, each archive's listing holds only
+files and directories (no symbolic or hard link, device or FIFO), no absolute name and no `..`
+component - otherwise the inspection stops with exit 1 and extracts nothing - and extraction
+runs with `--no-same-owner --no-same-permissions` (modes are judged from the listing); its
+members equal `expected-members.txt` (names, modes 0755/0644, every name once - a duplicate
+fails even where a pattern rule allows the name -, no signature, nothing from the build
+environment: `SynoBuildConf`, `build.env`, `prebuilt/`, hidden files, debug files); INFO is
+`key="value"` throughout without `"`, `\`,
 `$` or backquotes, with `package`, `displayname`, `version` (`a.b.c-build`, every number at most
 2^31-1), `beta="yes"` exactly when the build number is below 9000, `arch` of the family
 (`armv7 armada38x monaco` for armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default
@@ -424,7 +432,12 @@ files, debug files, absolute paths, `..`); INFO is `key="value"` throughout with
 `startable`, `changelog`; `package.tgz` is xz, holds the expected members and `bin/<id>`,
 `bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the family's class and machine
 without a program interpreter, with a GNU ABI tag at most the family's oldest DSM 7.2 kernel
-(3.10.108, armv8 4.4.302; a binary without the note, such as the Go server, is recorded only);
+(3.10.108, armv8 4.4.302). The note walk pads names and descriptors to the note segment's
+alignment (8 for `p_align` 8, else 4), so the tag is found behind a build-id or property note.
+Without an ABI note the kernel floor cannot be read from the file: for the Go server that is
+recorded as `info`; for `ffmpeg`/`ffprobe` it is a warning in test and release mode alike (the
+static musl build of SPK-15 carries no note; the SPK-11 smoke test checks its kernel floor
+under `kernelsim`), so a release inspection passes with these two warnings;
 `SOURCE.txt` has one `Status:` and one `Licence:` line plus at least one licence file;
 `port_conf/<id>.sc` has the section, `title`, `desc`, `port_forward="no"` and
 `dst.ports="<port>/tcp"` and `conf/resource` names it; the seven lifecycle scripts start with

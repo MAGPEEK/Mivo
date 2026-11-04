@@ -4,7 +4,8 @@
 # Columns: archive (spk = the outer tar, package = package.tgz), mode of a file (0755 or
 # 0644; a directory entry is always 0755), member name. "<id>" stands for INFO's package
 # name. A name with "*" is a pattern: members matching it are allowed, any number of them,
-# also none; every other line is required exactly once. A member matching no line fails.
+# also none; every other line is required exactly once. A member matching no line fails, and
+# so does a name stored twice, pattern or not.
 spk 0644 INFO
 spk 0644 LICENSE
 spk 0644 PACKAGE_ICON.PNG
