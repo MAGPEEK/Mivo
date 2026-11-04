@@ -21,6 +21,11 @@ func catalogV2Tables() []string {
 	}
 }
 
+// libraryManagementTables returns the tables migration 00004 adds.
+func libraryManagementTables() []string {
+	return []string{"library_roots", "library_imports"}
+}
+
 // openForeignKeyInspectionDB is openInspectionDB with foreign key enforcement, so constraint
 // tests see what the adapter's connections see.
 func openForeignKeyInspectionDB(t *testing.T, path string) *sql.DB {
@@ -35,7 +40,7 @@ func TestMediaCatalogTablesAreStrict(t *testing.T) {
 	_, path := openMigratedTestDB(t)
 	inspection := openInspectionDB(t, path)
 
-	for _, table := range append(catalogTables(), catalogV2Tables()...) {
+	for _, table := range slices.Concat(catalogTables(), catalogV2Tables(), libraryManagementTables()) {
 		var strict int
 
 		err := inspection.QueryRowContext(t.Context(),
@@ -66,8 +71,8 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 
 	want := []foreignKey{
 		{table: "artwork", column: "item_id", parent: "items", onDelete: "CASCADE"},
-		{table: "artwork", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "artwork", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
+		{table: "artwork", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
 		{table: "item_field_locks", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_people", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_people", column: "person_id", parent: "people", onDelete: "CASCADE"},
@@ -76,9 +81,12 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "item_tags", column: "tag_id", parent: "tags", onDelete: "CASCADE"},
 		{table: "items", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "items", column: "parent_id", parent: "items", onDelete: "CASCADE"},
+		{table: "library_roots", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "library_sidecars", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
+		{table: "library_sidecars", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
 		{table: "media_files", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "media_files", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
+		{table: "media_files", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
 		{table: "media_streams", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
 	}
 
@@ -251,21 +259,21 @@ func newItem(change func(row *itemRow)) string {
 
 // fileRow holds the SQL literals of a media_files insert; the other columns are fixed.
 type fileRow struct {
-	id, itemID, libraryID, relativePath, size, container, probeError, partNumber, layout string
+	id, itemID, libraryID, rootID, relativePath, size, container, probeError, partNumber, layout string
 }
 
 // newFile returns the insert of file "file-2" (b.mkv, item-1, lib-1, probed) after change
 // adjusted its literals.
 func newFile(change func(row *fileRow)) string {
 	row := fileRow{
-		id: "'file-2'", itemID: "'item-1'", libraryID: "'lib-1'", relativePath: "'b.mkv'",
+		id: "'file-2'", itemID: "'item-1'", libraryID: "'lib-1'", rootID: "'root-1'", relativePath: "'b.mkv'",
 		size: "0", container: "'mkv'", probeError: "NULL", partNumber: "0", layout: "'file'",
 	}
 	change(&row)
 
-	return `INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes, modified_at,
+	return `INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
 		container, format_name, duration_ms, bit_rate, probed_at, probe_error, part_number, layout)
-		VALUES (` + row.id + `, ` + row.itemID + `, ` + row.libraryID + `, ` + row.relativePath + `, ` +
+		VALUES (` + row.id + `, ` + row.itemID + `, ` + row.libraryID + `, ` + row.rootID + `, ` + row.relativePath + `, ` +
 		row.size + `, 0, ` + row.container + `, '', 0, 0, 0, ` + row.probeError + `, ` + row.partNumber +
 		`, ` + row.layout + `)`
 }
@@ -298,9 +306,11 @@ func newStream(change func(row *streamRow)) string {
 // video stream 0; library "lib-2" (shows) with show "show-1" and its season 1 "season-1".
 func constraintFixture() []string {
 	return []string{
-		`INSERT INTO libraries (id, name, kind, root_path, created_at, updated_at)
-			VALUES ('lib-1', 'Movies', 'movies', '/media/movies', 0, 0),
-			       ('lib-2', 'Shows', 'shows', '/media/shows', 0, 0)`,
+		`INSERT INTO libraries (id, name, kind, created_at, updated_at)
+			VALUES ('lib-1', 'Movies', 'movies', 0, 0), ('lib-2', 'Shows', 'shows', 0, 0)`,
+		`INSERT INTO library_roots (id, library_id, path, path_key, position, created_at)
+			VALUES ('root-1', 'lib-1', '/media/movies', 'media/movies', 0, 0),
+			       ('root-2', 'lib-2', '/media/shows', 'media/shows', 0, 0)`,
 		newItem(func(row *itemRow) { row.id, row.matchKey, row.title, row.sortTitle = "'item-1'", "'a'", "'A'", "'a'" }),
 		newItem(func(row *itemRow) {
 			row.id, row.libraryID, row.kind, row.matchKey, row.title, row.sortTitle = "'show-1'", "'lib-2'", "'show'", "'show'", "'Show'", "'show'"
@@ -324,9 +334,8 @@ type catalogConstraintCase struct {
 
 func libraryAndItemConstraintCases() []catalogConstraintCase {
 	return []catalogConstraintCase{
-		{name: "unknown library kind", statement: `INSERT INTO libraries VALUES ('lib-3', 'Mixed', 'mixed', '/media/mixed', 0, 0)`},
-		{name: "duplicate library root", statement: `INSERT INTO libraries VALUES ('lib-3', 'Copy', 'movies', '/media/movies', 0, 0)`},
-		{name: "empty library name", statement: `INSERT INTO libraries VALUES ('lib-3', '', 'movies', '/media/music', 0, 0)`},
+		{name: "unknown library kind", statement: `INSERT INTO libraries (id, name, kind, created_at, updated_at) VALUES ('lib-3', 'Mixed', 'mixed', 0, 0)`},
+		{name: "empty library name", statement: `INSERT INTO libraries (id, name, kind, created_at, updated_at) VALUES ('lib-3', '', 'movies', 0, 0)`},
 		{name: "unknown item kind", statement: newItem(func(row *itemRow) { row.kind = "'folder'" })},
 		{name: "item of a missing library", statement: newItem(func(row *itemRow) { row.libraryID = "'lib-9'" })},
 		{name: "item with a missing parent", statement: newItem(func(row *itemRow) { row.parentID, row.kind = "'item-9'", "'season'" })},
@@ -417,10 +426,10 @@ func TestMediaCatalogConstraintsAcceptDomainValues(t *testing.T) {
 	statements := []catalogConstraintCase{
 		{
 			name: "every library kind",
-			statement: `INSERT INTO libraries (id, name, kind, root_path, created_at, updated_at)
-				VALUES ('lib-3', 'Music', 'music', '/media/music', 0, 0),
-				       ('lib-4', 'Books', 'audiobooks', '/media/books', 0, 0),
-				       ('lib-5', 'Photos', 'photos', '/media/photos', 0, 0)`,
+			statement: `INSERT INTO libraries (id, name, kind, created_at, updated_at)
+				VALUES ('lib-3', 'Music', 'music', 0, 0),
+				       ('lib-4', 'Books', 'audiobooks', 0, 0),
+				       ('lib-5', 'Photos', 'photos', 0, 0)`,
 		},
 		{
 			name: "unknown container with a probe error",
@@ -440,7 +449,7 @@ func TestMediaCatalogConstraintsAcceptDomainValues(t *testing.T) {
 		{
 			name: "same relative path in another library",
 			statement: newFile(func(row *fileRow) {
-				row.id, row.itemID, row.libraryID, row.relativePath = "'file-3'", "'item-2'", "'lib-2'", "'a.mkv'"
+				row.id, row.itemID, row.libraryID, row.rootID, row.relativePath = "'file-3'", "'item-2'", "'lib-2'", "'root-2'", "'a.mkv'"
 			}),
 		},
 		{name: "second part of a disc image", statement: newFile(func(row *fileRow) {

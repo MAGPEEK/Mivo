@@ -18,9 +18,13 @@ FROM media_files
 WHERE library_id = ? AND relative_path = ?;
 
 -- name: InsertArtwork :exec
-INSERT INTO artwork (id, item_id, kind, source, library_id, relative_path, media_file_id,
+INSERT INTO artwork (id, item_id, kind, source, root_id, relative_path, media_file_id,
                      stream_index, size_bytes, modified_at, tag, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (sqlc.arg(id), sqlc.arg(item_id), sqlc.arg(kind), sqlc.arg(source),
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = sqlc.narg(library_id) AND library_roots.position = 0),
+        sqlc.narg(relative_path), sqlc.narg(media_file_id), sqlc.narg(stream_index),
+        sqlc.arg(size_bytes), sqlc.arg(modified_at), sqlc.arg(tag), sqlc.arg(created_at));
 
 -- name: UpdateArtworkFile :exec
 UPDATE artwork

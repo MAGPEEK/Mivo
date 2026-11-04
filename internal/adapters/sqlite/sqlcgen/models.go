@@ -13,7 +13,7 @@ type Artwork struct {
 	ItemID       string
 	Kind         string
 	Source       string
-	LibraryID    sql.NullString
+	RootID       sql.NullString
 	RelativePath sql.NullString
 	MediaFileID  sql.NullString
 	StreamIndex  sql.NullInt64
@@ -79,16 +79,36 @@ type ItemTag struct {
 }
 
 type Library struct {
+	ID                 string
+	Name               string
+	Kind               string
+	MetadataLanguage   string
+	ScanExtras         int64
+	ReadNfo            int64
+	LocalArtwork       int64
+	ImportedFromConfig int64
+	CreatedAt          int64
+	UpdatedAt          int64
+}
+
+type LibraryImport struct {
+	PathKey    string
+	Path       string
+	ImportedAt int64
+}
+
+type LibraryRoot struct {
 	ID        string
-	Name      string
-	Kind      string
-	RootPath  string
+	LibraryID string
+	Path      string
+	PathKey   string
+	Position  int64
 	CreatedAt int64
-	UpdatedAt int64
 }
 
 type LibrarySidecar struct {
 	LibraryID    string
+	RootID       string
 	RelativePath string
 	Kind         string
 	SizeBytes    int64
@@ -99,6 +119,7 @@ type MediaFile struct {
 	ID           string
 	ItemID       string
 	LibraryID    string
+	RootID       string
 	RelativePath string
 	SizeBytes    int64
 	ModifiedAt   int64

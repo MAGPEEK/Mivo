@@ -277,10 +277,15 @@ func (q *Queries) UpdateFilePlacement(ctx context.Context, arg UpdateFilePlaceme
 }
 
 const upsertPlacedFile = `-- name: UpsertPlacedFile :exec
-INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes, modified_at,
+INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error,
                          version_label, part_number)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?1, ?2, ?3,
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = ?3 AND library_roots.position = 0),
+        ?4, ?5, ?6, ?7,
+        ?8, ?9, ?10, ?11,
+        ?12, ?13, ?14)
 ON CONFLICT (id) DO UPDATE
 SET item_id       = excluded.item_id,
     relative_path = excluded.relative_path,
@@ -313,8 +318,10 @@ type UpsertPlacedFileParams struct {
 	PartNumber   int64
 }
 
-// UpsertPlacedFile writes a probe result together with the file's placement. library_id is
-// never changed by the update: the repository has checked that a stored file keeps its library.
+// UpsertPlacedFile writes a probe result together with the file's placement. library_id and
+// root_id are never changed by the update: the repository has checked that a stored file
+// keeps its library. A new file goes into the first folder of its library (single-folder
+// behaviour until M3-19h).
 func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFileParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPlacedFile,
 		arg.ID,
@@ -336,9 +343,12 @@ func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFilePara
 }
 
 const upsertSidecarState = `-- name: UpsertSidecarState :exec
-INSERT INTO library_sidecars (library_id, relative_path, kind, size_bytes, modified_at)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (library_id, relative_path) DO UPDATE
+INSERT INTO library_sidecars (library_id, root_id, relative_path, kind, size_bytes, modified_at)
+VALUES (?1,
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = ?1 AND library_roots.position = 0),
+        ?2, ?3, ?4, ?5)
+ON CONFLICT (root_id, relative_path) DO UPDATE
 SET kind        = excluded.kind,
     size_bytes  = excluded.size_bytes,
     modified_at = excluded.modified_at

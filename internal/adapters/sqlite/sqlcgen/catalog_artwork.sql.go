@@ -56,9 +56,13 @@ func (q *Queries) FindMediaFileID(ctx context.Context, arg FindMediaFileIDParams
 }
 
 const insertArtwork = `-- name: InsertArtwork :exec
-INSERT INTO artwork (id, item_id, kind, source, library_id, relative_path, media_file_id,
+INSERT INTO artwork (id, item_id, kind, source, root_id, relative_path, media_file_id,
                      stream_index, size_bytes, modified_at, tag, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?1, ?2, ?3, ?4,
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = ?5 AND library_roots.position = 0),
+        ?6, ?7, ?8,
+        ?9, ?10, ?11, ?12)
 `
 
 type InsertArtworkParams struct {

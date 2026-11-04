@@ -18,6 +18,8 @@ type LibraryRepository struct {
 	writer *sql.DB
 	reader *sqlcgen.Queries
 	clock  func() time.Time
+	// caseInsensitive selects the Windows folder comparison; fixed per build target.
+	caseInsensitive bool
 }
 
 // NewLibraryRepository returns a repository on db. db must be migrated before the first call.
@@ -27,7 +29,9 @@ func NewLibraryRepository(db *DB, clock func() time.Time) *LibraryRepository {
 		clock = time.Now
 	}
 
-	return &LibraryRepository{writer: db.writer, reader: sqlcgen.New(db.reader), clock: clock}
+	return &LibraryRepository{
+		writer: db.writer, reader: sqlcgen.New(db.reader), clock: clock, caseInsensitive: foldPathCase(),
+	}
 }
 
 // SyncLibraries makes the stored libraries match definitions in one write transaction. The
@@ -38,21 +42,24 @@ func NewLibraryRepository(db *DB, clock func() time.Time) *LibraryRepository {
 // removed ones (also ordered by name) with the item count they had before the delete. Both
 // lists are non-nil.
 //
-// Roots are compared exactly as given; the configuration has already cleaned them and
+// Roots are compared by library.FolderKey (case folded on Windows), the rule the folder
+// uniqueness uses; the configuration has already cleaned them and
 // rejected duplicates that differ only in case on Windows. Invalid definitions, two
 // definitions with the same root and a nil newID wrap domain.ErrInvalid; nothing is changed
 // then. When newID fails, the whole sync is rolled back.
 func (repository *LibraryRepository) SyncLibraries(ctx context.Context, definitions []library.Definition,
 	newID func() (string, error),
 ) (library.SyncResult, error) {
-	if err := checkSyncInput(definitions, newID); err != nil {
+	if err := checkSyncInput(definitions, newID, repository.caseInsensitive); err != nil {
 		return library.SyncResult{}, fmt.Errorf("sync libraries: %w", err)
 	}
 
 	var result library.SyncResult
 
 	err := inWriteTransaction(ctx, repository.writer, func(queries *sqlcgen.Queries) error {
-		run := librarySync{queries: queries, newID: newID, now: repository.clock().UnixMilli()}
+		run := librarySync{
+			queries: queries, newID: newID, now: repository.clock().UnixMilli(), caseInsensitive: repository.caseInsensitive,
+		}
 
 		var err error
 
@@ -99,7 +106,7 @@ func (repository *LibraryRepository) GetLibrary(ctx context.Context, id string) 
 
 // checkSyncInput rejects what would otherwise surface as a constraint error halfway through
 // the transaction.
-func checkSyncInput(definitions []library.Definition, newID func() (string, error)) error {
+func checkSyncInput(definitions []library.Definition, newID func() (string, error), caseInsensitive bool) error {
 	if newID == nil {
 		return fmt.Errorf("no id generator: %w", domain.ErrInvalid)
 	}
@@ -111,11 +118,11 @@ func checkSyncInput(definitions []library.Definition, newID func() (string, erro
 			return fmt.Errorf("definition %d: %w", index, err)
 		}
 
-		if roots[definition.Root] {
+		if roots[folderKey(definition.Root, caseInsensitive)] {
 			return fmt.Errorf("definition %d: root %q is configured twice: %w", index, definition.Root, domain.ErrInvalid)
 		}
 
-		roots[definition.Root] = true
+		roots[folderKey(definition.Root, caseInsensitive)] = true
 	}
 
 	return nil
@@ -126,7 +133,12 @@ type librarySync struct {
 	queries *sqlcgen.Queries
 	newID   func() (string, error)
 	// now is the sync's timestamp in Unix milliseconds, shared by every row it writes.
-	now int64
+	now             int64
+	caseInsensitive bool
+}
+
+func (run librarySync) key(path string) string {
+	return folderKey(path, run.caseInsensitive)
 }
 
 func (run librarySync) apply(ctx context.Context, definitions []library.Definition) (library.SyncResult, error) {
@@ -137,13 +149,13 @@ func (run librarySync) apply(ctx context.Context, definitions []library.Definiti
 
 	storedByRoot := make(map[string]library.Library, len(stored))
 	for _, summary := range stored {
-		storedByRoot[summary.Library.Root] = summary.Library
+		storedByRoot[run.key(summary.Library.Root)] = summary.Library
 	}
 
 	configured := make(map[string]bool, len(definitions))
 
 	for _, definition := range definitions {
-		configured[definition.Root] = true
+		configured[run.key(definition.Root)] = true
 
 		if err := run.save(ctx, definition, storedByRoot); err != nil {
 			return library.SyncResult{}, err
@@ -171,7 +183,7 @@ func (run librarySync) removeUnconfigured(ctx context.Context, stored []library.
 	removed := []library.Summary{}
 
 	for _, summary := range stored {
-		if configured[summary.Library.Root] {
+		if configured[run.key(summary.Library.Root)] {
 			continue
 		}
 
@@ -190,7 +202,7 @@ func (run librarySync) removeUnconfigured(ctx context.Context, stored []library.
 func (run librarySync) save(ctx context.Context, definition library.Definition,
 	storedByRoot map[string]library.Library,
 ) error {
-	stored, known := storedByRoot[definition.Root]
+	stored, known := storedByRoot[run.key(definition.Root)]
 
 	switch {
 	case !known:
@@ -212,12 +224,34 @@ func (run librarySync) insert(ctx context.Context, definition library.Definition
 		ID:        id,
 		Name:      definition.Name,
 		Kind:      definition.Kind.String(),
-		RootPath:  definition.Root,
 		CreatedAt: run.now,
 		UpdatedAt: run.now,
 	})
 	if err != nil {
 		return fmt.Errorf("insert library %q: %w", definition.Name, err)
+	}
+
+	return run.insertFolder(ctx, id, definition)
+}
+
+// insertFolder stores the library's only folder and records its root in the import ledger,
+// because the library comes from the configuration.
+func (run librarySync) insertFolder(ctx context.Context, libraryID string, definition library.Definition) error {
+	pathKey := run.key(definition.Root)
+
+	// The first folder shares the library's id, as the folders migration 00004 carries over.
+	err := run.queries.InsertLibraryRoot(ctx, sqlcgen.InsertLibraryRootParams{
+		ID: libraryID, LibraryID: libraryID, Path: definition.Root, PathKey: pathKey, CreatedAt: run.now,
+	})
+	if err != nil {
+		return fmt.Errorf("insert folder of library %q: %w", definition.Name, err)
+	}
+
+	err = run.queries.RecordLibraryImport(ctx, sqlcgen.RecordLibraryImportParams{
+		PathKey: pathKey, Path: definition.Root, ImportedAt: run.now,
+	})
+	if err != nil {
+		return fmt.Errorf("record import of library %q: %w", definition.Name, err)
 	}
 
 	return nil

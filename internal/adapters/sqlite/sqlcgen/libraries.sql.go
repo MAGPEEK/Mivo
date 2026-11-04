@@ -20,10 +20,21 @@ func (q *Queries) DeleteLibrary(ctx context.Context, id string) error {
 	return err
 }
 
+const deleteLibraryImport = `-- name: DeleteLibraryImport :exec
+DELETE FROM library_imports
+WHERE path_key = ?
+`
+
+func (q *Queries) DeleteLibraryImport(ctx context.Context, pathKey string) error {
+	_, err := q.db.ExecContext(ctx, deleteLibraryImport, pathKey)
+	return err
+}
+
 const getLibrary = `-- name: GetLibrary :one
-SELECT libraries.id, libraries.name, libraries.kind, libraries.root_path,
+SELECT libraries.id, libraries.name, libraries.kind, library_roots.path AS root_path,
        COUNT(items.id) AS item_count
 FROM libraries
+JOIN library_roots ON library_roots.library_id = libraries.id AND library_roots.position = 0
 LEFT JOIN items ON items.library_id = libraries.id
 WHERE libraries.id = ?
 GROUP BY libraries.id
@@ -51,35 +62,60 @@ func (q *Queries) GetLibrary(ctx context.Context, id string) (GetLibraryRow, err
 }
 
 const insertLibrary = `-- name: InsertLibrary :exec
-INSERT INTO libraries (id, name, kind, root_path, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO libraries (id, name, kind, imported_from_config, created_at, updated_at)
+VALUES (?, ?, ?, 1, ?, ?)
 `
 
 type InsertLibraryParams struct {
 	ID        string
 	Name      string
 	Kind      string
-	RootPath  string
 	CreatedAt int64
 	UpdatedAt int64
 }
 
+// InsertLibrary stores a library of the configuration import (imported_from_config = 1);
+// its folder follows with InsertLibraryRoot.
 func (q *Queries) InsertLibrary(ctx context.Context, arg InsertLibraryParams) error {
 	_, err := q.db.ExecContext(ctx, insertLibrary,
 		arg.ID,
 		arg.Name,
 		arg.Kind,
-		arg.RootPath,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
 	return err
 }
 
+const insertLibraryRoot = `-- name: InsertLibraryRoot :exec
+INSERT INTO library_roots (id, library_id, path, path_key, position, created_at)
+VALUES (?, ?, ?, ?, 0, ?)
+`
+
+type InsertLibraryRootParams struct {
+	ID        string
+	LibraryID string
+	Path      string
+	PathKey   string
+	CreatedAt int64
+}
+
+func (q *Queries) InsertLibraryRoot(ctx context.Context, arg InsertLibraryRootParams) error {
+	_, err := q.db.ExecContext(ctx, insertLibraryRoot,
+		arg.ID,
+		arg.LibraryID,
+		arg.Path,
+		arg.PathKey,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const listLibraries = `-- name: ListLibraries :many
-SELECT libraries.id, libraries.name, libraries.kind, libraries.root_path,
+SELECT libraries.id, libraries.name, libraries.kind, library_roots.path AS root_path,
        COUNT(items.id) AS item_count
 FROM libraries
+JOIN library_roots ON library_roots.library_id = libraries.id AND library_roots.position = 0
 LEFT JOIN items ON items.library_id = libraries.id
 GROUP BY libraries.id
 ORDER BY libraries.name COLLATE NOCASE, libraries.name, libraries.id
@@ -124,6 +160,93 @@ func (q *Queries) ListLibraries(ctx context.Context) ([]ListLibrariesRow, error)
 	return items, nil
 }
 
+const listLibraryImports = `-- name: ListLibraryImports :many
+SELECT path_key, path
+FROM library_imports
+ORDER BY path_key
+`
+
+type ListLibraryImportsRow struct {
+	PathKey string
+	Path    string
+}
+
+func (q *Queries) ListLibraryImports(ctx context.Context) ([]ListLibraryImportsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLibraryImports)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLibraryImportsRow{}
+	for rows.Next() {
+		var i ListLibraryImportsRow
+		if err := rows.Scan(&i.PathKey, &i.Path); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLibraryRoots = `-- name: ListLibraryRoots :many
+SELECT id, path, path_key
+FROM library_roots
+ORDER BY id
+`
+
+type ListLibraryRootsRow struct {
+	ID      string
+	Path    string
+	PathKey string
+}
+
+func (q *Queries) ListLibraryRoots(ctx context.Context) ([]ListLibraryRootsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listLibraryRoots)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListLibraryRootsRow{}
+	for rows.Next() {
+		var i ListLibraryRootsRow
+		if err := rows.Scan(&i.ID, &i.Path, &i.PathKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordLibraryImport = `-- name: RecordLibraryImport :exec
+INSERT INTO library_imports (path_key, path, imported_at)
+VALUES (?, ?, ?)
+ON CONFLICT (path_key) DO NOTHING
+`
+
+type RecordLibraryImportParams struct {
+	PathKey    string
+	Path       string
+	ImportedAt int64
+}
+
+// RecordLibraryImport remembers a configuration root; an existing entry stays as it is.
+func (q *Queries) RecordLibraryImport(ctx context.Context, arg RecordLibraryImportParams) error {
+	_, err := q.db.ExecContext(ctx, recordLibraryImport, arg.PathKey, arg.Path, arg.ImportedAt)
+	return err
+}
+
 const updateLibrary = `-- name: UpdateLibrary :exec
 UPDATE libraries
 SET name = ?, kind = ?, updated_at = ?
@@ -147,6 +270,22 @@ func (q *Queries) UpdateLibrary(ctx context.Context, arg UpdateLibraryParams) er
 	return err
 }
 
+const updateLibraryImportKey = `-- name: UpdateLibraryImportKey :exec
+UPDATE library_imports
+SET path_key = ?1
+WHERE path_key = ?2
+`
+
+type UpdateLibraryImportKeyParams struct {
+	NewKey string
+	OldKey string
+}
+
+func (q *Queries) UpdateLibraryImportKey(ctx context.Context, arg UpdateLibraryImportKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateLibraryImportKey, arg.NewKey, arg.OldKey)
+	return err
+}
+
 const updateLibraryItemKinds = `-- name: UpdateLibraryItemKinds :exec
 UPDATE items
 SET kind = ?1, updated_at = ?2
@@ -163,5 +302,21 @@ type UpdateLibraryItemKindsParams struct {
 // milestone 2 every item's kind follows from its library's kind (library.ItemKindForLibrary).
 func (q *Queries) UpdateLibraryItemKinds(ctx context.Context, arg UpdateLibraryItemKindsParams) error {
 	_, err := q.db.ExecContext(ctx, updateLibraryItemKinds, arg.Kind, arg.UpdatedAt, arg.LibraryID)
+	return err
+}
+
+const updateLibraryRootKey = `-- name: UpdateLibraryRootKey :exec
+UPDATE library_roots
+SET path_key = ?
+WHERE id = ?
+`
+
+type UpdateLibraryRootKeyParams struct {
+	PathKey string
+	ID      string
+}
+
+func (q *Queries) UpdateLibraryRootKey(ctx context.Context, arg UpdateLibraryRootKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateLibraryRootKey, arg.PathKey, arg.ID)
 	return err
 }

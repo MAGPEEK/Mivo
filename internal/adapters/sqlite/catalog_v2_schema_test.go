@@ -15,25 +15,25 @@ const catalogV1Version = 2
 
 // artworkRow holds the SQL literals of an artwork insert; the other columns are fixed.
 type artworkRow struct {
-	id, itemID, kind, source, libraryID, relativePath, mediaFileID, streamIndex string
-	dataPath, provider, remoteURL, size, width, tag, selected                   string
+	id, itemID, kind, source, rootID, relativePath, mediaFileID, streamIndex string
+	dataPath, provider, remoteURL, size, width, tag, selected                string
 }
 
 // newArtwork returns the insert of the local, unselected poster "art-2" (poster.jpg in
 // lib-1) of item-1 after change adjusted its literals.
 func newArtwork(change func(row *artworkRow)) string {
 	row := artworkRow{
-		id: "'art-2'", itemID: "'item-1'", kind: "'poster'", source: "'local'", libraryID: "'lib-1'",
+		id: "'art-2'", itemID: "'item-1'", kind: "'poster'", source: "'local'", rootID: "'root-1'",
 		relativePath: "'poster.jpg'", mediaFileID: "NULL", streamIndex: "NULL", dataPath: "NULL",
 		provider: "NULL", remoteURL: "NULL", size: "10", width: "0", tag: "'0123456789abcdef'", selected: "0",
 	}
 	change(&row)
 
-	return `INSERT INTO artwork (id, item_id, kind, source, library_id, relative_path, media_file_id,
+	return `INSERT INTO artwork (id, item_id, kind, source, root_id, relative_path, media_file_id,
 		stream_index, data_path, provider, remote_url, size_bytes, modified_at, width, height, tag,
 		selected, created_at)
 		VALUES (` + strings.Join([]string{
-		row.id, row.itemID, row.kind, row.source, row.libraryID, row.relativePath, row.mediaFileID,
+		row.id, row.itemID, row.kind, row.source, row.rootID, row.relativePath, row.mediaFileID,
 		row.streamIndex, row.dataPath, row.provider, row.remoteURL, row.size,
 	}, ", ") + `, 0, ` + row.width + `, 0, ` + row.tag + `, ` + row.selected + `, 0)`
 }
@@ -41,16 +41,16 @@ func newArtwork(change func(row *artworkRow)) string {
 // embedded, provider and upload turn the default local artwork row into one of the other
 // sources with a complete location group.
 func embedded(row *artworkRow) {
-	row.source, row.libraryID, row.relativePath, row.mediaFileID, row.streamIndex = "'embedded'", "NULL", "NULL", "'file-1'", "2"
+	row.source, row.rootID, row.relativePath, row.mediaFileID, row.streamIndex = "'embedded'", "NULL", "NULL", "'file-1'", "2"
 }
 
 func provider(row *artworkRow) {
-	row.source, row.libraryID, row.relativePath = "'provider'", "NULL", "NULL"
+	row.source, row.rootID, row.relativePath = "'provider'", "NULL", "NULL"
 	row.provider, row.remoteURL = "'tmdb'", "'https://image.tmdb.org/t/p/original/a.jpg'"
 }
 
 func upload(row *artworkRow) {
-	row.source, row.libraryID, row.relativePath, row.dataPath = "'upload'", "NULL", "NULL", "'artwork/a.jpg'"
+	row.source, row.rootID, row.relativePath, row.dataPath = "'upload'", "NULL", "NULL", "'artwork/a.jpg'"
 }
 
 // catalogV2Fixture adds to constraintFixture: genre "tag-1" (Action) and person "person-1"
@@ -66,8 +66,8 @@ func catalogV2Fixture() []string {
 		`INSERT INTO item_provider_ids (item_id, provider, external_id) VALUES ('item-1', 'tmdb', '603')`,
 		`INSERT INTO item_field_locks (item_id, field) VALUES ('item-1', 'title')`,
 		newArtwork(func(row *artworkRow) { row.id, row.selected = "'art-1'", "1" }),
-		`INSERT INTO library_sidecars (library_id, relative_path, kind, size_bytes, modified_at)
-			VALUES ('lib-1', 'poster.jpg', 'image', 10, 0)`,
+		`INSERT INTO library_sidecars (library_id, root_id, relative_path, kind, size_bytes, modified_at)
+			VALUES ('lib-1', 'root-1', 'poster.jpg', 'image', 10, 0)`,
 	}
 }
 
@@ -107,11 +107,12 @@ func metadataConstraintCases() []catalogConstraintCase {
 		{name: "provider id of a missing item", statement: `INSERT INTO item_provider_ids VALUES ('item-9', 'tmdb', '1')`},
 		{name: "empty locked field", statement: `INSERT INTO item_field_locks VALUES ('item-1', '')`},
 		{name: "duplicate lock", statement: `INSERT INTO item_field_locks VALUES ('item-1', 'title')`},
-		{name: "unknown sidecar kind", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'a.txt', 'text', 0, 0)`},
-		{name: "empty sidecar path", statement: `INSERT INTO library_sidecars VALUES ('lib-1', '', 'nfo', 0, 0)`},
-		{name: "duplicate sidecar", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'poster.jpg', 'image', 0, 0)`},
-		{name: "negative sidecar size", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'a.nfo', 'nfo', -1, 0)`},
-		{name: "sidecar of a missing library", statement: `INSERT INTO library_sidecars VALUES ('lib-9', 'a.nfo', 'nfo', 0, 0)`},
+		{name: "unknown sidecar kind", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-1', 'a.txt', 'text', 0, 0)`},
+		{name: "empty sidecar path", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-1', '', 'nfo', 0, 0)`},
+		{name: "duplicate sidecar", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-1', 'poster.jpg', 'image', 0, 0)`},
+		{name: "negative sidecar size", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-1', 'a.nfo', 'nfo', -1, 0)`},
+		{name: "sidecar of a missing library", statement: `INSERT INTO library_sidecars VALUES ('lib-9', 'root-1', 'a.nfo', 'nfo', 0, 0)`},
+		{name: "sidecar of a missing folder", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-9', 'a.nfo', 'nfo', 0, 0)`},
 	}
 }
 
@@ -126,16 +127,16 @@ func artworkConstraintCases() []catalogConstraintCase {
 		{name: "artwork of a missing item", statement: newArtwork(func(row *artworkRow) { row.itemID = "'item-9'" })},
 		{name: "second selected poster", statement: newArtwork(func(row *artworkRow) { row.selected = "1" })},
 		{name: "local without a path", statement: newArtwork(func(row *artworkRow) { row.relativePath = "NULL" })},
-		{name: "local without a library", statement: newArtwork(func(row *artworkRow) { row.libraryID = "NULL" })},
+		{name: "local without a folder", statement: newArtwork(func(row *artworkRow) { row.rootID = "NULL" })},
 		{name: "local with an empty path", statement: newArtwork(func(row *artworkRow) { row.relativePath = "''" })},
 		{name: "local with a media file", statement: newArtwork(func(row *artworkRow) { row.mediaFileID, row.streamIndex = "'file-1'", "2" })},
 		{name: "local with a data path", statement: newArtwork(func(row *artworkRow) { row.dataPath = "'artwork/a.jpg'" })},
 		{name: "local with a provider", statement: newArtwork(func(row *artworkRow) { row.provider = "'tmdb'" })},
 		{name: "embedded without a stream", statement: newArtwork(func(row *artworkRow) { embedded(row); row.streamIndex = "NULL" })},
 		{name: "embedded without a file", statement: newArtwork(func(row *artworkRow) { embedded(row); row.mediaFileID = "NULL" })},
-		{name: "embedded with a library path", statement: newArtwork(func(row *artworkRow) {
+		{name: "embedded with a folder path", statement: newArtwork(func(row *artworkRow) {
 			embedded(row)
-			row.libraryID, row.relativePath = "'lib-1'", "'poster.jpg'"
+			row.rootID, row.relativePath = "'root-1'", "'poster.jpg'"
 		})},
 		{name: "embedded of a missing file", statement: newArtwork(func(row *artworkRow) { embedded(row); row.mediaFileID = "'file-9'" })},
 		{name: "embedded with a negative stream", statement: newArtwork(func(row *artworkRow) { embedded(row); row.streamIndex = "-1" })},
@@ -182,7 +183,7 @@ func TestCatalogV2ConstraintsAcceptDomainValues(t *testing.T) {
 		{name: "role of a later task", statement: `INSERT INTO item_people VALUES ('show-1', 'person-1', 'narrator', '', 0)`},
 		{name: "provider of a later task", statement: `INSERT INTO item_provider_ids VALUES ('item-1', 'musicbrainz_album', 'x')`},
 		{name: "artwork lock", statement: `INSERT INTO item_field_locks VALUES ('item-1', 'artwork.poster')`},
-		{name: "nfo sidecar", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'a.nfo', 'nfo', 0, 0)`},
+		{name: "nfo sidecar", statement: `INSERT INTO library_sidecars VALUES ('lib-1', 'root-1', 'a.nfo', 'nfo', 0, 0)`},
 		{name: "unselected local candidate", statement: newArtwork(func(*artworkRow) {})},
 		{name: "embedded candidate", statement: newArtwork(func(row *artworkRow) { embedded(row); row.id = "'art-3'" })},
 		{name: "provider candidate before its download", statement: newArtwork(func(row *artworkRow) { provider(row); row.id = "'art-4'" })},

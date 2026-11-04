@@ -703,9 +703,9 @@ func insertCatalogTree(t *testing.T, inspection *sql.DB, libraryID, suffix strin
 
 // insertMediaFileQuery stores a successfully probed file; parameters: id, item_id,
 // library_id, relative_path.
-const insertMediaFileQuery = `INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes,
-	modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error)
-	VALUES (?, ?, ?, ?, 1048576, 0, 'mkv', 'matroska,webm', 30000, 2000000, 0, NULL)`
+const insertMediaFileQuery = `INSERT INTO media_files (id, item_id, library_id, root_id, relative_path,
+	size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error)
+	VALUES (?, ?, ?, (SELECT id FROM library_roots WHERE library_id = ?3 AND position = 0), ?, 1048576, 0, 'mkv', 'matroska,webm', 30000, 2000000, 0, NULL)`
 
 // insertMediaStreamQuery stores a stream; parameters: media_file_id, stream_index, kind.
 const insertMediaStreamQuery = `INSERT INTO media_streams (media_file_id, stream_index, kind, codec,

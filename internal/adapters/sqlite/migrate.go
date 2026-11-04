@@ -41,7 +41,8 @@ func (db *DB) Migrate(ctx context.Context) error {
 			slog.Duration("duration", result.Duration))
 	}
 
-	return nil
+	// Migration 00004 cannot fold the case of carried-over folder keys in SQL.
+	return db.RekeyFolders(ctx)
 }
 
 func (db *DB) newMigrationProvider() (*goose.Provider, error) {

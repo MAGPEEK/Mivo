@@ -27,12 +27,19 @@ WHERE id = ?;
 INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
--- UpsertMediaFile writes a probe result. item_id and library_id are never changed by the
--- update: the repository has checked that a stored file keeps its item and library.
+-- UpsertMediaFile writes a probe result. item_id, library_id and root_id are never changed
+-- by the update: the repository has checked that a stored file keeps its item and library.
+-- The file goes into the first folder of its library (single-folder behaviour until
+-- M3-19h); a library without a folder makes root_id NULL and the insert fails.
 -- name: UpsertMediaFile :exec
-INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes, modified_at,
+INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (sqlc.arg(id), sqlc.arg(item_id), sqlc.arg(library_id),
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = sqlc.arg(library_id) AND library_roots.position = 0),
+        sqlc.arg(relative_path), sqlc.arg(size_bytes), sqlc.arg(modified_at), sqlc.arg(container),
+        sqlc.arg(format_name), sqlc.arg(duration_ms), sqlc.arg(bit_rate), sqlc.arg(probed_at),
+        sqlc.arg(probe_error))
 ON CONFLICT (id) DO UPDATE
 SET relative_path = excluded.relative_path,
     size_bytes    = excluded.size_bytes,
@@ -95,7 +102,7 @@ WHERE item_id = ?
 ORDER BY part_number, relative_path, id;
 
 -- name: GetFileWithRoot :one
-SELECT sqlc.embed(media_files), libraries.root_path
+SELECT sqlc.embed(media_files), library_roots.path AS root_path
 FROM media_files
-JOIN libraries ON libraries.id = media_files.library_id
+JOIN library_roots ON library_roots.id = media_files.root_id
 WHERE media_files.id = ?;

@@ -58,9 +58,9 @@ type fileSpec struct {
 func insertFile(t *testing.T, inspection *sql.DB, spec fileSpec) {
 	t.Helper()
 
-	execute(t, inspection, `INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes,
-		modified_at, container, format_name, duration_ms, bit_rate, probed_at, version_label, part_number)
-		VALUES (?, ?, ?, ?, 1000, ?, 'mkv', 'matroska,webm', 60000, 1000, ?, ?, ?)`,
+	execute(t, inspection, `INSERT INTO media_files (id, item_id, library_id, root_id, relative_path,
+		size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, version_label,
+		part_number) VALUES (?, ?, ?3, ?3, ?, 1000, ?, 'mkv', 'matroska,webm', 60000, 1000, ?, ?, ?)`,
 		spec.id, spec.itemID, spec.libraryID, spec.relativePath, fileModifiedMilli, scannedMilli,
 		spec.versionLabel, spec.partNumber)
 }
@@ -79,7 +79,7 @@ type artworkSpec struct {
 func insertLocalArtwork(t *testing.T, inspection *sql.DB, spec artworkSpec) {
 	t.Helper()
 
-	execute(t, inspection, `INSERT INTO artwork (id, item_id, kind, source, library_id, relative_path,
+	execute(t, inspection, `INSERT INTO artwork (id, item_id, kind, source, root_id, relative_path,
 		size_bytes, modified_at, tag, selected, created_at) VALUES (?, ?, ?, 'local', ?, ?, 2048, ?, ?, ?, ?)`,
 		spec.id, spec.itemID, spec.kind, spec.libraryID, spec.relativePath, fileModifiedMilli, spec.tag,
 		spec.selected, scannedMilli)

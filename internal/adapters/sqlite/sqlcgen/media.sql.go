@@ -112,9 +112,9 @@ func (q *Queries) GetFileOwner(ctx context.Context, id string) (GetFileOwnerRow,
 }
 
 const getFileWithRoot = `-- name: GetFileWithRoot :one
-SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout, libraries.root_path
+SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.root_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout, library_roots.path AS root_path
 FROM media_files
-JOIN libraries ON libraries.id = media_files.library_id
+JOIN library_roots ON library_roots.id = media_files.root_id
 WHERE media_files.id = ?
 `
 
@@ -130,6 +130,7 @@ func (q *Queries) GetFileWithRoot(ctx context.Context, id string) (GetFileWithRo
 		&i.MediaFile.ID,
 		&i.MediaFile.ItemID,
 		&i.MediaFile.LibraryID,
+		&i.MediaFile.RootID,
 		&i.MediaFile.RelativePath,
 		&i.MediaFile.SizeBytes,
 		&i.MediaFile.ModifiedAt,
@@ -365,7 +366,7 @@ func (q *Queries) ListFileStates(ctx context.Context, libraryID string) ([]ListF
 }
 
 const listItemFiles = `-- name: ListItemFiles :many
-SELECT id, item_id, library_id, relative_path, size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error, version_label, part_number, layout
+SELECT id, item_id, library_id, root_id, relative_path, size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error, version_label, part_number, layout
 FROM media_files
 WHERE item_id = ?
 ORDER BY part_number, relative_path, id
@@ -386,6 +387,7 @@ func (q *Queries) ListItemFiles(ctx context.Context, itemID string) ([]MediaFile
 			&i.ID,
 			&i.ItemID,
 			&i.LibraryID,
+			&i.RootID,
 			&i.RelativePath,
 			&i.SizeBytes,
 			&i.ModifiedAt,
@@ -479,9 +481,14 @@ func (q *Queries) ListStreamsOfFiles(ctx context.Context, fileIds []string) ([]M
 }
 
 const upsertMediaFile = `-- name: UpsertMediaFile :exec
-INSERT INTO media_files (id, item_id, library_id, relative_path, size_bytes, modified_at,
+INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?1, ?2, ?3,
+        (SELECT library_roots.id FROM library_roots
+         WHERE library_roots.library_id = ?3 AND library_roots.position = 0),
+        ?4, ?5, ?6, ?7,
+        ?8, ?9, ?10, ?11,
+        ?12)
 ON CONFLICT (id) DO UPDATE
 SET relative_path = excluded.relative_path,
     size_bytes    = excluded.size_bytes,
@@ -509,8 +516,10 @@ type UpsertMediaFileParams struct {
 	ProbeError   sql.NullString
 }
 
-// UpsertMediaFile writes a probe result. item_id and library_id are never changed by the
-// update: the repository has checked that a stored file keeps its item and library.
+// UpsertMediaFile writes a probe result. item_id, library_id and root_id are never changed
+// by the update: the repository has checked that a stored file keeps its item and library.
+// The file goes into the first folder of its library (single-folder behaviour until
+// M3-19h); a library without a folder makes root_id NULL and the insert fails.
 func (q *Queries) UpsertMediaFile(ctx context.Context, arg UpsertMediaFileParams) error {
 	_, err := q.db.ExecContext(ctx, upsertMediaFile,
 		arg.ID,

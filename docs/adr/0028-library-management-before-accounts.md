@@ -40,7 +40,8 @@ expose server directories. The owner now wants libraries managed in the web app
 - Supersedes ADR 0022 "Library definitions" (config-only, path identity, "a removed path
   deletes the library", UI creation in M7). Rest of ADR 0022 stands.
 - Needs migration `00004`, a dynamic scan-trigger set, and a management guard in `adapters/http`.
-- Upgrade from alpha.2: `00003` drops the catalog, `00004` seeds an empty ledger, first start
-  re-imports configured libraries; users see one rebuild.
+- Upgrade from alpha.2: `00003` drops the catalog, `00004` keeps the libraries (same IDs, one
+  folder each) and seeds the import ledger from them; only the catalog is rebuilt by the next
+  scan, so users see one rebuild.
 - Docker users add their library in the app after the upgrade.
 - Import skips a configured library whose name another library already uses (warn log) and still records its root, so it is not retried; the user adds it in the app.

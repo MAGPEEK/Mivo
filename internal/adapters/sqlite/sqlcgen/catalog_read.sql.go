@@ -33,10 +33,10 @@ const getArtworkWithRoot = `-- name: GetArtworkWithRoot :one
 SELECT artwork.id, artwork.kind, artwork.source, artwork.relative_path, artwork.stream_index,
        artwork.data_path, artwork.size_bytes, artwork.modified_at, artwork.tag,
        media_files.relative_path AS media_relative_path,
-       CAST(ifnull(libraries.root_path, '') AS TEXT) AS library_root
+       CAST(ifnull(library_roots.path, '') AS TEXT) AS library_root
 FROM artwork
 LEFT JOIN media_files ON media_files.id = artwork.media_file_id
-LEFT JOIN libraries ON libraries.id = ifnull(artwork.library_id, media_files.library_id)
+LEFT JOIN library_roots ON library_roots.id = ifnull(artwork.root_id, media_files.root_id)
 WHERE artwork.id = ?
 `
 
@@ -526,7 +526,7 @@ func (q *Queries) ListItemTags(ctx context.Context, itemID string) ([]ListItemTa
 }
 
 const listPrimaryFiles = `-- name: ListPrimaryFiles :many
-SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout
+SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.root_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout
 FROM items
 JOIN media_files ON media_files.id = (
     SELECT candidates.id
@@ -566,6 +566,7 @@ func (q *Queries) ListPrimaryFiles(ctx context.Context, itemIds []string) ([]Lis
 			&i.MediaFile.ID,
 			&i.MediaFile.ItemID,
 			&i.MediaFile.LibraryID,
+			&i.MediaFile.RootID,
 			&i.MediaFile.RelativePath,
 			&i.MediaFile.SizeBytes,
 			&i.MediaFile.ModifiedAt,

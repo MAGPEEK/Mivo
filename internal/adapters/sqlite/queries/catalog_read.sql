@@ -170,10 +170,10 @@ ORDER BY provider;
 SELECT artwork.id, artwork.kind, artwork.source, artwork.relative_path, artwork.stream_index,
        artwork.data_path, artwork.size_bytes, artwork.modified_at, artwork.tag,
        media_files.relative_path AS media_relative_path,
-       CAST(ifnull(libraries.root_path, '') AS TEXT) AS library_root
+       CAST(ifnull(library_roots.path, '') AS TEXT) AS library_root
 FROM artwork
 LEFT JOIN media_files ON media_files.id = artwork.media_file_id
-LEFT JOIN libraries ON libraries.id = ifnull(artwork.library_id, media_files.library_id)
+LEFT JOIN library_roots ON library_roots.id = ifnull(artwork.root_id, media_files.root_id)
 WHERE artwork.id = ?;
 
 -- name: ListArtworkTags :many

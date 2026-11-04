@@ -79,8 +79,11 @@ func newCatalogFixture(t *testing.T) catalogFixture {
 		inspection: openForeignKeyInspectionDB(t, path),
 	}
 
-	execute(t, fixture.inspection, `INSERT INTO libraries (id, name, kind, root_path, created_at, updated_at)
-		VALUES (?, 'Movies', 'movies', ?, 0, 0), (?, 'Shows', 'shows', ?, 0, 0)`,
+	execute(t, fixture.inspection, `INSERT INTO libraries (id, name, kind, created_at, updated_at)
+		VALUES (?, 'Movies', 'movies', 0, 0), (?, 'Shows', 'shows', 0, 0)`, moviesLibraryID, showsLibraryID)
+	// The folder of a fixture library shares the library's id, as migration 00004 does.
+	execute(t, fixture.inspection, `INSERT INTO library_roots (id, library_id, path, path_key, position, created_at)
+		VALUES (?1, ?1, ?2, ?2, 0, 0), (?3, ?3, ?4, ?4, 0, 0)`,
 		moviesLibraryID, moviesRoot, showsLibraryID, showsRoot)
 
 	return fixture
