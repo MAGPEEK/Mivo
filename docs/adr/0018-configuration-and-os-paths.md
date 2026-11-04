@@ -236,3 +236,20 @@ standard` (desktop installs). On `docker` and `synology` it is skipped because a
 container home may hold secrets or the data directory. It is never added when relative, when it
 is the filesystem root (`HOME=/` in containers) or when it duplicates another default; the
 value is cleaned first. `browse.roots` overrides all defaults.
+
+## Notes (M6-05)
+
+Keys added for online metadata (ADR 0031). Booleans are strict like `server.lan_only`.
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `metadata.online.enabled` | `<PREFIX>_METADATA_ONLINE_ENABLED` | `true` | `true` or `false`; `false` means no outbound connection at all |
+| `metadata.tmdb.enabled` | `<PREFIX>_METADATA_TMDB_ENABLED` | `true` | `true` or `false` |
+| `metadata.tmdb.api_key` | `<PREFIX>_METADATA_TMDB_API_KEY` | empty | Own TMDB key, no whitespace; empty clears it. Wins over the key bundled at build time |
+| `metadata.musicbrainz.enabled` | `<PREFIX>_METADATA_MUSICBRAINZ_ENABLED` | `true` | `true` or `false`; also covers Cover Art Archive |
+| `metadata.language` | `<PREFIX>_METADATA_LANGUAGE` | `en` | Language tag such as `en`, `de`, `pt-BR` (stored in canonical case) |
+
+`Config.TMDBKey()` returns the key in use and its origin (`none`, `bundled`, `own`; own wins).
+The key type `config.Secret` prints a redaction marker in `%v`, `%#v`, JSON and `slog`, and
+error messages never contain the value. Keep it out of any config dump.
+The per-library `online_metadata` flag is stored with the library (ADR 0031 §2), not here.

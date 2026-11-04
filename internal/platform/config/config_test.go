@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -117,6 +118,10 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		Scan:      config.Scan{Watch: true, Interval: 12 * time.Hour},
 		Browse:    config.Browse{Roots: []string{}},
 		Install:   config.Install{Kind: config.InstallKindStandard},
+		Metadata: config.Metadata{
+			Online: true, TMDB: config.TMDB{Enabled: true}, MusicBrainz: config.MusicBrainz{Enabled: true},
+			Language: "en",
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)
@@ -215,7 +220,7 @@ func precedenceCases() []precedenceCase {
 			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Transcode.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Transcode },
 		},
-	}, append(toolAndTranscodeCases(), scanCases()...)...)
+	}, slices.Concat(toolAndTranscodeCases(), scanCases(), metadataCases())...)
 }
 
 // scanCases cover the automatic scan keys of milestone 3 (ADR 0027 §9).

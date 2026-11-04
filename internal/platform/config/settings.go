@@ -67,6 +67,10 @@ type setting struct {
 // settings returns every configurable scalar key in a stable order. The list setting
 // "libraries" has its own handler (libraries.go).
 func settings() []setting {
+	return append(coreSettings(), metadataSettings()...)
+}
+
+func coreSettings() []setting {
 	return []setting{
 		{key: keyServerHost, apply: applyHost},
 		{key: keyServerPort, apply: applyPort},

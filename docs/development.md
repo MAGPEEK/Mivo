@@ -533,6 +533,20 @@ Never push an image from a dev machine. Releases (version tag, image push to Doc
 published only by the `mivo-release` agent, after the gates pass and the review approves, and
 only with the owner's explicit approval for each push.
 
+## Bundled TMDB key (release builds)
+
+Online metadata (ADR 0031) uses the project's TMDB key when the owner sets no own key
+(`metadata.tmdb.api_key`). The key is injected at link time into
+`config.BundledTMDBKey` and is empty in every other build, so `go run`, the Dockerfile and
+the SPK build work without it (TMDB then stays off until an own key is set):
+
+```
+go build -ldflags "-X github.com/magpeek/mivo/internal/platform/config.BundledTMDBKey=$TMDB_KEY" ./cmd/mivo
+```
+
+CI passes the key from a repository secret (note for `mivo-release`); never commit a real key
+and never print it in build logs.
+
 ## Synology package
 
 The native DSM package (ADR 0026) is built with Docker only: a normal `docker build` prebuilds

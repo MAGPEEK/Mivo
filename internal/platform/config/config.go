@@ -81,6 +81,8 @@ type Config struct {
 	Browse Browse
 	// Install is the installation kind.
 	Install Install
+	// Metadata holds the online metadata settings (ADR 0031).
+	Metadata Metadata
 }
 
 // Scan holds the settings of the automatic library scans (ADR 0027 §9).
@@ -224,6 +226,7 @@ func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 		Transcode: Transcode{MaxSessions: DefaultTranscodeMaxSessions},
 		Scan:      Scan{Watch: DefaultScanWatch, Interval: DefaultScanInterval},
 		Install:   Install{Kind: InstallKindStandard},
+		Metadata:  defaultMetadata(),
 	}
 }
 
