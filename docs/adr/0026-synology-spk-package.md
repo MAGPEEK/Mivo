@@ -570,6 +570,29 @@ platform environments DSM 7.2.2 build 72723)**
   to every GitHub Release next to the SPKs. Its SHA-256 is recorded in each `SOURCE.txt` and
   checked against the archive, but not pinned in `sources.lock`, because any recipe edit changes
   it while the binaries stay byte-identical.
+
+## Notes (UX plan, 2026-11-04)
+
+- **DSM main-menu shortcut is in scope** (owner request 2026-11-04; implemented in the running
+  SPK work). This narrows §1 "Out of scope … a DSM desktop app or single sign-on (`dsmuidir`)"
+  and the "What the package is" statement "no DSM desktop UI beyond Package Center's start/stop
+  and 'Open' button": the package adds **one launcher entry** to the DSM main menu (the package
+  icon, title = `brand.DisplayName`) that opens the server's web app in a new browser tab on
+  port 8460. Still out of scope: an app embedded in the DSM desktop (iframe/DSM window), single
+  sign-on with DSM accounts, and any DSM-side settings UI.
+- Mechanism as documented by Synology and used by community packages *(verify on the owner's
+  device, SPK-12)*: INFO `dsmuidir` names a directory in `package.tgz` with a `config` file that
+  declares one entry of type `url` (protocol, port 8460, path, `allUsers`, title, description,
+  icon file pattern per size) plus the icon files. Title and description are build-time tokens
+  filled from `internal/platform/brand` (§6: no product name in packaging files); the icons come
+  from the generated package icons (SPK-08) in the sizes DSM asks for *(verify)*.
+- The launcher grants nothing: whoever opens it still meets the server's own access rules
+  (LAN-only guard now, the server's sign-in from milestone 7). A DSM user who sees the icon has
+  no more rights in Mivo than any other LAN client.
+- Caveat for the docs: the link uses the host name the browser used for DSM. Through
+  QuickConnect or DSM's reverse proxy that host does not serve port 8460, so the shortcut only
+  works for DSM opened on its LAN address or a host name that reaches the NAS directly (same
+  limitation as the "Open" button, §8).
 - **Verification**: two clean recipe builds give byte-identical binaries; each family runs the
   check set under emulation with the oldest DSM kernel's syscall surface (SPK-15). Static PIE
   (ASLR) is deferred until the device test (SPK-12).
