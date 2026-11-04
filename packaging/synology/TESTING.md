@@ -32,7 +32,7 @@ Package Center does with the conflict as an extra observation in step A2).
 |---|---|---|
 | Model | Control Panel > Info Center > General | |
 | DSM version and build | Info Center > General ("DSM 7.2.x-xxxxx Update n") | |
-| CPU / platform | Info Center > General (CPU) and over SSH `cat /proc/sys/kernel/syno_platform_name` (if present) or `uname -m` | |
+| CPU / platform | Info Center > General (CPU) and over SSH `/usr/syno/bin/synogetkeyvalue /etc.defaults/synoinfo.conf unique` (e.g. `synology_v1000nk_ds925+`; `/proc/sys/kernel/syno_platform_name` does not exist on DSM 7.4.1) or `uname -m` | |
 | Kernel | `uname -r` | |
 | `/bin/sh` | `ls -l /bin/sh` and `/bin/sh --version` (prints a version for bash; an error for BusyBox) | |
 | RAM | Info Center > General | |
@@ -55,7 +55,7 @@ step is not fatal for the run: continue where possible and record what happened.
 | A3 | In the wizard, read the explanatory text; field "Shared folder" | the **classic wizard** renders: one page with a text, a text field prefilled with `video`; the texts are **German when DSM is German** (else English) | |
 | A4 | Enter a name that breaks DSM's naming rules (for example `video/x` or a leading `-`) | the Next button stays disabled (or an error text under the field appears) | |
 | A5 | Enter a well-formed name of a shared folder that **does not exist** (for example `nosuchshare`), Next, finish | the installation is **refused** with a message naming the folder ("does not exist …"); afterwards Control Panel > Shared Folder shows **no new shared folder** of that name | |
-| A6 | Manual Install again, enter the real video share, Next, keep "Run after installation" ticked, Done. SSH: `cat /proc/sys/kernel/syno_platform_name` | installation completes without error (DSM accepted `arch="x86_64"` on this platform; record the platform name); Package Center lists the package | |
+| A6 | Manual Install again, enter the real video share, Next, keep "Run after installation" ticked, Done. SSH: `/usr/syno/bin/synogetkeyvalue /etc.defaults/synoinfo.conf unique` | installation completes without error (DSM accepted `arch="x86_64"` on this platform; record the platform name); Package Center lists the package | |
 | A7 | Package Center > Installed: the package entry and its detail page | display name, icon, version **`0.1.0-1020`**, a beta label, status **Running**; the description text is shown in full (German description on a German DSM, English otherwise) | |
 | A8 | Control Panel > Shared Folder > the video share > Edit > Permissions > drop-down "System internal user" | the user `<id>` is listed with **Read only** ticked, nothing else | |
 | A9 | SSH: `ls -l /var/packages/<id>/shares/` | a symbolic link named after the share, pointing at `/volumeN/<share>` | |

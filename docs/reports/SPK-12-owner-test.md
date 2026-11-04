@@ -1,0 +1,40 @@
+# SPK-12 – Owner DSM test (DS925+)
+
+Protocol: `packaging/synology/TESTING.md`. Results are added step by step; the device facts below
+were read over SSH (key login of the dedicated user, no root) on 2026-11-04.
+
+## Device facts
+
+| Item | Value | Source |
+|---|---|---|
+| Model | DS925+ | `/proc/sys/kernel/syno_hw_version` |
+| CPU | AMD Ryzen Embedded V1500B, 8 threads | `/proc/cpuinfo`, `nproc` |
+| RAM | 7.7 GiB (7894 MB) | `free -m` |
+| Architecture | `x86_64` → SPK family `x86_64` | `uname -m` |
+| DSM platform | `v1000nk` (unique `synology_v1000nk_ds925+`) | `synogetkeyvalue /etc.defaults/synoinfo.conf unique` |
+| DSM version | **7.4.1-90080 Update 1** (build date 2026-10-02) | `/etc.defaults/VERSION` |
+| Kernel | 5.10.55+ (GCC 12.2.0) | `/proc/version` |
+| `/bin/sh` | symlink to `bash` | `ls -l /bin/sh` |
+| Container Manager | 24.0.2-1706, Docker client 24.0.2 | package INFO, `docker version` |
+| Port 8460 | free (5000, 5001 DSM; 32400 Plex) | `netstat -ltn` |
+| Other media packages | Plex Media Server, Synology Media Server | `/var/packages` |
+
+## Findings so far
+
+- **DSM is 7.4.1, not 7.2**: the SPK's `os_min_ver="7.2-64570"` allows it, but every DSM fact in
+  ADR 0026 and `DSM-NOTES.md` was collected for 7.2; the device test confirms or corrects them
+  for 7.4.1. The toolkit stays on the DSM 7.2 branch (no 7.4 toolkit was checked).
+- **Platform `v1000nk`** is not in the DSM 7.2 toolkit platform list (`v1000` is). The x86_64 SPK
+  uses `arch="x86_64"`, which DSM is expected to accept for every x86_64 platform; to confirm at
+  install (TESTING.md A6).
+- **`/proc/sys/kernel/syno_platform_name` does not exist** on DSM 7.4.1; TESTING.md now uses
+  `synogetkeyvalue /etc.defaults/synoinfo.conf unique` instead.
+- **`/bin/sh` is bash** on this device, so the package scripts run under bash here, not ash;
+  they are tested under BusyBox sh, dash, `bash --posix` and bash.
+- **Docker Engine 24.0.2** confirms the Docker-guide note: `HEALTHCHECK --start-interval` is
+  ignored, *healthy* appears after about 30 s.
+- **Docker image name**: `image: mivo-media-server` failed with "pull access denied … repository
+  does not exist"; the correct name is `docker.io/magpeek/mivo-media-server:<tag>`.
+- **SSH for a non-root user**: DSM only admits members of `administrators` over SSH; the test
+  user `claude` (uid 1047) is in that group but no password or `sudo` is ever used by the agent,
+  so the Docker socket and `/var/packages/<id>/var` stay unreadable for it.

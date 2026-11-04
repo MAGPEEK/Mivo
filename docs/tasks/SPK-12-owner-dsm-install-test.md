@@ -75,7 +75,7 @@ are checked on a real DSM 7.2.
 ## Orchestrator note (2026-11-04): owner's device, access and findings so far
 
 - **Device**: the owner tests on a **Synology DS925+** (x86_64, AMD; DSM 7.2). Record
-  `uname -m`, `/proc/sys/kernel/syno_platform_name`, the DSM build and the Container Manager
+  `uname -m`, `synogetkeyvalue /etc.defaults/synoinfo.conf unique`, the DSM build and the Container Manager
   engine version (`sudo docker version --format '{{.Server.Version}}'`) in the report.
 - **Access** (offered by the owner): a dedicated non-admin DSM user (e.g. `claude-test`) with an
   SSH key the owner installs, read access to the test share only. The orchestrator never enters
