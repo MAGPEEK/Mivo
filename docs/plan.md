@@ -23,6 +23,26 @@
 | Migration | Import aus Plex und Jellyfin (Gesehen-Status, Fortschritt, Bewertungen, Playlists) **nach v0.1** |
 | Synology-Paket (SPK) | **vorgezogen** (Entscheidung 2026-10-31): natives SPK für DSM 7.2+, parallel zu Meilenstein 2, erstes SPK mit 0.1.0-alpha.2; je ein SPK für x86_64, armv8 und armv7 mit gebündeltem statischem FFmpeg. Docker bleibt die primäre NAS-Verteilung, QPKG bleibt „später“. Details: ADR 0026, Aufgaben `docs/tasks/SPK-*`. Ergänzung 2026-11-04: **Verknüpfung im DSM-Hauptmenü** (Mivo-Symbol im DSM-Startmenü wie bei anderen Paketen, öffnet die Web-App), wird in der laufenden SPK-Arbeit umgesetzt (ADR 0026, Notes UX-Plan). Ergänzung 2026-11-04 (Owner-Entscheidung): **Der Installationsassistent fragt keinen Medienordner mehr ab**, Bibliotheken werden danach direkt in der Mivo-App eingerichtet. Die SPKs von 0.1.0-alpha.2 behalten den Assistenten (sonst gäbe es dort keinen Weg, eine Bibliothek anzulegen); ab dem Release nach alpha.2 entfällt die Ordnerfrage (Aufgabe SPK-17, nach der Bibliotheksverwaltung aus Meilenstein 3, M3-19) |
 
+## Ziel: raus aus der Alpha – stabiler erster Entwurf (Owner, 2026-11-04)
+
+Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Vorschlag zur Definition
+(Owner bestätigt oder ändert):
+
+- **Stufen:** `0.1.0-alpha.N` (jetzt) → `0.1.0-beta.1` (Funktionsumfang komplett) → `0.1.0-rc.N`
+  (nur noch Fehlerbehebung) → **`0.1.0`** (erster stabiler Entwurf). Versionen nach SemVer, jede
+  Änderung bekommt eine neue Nummer.
+- **Funktionsumfang für beta.1:** Meilenstein 3 (Bibliotheken inkl. Bibliotheksverwaltung in der
+  App), 6 (TMDB-Metadaten, Bearbeiten-Dialog), 5 (komplette Web-UI nach `docs/design/ux-spec.md`),
+  4 (Untertitel, Tonspur, Hardware-Beschleunigung) und 7 (Konten, PIN, Weiterschauen). Docker und
+  Synology-SPK bleiben die Verteilungswege.
+- **Stabilitätskriterien für 0.1.0:** alle Qualitäts-Gates grün; Wiedergabematrix des
+  Testkorpus bestanden; auf der DS925+ Installation, Update (alpha → beta → 0.1.0), Wiedergabe,
+  Deinstallation und Datenübernahme geprüft; keine bekannten Datenverlust- oder
+  Sicherheitsfehler; offene Backlog-Zeilen „vor Release“ abgearbeitet; Doku (Docker-/Synology-
+  Anleitung, Release-Notes) vollständig; Update-Pfad ohne Neuaufbau des Katalogs (ab beta.1).
+- **Nicht nötig für 0.1.0:** DLNA/Chromecast (8), Fernzugriff (7b), LG-App (10), Live-TV –
+  folgen nach dem ersten stabilen Stand.
+
 ## Offene Entscheidungen (Stand 2026-11-04)
 
 Vom Owner zu entscheiden; der Architekt entscheidet sie nicht. OD-UX-2 ist entschieden (B); OD-UX-1 und OD-UX-3 sind offen.
