@@ -16,7 +16,7 @@ import (
 // and the periodic scan covers what watching cannot see (scan.interval).
 func (app application) newScanTrigger(db *sqlite.DB, scans *appscan.Service) (*scantrigger.Trigger, error) {
 	trigger, err := scantrigger.New(scantrigger.Dependencies{
-		Libraries: sqlite.NewLibraryRepository(db, time.Now),
+		Libraries: sqlite.NewScanLibrarySource(db, time.Now),
 		Scanner:   scans,
 		Watcher:   watcher.New(),
 		Clock:     scantrigger.SystemClock{},

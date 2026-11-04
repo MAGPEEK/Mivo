@@ -25,6 +25,8 @@ const (
 	// EvaluationInterval is the tick of the debounce; the quiet period ends at most this
 	// late, which is negligible against 30 s.
 	EvaluationInterval = 5 * time.Second
+	// RetryDelay is how long a due scan waits after the scanner failed to start it.
+	RetryDelay = time.Minute
 )
 
 // Log messages; the fallback depends on whether the periodic scan is on.
@@ -37,6 +39,7 @@ const (
 	reasonPeriodic        = "periodic"
 	scanStartedMessage    = "automatic scan started"
 	scanNotStartedMessage = "automatic scan could not start"
+	ignoredEventMessage   = "automatic scans: ignoring event for an unknown library"
 )
 
 // errWatchEnded reports a watch that ended without an error while it should still run.
@@ -62,7 +65,8 @@ type Dependencies struct {
 }
 
 // Trigger starts scans after file system changes and periodically. Run drives it; the
-// change callbacks of the watches and ReportWatchError may be called concurrently.
+// change callbacks of the watches, the library events and Suspend may be called
+// concurrently. It implements the library manager's ChangeEvents port.
 type Trigger struct {
 	libraries LibraryLister
 	scanner   Scanner
@@ -74,11 +78,17 @@ type Trigger struct {
 	// mutex guards states; the watch goroutines record changes while Run evaluates them.
 	mutex  sync.Mutex
 	states map[string]*libraryState
+	// startGate serializes scan starts with Suspend.
+	startGate sync.Mutex
+	// events carries library events to Run's loop, which owns all watch starts.
+	events *eventQueue
 	// lastCheck and the watch group are used by Run's goroutine only.
 	lastCheck time.Time
 	watches   sync.WaitGroup
-	// afterTick, when set by a test, is called after each handled tick.
-	afterTick func()
+	// afterTick and afterEvents, when set by a test, are called after each handled tick and
+	// batch of library events.
+	afterTick   func()
+	afterEvents func()
 }
 
 // New validates the dependencies and returns a Trigger. A missing dependency or a negative
@@ -96,6 +106,7 @@ func New(dependencies Dependencies) (*Trigger, error) {
 		logger:    dependencies.Logger,
 		settings:  dependencies.Settings,
 		states:    map[string]*libraryState{},
+		events:    newEventQueue(),
 	}, nil
 }
 
@@ -141,7 +152,10 @@ func (trigger *Trigger) Run(ctx context.Context) {
 		// Watches run on contexts derived from ctx, so they are ending already.
 		trigger.watches.Wait()
 		trigger.forgetLibraries()
+		trigger.events.close()
 	}()
+
+	trigger.events.open()
 
 	trigger.check(ctx, trigger.clock.Now())
 
@@ -149,6 +163,8 @@ func (trigger *Trigger) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-trigger.events.wake:
+			trigger.handleEvents(ctx)
 		case now := <-ticker.Ticks():
 			trigger.tick(ctx, now)
 		}
@@ -172,13 +188,13 @@ func (trigger *Trigger) tick(ctx context.Context, now time.Time) {
 func (trigger *Trigger) check(ctx context.Context, now time.Time) {
 	trigger.lastCheck = now
 
-	summaries, err := trigger.libraries.ListLibraries(ctx)
+	libraries, err := trigger.libraries.ListLibraries(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
 			trigger.logger.Warn("automatic scans: cannot list libraries", slog.String("error", err.Error()))
 		}
 	} else {
-		trigger.syncLibraries(ctx, summaries, now)
+		trigger.syncLibraries(ctx, libraries, now)
 	}
 
 	if trigger.settings.Interval > 0 {
@@ -186,18 +202,60 @@ func (trigger *Trigger) check(ctx context.Context, now time.Time) {
 	}
 }
 
-// start starts a scan; reason tells the log why.
-func (trigger *Trigger) start(ctx context.Context, libraryID, reason string) {
+// startOutcome tells what start did.
+type startOutcome int
+
+const (
+	// startSkipped: the library is suspended or gone.
+	startSkipped startOutcome = iota
+	// startFailed: the scanner refused or failed; the caller may retry later.
+	startFailed
+	// startStarted: the scan runs (or already did).
+	startStarted
+)
+
+// start starts a scan unless the library is suspended or gone; reason tells the log why. The
+// gate makes Suspend wait for a start in flight.
+func (trigger *Trigger) start(ctx context.Context, libraryID, reason string) startOutcome {
+	trigger.startGate.Lock()
+	defer trigger.startGate.Unlock()
+
+	if !trigger.mayStart(libraryID) {
+		return startSkipped
+	}
+
+	if err := trigger.startScan(ctx, libraryID, reason); err != nil {
+		return startFailed
+	}
+
+	return startStarted
+}
+
+// mayStart reports whether the library is known and not suspended.
+func (trigger *Trigger) mayStart(libraryID string) bool {
+	now := trigger.clock.Now()
+
+	trigger.mutex.Lock()
+	defer trigger.mutex.Unlock()
+
+	state := trigger.states[libraryID]
+
+	return state != nil && !state.held(now)
+}
+
+func (trigger *Trigger) startScan(ctx context.Context, libraryID, reason string) error {
 	if _, err := trigger.scanner.Start(ctx, libraryID); err != nil {
 		if ctx.Err() == nil {
 			trigger.logger.Warn(scanNotStartedMessage, slog.String("library", libraryID),
 				slog.String("reason", reason), slog.String("error", err.Error()))
 		}
 
-		return
+		return fmt.Errorf("start scan of library %s: %w", libraryID, err)
 	}
 
 	trigger.logger.Info(scanStartedMessage, slog.String("library", libraryID), slog.String("reason", reason))
+
+	return nil
 }
 
 // fallback names what keeps the library current when watching fails.

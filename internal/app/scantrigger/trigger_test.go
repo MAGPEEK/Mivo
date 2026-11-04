@@ -18,16 +18,29 @@ const (
 	defaultInterval = 12 * time.Hour
 	// watchWarning is the text of the warning logged when a library cannot be watched.
 	watchWarning = "relying on the periodic scan"
+
+	moviesRoot = "/media/movies"
+	showsRoot  = "/media/shows"
 )
+
+// managed builds a library with one folder per path.
+func managed(id, name string, paths ...string) library.ManagedLibrary {
+	folders := make([]library.Folder, 0, len(paths))
+	for _, path := range paths {
+		folders = append(folders, library.Folder{ID: "folder-" + path, Path: path})
+	}
+
+	return library.ManagedLibrary{ID: id, Name: name, Kind: library.KindMovies, Folders: folders}
+}
 
 func startTime() time.Time { return time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC) }
 
-func movies() library.Library {
-	return library.Library{ID: "movies-id", Name: "Movies", Root: "/media/movies"}
+func movies() library.ManagedLibrary {
+	return managed("movies-id", "Movies", moviesRoot)
 }
 
-func shows() library.Library {
-	return library.Library{ID: "shows-id", Name: "Shows", Root: "/media/shows"}
+func shows() library.ManagedLibrary {
+	return managed("shows-id", "Shows", showsRoot)
 }
 
 // harness runs one Trigger against fakes.
@@ -40,10 +53,11 @@ type harness struct {
 	trigger   *scantrigger.Trigger
 	settings  scantrigger.Settings
 	cancel    context.CancelFunc
+	events    chan struct{}
 	done      chan struct{}
 }
 
-func newHarness(t *testing.T, settings scantrigger.Settings, libraries ...library.Library) *harness {
+func newHarness(t *testing.T, settings scantrigger.Settings, libraries ...library.ManagedLibrary) *harness {
 	t.Helper()
 
 	clock := newFakeClock(startTime())
@@ -54,6 +68,7 @@ func newHarness(t *testing.T, settings scantrigger.Settings, libraries ...librar
 		watcher:   newFakeWatcher(),
 		logs:      &logBuffer{},
 		settings:  settings,
+		events:    make(chan struct{}, eventBacklog),
 	}
 
 	trigger, err := scantrigger.New(scantrigger.Dependencies{
@@ -69,6 +84,7 @@ func newHarness(t *testing.T, settings scantrigger.Settings, libraries ...librar
 	}
 
 	scantrigger.SetAfterTick(trigger, clock.tickHandled)
+	scantrigger.SetAfterEvents(trigger, func() { h.events <- struct{}{} })
 	h.trigger = trigger
 
 	return h
@@ -109,14 +125,14 @@ func (h *harness) stop(t *testing.T) {
 }
 
 // watching runs the trigger with the watcher only and waits until root is watched.
-func watching(t *testing.T, libraries ...library.Library) *harness {
+func watching(t *testing.T, libraries ...library.ManagedLibrary) *harness {
 	t.Helper()
 
 	h := newHarness(t, scantrigger.Settings{Watch: true}, libraries...)
 	h.run(t)
 
 	for _, entry := range libraries {
-		h.watcher.waitForAttempt(t, entry.Root)
+		h.watcher.waitForAttempt(t, entry.Folders[0].Path)
 	}
 
 	return h
@@ -194,7 +210,7 @@ func TestChangesStartAScanAfterTheQuietPeriod(t *testing.T) {
 	t.Parallel()
 
 	h := watching(t, movies())
-	root := movies().Root
+	root := moviesRoot
 
 	h.watcher.emit(t, root)
 	h.clock.Advance(t, 29*time.Second)
@@ -221,7 +237,7 @@ func TestContinuousChangesStartAScanAfterTheMaximumDelay(t *testing.T) {
 
 	for elapsed := time.Duration(0); elapsed < scantrigger.MaxDelay; elapsed += step {
 		h.expectStarts(t, movies().ID, 0, "before the maximum delay")
-		h.watcher.emit(t, movies().Root)
+		h.watcher.emit(t, moviesRoot)
 		h.clock.Advance(t, step)
 	}
 
@@ -237,7 +253,7 @@ func TestChangesDuringARunningScanScheduleOneMoreScan(t *testing.T) {
 	h.scanner.setStatus(movies().ID, scan.Status{State: scan.StateRunning, StartedAt: startTime()})
 
 	for range 3 {
-		h.watcher.emit(t, movies().Root)
+		h.watcher.emit(t, moviesRoot)
 		h.clock.Advance(t, scantrigger.QuietPeriod)
 	}
 
@@ -258,9 +274,9 @@ func TestChangesAreDebouncedPerLibrary(t *testing.T) {
 
 	h := watching(t, movies(), shows())
 
-	h.watcher.emit(t, movies().Root)
+	h.watcher.emit(t, moviesRoot)
 	h.clock.Advance(t, 20*time.Second)
-	h.watcher.emit(t, shows().Root)
+	h.watcher.emit(t, showsRoot)
 	h.clock.Advance(t, 10*time.Second)
 
 	h.expectStarts(t, movies().ID, 1, "30 s after the movies change")
@@ -374,19 +390,19 @@ func TestWatchFailureIsRetriedAndWarnedOnce(t *testing.T) {
 	t.Parallel()
 
 	h := newHarness(t, scantrigger.Settings{Watch: true, Interval: defaultInterval}, movies())
-	h.watcher.fail(movies().Root, errFake)
+	h.watcher.fail(moviesRoot, errFake)
 	h.run(t)
-	h.watcher.waitForAttempt(t, movies().Root)
+	h.watcher.waitForAttempt(t, moviesRoot)
 	h.logs.waitFor(t, watchWarning)
 
 	for range 3 {
-		h.checkUntilWatched(t, movies().Root)
+		h.checkUntilWatched(t, moviesRoot)
 	}
 
 	h.expectStarts(t, movies().ID, 0, "while the watch fails")
 
-	h.watcher.fail(movies().Root, nil)
-	h.checkUntilWatched(t, movies().Root)
+	h.watcher.fail(moviesRoot, nil)
+	h.checkUntilWatched(t, moviesRoot)
 
 	h.clock.Advance(t, scantrigger.QuietPeriod)
 	h.expectStarts(t, movies().ID, 1, "after the retried watch was ready, without a change")
@@ -414,9 +430,9 @@ func TestWatchFailureWithoutPeriodicScanSaysSo(t *testing.T) {
 	t.Parallel()
 
 	h := newHarness(t, scantrigger.Settings{Watch: true}, movies())
-	h.watcher.fail(movies().Root, errFake)
+	h.watcher.fail(moviesRoot, errFake)
 	h.run(t)
-	h.watcher.waitForAttempt(t, movies().Root)
+	h.watcher.waitForAttempt(t, moviesRoot)
 	h.logs.waitFor(t, "changes appear after the next manual scan")
 
 	if got := h.logs.count(watchWarning); got != 0 {
@@ -431,12 +447,12 @@ func TestDegradedWatchWarnsOncePerLibrary(t *testing.T) {
 
 	h := newHarness(t, scantrigger.Settings{Watch: true, Interval: defaultInterval}, movies(), shows())
 	h.run(t)
-	h.watcher.waitForAttempt(t, movies().Root)
-	h.watcher.waitForAttempt(t, shows().Root)
+	h.watcher.waitForAttempt(t, moviesRoot)
+	h.watcher.waitForAttempt(t, showsRoot)
 
-	h.watcher.degrade(t, movies().Root, errFake)
-	h.watcher.degrade(t, movies().Root, errFake)
-	h.watcher.degrade(t, shows().Root, errFake)
+	h.watcher.degrade(t, moviesRoot, errFake)
+	h.watcher.degrade(t, moviesRoot, errFake)
+	h.watcher.degrade(t, showsRoot, errFake)
 
 	if got := h.logs.count("only partly watched; " + watchWarning); got != 2 {
 		t.Errorf("%d watch warnings, want one per library; log:\n%s", got, h.logs)
@@ -450,15 +466,15 @@ func TestLibraryChangesStartAndStopWatches(t *testing.T) {
 
 	h.libraries.set(shows())
 	h.clock.Advance(t, scantrigger.CheckInterval)
-	h.watcher.waitForAttempt(t, shows().Root)
-	h.watcher.waitUntilInactive(t, movies().Root)
+	h.watcher.waitForAttempt(t, showsRoot)
+	h.watcher.waitUntilInactive(t, moviesRoot)
 
 	moved := shows()
-	moved.Root = "/media/series"
+	moved.Folders = []library.Folder{{Path: "/media/series"}}
 	h.libraries.set(moved)
 	h.clock.Advance(t, scantrigger.CheckInterval)
-	h.watcher.waitForAttempt(t, moved.Root)
-	h.watcher.waitUntilInactive(t, shows().Root)
+	h.watcher.waitForAttempt(t, moved.Folders[0].Path)
+	h.watcher.waitUntilInactive(t, showsRoot)
 
 	if got := h.watcher.activeWatches(); got != 1 {
 		t.Errorf("%d active watches, want 1", got)
@@ -470,7 +486,7 @@ func TestChangesOfARemovedLibraryAreDropped(t *testing.T) {
 	t.Parallel()
 
 	h := watching(t, movies())
-	h.watcher.emit(t, movies().Root)
+	h.watcher.emit(t, moviesRoot)
 
 	h.libraries.set()
 	h.clock.Advance(t, scantrigger.CheckInterval)
@@ -485,7 +501,7 @@ func TestListFailureKeepsTheKnownLibraries(t *testing.T) {
 
 	h.libraries.failWith(errFake)
 	h.clock.Advance(t, scantrigger.CheckInterval)
-	h.watcher.emit(t, movies().Root)
+	h.watcher.emit(t, moviesRoot)
 	h.clock.Advance(t, scantrigger.QuietPeriod)
 
 	h.expectStarts(t, movies().ID, 1, "after a failed library refresh")
@@ -495,19 +511,24 @@ func TestListFailureKeepsTheKnownLibraries(t *testing.T) {
 	}
 }
 
-func TestStartFailureIsLoggedAndNotRetriedUntilTheNextChange(t *testing.T) {
+func TestStartFailureIsLoggedOnceAndRetriedAfterTheRetryDelay(t *testing.T) {
 	t.Parallel()
 
 	h := watching(t, movies())
 	h.scanner.failStarts(errFake)
 
-	h.watcher.emit(t, movies().Root)
+	h.watcher.emit(t, moviesRoot)
 	h.clock.Advance(t, scantrigger.QuietPeriod)
 	h.clock.Advance(t, scantrigger.QuietPeriod)
 
 	if got := h.logs.count("automatic scan could not start"); got != 1 {
 		t.Errorf("log:\n%s\nwant one failed start", h.logs)
 	}
+
+	// The due scan is kept and retried after RetryDelay, without a new change.
+	h.scanner.failStarts(nil)
+	h.clock.Advance(t, scantrigger.RetryDelay)
+	h.expectStarts(t, movies().ID, 1, "after the retry delay")
 }
 
 // Run returns only after every watch it started has ended.

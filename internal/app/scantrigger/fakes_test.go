@@ -106,11 +106,11 @@ func (ticker fakeTicker) Stop() {
 // memoryLibraries is an in-memory library list.
 type memoryLibraries struct {
 	mutex     sync.Mutex
-	libraries []library.Library
+	libraries []library.ManagedLibrary
 	listErr   error
 }
 
-func (source *memoryLibraries) ListLibraries(context.Context) ([]library.Summary, error) {
+func (source *memoryLibraries) ListLibraries(context.Context) ([]library.ManagedLibrary, error) {
 	source.mutex.Lock()
 	defer source.mutex.Unlock()
 
@@ -118,15 +118,23 @@ func (source *memoryLibraries) ListLibraries(context.Context) ([]library.Summary
 		return nil, source.listErr
 	}
 
-	summaries := make([]library.Summary, 0, len(source.libraries))
-	for _, entry := range source.libraries {
-		summaries = append(summaries, library.Summary{Library: entry})
-	}
-
-	return summaries, nil
+	return slices.Clone(source.libraries), nil
 }
 
-func (source *memoryLibraries) set(libraries ...library.Library) {
+func (source *memoryLibraries) GetLibrary(_ context.Context, libraryID string) (library.ManagedLibrary, error) {
+	source.mutex.Lock()
+	defer source.mutex.Unlock()
+
+	for _, entry := range source.libraries {
+		if entry.ID == libraryID {
+			return entry, nil
+		}
+	}
+
+	return library.ManagedLibrary{}, fmt.Errorf("library %s: %w", libraryID, domain.ErrNotFound)
+}
+
+func (source *memoryLibraries) set(libraries ...library.ManagedLibrary) {
 	source.mutex.Lock()
 	defer source.mutex.Unlock()
 

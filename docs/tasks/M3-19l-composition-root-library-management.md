@@ -22,6 +22,14 @@ libraries once, and serves library management and the folder browser; Docker sta
       `ScanControl`, `scantrigger` as `LibraryEvents`; the HTTP server gets the management
       handlers, the guard and `libraryKinds` (`movies`, `shows`); `install.kind` and the
       service user reach `listFolderRoots`.
+- [ ] Update/delete call order (ADR 0028 §Scan coordination): the library manager declares a
+      small consumer-side port `Suspend(libraryID)` (satisfied by `*scantrigger.Trigger`; the
+      `ScanControl` adapter in cmd may carry it) and calls, in this order: `Suspend`, `Cancel`,
+      `WaitIdle`, update/delete in the store, the change event (`Added`/`Changed`/`Removed` to the
+      Trigger), and on removal `scan.Service.Forget(id)`. The Trigger's 2 min `HoldTimeout` is a
+      safety net for a rejected update only. The port is not added to `app/library/manage_ports.go`
+      by M3-19j (the existing `ScanControl` does not match `scan.Service` anyway, so cmd adapts
+      it); 19l adds it with the manager change and its fakes.
 - [ ] Docker image (OD-M3-7 A; if the owner chose B, only add the two new variables):
       `MIVO_LIBRARIES=/media` is replaced by `MIVO_BROWSE_ROOTS=/media` and
       `MIVO_INSTALL_KIND=docker`; `packaging/docker/README.md` and `docker-compose.yml` say: mount

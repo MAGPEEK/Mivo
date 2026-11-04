@@ -22,8 +22,15 @@ func (trigger *Trigger) startDebouncedScans(ctx context.Context, now time.Time) 
 			continue
 		}
 
-		trigger.clearDue(libraryID)
-		trigger.start(ctx, libraryID, reasonWatch)
+		// A suspended library keeps its due scan for after the library change; a failed
+		// start keeps it too and is retried after RetryDelay, not at every tick.
+		switch trigger.start(ctx, libraryID, reasonWatch) {
+		case startStarted:
+			trigger.clearDue(libraryID)
+		case startFailed:
+			trigger.delayRetry(libraryID, now)
+		case startSkipped:
+		}
 	}
 }
 
@@ -44,12 +51,22 @@ func (trigger *Trigger) collectDue(now time.Time) []string {
 			state.due = true
 		}
 
-		if state.due {
+		if state.due && !now.Before(state.retryAt) {
 			due = append(due, libraryID)
 		}
 	}
 
 	return due
+}
+
+// delayRetry keeps a due scan whose start failed back for RetryDelay.
+func (trigger *Trigger) delayRetry(libraryID string, now time.Time) {
+	trigger.mutex.Lock()
+	defer trigger.mutex.Unlock()
+
+	if state := trigger.states[libraryID]; state != nil {
+		state.retryAt = now.Add(RetryDelay)
+	}
 }
 
 func (trigger *Trigger) clearDue(libraryID string) {

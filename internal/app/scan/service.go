@@ -311,6 +311,19 @@ func (service *Service) WaitIdle(ctx context.Context, libraryID string) error {
 	return awaitScan(ctx, scanTracker, "wait for scan of library "+libraryID)
 }
 
+// Forget drops what the service remembers in memory about a library that was deleted: the
+// options of its last scan, the refresh waiting for an unavailable folder and the files known
+// to have no video. Call it after Cancel/WaitIdle, or a scan that is still ending stores them
+// again. It never touches the catalog.
+func (service *Service) Forget(libraryID string) {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	delete(service.lastOptions, libraryID)
+	delete(service.pendingRefresh, libraryID)
+	delete(service.withoutVideo, libraryID)
+}
+
 func (service *Service) trackerOf(libraryID string) *tracker {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()

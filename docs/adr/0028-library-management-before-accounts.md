@@ -36,6 +36,14 @@ expose server directories. The owner now wants libraries managed in the web app
    every client look local; DNS rebinding can make a hostile page same-origin, so a LAN browser
    could add a library below a browse root (the read API has the same exposure today).
 
+8. **Scan coordination.** Before the library manager updates or deletes a library it calls, in
+   this order: `Suspend(libraryID)` (a small port declared by the manager, satisfied by
+   `*scantrigger.Trigger`, so no trigger starts a scan on the old definition), `Cancel`,
+   `WaitIdle`, the store change, then the change event (`Added`/`Changed`/`Removed`) to the
+   Trigger, which lifts the suspension, and on removal `scan.Service.Forget(id)` to drop the
+   in-memory options and refresh state. `HoldTimeout` (2 min) only guards against a change that
+   never arrives.
+
 ## Consequences
 - Supersedes ADR 0022 "Library definitions" (config-only, path identity, "a removed path
   deletes the library", UI creation in M7). Rest of ADR 0022 stands.

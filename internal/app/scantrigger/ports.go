@@ -8,11 +8,13 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// LibraryLister lists the libraries to keep current. Implemented by adapters/sqlite (the
-// same repository the scan service uses).
+// LibraryLister reads the libraries to keep current, with their folders. It is the same
+// source the scan service uses (sqlite.ScanLibrarySource).
 type LibraryLister interface {
+	// GetLibrary returns one library or an error wrapping domain.ErrNotFound.
+	GetLibrary(ctx context.Context, libraryID string) (library.ManagedLibrary, error)
 	// ListLibraries returns every library.
-	ListLibraries(ctx context.Context) ([]library.Summary, error)
+	ListLibraries(ctx context.Context) ([]library.ManagedLibrary, error)
 }
 
 // Scanner starts library scans and reports their state. Implemented by *scan.Service.

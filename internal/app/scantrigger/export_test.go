@@ -5,3 +5,8 @@ package scantrigger
 func SetAfterTick(trigger *Trigger, afterTick func()) {
 	trigger.afterTick = afterTick
 }
+
+// SetAfterEvents makes Run call afterEvents when it has handled a batch of library events.
+func SetAfterEvents(trigger *Trigger, afterEvents func()) {
+	trigger.afterEvents = afterEvents
+}

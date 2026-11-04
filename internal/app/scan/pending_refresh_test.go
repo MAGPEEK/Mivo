@@ -108,3 +108,27 @@ func TestFilesWithoutVideoInAnUnavailableFolderAreNotProbedAgain(t *testing.T) {
 		t.Errorf("file without video probed %d times, want once", count)
 	}
 }
+
+// A deleted library must not leave its remembered options behind: a library created later
+// under the same ID starts like a new one, so an option change is not "due" for it.
+func TestForgetDropsTheRememberedOptionsOfALibrary(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	h.useLibrary(multiFolder(library.KindMovies))
+	service := h.start(t)
+	h.walker.set(firstPath, walkResult{files: []library.FileState{fileAt(heatPath, 1)}})
+	h.walker.set(secondPath, walkResult{files: []library.FileState{fileAt("Alien (1979).mkv", 2)}})
+	h.scan(t, multiID)
+
+	changed := multiFolder(library.KindMovies)
+	changed.Options.LocalArtwork = false
+	h.useLibrary(changed)
+
+	service.Forget(multiID)
+	h.scan(t, multiID)
+
+	if got := h.requestedItems(); len(got) != 0 {
+		t.Errorf("requested %v after Forget, want none: the options are unknown again", got)
+	}
+}
