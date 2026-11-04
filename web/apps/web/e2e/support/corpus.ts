@@ -1,7 +1,8 @@
 // The small test corpus the playback specs scan and play, generated with the repository's
 // corpus generator (scripts/gen-testmedia) into the library of the E2E server.
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { mkdir, rename, rm } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 import { assertCommandAvailable, runCommand } from "./commands";
 
@@ -9,14 +10,17 @@ import { assertCommandAvailable, runCommand } from "./commands";
 export interface CorpusClip {
   /** gen-testmedia case name. */
   readonly caseName: string;
-  /** Path below the output directory, as gen-testmedia writes it. */
+  /** Path below the generator's output directory, as gen-testmedia writes it. */
   readonly relativePath: string;
   /**
-   * Title the scanner derives from the file name ("." and "_" become spaces). Two clips may
-   * share it, e.g. `h264_aac.mkv` and `h264_aac.flv`.
+   * Path below the library root. The library is a movies library (`Title (Year)/` folders),
+   * where the title comes from the name and files of one movie merge into versions; every
+   * clip is therefore its own movie with a name the title parser keeps as it is.
    */
+  readonly libraryPath: string;
+  /** Title of the clip's movie, as the library grid and the detail page show it. */
   readonly title: string;
-  /** Technical chip of the clip's card, which tells clips with the same title apart. */
+  /** Technical chip of the clip's card. */
   readonly chip: string;
 }
 
@@ -24,7 +28,8 @@ export interface CorpusClip {
 export const webmClip: CorpusClip = {
   caseName: "video-webm-vp9-opus",
   relativePath: "video/vp9_opus.webm",
-  title: "vp9 opus",
+  libraryPath: "Open Codecs (2001)/Open Codecs (2001).webm",
+  title: "Open Codecs",
   chip: "WebM · VP9 · Opus",
 };
 
@@ -32,7 +37,8 @@ export const webmClip: CorpusClip = {
 export const mp4Clip: CorpusClip = {
   caseName: "video-mp4-h264-aac-faststart",
   relativePath: "video/h264_aac_faststart.mp4",
-  title: "h264 aac faststart",
+  libraryPath: "Plain Fast (2001)/Plain Fast (2001).mp4",
+  title: "Plain Fast",
   chip: "MP4 · H.264 · AAC",
 };
 
@@ -43,7 +49,8 @@ export const mp4Clip: CorpusClip = {
 export const mkvClip: CorpusClip = {
   caseName: "video-mkv-h264-aac",
   relativePath: "video/h264_aac.mkv",
-  title: "h264 aac",
+  libraryPath: "Matroska Movie (2001)/Matroska Movie (2001).mkv",
+  title: "Matroska Movie",
   chip: "MKV · H.264 · AAC",
 };
 
@@ -51,7 +58,8 @@ export const mkvClip: CorpusClip = {
 export const flvClip: CorpusClip = {
   caseName: "video-flv-h264-aac",
   relativePath: "video/h264_aac.flv",
-  title: "h264 aac",
+  libraryPath: "Flash Movie (2001)/Flash Movie (2001).flv",
+  title: "Flash Movie",
   chip: "FLV · H.264 · AAC",
 };
 
@@ -59,7 +67,9 @@ export const flvClip: CorpusClip = {
 export const aviClip: CorpusClip = {
   caseName: "video-avi-xvid-mp3",
   relativePath: "video/mpeg4_xvid_mp3.avi",
-  title: "mpeg4 xvid mp3",
+  // Not called "Xvid ...": the title parser treats codec names as release noise.
+  libraryPath: "Legacy Movie (2001)/Legacy Movie (2001).avi",
+  title: "Legacy Movie",
   chip: "AVI · MPEG-4 · MP3",
 };
 
@@ -70,7 +80,8 @@ export const aviClip: CorpusClip = {
 export const longMkvClip: CorpusClip = {
   caseName: "video-mkv-h264-aac-long",
   relativePath: "video/h264_aac_long.mkv",
-  title: "h264 aac long",
+  libraryPath: "Long Seek (2001)/Long Seek (2001).mkv",
+  title: "Long Seek",
   chip: "MKV · H.264 · AAC",
 };
 
@@ -104,24 +115,33 @@ export function assertFFmpegAvailable(): void {
 }
 
 /**
- * Generates {@link corpusClips} into `outputDirectory`.
+ * Generates {@link corpusClips} and moves each clip to its `libraryPath` below `libraryRoot`.
+ * The generator writes to a sibling staging directory, so the library never contains the
+ * generator's own layout.
  * @throws Error when the generator fails or skipped a clip, e.g. because the installed FFmpeg
  *   lacks an encoder.
  */
-export async function generateCorpus(outputDirectory: string): Promise<void> {
+export async function generateCorpus(libraryRoot: string): Promise<void> {
+  const staging = join(dirname(libraryRoot), "corpus-staging");
   const only = corpusClips.map((clip) => clip.caseName).join(",");
   await runCommand(
     "go",
-    ["run", "./scripts/gen-testmedia", "-only", only, "-out", outputDirectory],
-    { timeoutMs: generateTimeoutMs },
+    ["run", "./scripts/gen-testmedia", "-only", only, "-out", staging, "-library", ""],
+    {
+      timeoutMs: generateTimeoutMs,
+    },
   );
-  const missing = corpusClips.filter(
-    (clip) => !existsSync(join(outputDirectory, clip.relativePath)),
-  );
+  const missing = corpusClips.filter((clip) => !existsSync(join(staging, clip.relativePath)));
   if (missing.length > 0) {
     throw new Error(
       `gen-testmedia skipped ${missing.map((clip) => clip.caseName).join(", ")}; the installed ` +
-        `FFmpeg probably lacks an encoder. See ${join(outputDirectory, "manifest.json")}.`,
+        `FFmpeg probably lacks an encoder. See ${join(staging, "manifest.json")}.`,
     );
   }
+  for (const clip of corpusClips) {
+    const target = join(libraryRoot, clip.libraryPath);
+    await mkdir(dirname(target), { recursive: true });
+    await rename(join(staging, clip.relativePath), target);
+  }
+  await rm(staging, { recursive: true, force: true });
 }

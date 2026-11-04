@@ -4,6 +4,7 @@ import { productId } from "@mivo/ui-tokens";
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
+  cp,
   mkdir,
   mkdtemp,
   open,
@@ -11,6 +12,7 @@ import {
   readFile,
   rm,
   stat,
+  writeFile,
   type FileHandle,
 } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -45,9 +47,9 @@ const temporaryRootPrefix = `${productId}-e2e-`;
 
 // A cold build compiles the whole module and its dependencies; a hung toolchain must still
 // fail the run instead of blocking it.
-const buildTimeoutMs = 5 * 60_000;
+export const buildTimeoutMs = 5 * 60_000;
 const healthPath = "/api/v1/health";
-const startupTimeoutMs = 30_000;
+export const startupTimeoutMs = 30_000;
 const healthPollIntervalMs = 100;
 const healthRequestTimeoutMs = 1_000;
 // Time the server gets per stop signal before the next, harder one.
@@ -65,8 +67,9 @@ export interface E2EServer {
   /** Origin the server listens on, e.g. `http://127.0.0.1:53124`. */
   readonly baseUrl: string;
   /**
-   * Root of the server's only library, created empty. The server names a library after the
-   * last element of its root, so the library is called {@link e2eLibraryName}.
+   * Root of the server's default library, created empty. The server names a library after the
+   * last element of its root, so the library is called {@link e2eLibraryName}. With typed
+   * `libraries` it is an unused empty folder, because the configured libraries are separate.
    */
   readonly mediaDirectory: string;
   /** The server's transcode directory; sessions live in its `sessions` subdirectory. */
@@ -75,10 +78,25 @@ export interface E2EServer {
   readonly stop: () => Promise<void>;
 }
 
+/** A typed library for the config file of {@link startE2EServer}. */
+export interface E2ELibrary {
+  /** Display name; the library folder below the run's root is named the same. */
+  readonly name: string;
+  readonly kind: "movies" | "shows";
+  /** Directory whose content is copied into the library before the server starts. */
+  readonly copyFrom: string;
+}
+
 /** Options of {@link startE2EServer}. */
 export interface E2EServerOptions {
   /** File that receives the server's log output, kept for debugging failed runs. */
   readonly logFile: string;
+  /**
+   * Typed libraries written to a generated config.yaml. Without them the server gets its single
+   * empty `media` library through the environment variable. The variable is left unset for
+   * typed libraries, because it would replace the configured list (ADR 0018).
+   */
+  readonly libraries?: readonly E2ELibrary[];
 }
 
 /**
@@ -99,7 +117,10 @@ export async function startE2EServer(options: E2EServerOptions): Promise<E2EServ
   try {
     const binary = await buildServer(root);
     const port = await findFreePort();
-    const running = await launch(binary, await isolatedEnvironment(root, port), options.logFile);
+    const typedLibraries = options.libraries ?? [];
+    await writeTypedLibraries(root, typedLibraries);
+    const environment = await isolatedEnvironment(root, port, typedLibraries.length === 0);
+    const running = await launch(binary, environment, options.logFile);
     launched = running;
     const baseUrl = `http://${loopbackHost}:${String(port)}`;
     await waitUntilHealthy(baseUrl, running.exited, options.logFile);
@@ -188,6 +209,32 @@ async function buildServer(root: string): Promise<string> {
   return binary;
 }
 
+// Copies the fixtures into their library folders and writes the config file that lists them.
+// JSON strings are valid YAML scalars and keep Windows backslashes intact.
+async function writeTypedLibraries(root: string, libraries: readonly E2ELibrary[]): Promise<void> {
+  if (libraries.length === 0) {
+    return;
+  }
+  const entries: string[] = [];
+  for (const library of libraries) {
+    const path = join(root, library.name);
+    await cp(library.copyFrom, path, { recursive: true });
+    entries.push(
+      `  - name: ${JSON.stringify(library.name)}
+    path: ${JSON.stringify(path)}
+    kind: ${library.kind}
+`,
+    );
+  }
+  const configDirectory = join(root, "config");
+  await mkdir(configDirectory, { recursive: true });
+  await writeFile(
+    join(configDirectory, "config.yaml"),
+    `libraries:
+${entries.join("")}`,
+  );
+}
+
 function mediaDirectoryOf(root: string): string {
   return join(root, e2eLibraryName);
 }
@@ -218,10 +265,14 @@ async function findFreePort(): Promise<number> {
 
 /**
  * The inherited environment without any server setting, plus server and OS base directories
- * and the library root that all point into `root`. OS directories are replaced as well, so a default the server
- * derives from them can never reach the real profile.
+ * and the library root that all point into `root`. OS directories are replaced as well, so a
+ * default the server derives from them can never reach the real profile.
  */
-async function isolatedEnvironment(root: string, port: number): Promise<NodeJS.ProcessEnv> {
+async function isolatedEnvironment(
+  root: string,
+  port: number,
+  singleLibrary: boolean,
+): Promise<NodeJS.ProcessEnv> {
   const home = join(root, "home");
   const temporary = join(root, "tmp");
   const directories: Record<string, string> = {
@@ -239,9 +290,11 @@ async function isolatedEnvironment(root: string, port: number): Promise<NodeJS.P
     [`${envPrefix}PATHS_DATA`]: join(root, "data"),
     [`${envPrefix}PATHS_CACHE`]: join(root, "cache"),
     [`${envPrefix}PATHS_TRANSCODE`]: transcodeDirectoryOf(root),
-    // The only library. The server scans it at startup, while it is still empty.
-    [`${envPrefix}LIBRARIES`]: mediaDirectoryOf(root),
   };
+  if (singleLibrary) {
+    // The only library. The server scans it at startup, while it is still empty.
+    directories[`${envPrefix}LIBRARIES`] = mediaDirectoryOf(root);
+  }
   await Promise.all(Object.values(directories).map((path) => mkdir(path, { recursive: true })));
   const overrides: Record<string, string> = {
     ...directories,
