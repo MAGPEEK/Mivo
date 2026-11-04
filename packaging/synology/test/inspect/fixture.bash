@@ -183,6 +183,9 @@ EOF
 
 # Sizes of the main menu icons (DSM's {0} of the config's "icon").
 readonly FIXTURE_DESKTOP_ICON_SIZES="16 24 32 48 64 72 256"
+# Keys of the main menu entry as jq's `keys` lists them (sorted).
+# shellcheck disable=SC2034 # used by inspect-spk.bats
+readonly FIXTURE_DESKTOP_KEYS="advanceGrantPrivilege,allUsers,desc,grantPrivilege,icon,port,protocol,title,type,url"
 
 # fixture_desktop_config: ui/config as spkmeta renders it for the fixture package.
 fixture_desktop_config() {
@@ -273,9 +276,15 @@ pack_outer() {
 # size as eight big-endian bytes - and fixes the header checksum. GNU tar still reads the
 # member; the form normally appears only for members of 8 GiB and more.
 base256_size() {
-	local tar=$1 header=${2:-0} size sum
+	local tar=$1 header=${2:-0} size
 	size=$((8#$(dd if="$tar" bs=1 skip=$((header + 124)) count=11 2>/dev/null)))
 	{ byte 128; be 3 0; be 8 "$size"; } | patch_bytes "$tar" $((header + 124))
+	fix_header_checksum "$tar" "$header"
+}
+
+# fix_header_checksum <tar> <header offset>: recomputes the checksum of a patched header.
+fix_header_checksum() {
+	local tar=$1 header=$2 sum
 	printf '        ' | patch_bytes "$tar" $((header + 148))
 	sum=$(od -An -v -tu1 -j "$header" -N 512 "$tar" |
 		awk '{ for (i = 1; i <= NF; i++) s += $i } END { print s }')

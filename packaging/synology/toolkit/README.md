@@ -394,8 +394,9 @@ text such as the umlaut above passes through unchanged.
 produced against ADR 0026 and its Notes; SPK-11, SPK-12 and SPK-13 run it on the files they
 test or publish. POSIX `sh`, run in the image of `test/inspect/Dockerfile` (`debian:stable-slim`
 plus `xz-utils`, `jq` and `bats`; the slim image has no `xz`). The script needs GNU tar, xz, jq,
-od, dd, awk, sed, grep, sort, uniq, find, du, cut, wc, tr, head, mkdir, rm, mktemp and sha256sum
-and checks for all of them before it starts (exit 2 when one is missing). From the repository root:
+od, dd, awk, sed, grep, sort, uniq, find, du, cut, wc, tr, head, mkdir, rm, mktemp,
+sha256sum and dirname, and checks for all of them before it starts (exit 2 when one is
+missing). From the repository root:
 
 ```powershell
 docker build -t spk-inspect:dev packaging/synology/test/inspect
@@ -403,7 +404,7 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (53 cases on a synthetic SPK of fixture.bash) and shellcheck
+# tests of the script (57 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -415,43 +416,55 @@ In Git Bash prefix the commands with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)"` 
 inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <family>
 ```
 
-One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line; exit
-0 when nothing failed, 1 on any failure, 2 on a usage error or a missing tool. An archive tar
-cannot list or extract is a failure (exit 1), not a usage error. The 88 checks per SPK: the
-outer archive is an uncompressed tar (GNU or ustar/pax headers; the header walk reads GNU
-base-256 sizes big-endian); before anything is extracted, each archive's listing holds only
-files and directories (no symbolic or hard link, device or FIFO), no absolute name and no `..`
-component - otherwise the inspection stops with exit 1 and extracts nothing - and extraction
-runs with `--no-same-owner --no-same-permissions` (modes are judged from the listing); its
-members equal `expected-members.txt` (names, modes 0755/0644, every name once - a duplicate
-fails even where a pattern rule allows the name -, no signature, nothing from the build
-environment: `SynoBuildConf`, `build.env`, `prebuilt/`, hidden files, debug files); INFO is
-`key="value"` throughout without `"`, `\`,
-`$` or backquotes, with `package`, `displayname`, `version` (`a.b.c-build`, every number at most
-2^31-1), `beta="yes"` exactly when the build number is below 9000, `arch` of the family
-(`armv7 armada38x monaco` for armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default
-8460), `adminprotocol="http"`, no `adminurl`, `dsmuidir="ui"`, `description`,
-`description_ger`, `maintainer`, `support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none of `thirdparty`,
-`startable`, `changelog`; `package.tgz` is xz, holds the expected members and `bin/<id>`,
-`bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the family's class and machine
-without a program interpreter, with a GNU ABI tag at most the family's oldest DSM 7.2 kernel
-(3.10.108, armv8 4.4.302). The note walk pads names and descriptors to the note segment's
-alignment (8 for `p_align` 8, else 4), so the tag is found behind a build-id or property note.
-Without an ABI note the kernel floor cannot be read from the file: for the Go server that is
-recorded as `info`; for `ffmpeg`/`ffprobe` it is a warning in test and release mode alike (the
-static musl build of SPK-15 carries no note; the SPK-11 smoke test checks its kernel floor
-under `kernelsim`), so a release inspection passes with these two warnings;
-`SOURCE.txt` has one `Status:` and one `Licence:` line plus at least one licence file;
-`port_conf/<id>.sc` has the section, `title`, `desc`, `port_forward="no"` and
-`dst.ports="<port>/tcp"` and `conf/resource` names it; the seven lifecycle scripts start with
-`#!/bin/sh`; `scripts/*`, INFO, `conf/*`, the wizard files, the service file and `ui/config`
-have no CR; every JSON member parses and `conf/privilege` runs as `package` without `root`; the
-icons are PNGs of 64 x 64 and 256 x 256 pixels; the DSM main menu entry (`ui/` of `package.tgz`,
-INFO `dsmuidir`): `ui/config` parses, has `.url` as its only key with exactly one entry whose
-`type` is `url`, `title` INFO `displayname`, `protocol` `http`, `port` INFO `adminport`, `url`
-`/`, `allUsers` `true` and `icon` `images/<id>_{0}.png`, and `ui/images/<id>_<n>.png` are PNGs of
-n x n pixels for n = 16, 24, 32, 48, 64, 72, 256; no text member (icons excluded) holds an
-unreplaced `@NAME@` token.
+One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line;
+exit 0 when nothing failed, 1 on any failure, 2 on a usage error (also an `--expected` list
+without a rule or one grep cannot read) or a missing tool. An archive tar cannot list or
+extract is a failure (exit 1), not a usage error; one that tar fails to extract part-way may
+leave part of it in the temporary work directory, which is removed on every exit. With
+`--members`, a member that cannot be hashed fails instead of printing an empty digest. The 91
+checks per SPK:
+
+- **Archives**: the outer archive is an uncompressed tar (GNU or ustar/pax headers; the header
+  walk reads GNU base-256 sizes big-endian). Before anything is extracted, each archive's
+  listing holds only files and directories (no symbolic or hard link, device or FIFO), no
+  absolute name and no `..` component; otherwise the inspection stops with exit 1 and
+  extracts nothing of that archive. Extraction runs with
+  `--no-same-owner --no-same-permissions` (modes are judged from the listing). The members
+  equal `expected-members.txt`: names, modes 0755/0644, every name once (a duplicate fails
+  even where a pattern rule allows the name), no signature, nothing from the build
+  environment (`SynoBuildConf`, `build.env`, `prebuilt/`, hidden files, debug files). Names are
+  read whole, blanks included. `package.tgz` is xz and holds the expected members. A size
+  field whose first byte is 0x81 to 0xfe (neither octal nor GNU base-256) makes the archive
+  unreadable.
+- **INFO** is `key="value"` throughout without `"`, `\`, `$` or backquotes, with `package`,
+  `displayname`, `version` (`a.b.c-build`, every number at most 2^31-1), `beta="yes"` exactly
+  when the build number is below 9000, `arch` of the family (`armv7 armada38x monaco` for
+  armv7), `os_min_ver="7.2-64570"`, `adminport` (`--port`, default 8460),
+  `adminprotocol="http"`, no `adminurl`, `dsmuidir="ui"`, `description`, `description_ger`,
+  `maintainer`, `support_move="no"`, `extractsize`, `toolkit_version`, `create_time`, and none
+  of `thirdparty`, `startable`, `changelog`.
+- **Binaries**: `bin/<id>`, `bin/ffmpeg`, `bin/ffprobe` are little-endian ELF executables of the
+  family's class and machine without a program interpreter, with a GNU ABI tag at most the
+  family's oldest DSM 7.2 kernel (3.10.108, armv8 4.4.302). The note walk pads names and
+  descriptors to the note segment's alignment (8 for `p_align` 8, else 4), so the tag is found
+  behind a build-id or property note. Without an ABI note the kernel floor cannot be read from
+  the file: for the Go server that is recorded as `info`; for `ffmpeg`/`ffprobe` it is a
+  warning in test and release mode alike (the static musl build of SPK-15 carries no note; the
+  SPK-11 smoke test checks its kernel floor under `kernelsim`), so a release inspection passes
+  with these two warnings. `SOURCE.txt` has one `Status:` and one `Licence:` line plus at
+  least one licence file.
+- **Package files**: `port_conf/<id>.sc` has the section, `title`, `desc`, `port_forward="no"`
+  and `dst.ports="<port>/tcp"`, and `conf/resource` names it; the seven lifecycle scripts start
+  with `#!/bin/sh`; `scripts/*`, INFO, `conf/*`, the wizard files, the service file and
+  `ui/config` have no CR; every JSON member parses and `conf/privilege` runs as `package`
+  without `root`; the icons are PNGs of 64 x 64 and 256 x 256 pixels; no text member (icons
+  excluded) holds an unreplaced `@NAME@` token.
+- **DSM main menu entry** (`ui/` of `package.tgz`, INFO `dsmuidir`): `ui/config` parses and has
+  `.url` as its only key with exactly one entry, whose keys are exactly the ten spkmeta writes
+  and whose `type` is `url`, `title` INFO `displayname`, `protocol` `http`, `port` INFO
+  `adminport`, `url` `/`, `allUsers` `true`, `icon` `images/<id>_{0}.png`, `grantPrivilege`
+  `all` and `advanceGrantPrivilege` `true`; `ui/images/<id>_<n>.png` are PNGs of n x n pixels
+  for n = 16, 24, 32, 48, 64, 72, 256.
 
 **Interim rule** (ADR 0026 Notes): while `SOURCE.txt` says `Status: interim` and `--release` is
 not given, the FFmpeg findings (interim status, a `+nonfree` licence, a dynamically linked
@@ -461,8 +474,9 @@ binary is always held to the strict rule. `--members` appends one line per file 
 (`<sha256> <mode> <archive>:<name>`), the content-level fingerprint SPK-13 compares between the
 inspected and the uploaded files.
 
-**Results on the SPK-07 build of 0.1.0-alpha.2 (2026-10-31, interim FFmpeg pins)**: all three
-SPKs pass in test mode (`69 checks, 0 failed`): x86_64 and armv8 with 6 warnings each (interim
+**Results on the SPK-07 build of 0.1.0-alpha.2 (2026-10-31, interim FFmpeg pins)**, a record
+of that day: the script then ran 69 checks per SPK; the checks added since raise the count to
+the 91 listed above. All three SPKs passed in test mode (`69 checks, 0 failed`): x86_64 and armv8 with 6 warnings each (interim
 status, non-free licence, jellyfin's `ffmpeg` and `ffprobe` dynamically linked with ABI note
 4.18.20 above 3.10.108 / 4.4.302), armv7 with 1 warning (interim status; johnvansickle's build is
 static with ABI note 3.2.0). With `--release` the same SPKs fail with 6 / 6 / 1 failures, as

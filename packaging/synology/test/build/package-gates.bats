@@ -25,6 +25,7 @@ setup() {
 	for tool in ffmpeg ffprobe; do echo "fake $tool" >"$build/$tool"; done
 	echo "--enable-gpl --enable-version3" >"$build/configuration.txt"
 	echo "HAVE_X86ASM=1" >"$build/config-facts.txt"
+	echo "source" >"$archive/ffmpeg-1-source.tar"
 	echo "$(printf '0%.0s' {1..64})  ffmpeg-1-source.tar" >"$archive/ffmpeg-1-source.tar.sha256"
 }
 
@@ -142,6 +143,32 @@ zeros() { printf '0%.0s' $(seq "$1"); }
 	echo "$(zeros 64)  " >"$archive/ffmpeg-1-source.tar.sha256"
 	run_package
 	expect_failure_with "names no archive file"
+}
+
+@test "SOURCE.txt is refused unless the checksum line names an existing archive" {
+	# A hash alone used to pass as its own archive name.
+	zeros 64 >"$archive/ffmpeg-1-source.tar.sha256"
+	echo >>"$archive/ffmpeg-1-source.tar.sha256"
+	run_package
+	expect_failure_with "names no archive file"
+	for line in "$(zeros 64)ffmpeg-1-source.tar" "$(zeros 64)	ffmpeg-1-source.tar"; do
+		echo "$line" >"$archive/ffmpeg-1-source.tar.sha256"
+		run_package
+		expect_failure_with "is not a SHA-256"
+	done
+	echo "$(zeros 64)  ffmpeg-2-source.tar" >"$archive/ffmpeg-1-source.tar.sha256"
+	run_package
+	expect_failure_with "ffmpeg-2-source.tar is not a file in $archive"
+	mkdir "$archive/ffmpeg-2-source.tar"
+	run_package
+	expect_failure_with "ffmpeg-2-source.tar is not a file in $archive"
+	echo "$(zeros 64) *ffmpeg-1-source.tar" >"$archive/ffmpeg-1-source.tar.sha256"
+	run_package
+	[ "$status" -eq 0 ] || {
+		printf 'binary-mode line refused: %s\n' "$output" >&2
+		return 1
+	}
+	grep -qx "Corresponding source: ffmpeg-1-source.tar" "$dest/SOURCE.txt"
 }
 
 @test "SOURCE.txt is refused for a missing, empty or multi-line configuration" {

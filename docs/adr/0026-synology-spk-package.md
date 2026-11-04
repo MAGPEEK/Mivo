@@ -229,6 +229,7 @@ the package log, the privileges the toolkit needs in a container, and which `arc
 | transcode | `$SYNOPKG_PKGTMP/transcode` (OD-SPK-7 A; fallback `$SYNOPKG_PKGVAR/transcode` if SPK-01 finds `tmp` unsuitable) | `<PREFIX>_PATHS_TRANSCODE` |
 | log | `$SYNOPKG_PKGVAR/<id>.log` (+ `.1`) | stdout and stderr redirected by the script |
 | PID file | `$SYNOPKG_PKGVAR/<id>.pid` | written by the script |
+| action lock | `$SYNOPKG_PKGTMP/<id>.lock` (a directory with the file `pid`: holder PID, boot ID) | taken by `start-stop-status` (section 9); `tmp` is wiped on upgrade and uninstall |
 | home | `$SYNOPKG_PKGHOME` if DSM provides it | `HOME` (fontconfig/libass caches later) |
 
 - Directories are created with mode `0750`. `var` and `tmp` lie on a data volume, not the
@@ -297,6 +298,27 @@ the package log, the privileges the toolkit needs in a container, and which `arc
 - `status`: 0 when the PID file names a live process whose `/proc/<pid>/exe` is the package
   binary, 3 when not running (a stale PID file is removed), 150 when the binary is missing or
   not executable.
+- **Action lock** (SPK-13-pre): DSM does not document that it serializes package actions, so
+  `start`, `stop` and `status` read and replace the PID file under a lock, the directory
+  `$SYNOPKG_PKGTMP/<id>.lock` (`mkdir` is atomic) with a file `pid` holding the holder's PID
+  and the boot ID (`/proc/sys/kernel/random/boot_id`). `start` holds it from the PID file check
+  through clearing the transcode directory, rotating the log and the exec of the server until
+  the PID file names the new server, not while it waits for the health check; `stop` holds it
+  only to read the PID file and to remove it after the shutdown, `status` while it judges the
+  PID file. Another action polls for the lock and breaks it:
+  - **at once** when it was taken in an earlier boot (`tmp` survives reboots and PIDs start
+    over), when its holder has exited (a killed script leaves its lock behind), or when the
+    recorded PID is the waiter's own;
+  - **after 10 s** of waiting only when the holder is no longer a `start-stop-status` process
+    (`/proc/<pid>/cmdline` names no such script: a reused PID) or never wrote its PID. A live
+    action is waited for however long it takes, because breaking its lock while it clears a
+    large transcode directory could launch a second server; the waiter names the action it
+    waits for once in the package log.
+  A `mkdir` that fails while the lock directory is gone (the holder released it in between) is
+  retried; a lock that cannot be created at all (no `tmp`) or a broken lock that cannot be
+  removed lets the action run without it. Two waiters that break the same stale lock at the
+  same moment can both proceed (a window of a few instructions); the PID file rules (written
+  by rename, read again before removal) keep that harmless.
 - Logs: the server logs text to stderr; the script redirects it to `$SYNOPKG_PKGVAR/<id>.log`
   and rotates it at start when it exceeds 10 MiB (one old file kept). Whether Package Center
   shows this file is verified in SPK-01. A size limit while running (server-side file logging)
@@ -411,7 +433,8 @@ taken on them on 2026-10-31. Where a note contradicts the decision text above, t
 
 **Architectures and kernels**
 - Oldest DSM 7.2 kernel per family: **x86_64 3.10.108, armv8 4.4.302, armv7 3.10.108**; static
-  binaries need an ELF ABI note at or below these. The DSM 7.2 userland is glibc 2.36
+  binaries need an ELF ABI note, if present, at or below these (a binary without one, such as
+  the static musl FFmpeg of SPK-15, is checked under `kernelsim` instead). The DSM 7.2 userland is glibc 2.36
   (inference from the toolchains).
 - DSM's `armv7` family contains only `alpine`/`alpine4k`; `armada38x` and `monaco` are separate
   `arch` values ("armv7 not ready" in the toolkit). **Orchestrator decision**: the armv7 SPK sets

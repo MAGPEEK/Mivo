@@ -98,7 +98,12 @@ or `ignore-term` (records `SIGTERM` and keeps running). Records written by the f
 Two more tools of `helpers.bash` reach states the fake cannot: a log that is a FIFO without a
 reader holds the forked shell before `exec` (the window between fork and exec), and
 `fake_failing_command` puts an `rm` or `mv` first in `PATH` that fails for matching arguments
-(the tests run as root, so file permissions cannot make them fail).
+(the tests run as root, so file permissions cannot make them fail). The action lock cases of
+`start-stop-status.bats` add three of their own: `start_fake_action` holds the lock as a live
+process whose command line names `start-stop-status` (optionally recorded for another boot ID),
+`fake_slow_command` puts an `rm` first in `PATH` that sleeps before matching arguments (a start
+that clears a large transcode directory), and `fake_lock_race` a `mkdir` that fails once for the
+lock without creating it (the holder released the lock between `mkdir` and the `-d` test).
 
 ### Test-only variables of the package scripts
 
@@ -109,8 +114,8 @@ Documented in the script headers; DSM never sets them.
 | `PKG_TEST_START_TIMEOUT_SECONDS` | `start-stop-status` | the 30 s start budget | start budget cases |
 | `PKG_TEST_STOP_TIMEOUT_SECONDS` | `start-stop-status` | the 20 s stop budget before `SIGKILL` | "stop needing SIGKILL" case |
 | `PKG_TEST_UPTIME_FILE` | `start-stop-status` | `/proc/uptime`, the clock of the start budget | "start budget" clock cases |
-| `PKG_TEST_LOCK_WAIT_SECONDS` | `start-stop-status` | the 10 s wait for another action's lock before it is broken | "lock held too long" case |
-| `PKG_TEST_VOLUMES_ROOT` | `preinst` | `/`, where the `volume*` directories with the shared folders are | every case (set by `setup_package_tree`) |
+| `PKG_TEST_LOCK_WAIT_SECONDS` | `start-stop-status` | the 10 s wait for another action's lock, after which a lock whose holder is no `start-stop-status` is broken | the lock cases |
+| `PKG_TEST_VOLUMES_ROOT` | `common.sh` (`PKG_VOLUMES_ROOT`): `preinst`, `postuninst` | `/`, where the `volume*` directories are: the shared folders `preinst` looks for and the `volume<N>/@appdata\|@apphome/<id>` shape `postuninst` deletes below | every case (set by `setup_package_tree`) |
 
 ### Timing assertions
 
@@ -141,14 +146,14 @@ SPK-16): CI hosts default to release builds, `--test` / `-TestBuild` overrides t
 builds refuse interim or malformed `sources.lock` entries, the default version, a staged interim
 or non-free FFmpeg, staged `ffmpeg`/`ffprobe` binaries or a `SOURCE.txt` version that differ
 from the pins of `sources.lock` (a test build packs them with a warning and a line in
-`NOT-FOR-RELEASE.txt`), a dirty git tree, a failing git (a fake `git` reporting "dubious
+`NOT-FOR-RELEASE.txt`), a dirty git tree (also untracked files that
+`status.showUntrackedFiles=no` hides), a failing git (a fake `git` reporting "dubious
 ownership") and an empty revision (without git a release needs `--revision`; `run_build` adds
 a fixture commit then, and the tree of each test is a committed checkout where git exists), an
 spkstage warning, a toolkit run that writes no SPK, a staged DSM version with another package
 revision, an invalid staged package name and option values that are empty or start with `-`; a
-`SOURCE.txt` needs exactly one `Status:`,
-`Licence:`, `Version:` and `Source SHA-256:` line; the staged FFmpeg source archive must be the
-one every `SOURCE.txt` names and lands in `dist/` with a `SHA256SUMS` line; the FFmpeg recipe
+`SOURCE.txt` needs exactly one `Status:`, `Licence:`, `Version:` and `Source SHA-256:` line;
+the staged FFmpeg source archive must be the one every `SOURCE.txt` names and lands in `dist/` with a `SHA256SUMS` line; the FFmpeg recipe
 image is built before step 1 and passed to it; a failed toolkit run leaves no `SHA256SUMS`; and
 the SPK names carry `-r<N>` for package revision N ≥ 1. `build/fetch.bats` tests
 `../ffmpeg/fetch.sh` (install with modes and manifest, checksum and notice mismatches, missing
@@ -156,9 +161,10 @@ output files, usage errors, a failed recipe build, a licence that differs from t
 the image's POSIX `sh`. `build/package-gates.bats` runs `../ffmpeg/build/scripts/package.sh`
 against a fake `readelf`/`objdump`: a failing tool stops every gate, dynamic, foreign or too
 new executables are refused, and `SOURCE.txt` is written only from checked values (one
-well-formed `.tar.sha256`, a one-line configuration, 64-hex checksums). `build/stage.bats` runs
-`../stage.sh` (the staging stage of the Dockerfile) against `build/fake-spkstage.bash`:
-build-info, the source archive and the release refusals of step 1. A licence is always judged
+well-formed `.tar.sha256` line `<sha256>  <name>` naming an archive that exists next to it, a
+one-line configuration, 64-hex checksums). `build/stage.bats` runs `../stage.sh` (the staging
+stage of the Dockerfile) against `build/fake-spkstage.bash`: build-info, the source archive,
+the release refusals of step 1 and no temporary file left behind, also when it dies. A licence is always judged
 on the whole `Licence:` value. `build/fake-docker.bash` replaces Docker (its header lists the
 switches; the pins of the test locks are the SHA-256 of its fake binaries); its step 1 runs the
 real `stage.sh` with the fake spkstage, so a release is refused there exactly as in the real

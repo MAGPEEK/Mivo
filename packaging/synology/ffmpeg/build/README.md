@@ -74,7 +74,9 @@ emulation.
    and machine, have a `PT_INTERP` or a `NEEDED` entry, an ELF ABI note above the family's
    oldest DSM 7.2 kernel or (armv7) any VFPv4 instruction; every gate captures the `readelf` /
    `objdump` output first and fails when the tool fails (no silent pass through a pipe); writes
-   the output.
+   the output. `SOURCE.txt` names the corresponding source from the one `.sha256` of the
+   `source-archive` stage (mounted, not copied), which must be a line `<sha256>  <name>` naming
+   an archive next to it.
 8. `source-archive`: the corresponding source (below).
 
 ### Cache strategy

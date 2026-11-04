@@ -20,12 +20,16 @@
 # Prints one line per check: "ok", "WARN" or "FAIL" followed by the check, "info" lines for
 # facts that are recorded but not judged, and a summary. Exit 0 when nothing failed, 1 when a
 # check failed (also when an archive cannot be read or holds members that are unsafe to
-# extract; nothing of such an archive is extracted), 2 on a usage error or a missing tool.
+# extract), 2 on a usage error or a missing tool. An archive with an unsafe member, or one
+# tar cannot list, is not extracted at all; when tar lists an archive but fails while
+# extracting it, part of it may already lie in the temporary work directory, which is removed
+# on every exit. The outer archive is extracted before package.tgz inside it is judged.
 #
 # Runs in a debian:stable-slim based container (Dockerfile in this directory: tar, xz, jq;
 # how to run: ../../toolkit/README.md "Output verification"); POSIX sh, no bash. Needs GNU
 # tar, xz, jq, od, dd, awk, sed, grep, sort, uniq, find, du, cut, wc, tr, head, mkdir, rm,
-# mktemp and sha256sum. Nothing here names the product: the package name comes from INFO.
+# mktemp, sha256sum and dirname. Nothing here names the product: the package name comes from
+# INFO.
 #
 # No "set -e": most commands here are checks whose non-zero exit is a finding, not an error
 # (grep without a match, a missing member), so every exit status is handled where it occurs.
@@ -46,7 +50,7 @@ readonly MAX_VERSION_DIGITS=10
 readonly FINAL_BUILD_NUMBER=9000
 readonly PACKAGE_NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
 readonly REQUIRED_TOOLS="tar xz jq od dd awk sed grep sort uniq find du cut wc tr head mkdir rm \
-mktemp sha256sum"
+mktemp sha256sum dirname"
 # ELF constants: program header types, note type, note alignments.
 readonly PT_INTERP=3
 readonly PT_NOTE=4
@@ -78,13 +82,13 @@ readonly ICON_SIZES="PACKAGE_ICON.PNG:64 PACKAGE_ICON_256.PNG:256"
 # the icon sizes DSM puts into the {0} of the config's "icon".
 readonly DESKTOP_UI_DIR=ui
 readonly DESKTOP_ICON_SIZES="16 24 32 48 64 72 256"
-
-script_dir=$(cd "$(dirname "$0")" && pwd)
-readonly script_dir
+# Keys of the entry as spkmeta's desktopApp writes them, sorted as jq's `keys` lists them.
+readonly DESKTOP_ENTRY_KEYS="advanceGrantPrivilege,allUsers,desc,grantPrivilege,icon,port,protocol,title,type,url"
 
 release=no
 port=$DEFAULT_PORT
-expected_file="$script_dir/expected-members.txt"
+# "" until resolve_expected_file sets the default next to this script.
+expected_file=""
 print_members=no
 spk=""
 family=""
@@ -184,7 +188,6 @@ parse_args() {
 	done
 	[ -n "$spk" ] && [ -n "$family" ] || usage
 	[ -f "$spk" ] || die "$spk is not a file"
-	[ -f "$expected_file" ] || die "expected-member list $expected_file not found"
 	if ! printf '%s\n' "$port" | grep -Eqx '[1-9][0-9]{0,4}' || [ "$port" -gt "$MAX_PORT" ]; then
 		die "--port must be 1-$MAX_PORT, not '$port'"
 	fi
@@ -276,11 +279,14 @@ file_size() {
 
 # tar_member_size <file> <header offset>: the size field of a header; octal, or base-256
 # (first byte 0x80, the other eleven bytes big-endian). Prints "-1" for a negative
-# base-256 value and for one of 2^56 bytes or more (the high bytes +1..+4 not zero), which
-# no member can have and the shell could not add.
+# base-256 value, for one of 2^56 bytes or more (the high bytes +1..+4 not zero), which
+# no member can have and the shell could not add, and for a first byte 0x81 to 0xfe: GNU tar
+# writes only 0x80 and 0xff there, and such a byte is no octal digit either.
 tar_member_size() {
 	size_first=$(read_u "$1" "$(($2 + TAR_SIZE_OFFSET))" 1)
-	if [ "$size_first" -eq "$TAR_BASE256_POSITIVE" ]; then
+	if [ "$size_first" -gt "$TAR_BASE256_POSITIVE" ] && [ "$size_first" -lt "$TAR_BASE256_NEGATIVE" ]; then
+		printf '%s' -1
+	elif [ "$size_first" -eq "$TAR_BASE256_POSITIVE" ]; then
 		if [ "$(read_hex "$1" "$(($2 + TAR_SIZE_OFFSET + 1))" "$TAR_BASE256_HIGH_BYTES")" = 00000000 ]
 		then
 			read_be "$1" "$(($2 + TAR_SIZE_OFFSET + 1 + TAR_BASE256_HIGH_BYTES))" \
@@ -361,6 +367,17 @@ list_members() {
 		if ($1 ~ /^l/) sub(/ -> .*$/, "", name)
 		print $1, $2, name
 	}' "$2.raw" >"$2"
+}
+
+# member_names <listing>: the name of every member, whole: everything after the mode and owner
+# columns, so a name with blanks is not cut at the first one (as print_digests reads it).
+member_names() {
+	awk '{ name = $0; sub(/^[^ ]+ [^ ]+ /, "", name); print name }' "$1"
+}
+
+# file_member_names <listing>: member_names of the regular files only.
+file_member_names() {
+	awk '$1 ~ /^-/ { name = $0; sub(/^[^ ]+ [^ ]+ /, "", name); print name }' "$1"
 }
 
 # unsafe_members <listing>: one "name(reason)" per member that must not be extracted:
@@ -475,7 +492,7 @@ missing_members() {
 # duplicate_members <listing>: "name(duplicate, N times)" for every name stored more than
 # once, whether an exact rule or a pattern allows it (tar keeps only the last copy).
 duplicate_members() {
-	awk '{ print $3 }' "$1" | LC_ALL=C sort | uniq -c |
+	member_names "$1" | LC_ALL=C sort | uniq -c |
 		awk '$1 > 1 { count = $1; sub(/^ *[0-9]+ /, ""); printf "%s(duplicate, %d times) ", $0, count }'
 }
 
@@ -524,7 +541,7 @@ check_outer_archive() {
 	info "SPK tar extensions beyond plain ustar: ${outer_format#* }"
 	outer_listing="$work/listing-spk"
 	read_archive spk "$spk" "$outer_listing" "$work/spk"
-	info "SPK member order: $(awk '{ print $3 }' "$outer_listing" | tr '\n' ' ')"
+	info "SPK member order: $(member_names "$outer_listing" | tr '\n' ' ')"
 	[ -f "$work/spk/INFO" ] || abort "INFO is missing"
 	read_package_name
 	check_members spk "$outer_listing"
@@ -850,8 +867,8 @@ check_ffmpeg_notice() {
 		GPL-*) pass "SOURCE.txt licence $ffmpeg_licence" ;;
 		*) failed "SOURCE.txt licence '$ffmpeg_licence' is not a GPL identifier" ;;
 	esac
-	licence_files=$(awk '$1 ~ /^-/ && $3 ~ /^share\/licenses\/ffmpeg\// && $3 !~ /\/SOURCE\.txt$/' \
-		"$work/listing-package" | wc -l | tr -d ' ')
+	licence_files=$(file_member_names "$work/listing-package" |
+		awk 'index($0, "share/licenses/ffmpeg/") == 1 && $0 !~ /\/SOURCE\.txt$/' | wc -l | tr -d ' ')
 	if [ "$licence_files" -ge 1 ]; then
 		pass "share/licenses/ffmpeg has $licence_files licence file(s) besides SOURCE.txt"
 	else
@@ -1042,6 +1059,20 @@ check_desktop_config() {
 	desktop_expect url /
 	desktop_expect allUsers true
 	desktop_expect icon "images/${id}_{0}.png"
+	desktop_expect grantPrivilege all
+	desktop_expect advanceGrantPrivilege true
+	check_desktop_keys
+}
+
+# check_desktop_keys: the entry has exactly the keys spkmeta writes, so neither a key DSM would
+# read differently nor a missing one (desc) slips through the value checks.
+check_desktop_keys() {
+	desktop_keys=$(jq -r '[.".url"[]][0] | keys | join(",")' "$desktop_config" 2>/dev/null)
+	if [ "$desktop_keys" = "$DESKTOP_ENTRY_KEYS" ]; then
+		pass "$DESKTOP_UI_DIR/config: the entry has the keys $DESKTOP_ENTRY_KEYS"
+	else
+		failed "$DESKTOP_UI_DIR/config: the entry has the keys $desktop_keys, want $DESKTOP_ENTRY_KEYS"
+	fi
 }
 
 # check_desktop_icons: one PNG of each size DSM substitutes into the config's icon template.
@@ -1073,26 +1104,66 @@ print_digests() {
 		printf "%o %s\n", mode, name
 	}' "$3" | LC_ALL=C sort -k2 | while read -r digest_mode digest_name; do
 		[ "$1:$digest_name" != spk:package.tgz ] || continue
-		digest=$(sha256sum <"$2/$digest_name" | cut -d' ' -f1)
-		printf '%s %s %s:%s\n' "$digest" "$digest_mode" "$1" "$digest_name"
+		# The redirect and sha256sum are checked: a member that cannot be read gets no line
+		# with an empty digest.
+		if ! digest=$(sha256sum <"$2/$digest_name") || [ -z "$digest" ]; then
+			printf 'unhashed %s:%s\n' "$1" "$digest_name"
+			continue
+		fi
+		printf '%s %s %s:%s\n' "${digest%% *}" "$digest_mode" "$1" "$digest_name"
 	done
 }
 
+# print_member_digests prints the digest lines of both archives; a member that cannot be
+# hashed fails the inspection.
 print_member_digests() {
-	print_digests spk "$work/spk" "$work/listing-spk"
-	print_digests package.tgz "$work/pkg" "$work/listing-package"
+	{
+		print_digests spk "$work/spk" "$work/listing-spk"
+		print_digests package.tgz "$work/pkg" "$work/listing-package"
+	} >"$work/digests"
+	grep -v '^unhashed ' "$work/digests"
+	# A here-document, not a pipe: failed must count in this shell.
+	while read -r _ unhashed_member; do
+		[ -z "$unhashed_member" ] || failed "--members: cannot hash $unhashed_member"
+	done <<EOF
+$(grep '^unhashed ' "$work/digests")
+EOF
+}
+
+# read_expected_rules writes the rule lines of the expected-member list to $expected_rules.
+# grep exits 1 when the list holds no rule and 2 when it cannot read it; both are usage
+# errors, since every member would otherwise be judged against nothing.
+read_expected_rules() {
+	expected_rules="$work/rules"
+	expected_status=0
+	grep -Ev '^[[:space:]]*(#|$)' "$expected_file" >"$expected_rules" || expected_status=$?
+	case "$expected_status" in
+		0) ;;
+		1) die "expected-member list $expected_file holds no rule" ;;
+		*) die "cannot read the expected-member list $expected_file" ;;
+	esac
+}
+
+# resolve_expected_file sets the default expected-member list (next to this script) unless
+# --expected named one, and checks that it exists. Runs after require_tools: it needs dirname.
+resolve_expected_file() {
+	if [ -z "$expected_file" ]; then
+		expected_file="$(cd "$(dirname "$0")" && pwd)/expected-members.txt" ||
+			die "cannot find the directory of $0"
+	fi
+	[ -f "$expected_file" ] || die "expected-member list $expected_file not found"
 }
 
 main() {
 	parse_args "$@"
 	require_tools
+	resolve_expected_file
 	work=$(mktemp -d) || die "cannot create a work directory"
 	# An interrupt leaves through exit, so the EXIT trap removes the work directory.
 	trap cleanup EXIT
 	trap 'exit "$EXIT_INTERRUPTED"' INT
 	trap 'exit "$EXIT_TERMINATED"' TERM
-	expected_rules="$work/rules"
-	grep -Ev '^[[:space:]]*(#|$)' "$expected_file" >"$expected_rules"
+	read_expected_rules
 	mode_name="test"
 	[ "$release" = no ] || mode_name="release"
 	info "inspecting $spk for family $family ($mode_name mode, port $port)"

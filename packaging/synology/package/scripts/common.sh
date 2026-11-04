@@ -24,6 +24,9 @@ PKG_CONFIG_FILE_NAME=config.yaml
 # DSM's directory of the installed packages; /var/packages/<id>/shares/<share> is the link
 # Package Center creates for each share of the data-share resource (DSM-NOTES section 7).
 PKG_DSM_PACKAGES_DIR=/var/packages
+# Directory that holds DSM's volumes (/volume1, /volume2, ...): "" stands for /. The test-only
+# PKG_TEST_VOLUMES_ROOT (packaging/synology/test; DSM never sets it) moves it into a test tree.
+PKG_VOLUMES_ROOT=${PKG_TEST_VOLUMES_ROOT:-}
 # Longest shared-folder name DSM accepts, in characters (DSM-NOTES section 9); counted like the
 # wizard's validator, in UTF-16 code units (pkg_name_length).
 PKG_SHARE_NAME_MAX_CHARACTERS=32
@@ -172,20 +175,40 @@ pkg_remove_directory_contents() {
 	return "$pkg_remove_status"
 }
 
+# pkg_volume_directory_kind prints "var" or "home" when the path $1 is /volume<N>/@appdata/<id>
+# or /volume<N>/@apphome/<id> of this package: the volume is exactly one path component, a
+# "volume" name right below PKG_VOLUMES_ROOT, so no deeper directory of that shape passes.
+pkg_volume_directory_kind() {
+	pkg_volume_rest=${1#"$PKG_VOLUMES_ROOT"/volume}
+	if [ "$pkg_volume_rest" = "$1" ]; then
+		return 1
+	fi
+	# What follows "volume" up to the next "/": the volume number, never empty, never a "/".
+	case "${pkg_volume_rest%%/*}" in
+	'') return 1 ;;
+	esac
+	case "${pkg_volume_rest#*/}" in
+	"$pkg_volume_rest") return 1 ;;
+	@appdata/"$ID") printf '%s\n' var ;;
+	@apphome/"$ID") printf '%s\n' home ;;
+	*) return 1 ;;
+	esac
+}
+
 # pkg_package_directory_kind prints "var" or "home" when the absolute path $1 has the shape of
 # this package's var or home directory as DSM lays them out (DSM-NOTES section 8): the link
 # /var/packages/<id>/var or /var/packages/<id>/home, or the real directory on a volume,
-# <volume>/@appdata/<id> or <volume>/@apphome/<id>. Paths with "." or ".." elements or "//"
-# fail; one trailing "/" is ignored.
+# /volume<N>/@appdata/<id> or /volume<N>/@apphome/<id> (pkg_volume_directory_kind). Paths with
+# "." or ".." elements or "//" fail; one trailing "/" is ignored.
 pkg_package_directory_kind() {
 	pkg_kind_path=${1%/}
 	case "$pkg_kind_path/" in
 	*/./* | */../* | *//*) return 1 ;;
 	esac
 	case "$pkg_kind_path" in
-	"$PKG_DSM_PACKAGES_DIR/$ID/var" | /*/@appdata/"$ID") printf '%s\n' var ;;
-	"$PKG_DSM_PACKAGES_DIR/$ID/home" | /*/@apphome/"$ID") printf '%s\n' home ;;
-	*) return 1 ;;
+	"$PKG_DSM_PACKAGES_DIR/$ID/var") printf '%s\n' var ;;
+	"$PKG_DSM_PACKAGES_DIR/$ID/home") printf '%s\n' home ;;
+	*) pkg_volume_directory_kind "$pkg_kind_path" ;;
 	esac
 }
 

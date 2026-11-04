@@ -533,6 +533,17 @@ case_release_refuses_dirty_tree() {
 	expect_output "untracked"
 }
 
+# status.showUntrackedFiles=no hides untracked files from a plain `git status --porcelain`.
+case_release_sees_untracked_files_git_config_hides() {
+	have_git || skip "git not installed"
+	git -C "$tree" config status.showUntrackedFiles no
+	touch "$tree/untracked"
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "release refused: the working tree has uncommitted changes"
+	expect_output "untracked"
+}
+
 CASES=(
 	ci_defaults_to_release ci_values test_overrides_ci release_refuses_interim_lock
 	release_refuses_dev_version release_refuses_staged_nonfree_ffmpeg
@@ -544,7 +555,7 @@ CASES=(
 	source_archive_mismatch_fails malformed_lock_refused ffmpeg_image_built_before_stage
 	failed_toolkit_run_writes_no_sums release_build_names_and_sums package_revision_in_name
 	privilege_options version_checked_early empty_option_values_refused
-	stage_path_with_comma_and_blank release_refuses_dirty_tree
+	stage_path_with_comma_and_blank release_refuses_dirty_tree release_sees_untracked_files_git_config_hides
 )
 
 IMPLEMENTATIONS=(sh)

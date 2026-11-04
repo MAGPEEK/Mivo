@@ -253,7 +253,8 @@ function Invoke-ReleaseGit([string[]] $Arguments) {
 
 # A release must be rebuildable from its commit: it records the commit (git rev-parse HEAD, or
 # -Revision) and refuses uncommitted or untracked files (dist/ is ignored by
-# packaging/synology/.gitignore). Any git failure stops the release, so a git that cannot read
+# packaging/synology/.gitignore; --untracked-files=normal, so a status.showUntrackedFiles=no
+# setting cannot hide them). Any git failure stops the release, so a git that cannot read
 # the checkout (dubious ownership, no repository) never skips the check. Without git at all
 # there is nothing to compare against: the release then needs -Revision.
 function Assert-ReleaseTree {
@@ -267,7 +268,7 @@ function Assert-ReleaseTree {
     }
     if (-not $script:RevisionGiven) { $script:BuildRevision = Invoke-ReleaseGit @('rev-parse', 'HEAD') }
     if (-not $script:BuildRevision) { Exit-Build 'release refused: git names no commit for the build (empty revision)' }
-    $changes = Invoke-ReleaseGit @('status', '--porcelain')
+    $changes = Invoke-ReleaseGit @('status', '--porcelain', '--untracked-files=normal')
     if ($changes) {
         $first = ($changes -split "`n" | Select-Object -First 10) -join "`n"
         Exit-Build "release refused: the working tree has uncommitted changes:`n$first"

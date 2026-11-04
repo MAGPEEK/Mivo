@@ -83,8 +83,8 @@ var (
 	osMinVersionFormat = regexp.MustCompile(`^[0-9]+\.[0-9]+-[0-9]+$`)
 )
 
-// Validate reports the first value that cannot be written to INFO, build.env, package.env or
-// a template.
+// Validate reports the first value that cannot be written to INFO, build.env, package.env, a
+// template or the key of the main menu entry (DesktopAppConfig).
 func (pkg Package) Validate() error {
 	formats := []struct {
 		name, value string
@@ -115,7 +115,7 @@ func (pkg Package) Validate() error {
 		}
 	}
 
-	return nil
+	return pkg.validateDesktopAppKey()
 }
 
 // texts are the free-text fields; INFO prints them through pkg_dump_info's main field loop.

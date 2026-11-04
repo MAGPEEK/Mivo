@@ -160,7 +160,8 @@ require_sha256() {
 }
 
 # read_source_archive sets archive_sha and archive_name from the one <name>.tar.sha256 of
-# <source-archive-dir> (a line "<sha256>  <name>"); none, several, or a malformed line fail.
+# <source-archive-dir> (a line "<sha256>  <name>" naming a file of that directory); none,
+# several, a malformed line or a missing archive fail.
 read_source_archive() {
 	sums=$(find "$archive_dir" -maxdepth 1 -type f -name '*.tar.sha256') || fail "cannot list $archive_dir"
 	[ -n "$sums" ] || fail "no *.tar.sha256 in $archive_dir"
@@ -169,12 +170,16 @@ read_source_archive() {
 	sum_line=$(cat "$sums") || fail "cannot read $sums"
 	# sha256sum's format: hash, blank, "*" or blank (binary or text mode), file name.
 	archive_sha=${sum_line%% *}
-	archive_name=${sum_line#"$archive_sha" }
-	archive_name=${archive_name#[ *]}
 	require_sha256 "the source archive checksum in $(basename "$sums")" "$archive_sha"
+	# A line without the separator (a hash alone) names no file: the name stays empty.
+	case "$sum_line" in
+	"$archive_sha  "?* | "$archive_sha *"?*) archive_name=${sum_line#"$archive_sha" ?} ;;
+	*) archive_name= ;;
+	esac
 	case "$archive_name" in
 	'' | */* | *' '*) fail "$(basename "$sums") names no archive file: '$archive_name'" ;;
 	esac
+	[ -f "$archive_dir/$archive_name" ] || fail "$(basename "$sums"): $archive_name is not a file in $archive_dir"
 }
 
 # write_source_notice computes every value first and fails on the first one it cannot get, so

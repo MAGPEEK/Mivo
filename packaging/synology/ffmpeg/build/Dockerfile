@@ -145,23 +145,25 @@ RUN --network=none . /sources/ffmpeg/versions.env \
 
 # ---------------------------------------------------------------------------------------------
 # package-<family>: checks (ELF identity, static, ABI note, no VFPv4 on armv7) and SOURCE.txt.
+# The source archive directory is mounted, not copied: package.sh checks that the archive its
+# .sha256 names exists, and a copy would add the archive to every family's layers.
 FROM ffmpeg-x86_64 AS package-x86_64
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
-COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh x86_64 /build/out scripts/sources.list /build/archive /out/x86_64
+RUN --network=none --mount=type=bind,from=source-archive,source=/out/source,target=/build/archive \
+ BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh x86_64 /build/out scripts/sources.list /build/archive /out/x86_64
 
 FROM ffmpeg-armv8 AS package-armv8
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
-COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv8 /build/out scripts/sources.list /build/archive /out/armv8
+RUN --network=none --mount=type=bind,from=source-archive,source=/out/source,target=/build/archive \
+ BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv8 /build/out scripts/sources.list /build/archive /out/armv8
 
 FROM ffmpeg-armv7 AS package-armv7
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
-COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv7 /build/out scripts/sources.list /build/archive /out/armv7
+RUN --network=none --mount=type=bind,from=source-archive,source=/out/source,target=/build/archive \
+ BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv7 /build/out scripts/sources.list /build/archive /out/armv7
 
 # ---------------------------------------------------------------------------------------------
 # Output targets for --output type=local.

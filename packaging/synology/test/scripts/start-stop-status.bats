@@ -507,6 +507,72 @@ assert_no_lock() {
 	[[ ! -e $SYNOPKG_PKGTMP/$LOCK_DIR_NAME ]] || fail "the action lock is left: $(ls -la "$SYNOPKG_PKGTMP/$LOCK_DIR_NAME")"
 }
 
+lock_exists() {
+	[[ -d $SYNOPKG_PKGTMP/$LOCK_DIR_NAME ]]
+}
+
+current_boot_id() {
+	cat /proc/sys/kernel/random/boot_id
+}
+
+# start_fake_action holds the action lock like a running start-stop-status for $1 seconds and
+# then releases it; its command line names the package's start-stop-status, so the scripts take
+# it for a live action. The lock records boot ID $2 (default: the current boot). Sets
+# FOREIGN_PID.
+start_fake_action() {
+	local lock=$SYNOPKG_PKGTMP/$LOCK_DIR_NAME
+	mkdir "$lock"
+	# shellcheck disable=SC2016 # expanded by the fake action
+	bash -c 'sleep "$1"; rm -f "$2/pid"; rmdir "$2"' "$PKG_ROOT/scripts/start-stop-status" "$1" "$lock" \
+		</dev/null >/dev/null 2>&1 3>&- &
+	FOREIGN_PID=$!
+	track_foreign_process "$FOREIGN_PID"
+	printf '%s\n%s\n' "$FOREIGN_PID" "${2:-$(current_boot_id)}" >"$lock/pid"
+}
+
+# fake_slow_command puts a command $1 first in PATH that sleeps $3 seconds before it runs the
+# real command when one of its arguments matches the shell pattern $2.
+fake_slow_command() {
+	local name=$1 pattern=$2 seconds=$3 real fake_dir=$BATS_TEST_TMPDIR/fake-bin
+	real=$(command -v "$name")
+	mkdir -p "$fake_dir"
+	cat >"$fake_dir/$name" <<EOF
+#!/bin/sh
+for argument in "\$@"; do
+	case "\$argument" in
+	$pattern) sleep $seconds ;;
+	esac
+done
+exec "$real" "\$@"
+EOF
+	chmod 0755 "$fake_dir/$name"
+	export PATH=$fake_dir:$PATH
+}
+
+# fake_lock_race puts a mkdir first in PATH that fails once for the action lock without creating
+# it, as when the holder released the lock between start-stop-status's mkdir and its -d test.
+fake_lock_race() {
+	local real fake_dir=$BATS_TEST_TMPDIR/fake-bin
+	real=$(command -v mkdir)
+	mkdir -p "$fake_dir"
+	cat >"$fake_dir/mkdir" <<EOF
+#!/bin/sh
+for argument in "\$@"; do
+	case "\$argument" in
+	*/$LOCK_DIR_NAME)
+		if [ ! -e "$BATS_TEST_TMPDIR/lock-race.done" ]; then
+			: >"$BATS_TEST_TMPDIR/lock-race.done"
+			exit 1
+		fi
+		;;
+	esac
+done
+exec "$real" "\$@"
+EOF
+	chmod 0755 "$fake_dir/mkdir"
+	export PATH=$fake_dir:$PATH
+}
+
 # Starts at the same moment: the lock lets one launch the server, the others find it running.
 case_concurrent_starts_launch_one_server() {
 	local -a shell_command pids
@@ -572,6 +638,70 @@ case_lock_held_too_long_is_broken() {
 	assert_equal "$(server_starts)" 1
 	assert_no_lock
 	process_running "$FOREIGN_PID" || fail "breaking the lock touched its holder"
+}
+
+# A start that clears a large transcode directory holds the lock longer than the lock wait. A
+# second start keeps waiting for it instead of breaking the lock and launching a second server.
+case_lock_of_a_slow_start_is_not_broken() {
+	local transcode=$SYNOPKG_PKGTMP/transcode
+	mkdir -p "$transcode"
+	touch "$transcode/large-session"
+	fake_slow_command rm '*/large-session' 3
+	export PKG_TEST_LOCK_WAIT_SECONDS=1
+	local -a shell_command
+	read -ra shell_command <<<"$CASE_SHELL"
+	"${shell_command[@]}" "$PKG_ROOT/scripts/start-stop-status" start \
+		>"$BATS_TEST_TMPDIR/start-1.out" 2>&1 3>&- &
+	local first_pid=$! first_status=0
+	eventually lock_exists
+	run_sss start
+	assert_success
+	assert_output --partial "already running"
+	wait "$first_pid" || first_status=$?
+	assert_equal "$first_status" 0
+	[[ $stderr != *"breaking the action lock"* ]] || fail "the second start broke the lock of a live start: $stderr"
+	assert_equal "$(server_starts)" 1
+	assert_no_lock
+}
+
+# Past the lock wait, the lock of a live start-stop-status is waited for, not broken.
+case_lock_of_a_live_action_is_waited_for() {
+	start_fake_action 3
+	export PKG_TEST_LOCK_WAIT_SECONDS=1
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	assert_elapsed_at_least "$started" 2 "status broke the lock of a live action"
+	assert_stderr_contains "waiting for the action of pid $FOREIGN_PID"
+	[[ $stderr != *"breaking the action lock"* ]] || fail "status broke the lock of a live action: $stderr"
+	assert_short_output
+	assert_no_lock
+}
+
+# tmp survives a reboot, and the PIDs start over: a lock of an earlier boot is broken at once,
+# even when its PID now belongs to a live start-stop-status.
+case_lock_of_an_earlier_boot_is_broken_at_once() {
+	start_fake_action 30 00000000-0000-0000-0000-000000000000
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	assert_elapsed_below "$started" 3 "status waited for the lock of an earlier boot"
+	assert_stderr_contains "breaking the action lock of pid '$FOREIGN_PID'"
+	assert_no_lock
+	process_running "$FOREIGN_PID" || fail "breaking the lock touched its holder"
+}
+
+# The holder may release the lock between a failed mkdir and the test for the directory: the
+# action tries once more instead of going on without the lock.
+case_lock_released_in_between_is_taken() {
+	fake_lock_race
+	run_sss status
+	assert_failure 3
+	[[ -e $BATS_TEST_TMPDIR/lock-race.done ]] || fail "the fake mkdir was not used"
+	[[ $stderr != *"cannot create the action lock"* ]] || fail "status went on without the lock: $stderr"
+	assert_no_lock
 }
 
 # A lock that cannot be created (here: tmp is missing) never blocks status or stop.
@@ -750,6 +880,10 @@ register_cases \
 	start_waits_for_the_lock_of_another_action \
 	lock_of_an_exited_action_is_broken \
 	lock_held_too_long_is_broken \
+	lock_of_a_slow_start_is_not_broken \
+	lock_of_a_live_action_is_waited_for \
+	lock_of_an_earlier_boot_is_broken_at_once \
+	lock_released_in_between_is_taken \
 	actions_go_on_without_a_lock \
 	status_reports_missing_binary_as_broken \
 	status_reports_non_executable_binary_as_broken \

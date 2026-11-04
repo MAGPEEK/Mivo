@@ -11,6 +11,10 @@
 # directories in DSM's layout (pkg_resolve_package_directory). It deletes below the resolved
 # directories. Shared folders and media are never touched: nothing here follows a link out of
 # these directories.
+#
+# Test-only variable (packaging/synology/test; DSM never sets it):
+#   PKG_TEST_VOLUMES_ROOT  directory that holds the volume* directories instead of / (common.sh
+#                          PKG_VOLUMES_ROOT)
 set -eu
 
 if [ "${SYNOPKG_PKG_STATUS:-}" != UNINSTALL ] || [ "${wizard_delete_data:-}" != true ]; then

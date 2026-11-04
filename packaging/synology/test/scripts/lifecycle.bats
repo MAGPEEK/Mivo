@@ -326,7 +326,8 @@ case_postuninst_never_deletes_outside_the_package_directories() {
 	fill_user_data
 	export SYNOPKG_PKG_STATUS=UNINSTALL wizard_delete_data=true
 	local before directory home=$SYNOPKG_PKGHOME volume=$BATS_TEST_TMPDIR/volume1
-	mkdir -p "$BATS_TEST_TMPDIR/elsewhere" "$volume/@apphome/other" "$volume/@appdata/other"
+	mkdir -p "$BATS_TEST_TMPDIR/elsewhere" "$volume/@apphome/other" "$volume/@appdata/other" \
+		"$volume/nested/@apphome/$FIXTURE_ID"
 	echo precious >"$BATS_TEST_TMPDIR/elsewhere/file"
 	ln -s "$volume/@apphome/other" "$volume/@apphome/other-link"
 	before=$(user_data_snapshot)
@@ -335,7 +336,8 @@ case_postuninst_never_deletes_outside_the_package_directories() {
 	for directory in "$BATS_TEST_TMPDIR/elsewhere" / "$PKG_ROOT/var/../../.." "$PKG_ROOT/missing" \
 		"$DSM_PKG_ROOT/home/." "$DSM_PKG_ROOT/home/../home" "$PKG_ROOT/home" "$DSM_PKG_ROOT/var" \
 		"$volume/@appdata/$FIXTURE_ID" "$volume/@apphome/other" "$DSM_PACKAGES_DIR/other/home" \
-		"$DSM_PACKAGES_DIR//$FIXTURE_ID/home" "$volume/video" "$DSM_PKG_ROOT/home/data"; do
+		"$DSM_PACKAGES_DIR//$FIXTURE_ID/home" "$volume/video" "$DSM_PKG_ROOT/home/data" \
+		"$volume/nested/@apphome/$FIXTURE_ID"; do
 		export SYNOPKG_PKGHOME=$directory
 		: >"$TEMP_LOGFILE"
 		run_lifecycle postuninst
@@ -545,7 +547,9 @@ case_package_directory_check_accepts_only_package_paths() {
 	local volume=$BATS_TEST_TMPDIR/volume1 directory real_var real_home
 	real_var=$(cd -P "$volume/@appdata/$FIXTURE_ID" && pwd -P)
 	real_home=$(cd -P "$volume/@apphome/$FIXTURE_ID" && pwd -P)
-	mkdir -p "$BATS_TEST_TMPDIR/demonstration" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x"
+	mkdir -p "$BATS_TEST_TMPDIR/demonstration" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x" \
+		"$volume/nested/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/deeper/volume1/@appdata/$FIXTURE_ID" \
+		"$BATS_TEST_TMPDIR/share/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID"
 	touch "$PKG_ROOT/keep"
 	for directory in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGVAR/" "$volume/@appdata/$FIXTURE_ID"; do
 		run_common pkg_resolve_package_directory var "$directory"
@@ -562,9 +566,18 @@ case_package_directory_check_accepts_only_package_paths() {
 		"$PKG_ROOT/var" "$SYNOPKG_PKGHOME" "$SYNOPKG_PKGVAR//" "$SYNOPKG_PKGVAR/data" "$SYNOPKG_PKGTMP" \
 		"$SYNOPKG_PKGDEST" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x" \
 		"$volume/@apptemp/$FIXTURE_ID" "$DSM_PACKAGES_DIR/$FIXTURE_ID" "/var/packages/$FIXTURE_ID/var/." \
-		"$volume/@appdata/$FIXTURE_ID/../$FIXTURE_ID"; do
+		"$volume/@appdata/$FIXTURE_ID/../$FIXTURE_ID" "$volume/nested/@appdata/$FIXTURE_ID" \
+		"$BATS_TEST_TMPDIR/deeper/volume1/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/share/@appdata/$FIXTURE_ID" \
+		"$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID"; do
 		run_common pkg_resolve_package_directory var "$directory"
 		[[ $status -eq 1 ]] || fail "'$directory' passed as the package's var directory"
+		assert_output ''
+	done
+	# The volume is one path component right below / of the NAS (PKG_TEST_VOLUMES_ROOT here):
+	# without the test root, the volumes of the test tree lie too deep, also behind the link.
+	for directory in "$volume/@appdata/$FIXTURE_ID" "$SYNOPKG_PKGVAR"; do
+		PKG_TEST_VOLUMES_ROOT='' run_common pkg_resolve_package_directory var "$directory"
+		[[ $status -eq 1 ]] || fail "'$directory' passed with a volume below $BATS_TEST_TMPDIR and no test root"
 		assert_output ''
 	done
 	# A var link that leads to the home directory resolves to the wrong kind.

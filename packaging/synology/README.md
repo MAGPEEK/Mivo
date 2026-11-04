@@ -118,7 +118,9 @@ into a browser on any device in your local network. Which address DSM puts into 
 **Main menu entry.** The package also adds its icon with the display name to the DSM **main
 menu** (the top-left button of DSM), like other media server packages do. Clicking it opens the
 same address, `http://<host you opened DSM with>:8460/`, in a new browser window. Every DSM
-user sees the entry; an administrator can restrict it in Control Panel > Application Privileges.
+user sees the entry. An administrator should be able to restrict it in Control Panel >
+Application Privileges; that the entry is listed there is not yet confirmed (community practice,
+checked in the hardware test, DSM-NOTES section 16).
 The entry grants nothing: whoever opens it meets the server's own access rules, exactly like any
 other browser in the network. It works only when DSM itself was opened on the NAS's LAN address
 or a host name that reaches the NAS directly – through QuickConnect or DSM's reverse proxy the
@@ -291,7 +293,8 @@ the database, settings and logs"**, unchecked by default:
 - **checked**: the package also deletes the contents of `var` and `home`. It deletes only when
   both are, with every link resolved, this package's directories in DSM's layout
   (`/var/packages/<id>/var` or `/volumeN/@appdata/<id>`, `/var/packages/<id>/home` or
-  `/volumeN/@apphome/<id>`); otherwise it keeps everything and reports why.
+  `/volumeN/@apphome/<id>`, with the volume directly below `/`); otherwise it keeps everything
+  and reports why.
 
 Your media files and shared folders are never touched. DSM removes the firewall service entry;
 the read-only grant for the user `<id>` on the shared folder stays (DSM keeps it on purpose) –

@@ -301,6 +301,27 @@ make_tree_notice_interim() {
 	expect_line "share/licenses/ffmpeg/LICENSE.md(duplicate, 2 times)"
 }
 
+@test "member names with blanks are taken whole" {
+	pack_spk "$tree" "$out"
+	echo x >"$tree/spk/a b"
+	echo x >"$tree/spk/a c"
+	tar rf "$out" -C "$tree/spk" "a b" "a c"
+	inspect_packed x86_64
+	expect_status 1
+	expect_line "a b(unexpected)"
+	expect_line "a c(unexpected)"
+	# Cut at the blank, both names read "a": a duplicate that is none.
+	refute_line "(duplicate"
+	expect_line "scripts/preupgrade a b a c"
+	# A SOURCE.txt below a directory with a blank is no licence file. (pack_outer splits ls
+	# output at blanks, so the outer members with blanks go first.)
+	rm "$tree/spk/a b" "$tree/spk/a c" "$tree/pkg/share/licenses/ffmpeg/LICENSE.md"
+	mkdir -p "$tree/pkg/share/licenses/ffmpeg/a b"
+	echo notice >"$tree/pkg/share/licenses/ffmpeg/a b/SOURCE.txt"
+	inspect x86_64
+	expect_line "FAIL share/licenses/ffmpeg has no licence file besides SOURCE.txt"
+}
+
 @test "an archive tar cannot read is a finding (exit 1), not a usage error" {
 	pack_spk "$tree" "$out"
 	head -c 1000 "$out" >"$BATS_TEST_TMPDIR/truncated.spk"
@@ -329,6 +350,18 @@ make_tree_notice_interim() {
 	inspect_packed x86_64
 	expect_status 1
 	expect_line "info SPK tar extensions beyond plain ustar: base-256-size,gnu-longname"
+}
+
+@test "a size field with a first byte 0x81 to 0xfe is invalid" {
+	local first
+	for first in 129 200 254; do
+		pack_spk "$tree" "$out"
+		base256_size "$out"
+		byte "$first" | patch_bytes "$out" 124
+		fix_header_checksum "$out" 0
+		inspect_packed x86_64
+		expect_fail "SPK is not a tar archive with ustar or GNU headers (unknown)"
+	done
 }
 
 @test "a gzip-compressed SPK and a gzip-compressed package.tgz fail" {
@@ -542,6 +575,9 @@ set_desktop() {
 	expect_line 'ok   ui/config: url is "/"'
 	expect_line 'ok   ui/config: allUsers is "true"'
 	expect_line "ok   ui/config: icon is \"images/${FIXTURE_ID}_{0}.png\""
+	expect_line 'ok   ui/config: grantPrivilege is "all"'
+	expect_line 'ok   ui/config: advanceGrantPrivilege is "true"'
+	expect_line "ok   ui/config: the entry has the keys $FIXTURE_DESKTOP_KEYS"
 	local size
 	for size in 16 24 32 48 64 72 256; do
 		expect_line "ok   ui/images/${FIXTURE_ID}_$size.png is a ${size}x$size PNG"
@@ -595,6 +631,17 @@ set_desktop() {
 	set_desktop '.".url"[] |= del(.allUsers)'
 	inspect x86_64
 	expect_line 'FAIL ui/config: allUsers is "", want "true"'
+	fixture_desktop_config >"$tree/pkg/ui/config"
+	set_desktop '.".url"[] |= (.grantPrivilege = "local" | .advanceGrantPrivilege = false)'
+	inspect x86_64
+	expect_fail 'ui/config: grantPrivilege is "local", want "all"'
+	expect_line 'FAIL ui/config: advanceGrantPrivilege is "false", want "true"'
+}
+
+@test "a main menu entry with a missing or an extra key fails" {
+	set_desktop '.".url"[] |= (del(.desc) | .appWindow = "x")'
+	inspect x86_64
+	expect_fail "ui/config: the entry has the keys advanceGrantPrivilege,allUsers,appWindow,grantPrivilege,icon,port,protocol,title,type,url, want $FIXTURE_DESKTOP_KEYS"
 }
 
 @test "a main menu icon of the wrong size, CR and a token in ui/config fail" {
@@ -626,6 +673,17 @@ set_desktop() {
 	inspect --members x86_64
 	table_b="$(grep -E '^[0-9a-f]{64} ' <<<"$output")"
 	[ "$table_a" = "$table_b" ]
+}
+
+@test "--members fails when a member cannot be hashed" {
+	local stubs="$BATS_TEST_TMPDIR/stubs"
+	mkdir -p "$stubs"
+	printf '#!/bin/sh\necho "sha256sum: read error (test)" >&2\nexit 1\n' >"$stubs/sha256sum"
+	chmod 0755 "$stubs/sha256sum"
+	pack_spk "$tree" "$out"
+	PATH="$stubs:$PATH" inspect_packed --members x86_64
+	expect_fail "--members: cannot hash spk:INFO"
+	refute_line " 644 spk:INFO"
 }
 
 @test "TERM ends the inspection with exit 143 and removes the work directory" {
@@ -667,4 +725,9 @@ set_desktop() {
 	expect_status 2
 	run sh "$INSPECT" --port 65536 "$out" x86_64
 	expect_status 2
+	# An expected-member list without a rule is no list (grep finds no line).
+	printf '# only a comment\n\n' >"$BATS_TEST_TMPDIR/empty.txt"
+	run sh "$INSPECT" --expected "$BATS_TEST_TMPDIR/empty.txt" "$out" x86_64
+	expect_status 2
+	expect_line "expected-member list $BATS_TEST_TMPDIR/empty.txt holds no rule"
 }

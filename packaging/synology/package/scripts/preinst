@@ -10,7 +10,8 @@
 # at install) exits 0 without a check.
 #
 # Test-only variable (packaging/synology/test; DSM never sets it):
-#   PKG_TEST_VOLUMES_ROOT  directory that holds the volume* directories instead of /
+#   PKG_TEST_VOLUMES_ROOT  directory that holds the volume* directories instead of / (common.sh
+#                          PKG_VOLUMES_ROOT)
 set -eu
 
 if [ "${SYNOPKG_PKG_STATUS:-}" != INSTALL ]; then
@@ -33,7 +34,7 @@ pkg_load_package_env || exit 1
 # share_exists succeeds when a volume holds a directory named $1. Only reached with a name
 # pkg_check_share_name accepted: no "/", no "..", no glob characters.
 share_exists() {
-	for share_dir in "${PKG_TEST_VOLUMES_ROOT:-}"/volume*/"$1"; do
+	for share_dir in "$PKG_VOLUMES_ROOT"/volume*/"$1"; do
 		if [ -d "$share_dir" ]; then
 			return 0
 		fi

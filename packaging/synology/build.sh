@@ -250,7 +250,8 @@ interim_banner() {
 
 # A release must be rebuildable from its commit: it records the commit (git rev-parse HEAD, or
 # --revision) and refuses uncommitted or untracked files (dist/ is ignored by
-# packaging/synology/.gitignore). Any git failure stops the release, so a git that cannot read
+# packaging/synology/.gitignore; --untracked-files=normal, so a status.showUntrackedFiles=no
+# setting cannot hide them). Any git failure stops the release, so a git that cannot read
 # the checkout (dubious ownership, no repository) never skips the check. Without git at all
 # there is nothing to compare against: the release then needs --revision.
 check_release_tree() {
@@ -264,7 +265,7 @@ check_release_tree() {
 	[ "$inside" = true ] || die "release refused: $repo_root is not a git working tree"
 	if [ "$revision_set" = no ]; then revision="$(release_git rev-parse HEAD)" || exit 1; fi
 	[ -n "$revision" ] || die "release refused: git names no commit for the build (empty revision)"
-	changes="$(release_git status --porcelain)" || exit 1
+	changes="$(release_git status --porcelain --untracked-files=normal)" || exit 1
 	[ -z "$changes" ] || die "release refused: the working tree has uncommitted changes:
 $(head -n 10 <<<"$changes")"
 }

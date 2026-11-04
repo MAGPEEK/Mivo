@@ -33,6 +33,14 @@ die() {
 	exit 1
 }
 
+# warnings_file holds spkstage's stderr of the family being staged; the EXIT trap removes it
+# however the stage ends, also when die leaves from inside stage_family.
+warnings_file=""
+remove_warnings_file() {
+	[ -z "$warnings_file" ] || rm -f "$warnings_file"
+}
+trap remove_warnings_file EXIT
+
 # notice_value <notice> <field> prints the single value of a "Field:" line, trimmed, so a word
 # such as "nonfree" cannot hide behind the first one; a notice with no or several such lines
 # is refused.
@@ -76,7 +84,9 @@ copy_source_archive() {
 # stage_family runs spkstage for family $1 and judges the staged FFmpeg.
 stage_family() {
 	local family="$1" warnings notice status licence
-	warnings="$(mktemp)"
+	remove_warnings_file
+	warnings_file="$(mktemp)"
+	warnings="$warnings_file"
 	if ! spkstage -family "$family" -version "$VERSION" -package-revision "$PACKAGE_REVISION" \
 		-source-date-epoch "$SOURCE_DATE_EPOCH" -binary "$prebuilt_dir/server/$family/server" \
 		-ffmpeg-dir "$prebuilt_dir/ffmpeg/$family" -repo "$repo_dir" -out "$output_dir/$family" 2>"$warnings"; then
@@ -96,7 +106,8 @@ stage_family() {
 	elif [ "$status" != selected ]; then
 		echo "stage: WARNING: $family uses an FFmpeg build with status '${status:-none}'; this is a test build, not for release or distribution" >&2
 	fi
-	rm -f "$warnings"
+	remove_warnings_file
+	warnings_file=""
 }
 
 main() {

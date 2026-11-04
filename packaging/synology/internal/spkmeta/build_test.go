@@ -272,6 +272,9 @@ func TestPackageValidateRejectsMalformedValues(t *testing.T) {
 		{name: "os_min_ver without build", field: "OS_MIN_VER", edit: func(pkg *spkmeta.Package) { pkg.OSMinVersion = "7.2" }},
 		{name: "os_min_ver text build", field: "OS_MIN_VER", edit: func(pkg *spkmeta.Package) { pkg.OSMinVersion = "7.2-abc" }},
 		{name: "empty os_min_ver", field: "OS_MIN_VER", edit: func(pkg *spkmeta.Package) { pkg.OSMinVersion = "" }},
+		// The main menu entry's key is com.<maintainer letters and digits>.<id>: no empty part.
+		{name: "maintainer without ASCII letters or digits", field: "MAINTAINER", edit: func(pkg *spkmeta.Package) { pkg.Maintainer = "Ö-Ü ä" }},
+		{name: "maintainer of punctuation only", field: "MAINTAINER", edit: func(pkg *spkmeta.Package) { pkg.Maintainer = "-." }},
 	}
 
 	for _, test := range tests {

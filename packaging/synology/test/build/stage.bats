@@ -125,6 +125,24 @@ expect_success() {
 	[[ "$output" == *"spkstage: fake failure for armv8"* ]]
 }
 
+@test "no temporary file is left, whether the stage succeeds or dies" {
+	local temp="$BATS_TEST_TMPDIR/temp"
+	mkdir -p "$temp"
+	TMPDIR="$temp" FAKE_SPKSTAGE_FAIL=armv8 RELEASE=false run_stage
+	expect_refusal "spkstage failed for armv8"
+	TMPDIR="$temp" FAKE_SPKSTAGE_WARN=armv7 run_stage
+	expect_refusal "release refused: spkstage warned for armv7"
+	write_notice x86_64 "Status:  interim" "Licence: GPL-3.0-or-later"
+	TMPDIR="$temp" run_stage
+	expect_refusal "release refused: the FFmpeg build of x86_64 has status 'interim'"
+	TMPDIR="$temp" RELEASE=false run_stage
+	expect_success
+	[ -z "$(ls -A "$temp")" ] || {
+		printf 'temporary files left: %s\n' "$(ls -A "$temp")" >&2
+		return 1
+	}
+}
+
 @test "exactly one source archive with its .sha256 is required" {
 	echo other >"$prebuilt/ffmpeg/source/ffmpeg-2-source.tar"
 	RELEASE=false run_stage

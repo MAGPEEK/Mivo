@@ -70,9 +70,15 @@ func (pkg Package) desktopIconTemplate() string {
 }
 
 // desktopAppKey is the unique property name of the entry: a reverse domain of the maintainer
-// (its letters and digits, lower case) plus the package name.
+// (desktopMaintainerLabel) plus the package name.
 func (pkg Package) desktopAppKey() string {
-	maintainer := strings.Map(func(character rune) rune {
+	return "com." + pkg.desktopMaintainerLabel() + "." + pkg.ID
+}
+
+// desktopMaintainerLabel is the maintainer's ASCII letters and digits in lower case, the
+// maintainer's part of desktopAppKey. Validate refuses a maintainer for which it is empty.
+func (pkg Package) desktopMaintainerLabel() string {
+	return strings.Map(func(character rune) rune {
 		switch {
 		case character >= 'a' && character <= 'z', character >= '0' && character <= '9':
 			return character
@@ -82,8 +88,17 @@ func (pkg Package) desktopAppKey() string {
 			return -1
 		}
 	}, pkg.Maintainer)
+}
 
-	return "com." + maintainer + "." + pkg.ID
+// validateDesktopAppKey refuses a maintainer without ASCII letters or digits, which would
+// leave an empty label in the entry key ("com..<id>").
+func (pkg Package) validateDesktopAppKey() error {
+	if pkg.desktopMaintainerLabel() == "" {
+		return fmt.Errorf("MAINTAINER %q has no ASCII letter or digit for the %s entry key: %w",
+			pkg.Maintainer, DesktopConfigFile, ErrInvalidValue)
+	}
+
+	return nil
 }
 
 // DesktopAppConfig renders the application config: one "url" entry titled with the display
