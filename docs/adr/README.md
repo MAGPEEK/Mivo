@@ -34,6 +34,8 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0026](0026-synology-spk-package.md) | Native Synology DSM package (SPK) | Accepted |
 | [0027](0027-library-model-v2.md) | Library model v2: hierarchy, local metadata, artwork and scanning (milestone 3) | Accepted |
 | [0028](0028-library-management-before-accounts.md) | Library management in the app, before accounts (partly supersedes 0022) | Accepted |
+| [0029](0029-second-wave-tooling-photos-and-discs.md) | Second-wave tooling: photos and discs | Accepted |
+| [0030](0030-streaming-extension-m4.md) | Streaming extension (M4): subtitles, tracks, hardware acceleration, throttling, trickplay | Proposed |
 
 ## Template
 
