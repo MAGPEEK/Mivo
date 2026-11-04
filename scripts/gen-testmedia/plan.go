@@ -20,13 +20,16 @@ const (
 	actionKeepOnly
 	// actionGap records a known gap (ADR 0021): a format FFmpeg cannot produce at all.
 	actionGap
+	// actionMissingInput leaves a case alone whose input file an earlier phase did not
+	// build: an existing file is kept, otherwise the case is skipped with the reason.
+	actionMissingInput
 )
 
 // plannedCase is one case with the decision of what to do with it.
 type plannedCase struct {
 	Case   mediaCase
 	Action action
-	// Reason explains actionSkip, actionKeepOnly and actionGap.
+	// Reason explains actionSkip, actionKeepOnly, actionGap and actionMissingInput.
 	Reason string
 }
 

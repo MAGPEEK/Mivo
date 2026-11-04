@@ -405,6 +405,32 @@ dev machine.
 
 Tests and the smoke test that need the corpus skip with a message when it is missing.
 
+### Library tree
+
+The same run also writes a library tree for the milestone-3 scan (task M3-17, ADR 0027) into
+`testdata/library/` (git-ignored): `movies/` and `shows/` as two library roots plus
+`manifest.json`, which describes the **expected catalog** (top-level items with kind, title,
+year, version labels, extras, NFO fields, artwork, and seasons with episode numbers) and the
+build result of every library case. The schema is documented in the package comment of
+`scripts/gen-testmedia/main.go`. It stays apart from `testdata/media`, which tests and the
+smoke script use as one movies library.
+
+- **Movies**: folder movie with `- 1080p`/`- 4K` versions, `Trailers/` and a `-featurette`
+  extra, a `sample.mkv`, `poster.jpg`, `fanart.jpg` and an RGBA `clearlogo.png`; an
+  `{edition-Director's Cut}`; a `cd1`/`cd2` movie; loose movies in one folder; NFO files
+  whose title differs from the folder, URL-only, ISO-8859-1 and malformed; an NFD folder
+  name (`Amélie (2001)`); a Matroska cover attachment and an MP4 `covr` without local poster.
+- **Shows**: `Season 01`, `Season 02`, `Specials`, a multi-episode file, `tvshow.nfo` with
+  provider IDs, `season01-poster.jpg`, an episode NFO and `-thumb.jpg`; a show with files in
+  the library root; `Dragon Ball Super/` with 131 absolutely numbered files (UX DT-24: one
+  show, one season, 131 episodes) and an anime-style release name in a second folder.
+- All videos are the same 2 s H.264/AAC clip: one FFmpeg run per item, further files are
+  byte copies, so the 165 media files take 20 runs. Images are single `testsrc2` frames (600×900
+  posters, 1280×720 backdrops and thumbnails); NFO files are written by the generator.
+- `-library <dir>` changes the directory, `-library ""` skips the tree, and
+  `-only 'library-*'` builds only the tree. `-force` and kept files work as for the corpus;
+  deleted copies and NFO files are restored on the next run.
+
 ### Corpus integration test
 
 `internal/adapters/corpustest` proves the milestone promise against the generated corpus
@@ -439,6 +465,7 @@ Wall-clock times on the dev machine (Intel Core Ultra 7 265K, 20 threads, FFmpeg
 | `go test -count=1 -short ./...` | 13 s | 13 s |
 | `go test -count=1 -race "-coverprofile=coverage.out" ./...` | 106 s | 107 s |
 | `go run ./scripts/gen-testmedia` (45 files) | – | 2 s |
+| `go run ./scripts/gen-testmedia -force` (45 files and the library tree, 2026-11-04) | – | 2.5 s |
 
 - The corpus itself costs little: the clips are small, and `corpustest` plays all of them in
   about 5 s (9 s with `-race`).

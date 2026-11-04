@@ -6,8 +6,51 @@
 // lists every case with its status, expected properties and the known gaps FFmpeg cannot
 // produce at all. Run it from the repository root:
 //
-//	go run ./scripts/gen-testmedia [-out testdata/media] [-ffmpeg ffmpeg] [-force]
-//	                               [-only <glob>[,<glob>...]] [-jobs N]
+//	go run ./scripts/gen-testmedia [-out testdata/media] [-library testdata/library]
+//	                               [-ffmpeg ffmpeg] [-force] [-only <glob>[,<glob>...]] [-jobs N]
+//
+// # Library tree
+//
+// Unless -library is "", it also writes a library tree for the milestone-3 scan (task
+// M3-17, ADR 0027): <library>/movies and <library>/shows with folder and loose movies,
+// versions, editions, parts, extras, samples, shows with seasons, specials, multi-episode
+// files, absolutely numbered episodes (UX DT-24: "Dragon Ball Super - 001" … "- 131"), Kodi
+// NFO files (UTF-8, ISO-8859-1, URL-only, malformed) and local and embedded artwork. Names of
+// real movies and shows are only file names; all content is generated. Every video is the
+// same 2 s H.264/AAC clip; files of one item share one FFmpeg run and are byte copies. Library
+// case names start with "library-", so -only 'library-*' builds the tree alone.
+//
+// <library>/manifest.json describes the expected catalog (what a scan must produce) and the
+// build result. Paths are relative to the library root (Path of the library) unless noted,
+// use forward slashes and keep the raw file-system form (one folder name is Unicode NFD);
+// titles and NFO text are NFC. Schema version 1:
+//
+//	schemaVersion  1
+//	ffmpegVersion  version of the FFmpeg that ran
+//	libraries[]    kind ("movies"|"shows"), path (below <library>), items[]:
+//	  kind           "movie"|"show"
+//	  title, year    expected catalog values after the merge (NFO before file name); year
+//	                 is omitted when there is none
+//	  path           movie or show folder, file of a loose movie, "" for a show whose files
+//	                 lie directly in the library root
+//	  versions[]     movies: label (file-name suffix or edition, "" for none), parts[]
+//	                 (files in part order)
+//	  extras[]       type ("trailer"|"featurette"), file
+//	  ignored[]      files the scan must not list (samples)
+//	  nfo            file, format ("xml"|"url"|"malformed"), encoding ("UTF-8"|
+//	                 "ISO-8859-1", XML only), fields: title, originalTitle, year, plot,
+//	                 aired, season, episode, genres[], providerIds{tmdb,imdb,tvdb};
+//	                 fields is empty for a malformed file
+//	  artwork[]      kind ("poster"|"backdrop"|"thumb"|"logo"), source ("local"|
+//	                 "embedded"), file (the image, or the video embedding it)
+//	  seasons[]      shows, ascending number (0 = specials): number, path ("" without a
+//	                 season folder), artwork[], episodes[]: number, numberEnd (multi-episode
+//	                 file), absoluteNumber (absolutely numbered files), files[], nfo, artwork[]
+//	cases[]        name, category ("artwork"|"movies"|"shows"), status ("generated"|
+//	               "skipped"|"failed"), skipKind, reason, files[] (relative to <library>)
+//
+// The catalog is static; consumers check that every case is generated (or skip with the
+// reason) before they compare a scan with it.
 package main
 
 import (
@@ -31,7 +74,10 @@ const (
 	exitUsage = 2
 
 	defaultOutDir = "testdata/media"
-	defaultFFmpeg = "ffmpeg"
+	// defaultLibraryDir stays apart from defaultOutDir: tests and the smoke script use
+	// testdata/media as one movies library and would change their counts otherwise.
+	defaultLibraryDir = "testdata/library"
+	defaultFFmpeg     = "ffmpeg"
 )
 
 // errCasesFailed reports that at least one buildable case failed; details are in the manifest.
@@ -62,10 +108,12 @@ func interruptContext(parent context.Context) (context.Context, context.CancelFu
 // options holds the parsed command line.
 type options struct {
 	outDir string
-	ffmpeg string
-	force  bool
-	only   caseFilter
-	jobs   int
+	// libraryDir receives the library tree; "" skips it.
+	libraryDir string
+	ffmpeg     string
+	force      bool
+	only       caseFilter
+	jobs       int
 }
 
 // run executes the command with the given arguments and returns the process exit code.
@@ -97,6 +145,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("gen-testmedia", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&opts.outDir, "out", defaultOutDir, "output directory for media files and manifest.json")
+	flags.StringVar(&opts.libraryDir, "library", defaultLibraryDir,
+		"output directory for the library tree (movies/, shows/) and its manifest.json; \"\" skips it")
 	flags.StringVar(&opts.ffmpeg, "ffmpeg", defaultFFmpeg, "ffmpeg executable (name on PATH or path)")
 	flags.BoolVar(&opts.force, "force", false, "regenerate files that already exist")
 	flags.StringVar(&only, "only", "",
@@ -143,30 +193,61 @@ func generateCorpus(ctx context.Context, opts options, ffmpeg commandRunner, std
 		return fmt.Errorf("use ffmpeg %q (install FFmpeg or pass -ffmpeg): %w", opts.ffmpeg, err)
 	}
 
-	gen := generator{
-		ffmpeg: ffmpeg, outDir: opts.outDir, force: opts.force, jobs: opts.jobs, progress: stdout,
-		previous: loadPreviousEncoders(opts.outDir, stdout),
-	}
-	entries := gen.generateAll(ctx, planCases(allCases(), caps, opts.only))
-	result := newManifest(caps.version, entries)
+	run := session{opts: opts, caps: caps, ffmpeg: ffmpeg, stdout: stdout}
 
-	// An interrupted run still writes the manifest, so it matches the files on disk.
-	if err := writeManifest(opts.outDir, result); err != nil {
+	// An interrupted run still writes the manifests, so they match the files on disk.
+	media, err := run.generateMedia(ctx)
+	if err != nil {
 		return err
 	}
 
-	// The summary is informational; the manifest is the authoritative result.
-	_ = writeSummary(stdout, result, filepath.Join(opts.outDir, manifestFileName))
+	failed := media.count(statusFailed)
+
+	if opts.libraryDir != "" {
+		library, err := run.generateLibrary(ctx)
+		if err != nil {
+			return err
+		}
+
+		failed += library.count(statusFailed)
+	}
 
 	if ctx.Err() != nil {
 		return fmt.Errorf("%w: %w", errInterrupted, ctx.Err())
 	}
 
-	if result.count(statusFailed) > 0 {
+	if failed > 0 {
 		return errCasesFailed
 	}
 
 	return nil
+}
+
+// session is one run of the program with detected FFmpeg capabilities.
+type session struct {
+	opts   options
+	caps   capabilities
+	ffmpeg commandRunner
+	stdout io.Writer
+}
+
+// generateMedia builds the playback corpus into s.opts.outDir and writes its manifest and
+// summary.
+func (s session) generateMedia(ctx context.Context) (manifest, error) {
+	gen := generator{
+		ffmpeg: s.ffmpeg, outDir: s.opts.outDir, force: s.opts.force, jobs: s.opts.jobs, progress: s.stdout,
+		previous: loadPreviousEncoders(s.opts.outDir, s.stdout),
+	}
+	result := newManifest(s.caps.version, gen.generateAll(ctx, planCases(allCases(), s.caps, s.opts.only)))
+
+	if err := writeManifest(s.opts.outDir, result); err != nil {
+		return manifest{}, err
+	}
+
+	// The summary is informational; the manifest is the authoritative result.
+	_ = writeSummary(s.stdout, result, filepath.Join(s.opts.outDir, manifestFileName))
+
+	return result, nil
 }
 
 // loadPreviousEncoders reads the encoders of the files the earlier runs built. An unusable

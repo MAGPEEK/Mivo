@@ -20,6 +20,7 @@ web/**/test-results/
 
 # Generated test media (recreate with scripts/gen-testmedia)
 /testdata/media/
+/testdata/library/
 
 # Local runtime data
 /data/

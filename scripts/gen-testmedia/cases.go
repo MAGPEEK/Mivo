@@ -49,8 +49,15 @@ type mediaCase struct {
 	// Inputs are text files the generator writes to a temporary directory and passes to
 	// FFmpeg after the lavfi inputs, e.g. subtitles to embed or a chapter list.
 	Inputs []textInput
-	// Sidecars are text files written next to Output once it was built.
+	// Sidecars are text files written once Output was built, usually next to it.
 	Sidecars []sidecarFile
+	// Copies are further output paths (relative to the output directory, forward slashes)
+	// that receive a byte copy of Output, so many file names cost one FFmpeg run.
+	Copies []string
+	// Cover, when set, is a JPEG relative to the output directory that an earlier phase of
+	// the run built. It is embedded as cover art: a Matroska attachment, otherwise an
+	// attached picture (MP4 covr). The generator resolves it before building the arguments.
+	Cover string
 	// Args are the encoder options of the case. They are placed after the generic
 	// reproducibility options, so a case can override those.
 	Args []string
@@ -345,6 +352,7 @@ func cloneTrack(track *trackExpectation) *trackExpectation {
 func buildArgs(c mediaCase, inputDir, outputPath string) []string {
 	sourceInputs, sourceMaps := sourceArgs(c.Source)
 	textInputs, textMaps := textInputArgs(c.Inputs, inputDir, c.Source.inputCount())
+	coverInputs, coverMaps, coverOptions := coverArgs(c, c.Source.inputCount()+len(c.Inputs))
 
 	return slices.Concat(
 		[]string{
@@ -353,7 +361,7 @@ func buildArgs(c mediaCase, inputDir, outputPath string) []string {
 			// afterwards, so overwriting never touches a finished corpus file.
 			"-y",
 		},
-		sourceInputs, textInputs, sourceMaps, textMaps,
+		sourceInputs, textInputs, coverInputs, sourceMaps, textMaps, coverMaps,
 		// Strip global and stream metadata and encoder version strings so repeated runs give
 		// identical files. A plain "-map_metadata -1" would also drop chapter titles, which
 		// only come from inputs the generator writes itself.
@@ -361,9 +369,52 @@ func buildArgs(c mediaCase, inputDir, outputPath string) []string {
 			"-map_metadata:g", "-1", "-map_metadata:s", "-1",
 			"-fflags", "+bitexact", "-flags", "+bitexact",
 		},
-		c.Args,
+		c.Args, coverOptions,
 		[]string{"-t", formatSeconds(c.Source.Duration), "-f", c.Muxer, outputPath},
 	)
+}
+
+// Cover art options. The cover JPEG is copied, never re-encoded, so the embedded picture is
+// byte-identical to the poster image.
+const (
+	matroskaMuxer = "matroska"
+	// coverFileName is the attachment name Matroska readers (and FFmpeg) treat as a cover.
+	coverFileName = "cover.jpg"
+	coverMimeType = "image/jpeg"
+)
+
+// coverArgs returns the input, map and codec options that embed c.Cover. inputIndex is the
+// FFmpeg index the cover input gets. Matroska stores the picture as an attachment, which
+// needs no input; other muxers (MP4) take it as a second video stream marked as attached
+// picture, which follows the single source video stream.
+func coverArgs(c mediaCase, inputIndex int) (inputs, maps, options []string) {
+	if c.Cover == "" {
+		return nil, nil, nil
+	}
+
+	if c.Muxer == matroskaMuxer {
+		return nil, nil, []string{
+			"-attach", c.Cover,
+			"-metadata:s:t:0", "mimetype=" + coverMimeType, "-metadata:s:t:0", "filename=" + coverFileName,
+		}
+	}
+
+	return []string{"-i", c.Cover},
+		[]string{"-map", strconv.Itoa(inputIndex) + ":v:0"},
+		[]string{"-c:v:1", "copy", "-disposition:v:1", "attached_pic"}
+}
+
+// files returns every path the case writes: Output, its copies and its sidecars.
+func (c mediaCase) files() []string {
+	files := make([]string, 0, 1+len(c.Copies)+len(c.Sidecars))
+	files = append(files, c.Output)
+	files = append(files, c.Copies...)
+
+	for _, sidecar := range c.Sidecars {
+		files = append(files, sidecar.Output)
+	}
+
+	return files
 }
 
 // sourceArgs returns the lavfi inputs of a source and the options that map them.

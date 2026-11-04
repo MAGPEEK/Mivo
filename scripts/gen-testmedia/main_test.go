@@ -29,11 +29,11 @@ func TestParseOptions(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: options{outDir: defaultOutDir, ffmpeg: defaultFFmpeg, jobs: runtime.NumCPU()},
+			want: options{outDir: defaultOutDir, libraryDir: defaultLibraryDir, ffmpeg: defaultFFmpeg, jobs: runtime.NumCPU()},
 		},
 		{
 			name: "all flags",
-			args: []string{"-out", "media", "-ffmpeg", "/opt/ffmpeg", "-force", "-only", "video-*", "-jobs", "3"},
+			args: []string{"-out", "media", "-library", "", "-ffmpeg", "/opt/ffmpeg", "-force", "-only", "video-*", "-jobs", "3"},
 			want: options{
 				outDir: "media", ffmpeg: "/opt/ffmpeg", force: true,
 				only: caseFilter{text: "video-*", globs: []string{"video-*"}}, jobs: 3,
@@ -43,7 +43,7 @@ func TestParseOptions(t *testing.T) {
 			name: "only takes a comma-separated glob list",
 			args: []string{"-only", "video-mp4-*,video-webm-vp9-opus"},
 			want: options{
-				outDir: defaultOutDir, ffmpeg: defaultFFmpeg, jobs: runtime.NumCPU(),
+				outDir: defaultOutDir, libraryDir: defaultLibraryDir, ffmpeg: defaultFFmpeg, jobs: runtime.NumCPU(),
 				only: caseFilter{
 					text:  "video-mp4-*,video-webm-vp9-opus",
 					globs: []string{"video-mp4-*", "video-webm-vp9-opus"},
@@ -53,7 +53,7 @@ func TestParseOptions(t *testing.T) {
 		{
 			name: "jobs below one are raised to one",
 			args: []string{"-jobs", "-2"},
-			want: options{outDir: defaultOutDir, ffmpeg: defaultFFmpeg, jobs: 1},
+			want: options{outDir: defaultOutDir, libraryDir: defaultLibraryDir, ffmpeg: defaultFFmpeg, jobs: 1},
 		},
 	}
 
@@ -132,7 +132,7 @@ func TestRunExitCodes(t *testing.T) {
 		{name: "usage error", args: []string{"-jobs", "many"}, wantCode: exitUsage},
 		{
 			name:       "missing ffmpeg",
-			args:       []string{"-ffmpeg", missingFFmpeg, "-out", t.TempDir()},
+			args:       []string{"-ffmpeg", missingFFmpeg, "-out", t.TempDir(), "-library", ""},
 			wantCode:   exitFailure,
 			wantStderr: "install FFmpeg or pass -ffmpeg",
 		},

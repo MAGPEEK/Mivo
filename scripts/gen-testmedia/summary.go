@@ -53,7 +53,7 @@ func (t *tally) addSkip(kind skipKind) {
 		t.gaps++
 	case skipInterrupted:
 		t.interrupted++
-	case skipMissingCapability:
+	case skipMissingCapability, skipMissingInput:
 		t.skipped++
 	}
 }
@@ -81,10 +81,10 @@ func (t tally) String() string {
 }
 
 // tallyByCategory counts the entries of every category.
-func (m manifest) tallyByCategory() map[string]tally {
+func tallyByCategory(entries []manifestEntry) map[string]tally {
 	tallies := map[string]tally{}
 
-	for _, entry := range m.Cases {
+	for _, entry := range entries {
 		counts := tallies[entry.Category]
 		counts.add(entry)
 		tallies[entry.Category] = counts
@@ -95,7 +95,22 @@ func (m manifest) tallyByCategory() map[string]tally {
 
 // writeSummary prints one line per category, a total and the manifest path.
 func writeSummary(output io.Writer, m manifest, manifestPath string) error {
-	tallies := m.tallyByCategory()
+	var text strings.Builder
+
+	fmt.Fprintf(&text, "ffmpeg %s\n", m.FFmpegVersion)
+	writeTallies(&text, m.Cases)
+	fmt.Fprintf(&text, "manifest: %s\n", manifestPath)
+
+	if _, err := io.WriteString(output, text.String()); err != nil {
+		return fmt.Errorf("write summary: %w", err)
+	}
+
+	return nil
+}
+
+// writeTallies writes one indented line per category and a total line.
+func writeTallies(text *strings.Builder, entries []manifestEntry) {
+	tallies := tallyByCategory(entries)
 	categories := slices.Sorted(maps.Keys(tallies))
 	width := len(summaryTotalLabel)
 
@@ -103,22 +118,12 @@ func writeSummary(output io.Writer, m manifest, manifestPath string) error {
 		width = max(width, len(category))
 	}
 
-	var text strings.Builder
-
-	fmt.Fprintf(&text, "ffmpeg %s\n", m.FFmpegVersion)
-
 	total := tally{}
 
 	for _, category := range categories {
-		fmt.Fprintf(&text, "  %-*s  %s\n", width, category, tallies[category])
+		fmt.Fprintf(text, "  %-*s  %s\n", width, category, tallies[category])
 		total = total.plus(tallies[category])
 	}
 
-	fmt.Fprintf(&text, "  %-*s  %s\nmanifest: %s\n", width, summaryTotalLabel, total, manifestPath)
-
-	if _, err := io.WriteString(output, text.String()); err != nil {
-		return fmt.Errorf("write summary: %w", err)
-	}
-
-	return nil
+	fmt.Fprintf(text, "  %-*s  %s\n", width, summaryTotalLabel, total)
 }

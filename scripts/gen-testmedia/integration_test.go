@@ -48,7 +48,7 @@ func generateCases(t *testing.T, ffmpegPath, outDir string, names ...string) man
 	t.Helper()
 
 	for _, name := range names {
-		args := []string{"-out", outDir, "-ffmpeg", ffmpegPath, "-only", name, "-jobs", "1"}
+		args := []string{"-out", outDir, "-library", "", "-ffmpeg", ffmpegPath, "-only", name, "-jobs", "1"}
 
 		var stdout, stderr bytes.Buffer
 		if code := run(context.Background(), args, &stdout, &stderr); code != exitOK {
@@ -193,6 +193,80 @@ func TestIntegrationGeneratesNewCategories(t *testing.T) {
 	}
 }
 
+// TestIntegrationGeneratesTheLibraryTree builds the library tree (M3-17) with the real FFmpeg
+// into a temporary directory and checks every case against its expectation, the copies and
+// the embedded cover art.
+func TestIntegrationGeneratesTheLibraryTree(t *testing.T) {
+	ffmpegPath, ffprobePath := requireFFmpeg(t)
+	t.Parallel()
+
+	libraryDir := t.TempDir()
+	args := []string{"-out", t.TempDir(), "-library", libraryDir, "-ffmpeg", ffmpegPath, "-only", libraryCasePrefix + "*"}
+
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), args, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit code %d\nstdout:\n%s\nstderr:\n%s", code, stdout.String(), stderr.String())
+	}
+
+	if result := readLibraryManifest(t, libraryDir); result.count(statusGenerated) != len(result.Cases) {
+		t.Fatalf("not every library case was generated:\n%s", stdout.String())
+	}
+
+	for _, c := range libraryCases() {
+		t.Run(c.Name, func(t *testing.T) {
+			t.Parallel()
+
+			entry := newBuiltEntry(c)
+			// NFO sidecars are no media; the unit tests check their content.
+			entry.Expected.Sidecars = nil
+			verifyEntry(t, ffprobePath, libraryDir, entry)
+			verifyCopies(t, libraryDir, c)
+
+			if c.Cover != "" {
+				verifyCoverArt(t, ffprobePath, libraryDir, c)
+			}
+		})
+	}
+}
+
+// verifyCopies checks that every copy is byte-identical to the built file.
+func verifyCopies(t *testing.T, dir string, c mediaCase) {
+	t.Helper()
+
+	library := os.DirFS(dir)
+
+	built, err := fs.ReadFile(library, c.Output)
+	if err != nil {
+		t.Fatalf("read %s: %v", c.Output, err)
+	}
+
+	for _, copyOutput := range c.Copies {
+		if data, err := fs.ReadFile(library, copyOutput); err != nil || !bytes.Equal(data, built) {
+			t.Errorf("%s is no copy of %s (error %v)", copyOutput, c.Output, err)
+		}
+	}
+}
+
+// verifyCoverArt checks the embedded poster: one 600x900 JPEG attached picture, and in
+// Matroska an attachment named and typed as a cover.
+func verifyCoverArt(t *testing.T, ffprobePath, dir string, c mediaCase) {
+	t.Helper()
+
+	covers := attachedPictures(probeFile(t, ffprobePath, filepath.Join(dir, filepath.FromSlash(c.Output))))
+	if len(covers) != 1 {
+		t.Fatalf("%d attached pictures, want 1", len(covers))
+	}
+
+	cover := covers[0]
+	check(t, "cover codec", cover.CodecName, "mjpeg")
+	check(t, "cover size", fmt.Sprintf("%dx%d", cover.Width, cover.Height), fmt.Sprintf("%dx%d", posterWidth, posterHeight))
+
+	if c.Muxer == matroskaMuxer {
+		check(t, "attachment file name", cover.Tags.FileName, coverFileName)
+		check(t, "attachment MIME type", cover.Tags.MimeType, coverMimeType)
+	}
+}
+
 // TestIntegrationCorpusMatchesManifest verifies every generated file of the repository corpus
 // (`go run ./scripts/gen-testmedia`) with ffprobe against its expected properties.
 func TestIntegrationCorpusMatchesManifest(t *testing.T) {
@@ -275,11 +349,29 @@ type probeStream struct {
 	BitsPerRawSample string `json:"bits_per_raw_sample"`
 	Tags             struct {
 		Language string `json:"language"`
+		// FileName and MimeType describe Matroska attachments; ffprobe writes them in
+		// lower case for files FFmpeg muxed.
+		FileName string `json:"filename"`
+		MimeType string `json:"mimetype"`
 	} `json:"tags"`
 	Disposition struct {
-		Default int `json:"default"`
-		Forced  int `json:"forced"`
+		Default     int `json:"default"`
+		Forced      int `json:"forced"`
+		AttachedPic int `json:"attached_pic"`
 	} `json:"disposition"`
+}
+
+// attachedPictures returns the cover art streams.
+func attachedPictures(result probeResult) []probeStream {
+	var streams []probeStream
+
+	for _, stream := range result.Streams {
+		if stream.Disposition.AttachedPic == 1 {
+			streams = append(streams, stream)
+		}
+	}
+
+	return streams
 }
 
 type probeChapter struct {
@@ -484,12 +576,13 @@ func verifyHDR10SideData(t *testing.T, ffprobePath, path string) {
 	}
 }
 
-// streamsOfType returns the streams of one codec type in stream order.
+// streamsOfType returns the streams of one codec type in stream order. Attached pictures
+// (cover art) are no video streams; attachedPictures returns them.
 func streamsOfType(result probeResult, codecType string) []probeStream {
 	var streams []probeStream
 
 	for _, stream := range result.Streams {
-		if stream.CodecType == codecType {
+		if stream.CodecType == codecType && stream.Disposition.AttachedPic == 0 {
 			streams = append(streams, stream)
 		}
 	}

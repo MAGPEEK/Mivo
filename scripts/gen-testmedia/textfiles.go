@@ -106,6 +106,107 @@ func escapeFFMetadata(value string) string {
 	return strings.NewReplacer(`\`, `\\`, "=", `\=`, ";", `\;`, "#", `\#`, "\n", "\\\n").Replace(value)
 }
 
+// Kodi NFO root elements (ADR 0027 section 7).
+const (
+	nfoRootMovie   = "movie"
+	nfoRootShow    = "tvshow"
+	nfoRootEpisode = "episodedetails"
+	// tmdbMovieURL prefixes the TMDB ID in a URL-only NFO.
+	tmdbMovieURL = "https://www.themoviedb.org/movie/"
+	// malformedNFO ends inside an element: no XML parser accepts it, so a reader must fall
+	// back to the file name.
+	malformedNFO = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<movie>\n  <title>Never read</title>\n  <plot>The file ends before"
+	// maxLatin1 is the highest code point ISO-8859-1 encodes.
+	maxLatin1 = 0xFF
+	// latin1Replacement stands for runes ISO-8859-1 cannot encode; the tests keep the catalog
+	// free of them.
+	latin1Replacement = '?'
+)
+
+// renderNFO writes the NFO file whose readable content is nfo.Fields. root is the XML root
+// element: movie, tvshow or episodedetails.
+func renderNFO(root string, nfo expectedNFO) string {
+	switch nfo.Format {
+	case nfoFormatURL:
+		return tmdbMovieURL + nfo.Fields.ProviderIDs[providerTMDB] + "\n"
+	case nfoFormatMalformed:
+		return malformedNFO
+	}
+
+	text := nfoXML(root, nfo.Encoding, nfo.Fields)
+	if nfo.Encoding == encodingLatin1 {
+		return toLatin1(text)
+	}
+
+	return text
+}
+
+// nfoXML writes the fields as Kodi XML in a fixed element order.
+func nfoXML(root, encoding string, fields nfoFields) string {
+	var text strings.Builder
+
+	fmt.Fprintf(&text, "<?xml version=\"1.0\" encoding=\"%s\" standalone=\"yes\"?>\n<%s>\n", encoding, root)
+	writeNFOElement(&text, "title", fields.Title)
+	writeNFOElement(&text, "originaltitle", fields.OriginalTitle)
+	writeNFONumber(&text, "year", fields.Year)
+	writeNFONumber(&text, "season", fields.Season)
+	writeNFONumber(&text, "episode", fields.Episode)
+	writeNFOElement(&text, "aired", fields.Aired)
+	writeNFOElement(&text, "plot", fields.Plot)
+
+	for _, genre := range fields.Genres {
+		writeNFOElement(&text, "genre", genre)
+	}
+
+	isDefault := true
+
+	for _, provider := range []string{providerTMDB, providerIMDb, providerTVDB} {
+		id, found := fields.ProviderIDs[provider]
+		if !found {
+			continue
+		}
+
+		fmt.Fprintf(&text, "  <uniqueid type=\"%s\" default=\"%t\">%s</uniqueid>\n", provider, isDefault, escapeXML(id))
+		isDefault = false
+	}
+
+	fmt.Fprintf(&text, "</%s>\n", root)
+
+	return text.String()
+}
+
+func writeNFOElement(text *strings.Builder, name, value string) {
+	if value != "" {
+		fmt.Fprintf(text, "  <%s>%s</%s>\n", name, escapeXML(value), name)
+	}
+}
+
+func writeNFONumber(text *strings.Builder, name string, value int) {
+	if value > 0 {
+		fmt.Fprintf(text, "  <%s>%d</%s>\n", name, value, name)
+	}
+}
+
+// escapeXML escapes the characters XML reserves in element content and attribute values.
+func escapeXML(value string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;").Replace(value)
+}
+
+// toLatin1 encodes text as ISO-8859-1 bytes; Go strings may hold any bytes.
+func toLatin1(text string) string {
+	encoded := make([]byte, 0, len(text))
+
+	for _, character := range text {
+		if character > maxLatin1 {
+			character = latin1Replacement
+		}
+
+		encoded = append(encoded, byte(character))
+	}
+
+	return string(encoded)
+}
+
 // clockTime formats d as "HH:MM:SS<separator>mmm", the SRT and WebVTT timestamp.
 func clockTime(d time.Duration, separator string) string {
 	hours, minutes, seconds := clockParts(d)

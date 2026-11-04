@@ -77,6 +77,8 @@ func (g *generator) generate(ctx context.Context, plan plannedCase) manifestEntr
 		return newSkippedEntry(plan.Case, skipMissingCapability, plan.Reason)
 	case actionGap:
 		return newSkippedEntry(plan.Case, skipKnownGap, plan.Reason)
+	case actionMissingInput:
+		return g.keptOrSkipped(plan.Case, target, skipMissingInput, plan.Reason)
 	case actionBuild:
 		return g.buildOrKeep(ctx, plan.Case, target)
 	}
@@ -104,8 +106,8 @@ func (g *generator) keptEntry(c mediaCase) manifestEntry {
 // are skipped.
 func (g *generator) buildOrKeep(ctx context.Context, c mediaCase, target string) manifestEntry {
 	if isNonEmptyFile(target) && !g.force {
-		// Sidecars are cheap text; restoring deleted ones keeps the manifest truthful.
-		if err := g.writeSidecars(c, false); err != nil {
+		// Sidecars and copies are cheap; restoring deleted ones keeps the manifest truthful.
+		if err := g.writeCompanions(c, false); err != nil {
 			return newEntry(c, statusFailed, err.Error())
 		}
 
@@ -147,7 +149,7 @@ func (g *generator) build(ctx context.Context, c mediaCase, target string) (err 
 	caseCtx, cancel := context.WithTimeout(ctx, caseTimeout)
 	defer cancel()
 
-	if _, err := g.ffmpeg.Run(caseCtx, buildArgs(c, inputDir, partial)); err != nil {
+	if _, err := g.ffmpeg.Run(caseCtx, buildArgs(g.resolveCover(c), inputDir, partial)); err != nil {
 		return errors.Join(fmt.Errorf("ffmpeg: %w", err), removePartial(partial))
 	}
 
@@ -155,7 +157,27 @@ func (g *generator) build(ctx context.Context, c mediaCase, target string) (err 
 		return errors.Join(fmt.Errorf("finish %s: %w", c.Output, err), removePartial(partial))
 	}
 
-	return g.writeSidecars(c, true)
+	return g.writeCompanions(c, true)
+}
+
+// resolveCover turns the cover path of a case into a path below the output directory. c is a
+// copy, so the registry keeps its relative path.
+func (g *generator) resolveCover(c mediaCase) mediaCase {
+	if c.Cover != "" {
+		c.Cover = g.path(c.Cover)
+	}
+
+	return c
+}
+
+// writeCompanions writes the sidecars and copies of a case once Output exists. Without
+// overwrite, existing ones are kept.
+func (g *generator) writeCompanions(c mediaCase, overwrite bool) error {
+	if err := g.writeSidecars(c, overwrite); err != nil {
+		return err
+	}
+
+	return g.writeCopies(c, overwrite)
 }
 
 // writeSidecars writes the sidecar files of a case. Without overwrite, existing ones are kept.
@@ -166,12 +188,57 @@ func (g *generator) writeSidecars(c mediaCase, overwrite bool) error {
 			continue
 		}
 
-		if err := writeFileAtomically(path, []byte(sidecar.Content)); err != nil {
+		if err := writeFileAtomicallyInNewDirectory(path, []byte(sidecar.Content)); err != nil {
 			return fmt.Errorf("sidecar %s: %w", sidecar.Output, err)
 		}
 	}
 
 	return nil
+}
+
+// writeCopies copies Output to every copy path. Without overwrite, existing copies are kept.
+func (g *generator) writeCopies(c mediaCase, overwrite bool) error {
+	source := g.path(c.Output)
+
+	for _, copyOutput := range c.Copies {
+		target := g.path(copyOutput)
+		if !overwrite && isNonEmptyFile(target) {
+			continue
+		}
+
+		if err := copyFileAtomically(source, target); err != nil {
+			return fmt.Errorf("copy %s: %w", copyOutput, err)
+		}
+	}
+
+	return nil
+}
+
+// writeFileAtomicallyInNewDirectory creates the directory of target first: library sidecars
+// such as tvshow.nfo lie in another folder than the case output.
+func writeFileAtomicallyInNewDirectory(target string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(target), outputDirPermissions); err != nil {
+		return fmt.Errorf("create directory of %s: %w", filepath.Base(target), err)
+	}
+
+	return writeFileAtomically(target, data)
+}
+
+// copyFileAtomically copies source to a temporary file next to target and renames it, so an
+// interrupted copy never leaves a truncated file a later run would keep.
+func copyFileAtomically(source, target string) error {
+	input, err := os.Open(source) //nolint:gosec // source is a file this program just built
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+
+	defer func() { _ = input.Close() }() // read-only; a close error loses no data
+
+	if err := os.MkdirAll(filepath.Dir(target), outputDirPermissions); err != nil {
+		return fmt.Errorf("create directory: %w", err)
+	}
+
+	return writeAtomically(target, input)
 }
 
 // path converts a corpus path with forward slashes into a path below the output directory.

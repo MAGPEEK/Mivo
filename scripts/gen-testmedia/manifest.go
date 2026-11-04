@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -44,6 +46,9 @@ const (
 	skipKnownGap skipKind = "known-gap"
 	// skipInterrupted: the run was interrupted before the case was built.
 	skipInterrupted skipKind = "interrupted"
+	// skipMissingInput: an input file an earlier phase should have built is missing (only
+	// library cases that embed the poster as cover art have such inputs).
+	skipMissingInput skipKind = "missing-input"
 )
 
 // manifest lists every case of a run. Integration tests read it to find corpus files.
@@ -225,12 +230,17 @@ func writeManifest(dir string, m manifest) error {
 // writeFileAtomically writes data to a temporary file next to target and renames it, so
 // readers never see half a file and an interrupted write never leaves a truncated target.
 func writeFileAtomically(target string, data []byte) error {
+	return writeAtomically(target, bytes.NewReader(data))
+}
+
+// writeAtomically is writeFileAtomically for content read from a reader.
+func writeAtomically(target string, content io.Reader) error {
 	temp, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+"-*"+partialSuffix)
 	if err != nil {
 		return fmt.Errorf("create %s: %w", filepath.Base(target), err)
 	}
 
-	_, writeErr := temp.Write(data)
+	_, writeErr := io.Copy(temp, content)
 	// CreateTemp uses 0600; corpus files are group-readable like their directories.
 	chmodErr := temp.Chmod(outputFilePermissions)
 	closeErr := temp.Close()
