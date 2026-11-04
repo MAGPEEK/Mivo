@@ -9,7 +9,7 @@ import (
 )
 
 // LibraryLister reads the libraries to keep current, with their folders. It is the same
-// source the scan service uses (sqlite.ScanLibrarySource).
+// source the scan service uses (sqlite.ManagedLibraryStore).
 type LibraryLister interface {
 	// GetLibrary returns one library or an error wrapping domain.ErrNotFound.
 	GetLibrary(ctx context.Context, libraryID string) (library.ManagedLibrary, error)

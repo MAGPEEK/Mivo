@@ -80,9 +80,10 @@ type ManagerDependencies struct {
 	Ledger  ImportLedger
 	Browser FolderBrowser
 	Scans   ScanControl
-	// Events is optional.
-	Events ChangeEvents
-	Logger *slog.Logger
+	// Events and Suspender are optional.
+	Events    ChangeEvents
+	Suspender ScanSuspender
+	Logger    *slog.Logger
 	// AllowedKinds are the library kinds this install can create.
 	AllowedKinds []library.Kind
 	// Reserved are the server directories no folder may touch.
@@ -195,6 +196,9 @@ func (manager *Manager) RemoveLibrary(ctx context.Context, id string) error {
 		manager.deps.Events.Removed(id)
 	}
 
+	// After the wait: a scan that is still ending would store what Forget drops again.
+	manager.deps.Scans.Forget(id)
+
 	return nil
 }
 
@@ -306,8 +310,13 @@ func (manager *Manager) startScan(ctx context.Context, id string) {
 	}
 }
 
-// stopScan cancels the library's scan and waits, bounded, until it has stopped.
+// stopScan suspends the automatic triggers of the library, cancels its scan and waits,
+// bounded, until it has stopped.
 func (manager *Manager) stopScan(ctx context.Context, id string) error {
+	if manager.deps.Suspender != nil {
+		manager.deps.Suspender.Suspend(id)
+	}
+
 	manager.deps.Scans.Cancel(id)
 
 	waitCtx, cancel := context.WithTimeout(ctx, scanStopTimeout)

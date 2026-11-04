@@ -8,8 +8,8 @@ import (
 )
 
 // LibrarySource looks up the configured libraries with their folders and options, read at the
-// start of each scan so edits apply to the next scan. Implemented in the composition root on top of
-// the library store.
+// start of each scan so edits apply to the next scan. Implemented by adapters/sqlite
+// (ManagedLibraryStore).
 type LibrarySource interface {
 	// GetLibrary returns one library or an error wrapping domain.ErrNotFound.
 	GetLibrary(ctx context.Context, libraryID string) (library.ManagedLibrary, error)

@@ -41,6 +41,8 @@ type (
 	unusedItems     struct{ restapi.ItemCatalog }
 	unusedScans     struct{ restapi.ScanService }
 	unusedPlayback  struct{ restapi.PlaybackService }
+	unusedManager   struct{ restapi.LibraryManager }
+	unusedFolders   struct{ restapi.FolderBrowsing }
 )
 
 func discardLogger() *slog.Logger {
@@ -61,7 +63,7 @@ func newAPIHandler(t *testing.T) http.Handler {
 
 	handler, err := restapi.NewHandler(restapi.Options{
 		System: service, Libraries: unusedLibraries{}, Items: unusedItems{},
-		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: discardLogger(),
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Manager: unusedManager{}, Folders: unusedFolders{}, Logger: discardLogger(),
 	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler: %v", err)

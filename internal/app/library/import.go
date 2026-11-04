@@ -95,9 +95,9 @@ func (manager *Manager) importOne(ctx context.Context, definition library.Defini
 	candidate := library.FromDefinition(definition)
 
 	if err := manager.validateAgainst(candidate, others); err != nil {
-		// A taken name is logged at warn: the user loses a configured library silently
-		// otherwise. The root is still recorded (no ledger suppression change), so renaming
-		// the definition later does not import it; the user adds it in the UI instead.
+		// A taken name is logged at warn, because the configured library would otherwise vanish
+		// silently. The root is still recorded in the ledger, so renaming the definition later
+		// does not import it; the user adds the library in the UI instead.
 		if errors.Is(err, domain.ErrConflict) {
 			manager.logSkipped(ctx, slog.LevelWarn, definition, err)
 
@@ -134,6 +134,27 @@ func (manager *Manager) recordRoots(ctx context.Context, roots []string) error {
 
 	if err := manager.deps.Ledger.RecordImported(ctx, roots); err != nil {
 		return fmt.Errorf("import configured libraries: record roots: %w", err)
+	}
+
+	return nil
+}
+
+// validateDefinitions compares roots exactly as given: the configuration has cleaned them
+// and rejected duplicates that differ only in case on Windows.
+func validateDefinitions(definitions []library.Definition) error {
+	firstIndexByRoot := make(map[string]int, len(definitions))
+
+	for index, definition := range definitions {
+		if err := definition.Validate(); err != nil {
+			return fmt.Errorf("definition %d: %w", index, err)
+		}
+
+		if first, seen := firstIndexByRoot[definition.Root]; seen {
+			return fmt.Errorf("definition %d: root %q is already used by definition %d: %w",
+				index, definition.Root, first, domain.ErrInvalid)
+		}
+
+		firstIndexByRoot[definition.Root] = index
 	}
 
 	return nil

@@ -90,27 +90,28 @@ func newCorpusGraph(t *testing.T, environment corpusEnvironment) *corpusGraph {
 		ffmpegPath: environment.ffmpegPath, transcodeRoot: filepath.Join(dataDirectory, transcodeDirName),
 		logger: logger,
 	}
-	graph.libraryID = graph.syncLibrary(t, environment.root)
+	graph.libraryID = graph.createLibrary(t, environment.root)
 
 	return graph
 }
 
-func (graph *corpusGraph) syncLibrary(t *testing.T, root string) string {
+func (graph *corpusGraph) createLibrary(t *testing.T, root string) string {
 	t.Helper()
 
-	repository := sqlite.NewLibraryRepository(graph.database, time.Now)
-	definition := library.Definition{Name: libraryName, Root: root, Kind: library.KindMovies}
-
-	result, err := repository.SyncLibraries(t.Context(), []library.Definition{definition}, uuidgen.New().NewID)
+	created, err := graph.libraries().CreateLibrary(t.Context(), library.ManagedLibrary{
+		Name: libraryName, Kind: library.KindMovies, Folders: []library.Folder{{Path: root}},
+		Options: library.DefaultOptions(),
+	})
 	if err != nil {
-		t.Fatalf("sync the corpus library: %v", err)
+		t.Fatalf("create the corpus library: %v", err)
 	}
 
-	if len(result.Libraries) != 1 {
-		t.Fatalf("sync returned %d libraries, want 1", len(result.Libraries))
-	}
+	return created.ID
+}
 
-	return result.Libraries[0].ID
+// libraries is the library store, which is also the scan's library source.
+func (graph *corpusGraph) libraries() *sqlite.ManagedLibraryStore {
+	return sqlite.NewManagedLibraryStore(graph.database, time.Now, uuidgen.New().NewID)
 }
 
 // requireTranscoding skips the test when the local FFmpeg cannot do what FullCapabilities
@@ -139,7 +140,7 @@ func (graph *corpusGraph) scanCorpus(t *testing.T) map[string]string {
 	catalog := sqlite.NewLibraryCatalog(graph.database, time.Now)
 
 	service, err := scan.NewService(scan.Dependencies{
-		Libraries: sqlite.NewScanLibrarySource(graph.database, time.Now),
+		Libraries: graph.libraries(),
 		Walker:    graph.files, Resolver: graph.files, Prober: graph.prober, CatalogV2: catalog,
 		IDs: uuidgen.New(), Clock: time.Now, Logger: graph.logger,
 	})

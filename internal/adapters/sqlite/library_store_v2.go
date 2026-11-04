@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
@@ -201,14 +202,49 @@ func (store *ManagedLibraryStore) removeMissingFolders(ctx context.Context, quer
 		kept[folder.ID] = true
 	}
 
+	var emptied []string
+
 	for _, folder := range stored {
 		if kept[folder.ID] {
 			continue
 		}
 
-		err := queries.DeleteManagedFolder(ctx, sqlcgen.DeleteManagedFolderParams{ID: folder.ID, LibraryID: updated.ID})
+		itemIDs, err := queries.ListFolderItemIDs(ctx, folder.ID)
+		if err != nil {
+			return fmt.Errorf("read items of folder %q: %w", folder.ID, err)
+		}
+
+		err = queries.DeleteManagedFolder(ctx, sqlcgen.DeleteManagedFolderParams{ID: folder.ID, LibraryID: updated.ID})
 		if err != nil {
 			return fmt.Errorf("delete folder %q: %w", folder.ID, err)
+		}
+
+		emptied = append(emptied, itemIDs...)
+	}
+
+	// The cascade removed the files; the items they belonged to would stay as empty entries
+	// in the library until someone deletes them.
+	return pruneEmptiedItems(ctx, queries, emptied)
+}
+
+// pruneEmptiedItems deletes the listed items that own no file and no child, then checks their
+// parents the same way, so a show disappears with its last episode. Unlike the scan's prune it
+// keeps a movie that still has an extra with a file in a kept folder.
+func pruneEmptiedItems(ctx context.Context, queries *sqlcgen.Queries, itemIDs []string) error {
+	slices.Sort(itemIDs)
+
+	for _, start := range slices.Compact(itemIDs) {
+		for itemID := start; itemID != ""; {
+			parent, err := queries.DeleteFolderEmptiedItem(ctx, itemID)
+			if errors.Is(err, sql.ErrNoRows) {
+				break
+			}
+
+			if err != nil {
+				return fmt.Errorf("delete emptied item %q: %w", itemID, err)
+			}
+
+			itemID = parent.String
 		}
 	}
 

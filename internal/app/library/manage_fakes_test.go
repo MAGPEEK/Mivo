@@ -180,11 +180,18 @@ func (scans *fakeScans) Start(_ context.Context, id string) error {
 
 func (scans *fakeScans) Cancel(id string) { scans.log.add("scan.cancel " + id) }
 
+func (scans *fakeScans) Forget(id string) { scans.log.add("scan.forget " + id) }
+
 func (scans *fakeScans) WaitIdle(_ context.Context, id string) error {
 	scans.log.add("scan.wait " + id)
 
 	return scans.waitErr
 }
+
+// fakeSuspender records Suspend calls into the shared log.
+type fakeSuspender struct{ log *callLog }
+
+func (suspender fakeSuspender) Suspend(id string) { suspender.log.add("trigger.suspend " + id) }
 
 // fakeEvents records library events into the shared log.
 type fakeEvents struct{ log *callLog }

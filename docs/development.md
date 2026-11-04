@@ -307,7 +307,7 @@ home directory that exist elsewhere), and `install.kind` / `MIVO_INSTALL_KIND` i
 
 | YAML key | Environment | Default | Meaning |
 |---|---|---|---|
-| `libraries` (list of `name`, `path`, `kind`) | `MIVO_LIBRARIES` (OS path list) | none | library roots; `kind` is `movies` (default) or `shows` (listed flat like `movies` until milestone 3) |
+| `libraries` (list of `name`, `path`, `kind`) | `MIVO_LIBRARIES` (OS path list) | none | library folders imported once at the start (ADR 0028); `kind` is `movies` (default) or `shows`; add and change libraries in the web app (Settings > Libraries) |
 | `tools.ffmpeg` | `MIVO_TOOLS_FFMPEG` | `ffmpeg` | bare name looked up on `PATH`, or a path |
 | `tools.ffprobe` | `MIVO_TOOLS_FFPROBE` | `ffprobe` | as `tools.ffmpeg` |
 | `transcode.max_sessions` | `MIVO_TRANSCODE_MAX_SESSIONS` | `2` | concurrent re-encoding sessions, `1`–`8` |
@@ -328,7 +328,7 @@ transcode:
   max_sessions: 1
 ```
 
-`MIVO_LIBRARIES` replaces the whole list of the file. Its elements are separated by the OS list
+`MIVO_LIBRARIES` replaces the whole list of the file. Libraries are imported once per folder: one you delete in the app does not return at the next start. Its elements are separated by the OS list
 separator (`;` on Windows, `:` on Linux); each one becomes a `movies` library named after its
 last folder. An empty value means no library at all. To point a dev server at the test corpus
 (see "Test media corpus"):
@@ -507,7 +507,7 @@ docker rm -f -v mivo-smoke
 - `-profile` is `chromium-desktop` (default) or `firefox-desktop`; `-case-timeout` (default
   `2m`) and `-scan-timeout` (default `5m`) bound one case and the scan.
 - `docker exec … ls /transcode/sessions` must print nothing: every session was removed.
-- It works against any server, for example `go run ./cmd/mivo` with `MIVO_LIBRARIES` set to
+- A server without a library gets one over its first available browse root (`/media` preferred) through `POST /api/v1/libraries`. It works against any server, for example `go run ./cmd/mivo` with `MIVO_LIBRARIES` set to
   the corpus. Linux file modes and `--user` for the bind mount: `packaging/docker/README.md`,
   "Verify an image".
 - Run time on the dev machine: about 5 s per profile against the image (30 cases for

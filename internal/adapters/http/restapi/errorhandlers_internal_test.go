@@ -48,6 +48,8 @@ func internalTestOptions(system SystemService, logger *slog.Logger) Options {
 		Items:     nilItemCatalog{},
 		Scan:      nilScanService{},
 		Playback:  nilPlaybackService{},
+		Manager:   nilLibraryManager{},
+		Folders:   nilFolderBrowsing{},
 		Logger:    logger,
 	}
 }
@@ -58,6 +60,8 @@ type (
 	nilItemCatalog     struct{ ItemCatalog }
 	nilScanService     struct{ ScanService }
 	nilPlaybackService struct{ PlaybackService }
+	nilLibraryManager  struct{ LibraryManager }
+	nilFolderBrowsing  struct{ FolderBrowsing }
 )
 
 type errorHandler func(writer http.ResponseWriter, request *http.Request, err error)

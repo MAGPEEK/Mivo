@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/fs/watcher"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
@@ -14,9 +13,9 @@ import (
 
 // newScanTrigger keeps the libraries current: the watcher scans after changes (scan.watch)
 // and the periodic scan covers what watching cannot see (scan.interval).
-func (app application) newScanTrigger(db *sqlite.DB, scans *appscan.Service) (*scantrigger.Trigger, error) {
+func (app application) newScanTrigger(store *sqlite.ManagedLibraryStore, scans *appscan.Service) (*scantrigger.Trigger, error) {
 	trigger, err := scantrigger.New(scantrigger.Dependencies{
-		Libraries: sqlite.NewScanLibrarySource(db, time.Now),
+		Libraries: store,
 		Scanner:   scans,
 		Watcher:   watcher.New(),
 		Clock:     scantrigger.SystemClock{},

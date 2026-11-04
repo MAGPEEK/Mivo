@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	errNoLibraries   = errors.New("the server has no library configured (set MIVO_LIBRARIES or libraries in config.yaml)")
+	errNoLibraries   = errors.New("the server has no library and offers no available folder root to create one over (set MIVO_BROWSE_ROOTS, or MIVO_LIBRARIES as a seed)")
 	errScanFailed    = errors.New("library scan failed")
 	errAmbiguousFile = errors.New("file name is not unique across the libraries")
 	errFileNotFound  = errors.New("no catalogued file with this name")
@@ -38,14 +38,9 @@ func (c *apiClient) systemInfo(ctx context.Context) (apigen.SystemInfo, error) {
 // scanLibraries starts a scan of every configured library and waits until all of them are
 // finished. It returns the libraries as they are after the scans.
 func scanLibraries(ctx context.Context, client *apiClient, poll pollSettings) ([]apigen.Library, error) {
-	var list apigen.LibraryList
-
-	if err := client.call(ctx, apiCall{method: http.MethodGet, reference: librariesPath, want: http.StatusOK, out: &list}); err != nil {
-		return nil, fmt.Errorf("list the libraries: %w", err)
-	}
-
-	if len(list.Libraries) == 0 {
-		return nil, errNoLibraries
+	list, err := listOrSeedLibraries(ctx, client)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, library := range list.Libraries {
@@ -68,6 +63,33 @@ func scanLibraries(ctx context.Context, client *apiClient, poll pollSettings) ([
 	}
 
 	return scanned, nil
+}
+
+// listOrSeedLibraries lists the libraries; a server without any gets one over its browse
+// root (seedLibrary) and is listed again.
+func listOrSeedLibraries(ctx context.Context, client *apiClient) (apigen.LibraryList, error) {
+	var list apigen.LibraryList
+
+	for attempt := 0; attempt < 2; attempt++ {
+		list = apigen.LibraryList{}
+
+		err := client.call(ctx, apiCall{method: http.MethodGet, reference: librariesPath, want: http.StatusOK, out: &list})
+		if err != nil {
+			return list, fmt.Errorf("list the libraries: %w", err)
+		}
+
+		if len(list.Libraries) > 0 {
+			return list, nil
+		}
+
+		if attempt == 0 {
+			if err := seedLibrary(ctx, client); err != nil {
+				return list, err
+			}
+		}
+	}
+
+	return list, errNoLibraries
 }
 
 // waitForScan polls the library until no scan runs. The scan was started before, and the

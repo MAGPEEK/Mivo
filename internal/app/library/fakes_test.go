@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -15,144 +14,44 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// memoryLibraryStore is an in-memory Store. Like the real adapter it identifies a
-// library by its root, creates IDs only for new roots, deletes unconfigured roots and reports
-// them with their item counts, and lists libraries ordered by name.
-type memoryLibraryStore struct {
+// memoryLibraryReader is an in-memory ManagedReader for the item use cases.
+type memoryLibraryReader struct {
 	mutex     sync.Mutex
-	libraries []library.Summary
-
-	// syncErr, listErr and getErr, when set, are returned by the matching method.
-	syncErr error
-	listErr error
-	getErr  error
-	// syncCalls counts SyncLibraries calls, so tests can prove invalid input never arrives.
-	syncCalls int
+	libraries []library.ManagedLibrary
+	// getErr, when set, is returned by GetManaged.
+	getErr error
 }
 
-func (store *memoryLibraryStore) SyncLibraries(_ context.Context, definitions []library.Definition,
-	newID func() (string, error),
-) (library.SyncResult, error) {
+func (store *memoryLibraryReader) ListManaged(context.Context) ([]library.ManagedLibrary, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
-
-	store.syncCalls++
-
-	if store.syncErr != nil {
-		return library.SyncResult{}, store.syncErr
-	}
-
-	synced := make([]library.Summary, 0, len(definitions))
-
-	for _, definition := range definitions {
-		summary, err := store.syncOne(definition, newID)
-		if err != nil {
-			return library.SyncResult{}, err
-		}
-
-		synced = append(synced, summary)
-	}
-
-	removed := store.unconfigured(definitions)
-	store.libraries = sortedByName(synced)
-
-	return library.SyncResult{Libraries: librariesOf(store.libraries), Removed: removed}, nil
-}
-
-func (store *memoryLibraryStore) syncOne(definition library.Definition,
-	newID func() (string, error),
-) (library.Summary, error) {
-	for _, stored := range store.libraries {
-		if stored.Library.Root == definition.Root {
-			stored.Library.Name, stored.Library.Kind = definition.Name, definition.Kind
-
-			return stored, nil
-		}
-	}
-
-	id, err := newID()
-	if err != nil {
-		return library.Summary{}, fmt.Errorf("new id for library %q: %w", definition.Name, err)
-	}
-
-	return library.Summary{Library: library.Library{
-		ID: id, Name: definition.Name, Root: definition.Root, Kind: definition.Kind,
-	}}, nil
-}
-
-func (store *memoryLibraryStore) unconfigured(definitions []library.Definition) []library.Summary {
-	removed := []library.Summary{}
-
-	for _, stored := range store.libraries {
-		configured := slices.ContainsFunc(definitions, func(definition library.Definition) bool {
-			return definition.Root == stored.Library.Root
-		})
-		if !configured {
-			removed = append(removed, stored)
-		}
-	}
-
-	return removed
-}
-
-func (store *memoryLibraryStore) ListLibraries(context.Context) ([]library.Summary, error) {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-
-	if store.listErr != nil {
-		return nil, store.listErr
-	}
 
 	return slices.Clone(store.libraries), nil
 }
 
-func (store *memoryLibraryStore) GetLibrary(_ context.Context, id string) (library.Summary, error) {
+func (store *memoryLibraryReader) GetManaged(_ context.Context, id string) (library.ManagedLibrary, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 
 	if store.getErr != nil {
-		return library.Summary{}, store.getErr
+		return library.ManagedLibrary{}, store.getErr
 	}
 
 	for _, stored := range store.libraries {
-		if stored.Library.ID == id {
+		if stored.ID == id {
 			return stored, nil
 		}
 	}
 
-	return library.Summary{}, fmt.Errorf("library %q: %w", id, domain.ErrNotFound)
+	return library.ManagedLibrary{}, fmt.Errorf("library %q: %w", id, domain.ErrNotFound)
 }
 
-// put stores summaries directly, as an earlier sync would have.
-func (store *memoryLibraryStore) put(summaries ...library.Summary) {
+// put stores libraries directly.
+func (store *memoryLibraryReader) put(libraries ...library.ManagedLibrary) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 
-	store.libraries = sortedByName(append(store.libraries, summaries...))
-}
-
-func (store *memoryLibraryStore) syncs() int {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
-
-	return store.syncCalls
-}
-
-func sortedByName(summaries []library.Summary) []library.Summary {
-	slices.SortFunc(summaries, func(first, second library.Summary) int {
-		return strings.Compare(first.Library.Name, second.Library.Name)
-	})
-
-	return summaries
-}
-
-func librariesOf(summaries []library.Summary) []library.Library {
-	libraries := make([]library.Library, 0, len(summaries))
-	for _, summary := range summaries {
-		libraries = append(libraries, summary.Library)
-	}
-
-	return libraries
+	store.libraries = append(store.libraries, libraries...)
 }
 
 // memoryItemReader is an in-memory ItemReader holding the items of each library in sort
@@ -250,31 +149,6 @@ func (reader *memoryItemReader) recordedRequests() []listRequest {
 	return slices.Clone(reader.requests)
 }
 
-// sequenceIDGenerator returns the configured IDs in order and then fails.
-type sequenceIDGenerator struct {
-	mutex sync.Mutex
-	ids   []string
-	err   error
-}
-
-func (generator *sequenceIDGenerator) NewID() (string, error) {
-	generator.mutex.Lock()
-	defer generator.mutex.Unlock()
-
-	if generator.err != nil {
-		return "", generator.err
-	}
-
-	if len(generator.ids) == 0 {
-		return "", errIDsExhausted
-	}
-
-	next := generator.ids[0]
-	generator.ids = generator.ids[1:]
-
-	return next, nil
-}
-
 // rootCheckerFunc adapts a function to the RootChecker port.
 type rootCheckerFunc func(ctx context.Context, root string) bool
 
@@ -330,53 +204,6 @@ func (checker *hungRootChecker) checkCount(root string) int {
 	defer checker.mutex.Unlock()
 
 	return checker.checks[root]
-}
-
-// recordingHandler is a slog.Handler that keeps every record for assertions.
-type recordingHandler struct {
-	mutex   *sync.Mutex
-	records *[]slog.Record
-}
-
-func newRecordingLogger() (*slog.Logger, *recordingHandler) {
-	handler := &recordingHandler{mutex: &sync.Mutex{}, records: &[]slog.Record{}}
-
-	return slog.New(handler), handler
-}
-
-func (handler *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
-
-func (handler *recordingHandler) Handle(_ context.Context, record slog.Record) error {
-	handler.mutex.Lock()
-	defer handler.mutex.Unlock()
-
-	*handler.records = append(*handler.records, record.Clone())
-
-	return nil
-}
-
-func (handler *recordingHandler) WithAttrs([]slog.Attr) slog.Handler { return handler }
-
-func (handler *recordingHandler) WithGroup(string) slog.Handler { return handler }
-
-func (handler *recordingHandler) recorded() []slog.Record {
-	handler.mutex.Lock()
-	defer handler.mutex.Unlock()
-
-	return slices.Clone(*handler.records)
-}
-
-// attributes returns the attributes of record as text keyed by name.
-func attributes(record slog.Record) map[string]string {
-	values := map[string]string{}
-
-	record.Attrs(func(attribute slog.Attr) bool {
-		values[attribute.Key] = attribute.Value.String()
-
-		return true
-	})
-
-	return values
 }
 
 // memoryChildReader is an in-memory ChildReader over a flat list of catalog items. It mirrors

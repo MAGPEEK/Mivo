@@ -59,7 +59,7 @@ type application struct {
 // serve loads the configuration, builds the logger and runs the server until ctx is done.
 //
 // Startup order: config → logger → directories → data directory lock → database and
-// migrations → server identity → FFmpeg tools and capabilities → library sync → scan service →
+// migrations → server identity → FFmpeg tools and capabilities → configured library import → scan service →
 // playback service and workspace purge → HTTP listener → startup scan → serve. Shutdown runs
 // backwards: HTTP server → playback sessions → scans → database → lock. Every step closes
 // what it opened when a later one fails, and every shutdown step is bounded.
@@ -209,7 +209,9 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 		return fmt.Errorf("create library file system: %w", err)
 	}
 
-	libraries, managed, err := app.newLibraryServices(ctx, db, files)
+	store := newLibraryStore(db)
+
+	libraries, managed, err := newLibraryServices(db, store, files)
 	if err != nil {
 		return err
 	}
@@ -224,22 +226,18 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 		return err
 	}
 
-	scans, err := app.newScanService(db, scanAdapters{files: files, prober: prober, images: images.service})
+	scanning, err := app.newScanning(ctx, db, store, scanAdapters{files: files, prober: prober, images: images.service})
 	if err != nil {
 		return err
 	}
 
-	trigger, err := app.newScanTrigger(db, scans)
-	if err != nil {
-		return withCleanupError(ctx, err, closeScansStep, app.closeScans(ctx, scans))
-	}
-
 	stopPurge := app.purgeImageCacheInBackground(ctx, images.service)
 	catalog := catalogServices{
-		system: system, libraries: libraries, managed: managed, scans: scans, images: images, trigger: trigger,
+		system: system, libraries: libraries, managed: managed, scans: scanning.scans, images: images,
+		trigger: scanning.trigger, management: scanning.management,
 	}
 	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
-	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scans))
+	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scanning.scans))
 
 	// Cancelling and waiting keeps the purge from reading the database after it is closed.
 	stopPurge()

@@ -33,6 +33,8 @@ type catalogServices struct {
 	// images serves artwork; trigger keeps the libraries current after the startup scan.
 	images  imageServices
 	trigger runner
+	// management creates, changes and removes libraries and browses folders.
+	management management
 }
 
 // wiredServices is everything the HTTP adapter serves.
@@ -112,8 +114,10 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Items:     services.libraries,
 		Scan:      services.scans,
 		Playback:  services.playback,
-		// The manager and the folder browser follow with M3-19l; until then the
-		// management operations answer 503 and only the kinds below are advertised.
+		// The manager also serves the folder browser: it marks the folders that cannot be chosen.
+		Manager:      services.management.manager,
+		Folders:      services.management.manager,
+		Install:      services.management.install,
 		LibraryKinds: []library.Kind{library.KindMovies, library.KindShows},
 		Logger:       app.logger,
 		Mounts:       services.mounts(),

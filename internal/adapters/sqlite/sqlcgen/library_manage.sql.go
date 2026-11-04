@@ -7,6 +7,7 @@ package sqlcgen
 
 import (
 	"context"
+	"database/sql"
 )
 
 const countTopLevelItems = `-- name: CountTopLevelItems :many
@@ -45,6 +46,28 @@ func (q *Queries) CountTopLevelItems(ctx context.Context) ([]CountTopLevelItemsR
 		return nil, err
 	}
 	return items, nil
+}
+
+const deleteFolderEmptiedItem = `-- name: DeleteFolderEmptiedItem :one
+DELETE FROM items
+WHERE items.id = ?
+  AND NOT EXISTS (SELECT 1 FROM media_files WHERE media_files.item_id = items.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM items AS child
+    WHERE child.parent_id = items.id
+      AND (child.kind <> 'extra'
+           OR EXISTS (SELECT 1 FROM media_files WHERE media_files.item_id = child.id)))
+RETURNING parent_id
+`
+
+// DeleteFolderEmptiedItem is DeleteItemIfUnused for items a removed folder left empty: an
+// extra that still has a file in a kept folder keeps its movie, because that file would
+// otherwise leave the library with the cascade. Returns the parent for the next check.
+func (q *Queries) DeleteFolderEmptiedItem(ctx context.Context, id string) (sql.NullString, error) {
+	row := q.db.QueryRowContext(ctx, deleteFolderEmptiedItem, id)
+	var parent_id sql.NullString
+	err := row.Scan(&parent_id)
+	return parent_id, err
 }
 
 const deleteManagedFolder = `-- name: DeleteManagedFolder :exec
@@ -172,6 +195,37 @@ func (q *Queries) InsertManagedLibrary(ctx context.Context, arg InsertManagedLib
 		arg.UpdatedAt,
 	)
 	return err
+}
+
+const listFolderItemIDs = `-- name: ListFolderItemIDs :many
+SELECT DISTINCT item_id
+FROM media_files
+WHERE root_id = ?
+`
+
+// ListFolderItemIDs returns the items that own a file in the folder, so deleting the folder
+// can prune the items it leaves without files.
+func (q *Queries) ListFolderItemIDs(ctx context.Context, rootID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listFolderItemIDs, rootID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var item_id string
+		if err := rows.Scan(&item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listManagedFolders = `-- name: ListManagedFolders :many

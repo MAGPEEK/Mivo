@@ -2,8 +2,10 @@ package library
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -104,7 +106,7 @@ func (service *Service) ListItems(ctx context.Context, libraryID string, page li
 	}
 
 	// The reader cannot tell an unknown library from an empty one.
-	if _, err := service.libraries.GetLibrary(ctx, libraryID); err != nil {
+	if _, err := service.libraries.GetManaged(ctx, libraryID); err != nil {
 		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, storedDataError(err))
 	}
 
@@ -125,4 +127,16 @@ func (service *Service) GetItem(ctx context.Context, itemID string) (ItemDetail,
 	}
 
 	return detail, nil
+}
+
+// storedDataError hides domain.ErrInvalid from a library store read. No client value reaches
+// those reads (an unknown ID is ErrNotFound), so ErrInvalid can only mean a stored row the
+// domain cannot read: a server fault that must not turn into a "bad request" for the client.
+// The message is kept for the log; every other error passes through unchanged.
+func storedDataError(err error) error {
+	if !errors.Is(err, domain.ErrInvalid) {
+		return err
+	}
+
+	return errors.New("unreadable stored library data: " + err.Error())
 }

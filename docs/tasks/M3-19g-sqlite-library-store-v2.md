@@ -17,8 +17,8 @@ import ledger remembers which configuration roots were already imported.
       generator, `position` in request order, `path_key` from `library.FolderKey`).
 - [ ] Update: one transaction; kept folders keep id and catalog; removed folders are deleted
       (cascade removes their files, sidecars and local artwork); added folders inserted;
-      positions renumbered; `updated_at` set. Items left without files are removed by the next
-      scan (ADR 0027 §3), not here.
+      positions renumbered; `updated_at` set. Items left without files are pruned in the same
+      transaction (changed in M3-19l; an item with an extra that still has a file stays).
 - [ ] Delete: one transaction deletes the library (catalog cascade); unknown id →
       `domain.ErrNotFound`.
 - [ ] A `path_key` unique violation maps to `domain.ErrConflict` naming the folder index; the

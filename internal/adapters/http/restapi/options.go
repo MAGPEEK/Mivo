@@ -24,10 +24,9 @@ type Options struct {
 	Scan ScanService
 	// Playback creates, reads and stops playback sessions.
 	Playback PlaybackService
-	// Manager creates, changes and removes libraries. Optional until M3-19l wires it; the
-	// create, update and delete operations answer 503 "unavailable" without it.
+	// Manager creates, changes and removes libraries.
 	Manager LibraryManager
-	// Folders serves the folder browser. Optional like Manager.
+	// Folders serves the folder browser.
 	Folders FolderBrowsing
 	// Install describes the installation for the folder roots answer.
 	Install InstallInfo
@@ -64,6 +63,8 @@ func (options Options) validate() error {
 		{name: "item catalog", present: options.Items != nil},
 		{name: "scan service", present: options.Scan != nil},
 		{name: "playback service", present: options.Playback != nil},
+		{name: "library manager", present: options.Manager != nil},
+		{name: "folder browser", present: options.Folders != nil},
 		{name: "logger", present: options.Logger != nil},
 	}
 

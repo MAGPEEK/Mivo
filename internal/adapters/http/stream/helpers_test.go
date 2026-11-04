@@ -252,6 +252,8 @@ type (
 	unusedItems     struct{ restapi.ItemCatalog }
 	unusedScans     struct{ restapi.ScanService }
 	unusedPlayback  struct{ restapi.PlaybackService }
+	unusedManager   struct{ restapi.LibraryManager }
+	unusedFolders   struct{ restapi.FolderBrowsing }
 )
 
 // syncBuffer collects log output; handlers log from the request goroutines.
@@ -389,7 +391,7 @@ func mustAPI(t *testing.T, logger *slog.Logger, mounts []restapi.Mount) http.Han
 
 	api, err := restapi.NewHandler(restapi.Options{
 		System: healthySystem{}, Libraries: unusedLibraries{}, Items: unusedItems{},
-		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: logger, Mounts: mounts,
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Manager: unusedManager{}, Folders: unusedFolders{}, Logger: logger, Mounts: mounts,
 	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler error = %v", err)

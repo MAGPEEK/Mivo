@@ -52,10 +52,10 @@ shutdown that hangs; as PID 1 the server would otherwise ignore it.
 | Path / setting | Purpose |
 |---|---|
 | `/config` | `config.yaml` (optional), `data/` (database) and `cache/` |
-| `/media` | the default library (`MIVO_LIBRARIES=/media`), read only is enough |
+| `/media` | where your videos are mounted; the web app browses it when you add a library (`MIVO_BROWSE_ROOTS=/media`), read only is enough |
 | `/transcode` | temporary output of remux and transcode sessions |
 | port `8460` | web app and REST API |
-| `MIVO_LIBRARIES` | library roots inside the container, default `/media` (see below) |
+| `MIVO_LIBRARIES` | optional: library folders to import once at the first start (see below) |
 | `MIVO_TRANSCODE_MAX_SESSIONS` | concurrent re-encoding sessions, default `2`, allowed `1`–`8` |
 | `MIVO_*` | every setting of ADR 0018, e.g. `MIVO_LOG_LEVEL=debug` |
 | `TZ` | time zone, e.g. `TZ=Europe/Berlin` (tzdata is installed) |
@@ -64,49 +64,29 @@ shutdown that hangs; as PID 1 the server would otherwise ignore it.
 
 ### Libraries
 
-The image sets `MIVO_LIBRARIES=/media`: whatever you mount at `/media` is one library of
-kind `movies`, named `media`. The server scans every library at start; the web app and
-`POST /api/v1/libraries/{id}/scan` scan again. Libraries are defined only in the
-configuration (ADR 0022); changes need a restart.
+The image starts without a library. Mount your media below `/media` (for example
+`-v /volume1/video/movies:/media/movies:ro -v /volume1/video/series:/media/series:ro`), open
+the web app and add the folders in **Settings > Libraries** (ADR 0028). The folder browser
+starts at `/media` (`MIVO_BROWSE_ROOTS=/media`, `MIVO_INSTALL_KIND=docker` are set by the
+image). The server scans a library when you add or change it, at every start and
+periodically. Managing libraries works from the local network only until accounts exist.
 
-Several libraries: mount them below `/media` and list the container paths, separated by `:`.
-Each one becomes a `movies` library named after its last folder:
-
-```
-docker run ... -v /volume1/video/movies:/media/movies:ro -v /volume1/video/series:/media/series:ro \
-  -e MIVO_LIBRARIES=/media/movies:/media/series docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
-```
-
-Roots must not be nested in each other or lie inside `/config` or `/transcode`, so do not
-keep `/media` in the list together with folders below it. An empty value
-(`-e MIVO_LIBRARIES=`) means no library at all, not "use the file".
-
-Names and kinds (`shows`) need `libraries` in `/config/config.yaml`:
-
-```yaml
-libraries:
-  - name: Movies
-    path: /media/movies
-  - name: Series
-    path: /media/series
-    kind: shows
-```
-
-`MIVO_LIBRARIES` replaces the list of the file as a whole (ADR 0018), and Docker cannot unset
-a variable of the image, so start the server without it. Only the server process loses the
-variable; the `HEALTHCHECK` keeps the image's value, which is harmless because it reads only
-the port:
+To seed libraries from the configuration instead, list the container paths in
+`MIVO_LIBRARIES`, separated by `:`, or use `libraries` in `/config/config.yaml` (names and
+kinds need the file):
 
 ```
-docker run ... --entrypoint /usr/bin/env docker.io/magpeek/mivo-media-server:0.1.0-alpha.2 -u MIVO_LIBRARIES /usr/local/bin/mivo
+docker run ... -e MIVO_LIBRARIES=/media/movies:/media/series docker.io/magpeek/mivo-media-server:<version>
 ```
 
-```yaml
-    entrypoint: ["/usr/bin/env", "-u", "MIVO_LIBRARIES", "/usr/local/bin/mivo"]
-```
+Configured libraries are imported **once per folder**: a library you delete in the app is not
+imported again at the next start, and the configuration never changes or deletes a library you
+manage in the app. The image no longer sets `MIVO_LIBRARIES`.
 
-This workaround is temporary: a lower-priority image default that `config.yaml` overrides is
-tracked in `docs/tasks/BACKLOG.md` (area config/docker, due before milestone 9).
+**Upgrading from 0.1.0-alpha.2**: that version made `/media` one library from
+`MIVO_LIBRARIES=/media`. After the upgrade the catalog is rebuilt anyway (ADR 0027) and the
+new image has no library: add your library once in **Settings > Libraries**, or start the new
+image with `-e MIVO_LIBRARIES=/media` to get the old library back.
 
 ### Transcoding
 
@@ -135,8 +115,9 @@ next start.
 ### Verify an image (release gate)
 
 `go test` checks playback with the FFmpeg of the dev machine; the playback smoke test checks
-the image's FFmpeg (ADR 0025). Generate the corpus, start the image with it as the library
-and run the smoke test from the repository root (needs a local `ffprobe`):
+the image's FFmpeg (ADR 0025). Generate the corpus, mount it at `/media` and run the smoke test
+from the repository root (needs a local `ffprobe`). A fresh image has no library, so the smoke
+creates one over `/media` through `POST /api/v1/libraries`:
 
 ```
 go run ./scripts/gen-testmedia

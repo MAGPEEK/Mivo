@@ -71,8 +71,8 @@ type FolderBrowser interface {
 	Check(ctx context.Context, rootID, relativePath string) (string, error)
 }
 
-// ScanControl starts and stops library scans. Implemented by *scan.Service (M3-19i); cmd
-// passes it in.
+// ScanControl starts and stops library scans. cmd adapts *scan.Service (M3-19i, whose Start and
+// Cancel have other signatures) to it.
 type ScanControl interface {
 	// Start starts a scan unless one runs already.
 	Start(ctx context.Context, libraryID string) error
@@ -80,6 +80,18 @@ type ScanControl interface {
 	Cancel(libraryID string)
 	// WaitIdle returns once no scan of the library runs or ctx is done.
 	WaitIdle(ctx context.Context, libraryID string) error
+	// Forget drops what the scan keeps in memory about a deleted library; it never touches
+	// the catalog.
+	Forget(libraryID string)
+}
+
+// ScanSuspender keeps automatic scan triggers from starting a scan of a library until the
+// next change event for it. Implemented by *scantrigger.Trigger (M3-19j). The manager calls
+// it before it cancels a scan, so no trigger starts a scan on the old definition between the
+// cancel and the change (ADR 0028 §Scan coordination).
+type ScanSuspender interface {
+	// Suspend holds back the scans of the library.
+	Suspend(libraryID string)
 }
 
 // ChangeEvents announces library changes (for the scan triggers, M3-19j). Calls must not

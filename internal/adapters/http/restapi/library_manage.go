@@ -36,12 +36,6 @@ type LibraryManager interface {
 	RemoveLibrary(ctx context.Context, id string) error
 }
 
-// errManagementNotWired answers the management operations of a server whose composition
-// root passes no manager yet; M3-19l makes the manager required.
-func errManagementNotWired(operation string) error {
-	return fmt.Errorf("%s: library management is not configured: %w", operation, domain.ErrUnavailable)
-}
-
 // managementStatuses are the problem statuses createLibrary and updateLibrary document: the
 // folder and field codes (400), an unknown library (404), a taken name or an overlapping
 // folder (409) and a scan that does not stop in time (503).
@@ -54,10 +48,6 @@ func managementStatuses() []int32 {
 // CreateLibrary adds a library and answers 201 with its location. The scan status in the
 // body already shows the scan the manager started.
 func (api *API) CreateLibrary(ctx context.Context, request apigen.CreateLibraryRequestObject) (apigen.CreateLibraryResponseObject, error) {
-	if api.manager == nil {
-		return nil, errManagementNotWired(operationCreateLibrary)
-	}
-
 	if request.Body == nil {
 		return nil, fmt.Errorf("%s: missing request body: %w", operationCreateLibrary, domain.ErrInvalid)
 	}
@@ -83,10 +73,6 @@ func (api *API) CreateLibrary(ctx context.Context, request apigen.CreateLibraryR
 // UpdateLibrary changes the given properties of a library and answers the library as it is
 // stored now.
 func (api *API) UpdateLibrary(ctx context.Context, request apigen.UpdateLibraryRequestObject) (apigen.UpdateLibraryResponseObject, error) {
-	if api.manager == nil {
-		return nil, errManagementNotWired(operationUpdateLibrary)
-	}
-
 	if request.Body == nil {
 		return nil, fmt.Errorf("%s: missing request body: %w", operationUpdateLibrary, domain.ErrInvalid)
 	}
@@ -106,10 +92,6 @@ func (api *API) UpdateLibrary(ctx context.Context, request apigen.UpdateLibraryR
 
 // DeleteLibrary removes a library and answers 204. Media files are never touched.
 func (api *API) DeleteLibrary(ctx context.Context, request apigen.DeleteLibraryRequestObject) (apigen.DeleteLibraryResponseObject, error) {
-	if api.manager == nil {
-		return nil, errManagementNotWired(operationDeleteLibrary)
-	}
-
 	err := api.manager.RemoveLibrary(ctx, request.LibraryID.String())
 	if err != nil {
 		return nil, operationFailure(operationDeleteLibrary, err, http.StatusNotFound, http.StatusServiceUnavailable)

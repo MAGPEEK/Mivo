@@ -1,9 +1,8 @@
-// Package library contains the catalog use cases (ADR 0022): syncing the configured
-// libraries into the catalog at startup, listing libraries with their availability, paging
+// Package library contains the catalog use cases (ADR 0022, 0028): managing libraries and
+// importing the configured ones once, listing libraries with their availability, paging
 // through a library's top-level items and an item's children, and opening one item with its
-// detail. Scanning is a
-// separate package (internal/app/scan). It declares the ports it needs; adapters implement
-// them and cmd/mivo wires them (ADR 0003).
+// detail. Scanning is a separate package (internal/app/scan). It declares the ports it needs;
+// adapters implement them and cmd/mivo wires them (ADR 0003).
 package library
 
 import (
@@ -11,27 +10,6 @@ import (
 
 	"github.com/magpeek/mivo/internal/domain/library"
 )
-
-// Store persists the configured libraries. Implemented by adapters/sqlite
-// (LibraryRepository).
-//
-// Error contract: domain.ErrInvalid from SyncLibraries means invalid definitions or a
-// missing ID generator. The reads receive no client value except an ID (unknown →
-// domain.ErrNotFound), so ErrInvalid from a read can only mean a stored row the domain cannot
-// read; the service reports it as a plain error, because it is a server fault and not a bad
-// request.
-type Store interface {
-	// SyncLibraries makes the stored libraries match definitions in one transaction. The
-	// root is a library's identity: a new root gets an ID from newID, and a stored root that
-	// is no longer configured is deleted with its catalog and reported in Removed.
-	SyncLibraries(ctx context.Context, definitions []library.Definition,
-		newID func() (string, error)) (library.SyncResult, error)
-	// ListLibraries returns every library with its item count, ordered by name.
-	ListLibraries(ctx context.Context) ([]library.Summary, error)
-	// GetLibrary returns one library with its item count. An unknown ID wraps
-	// domain.ErrNotFound.
-	GetLibrary(ctx context.Context, id string) (library.Summary, error)
-}
 
 // ItemReader reads the media catalog. Implemented by adapters/sqlite (M2-15).
 //
@@ -71,13 +49,6 @@ type ChildReader interface {
 	// ListChildren returns one page of the item's children. request.Page.Limit is already
 	// normalised (1 to library.MaxPageLimit).
 	ListChildren(ctx context.Context, itemID string, request ChildPageRequest) (ItemPage, error)
-}
-
-// IDGenerator creates new random library IDs in canonical lowercase UUID text form.
-// Implemented by adapters/uuidgen.
-type IDGenerator interface {
-	// NewID returns a new random ID.
-	NewID() (string, error)
 }
 
 // RootChecker reports whether a library root is reachable now. Implemented by

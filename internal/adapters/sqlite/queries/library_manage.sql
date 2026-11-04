@@ -68,3 +68,24 @@ SELECT library_id, COUNT(*) AS item_count
 FROM items
 WHERE parent_id IS NULL AND kind <> 'extra'
 GROUP BY library_id;
+
+-- DeleteFolderEmptiedItem is DeleteItemIfUnused for items a removed folder left empty: an
+-- extra that still has a file in a kept folder keeps its movie, because that file would
+-- otherwise leave the library with the cascade. Returns the parent for the next check.
+-- name: DeleteFolderEmptiedItem :one
+DELETE FROM items
+WHERE items.id = ?
+  AND NOT EXISTS (SELECT 1 FROM media_files WHERE media_files.item_id = items.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM items AS child
+    WHERE child.parent_id = items.id
+      AND (child.kind <> 'extra'
+           OR EXISTS (SELECT 1 FROM media_files WHERE media_files.item_id = child.id)))
+RETURNING parent_id;
+
+-- ListFolderItemIDs returns the items that own a file in the folder, so deleting the folder
+-- can prune the items it leaves without files.
+-- name: ListFolderItemIDs :many
+SELECT DISTINCT item_id
+FROM media_files
+WHERE root_id = ?;

@@ -288,8 +288,8 @@ func (service *Service) runScan(scanned library.ManagedLibrary, scanTracker *tra
 // is done. The scan ends with ErrorCodeCanceled; it removes nothing it had not already
 // justified, because removals only follow a completed walk (ADR 0022). It does nothing for a
 // library without a running scan. Library management uses it before changing or removing a
-// library. Cancel does not stop new scans: M3-19l and M3-19j must stop the scan triggers
-// between Cancel and the library change, or a trigger can start a scan on the old definition.
+// library. Cancel does not stop new scans: the library manager suspends the scan triggers before it cancels
+// and until the library change, or a trigger can start a scan on the old definition.
 func (service *Service) Cancel(ctx context.Context, libraryID string) error {
 	scanTracker := service.trackerOf(libraryID)
 	if scanTracker == nil {

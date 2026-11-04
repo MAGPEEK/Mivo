@@ -258,23 +258,6 @@ func TestLibraryBodyCheckLeavesOtherRequestsAlone(t *testing.T) {
 	assertProblem(t, serveRequest(t, handler, jsonRequest(t, http.MethodPatch, libraryPath, huge)), http.StatusRequestEntityTooLarge, restapi.CodePayloadTooLarge)
 }
 
-func TestManagementWithoutManagerIsUnavailable(t *testing.T) {
-	t.Parallel()
-
-	handler, _ := newManagementHandler(t, restapi.Options{})
-
-	for _, request := range []struct{ method, target, body string }{
-		{http.MethodPost, librariesPath, createBody},
-		{http.MethodPatch, libraryPath, `{"name":"x"}`},
-		{http.MethodDelete, libraryPath, ""},
-		{http.MethodGet, rootsPath, ""},
-		{http.MethodGet, foldersPath, ""},
-	} {
-		got := serveRequest(t, handler, jsonRequest(t, request.method, request.target, request.body))
-		assertProblem(t, got, http.StatusServiceUnavailable, restapi.CodeUnavailable)
-	}
-}
-
 func TestCreateLibraryDescribeFailureIsInternal(t *testing.T) {
 	t.Parallel()
 

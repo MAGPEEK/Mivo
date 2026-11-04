@@ -57,48 +57,23 @@ func libraryDefinition(configured config.LibraryConfig) (library.Definition, err
 	return definition, nil
 }
 
-// newLibraryService builds the catalog use cases and syncs the configured libraries into the
-// catalog before any client can ask for them (ADR 0022).
-func (app application) newLibraryService(ctx context.Context, db *sqlite.DB, files *libraryfs.FileSystem) (*applibrary.Service, error) {
-	definitions, err := libraryDefinitions(app.config.Libraries)
-	if err != nil {
-		return nil, err
-	}
-
-	reader := sqlite.NewCatalogReader(db)
-
-	service, err := applibrary.NewService(applibrary.Dependencies{
-		Libraries: sqlite.NewLibraryRepository(db, time.Now),
-		Items:     reader,
-		Children:  reader,
-		IDs:       uuidgen.New(),
-		Roots:     files,
-		Logger:    app.logger,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create library service: %w", err)
-	}
-
-	libraries, err := service.SyncLibraries(ctx, definitions)
-	if err != nil {
-		return nil, fmt.Errorf("sync configured libraries: %w", err)
-	}
-
-	app.logger.InfoContext(ctx, "libraries synced from the configuration", slog.Int("libraries", len(libraries)))
-
-	return service, nil
+// newLibraryStore is the one library store of the server: it writes the libraries, keeps the
+// import ledger and is the library source of the scan and its triggers (ADR 0028).
+func newLibraryStore(db *sqlite.DB) *sqlite.ManagedLibraryStore {
+	return sqlite.NewManagedLibraryStore(db, time.Now, uuidgen.New().NewID)
 }
 
 // newLibraryServices builds the item use cases and the library reader of the API responses.
-// The full management wiring (manager, folder browser) follows with M3-19l.
-func (app application) newLibraryServices(ctx context.Context, db *sqlite.DB, files *libraryfs.FileSystem,
+func newLibraryServices(db *sqlite.DB, store *sqlite.ManagedLibraryStore, files *libraryfs.FileSystem,
 ) (*applibrary.Service, *applibrary.ManagedCatalog, error) {
-	service, err := app.newLibraryService(ctx, db, files)
+	reader := sqlite.NewCatalogReader(db)
+
+	service, err := applibrary.NewService(applibrary.Dependencies{Libraries: store, Items: reader, Children: reader})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("create library service: %w", err)
 	}
 
-	managed, err := newManagedCatalog(db, files)
+	managed, err := newManagedCatalog(store, files)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,9 +82,7 @@ func (app application) newLibraryServices(ctx context.Context, db *sqlite.DB, fi
 }
 
 // newManagedCatalog reads the libraries with folders, options and item counts.
-func newManagedCatalog(db *sqlite.DB, files *libraryfs.FileSystem) (*applibrary.ManagedCatalog, error) {
-	store := sqlite.NewManagedLibraryStore(db, time.Now, uuidgen.New().NewID)
-
+func newManagedCatalog(store *sqlite.ManagedLibraryStore, files *libraryfs.FileSystem) (*applibrary.ManagedCatalog, error) {
 	catalog, err := applibrary.NewManagedCatalog(applibrary.ManagedCatalogDependencies{
 		Libraries: store, Counts: store, Roots: files,
 	})
@@ -130,7 +103,7 @@ type scanAdapters struct {
 // newScanService builds the v2 scan use case on the real walker, resolver and ffprobe, the
 // sqlite catalog, and the metadata refresher that reads NFO files and picks artwork. A
 // finished scan purges the image cache, whose renderings the scan may have outdated.
-func (app application) newScanService(db *sqlite.DB, adapters scanAdapters) (*appscan.Service, error) {
+func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibraryStore, adapters scanAdapters) (*appscan.Service, error) {
 	catalog := sqlite.NewLibraryCatalog(db, time.Now)
 
 	refresher, err := appscan.NewMetadataRefresher(appscan.MetadataRefresherDeps{
@@ -141,7 +114,7 @@ func (app application) newScanService(db *sqlite.DB, adapters scanAdapters) (*ap
 	}
 
 	service, err := appscan.NewService(appscan.Dependencies{
-		Libraries: sqlite.NewScanLibrarySource(db, time.Now),
+		Libraries: store,
 		Walker:    adapters.files,
 		Resolver:  adapters.files,
 		Prober:    adapters.prober,

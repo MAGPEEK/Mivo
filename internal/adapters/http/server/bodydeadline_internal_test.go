@@ -58,6 +58,8 @@ type (
 	unusedItems     struct{ restapi.ItemCatalog }
 	unusedScans     struct{ restapi.ScanService }
 	unusedPlayback  struct{ restapi.PlaybackService }
+	unusedManager   struct{ restapi.LibraryManager }
+	unusedFolders   struct{ restapi.FolderBrowsing }
 )
 
 // newDeadlineTestServer serves the full chain with the real API and web UI and the short
@@ -70,7 +72,7 @@ func newDeadlineTestServer(t *testing.T, withFallback bool, mounts ...restapi.Mo
 
 	api, err := restapi.NewHandler(restapi.Options{
 		System: stubSystemService{}, Libraries: unusedLibraries{}, Items: unusedItems{},
-		Scan: unusedScans{}, Playback: unusedPlayback{}, Logger: logger, Mounts: mounts,
+		Scan: unusedScans{}, Playback: unusedPlayback{}, Manager: unusedManager{}, Folders: unusedFolders{}, Logger: logger, Mounts: mounts,
 	})
 	if err != nil {
 		t.Fatalf("restapi.NewHandler: %v", err)

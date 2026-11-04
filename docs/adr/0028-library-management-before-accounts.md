@@ -42,7 +42,11 @@ expose server directories. The owner now wants libraries managed in the web app
    `WaitIdle`, the store change, then the change event (`Added`/`Changed`/`Removed`) to the
    Trigger, which lifts the suspension, and on removal `scan.Service.Forget(id)` to drop the
    in-memory options and refresh state. `HoldTimeout` (2 min) only guards against a change that
-   never arrives.
+   never arrives; a rejected update sends `Changed` so the trigger resumes at once. A manual
+   scan (`POST /libraries/{id}/scan`) can still start between `WaitIdle` and the store write;
+   that is harmless: it runs on the old definition or fails on a foreign key.
+   Removing a folder prunes the items it left without files in the same transaction (not at
+   the next scan); an item keeps living while one of its extras still has a file elsewhere.
 
 ## Consequences
 - Supersedes ADR 0022 "Library definitions" (config-only, path identity, "a removed path

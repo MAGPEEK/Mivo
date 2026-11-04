@@ -105,6 +105,14 @@ func completeOptions(options restapi.Options) restapi.Options {
 		options.Playback = &fakePlaybackService{}
 	}
 
+	if options.Manager == nil {
+		options.Manager = &fakeManager{}
+	}
+
+	if options.Folders == nil {
+		options.Folders = &fakeBrowsing{}
+	}
+
 	return options
 }
 

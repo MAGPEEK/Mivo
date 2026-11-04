@@ -9,6 +9,11 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
+// DefaultRootCheckTimeout is how long listing libraries waits for a folder check. It is short
+// because the library list is the first request of every client and a hung network mount
+// must not block it; a folder that does not answer in time is reported as unavailable.
+const DefaultRootCheckTimeout = time.Second
+
 // ItemCountReader counts the catalog items of the libraries. Implemented by adapters/sqlite
 // (ManagedLibraryStore.TopLevelItemCounts).
 type ItemCountReader interface {

@@ -36,14 +36,17 @@ services:
       TZ: Europe/Berlin
       # Concurrent re-encoding sessions, 1-8 (default 2). Use 1 on a weak NAS.
       # MIVO_TRANSCODE_MAX_SESSIONS: "1"
-      # Several libraries: mount each folder below /media and list the container paths.
+      # Libraries are added in the web app (Settings > Libraries), which browses /media.
+      # To seed them once from here instead, list the container paths (imported at the first
+      # start only; a library you delete later does not come back):
       # MIVO_LIBRARIES: /media/movies:/media/series
 
     volumes:
       # Settings (config.yaml), database and cache. Keep it on local storage, not on a
       # network share.
       - /path/to/config:/config
-      # Your videos; the mount is one library named "media". Read-only is enough.
+      # Your videos: mount each folder below /media, then add it as a library in the web
+      # app. Read-only is enough.
       - /path/to/videos:/media:ro
       # Temporary HLS output of remux and transcode sessions; needs free space for the
       # largest film times the number of concurrent sessions.

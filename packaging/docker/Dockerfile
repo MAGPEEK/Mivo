@@ -116,15 +116,16 @@ LABEL org.opencontainers.image.title="Mivo" \
       org.opencontainers.image.revision="${REVISION}"
 
 # Paths of ADR 0018 for Docker: the server does not compute them, the image sets them.
-# MIVO_LIBRARIES makes the /media mount the default library (OD-1), so "docker run -v
-# <videos>:/media:ro" works without a config file. The variable replaces the libraries of
-# /config/config.yaml as a whole (ADR 0018); packaging/docker/README.md shows how to set
-# several libraries or use the file instead.
+# MIVO_BROWSE_ROOTS makes /media the folder the web app browses when it adds a library (ADR 0028),
+# so "docker run -v <videos>:/media:ro" works without a config file: the first start has no
+# library and the user adds one in Settings > Libraries. MIVO_LIBRARIES still seeds libraries once;
+# packaging/docker/README.md shows how.
 ENV MIVO_CONFIG_DIR=/config \
     MIVO_PATHS_DATA=/config/data \
     MIVO_PATHS_CACHE=/config/cache \
     MIVO_PATHS_TRANSCODE=/transcode \
-    MIVO_LIBRARIES=/media
+    MIVO_BROWSE_ROOTS=/media \
+    MIVO_INSTALL_KIND=docker
 
 # Numeric, so Kubernetes' runAsNonRoot can verify it without a passwd entry. Override with
 # --user or compose "user:" to match the owner of the mounted directories on a NAS.

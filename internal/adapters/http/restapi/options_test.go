@@ -42,6 +42,8 @@ func TestNewHandlerRejectsInvalidOptions(t *testing.T) {
 		{name: "missing item catalog", options: without(func(options *restapi.Options) { options.Items = nil })},
 		{name: "missing scan service", options: without(func(options *restapi.Options) { options.Scan = nil })},
 		{name: "missing playback service", options: without(func(options *restapi.Options) { options.Playback = nil })},
+		{name: "missing library manager", options: without(func(options *restapi.Options) { options.Manager = nil })},
+		{name: "missing folder browser", options: without(func(options *restapi.Options) { options.Folders = nil })},
 		{name: "missing logger", options: without(func(options *restapi.Options) { options.Logger = nil })},
 		{name: "nothing wired", options: restapi.Options{}},
 		{name: "mount without pattern", options: withMounts(restapi.Mount{Handler: mounted})},

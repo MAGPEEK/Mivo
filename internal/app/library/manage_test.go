@@ -37,7 +37,7 @@ func newManagerFixture(t *testing.T, existing ...domainlibrary.ManagedLibrary) *
 
 	manager, err := library.NewManager(library.ManagerDependencies{
 		Catalog: fixture.store, Writer: fixture.store, Ledger: fixture.store,
-		Browser: fixture.browser, Scans: fixture.scans, Events: fakeEvents{log: log},
+		Browser: fixture.browser, Scans: fixture.scans, Events: fakeEvents{log: log}, Suspender: fakeSuspender{log: log},
 		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
 		AllowedKinds: []domainlibrary.Kind{domainlibrary.KindMovies, domainlibrary.KindShows},
 		Reserved:     []string{"/data"},
@@ -286,19 +286,19 @@ func TestUpdateLibrary(t *testing.T) {
 		{
 			"options rescan",
 			library.UpdatePatch{Options: &newOptions},
-			[]string{"scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
+			[]string{"trigger.suspend lib-a", "scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
 			1,
 		},
 		{
 			"keep and add folder",
 			library.UpdatePatch{Folders: &keepAndAdd},
-			[]string{"scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
+			[]string{"trigger.suspend lib-a", "scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
 			2,
 		},
 		{
 			"replace folder",
 			library.UpdatePatch{Folders: &replace},
-			[]string{"scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
+			[]string{"trigger.suspend lib-a", "scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"},
 			1,
 		},
 	}
@@ -436,7 +436,7 @@ func TestRemoveLibrary(t *testing.T) {
 		t.Fatalf("RemoveLibrary: %v", err)
 	}
 
-	want := []string{"scan.cancel lib-a", "scan.wait lib-a", "store.delete", "event.removed lib-a"}
+	want := []string{"trigger.suspend lib-a", "scan.cancel lib-a", "scan.wait lib-a", "store.delete", "event.removed lib-a", "scan.forget lib-a"}
 	if got := fixture.log.all(); !slices.Equal(got, want) {
 		t.Errorf("calls = %v, want %v", got, want)
 	}
@@ -459,7 +459,7 @@ func TestUpdateLibraryRestartsScanWhenStoreWriteFails(t *testing.T) {
 		t.Fatal("want error")
 	}
 
-	want := []string{"scan.cancel lib-a", "scan.wait lib-a", "store.update", "scan.start lib-a"}
+	want := []string{"trigger.suspend lib-a", "scan.cancel lib-a", "scan.wait lib-a", "store.update", "event.changed lib-a", "scan.start lib-a"}
 	if got := fixture.log.all(); !slices.Equal(got, want) {
 		t.Errorf("calls = %v, want %v", got, want)
 	}

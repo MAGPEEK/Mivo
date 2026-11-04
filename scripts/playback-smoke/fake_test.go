@@ -61,6 +61,9 @@ type fakeServer struct {
 	scanPolls int
 	scanState apigen.ScanState
 	noLibrary bool
+	// noRoots leaves the server without a browse root; created counts libraries made through the API.
+	noRoots bool
+	created int
 	// sessionLimitOnce makes the first session creation answer 503 session_limit_reached.
 	sessionLimitOnce bool
 	sessions         map[uuid.UUID]*fakeSession
@@ -85,6 +88,8 @@ func (fake *fakeServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/system/info", fake.systemInfo)
 	mux.HandleFunc("GET /api/v1/libraries", fake.libraries)
+	mux.HandleFunc("GET /api/v1/folder-roots", fake.folderRoots)
+	mux.HandleFunc("POST /api/v1/libraries", fake.createLibrary)
 	mux.HandleFunc("GET /api/v1/libraries/{id}", fake.library)
 	mux.HandleFunc("POST /api/v1/libraries/{id}/scan", fake.scan)
 	mux.HandleFunc("GET /api/v1/libraries/{id}/items", fake.items)
@@ -144,6 +149,36 @@ func (fake *fakeServer) libraries(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	fake.writeJSON(w, http.StatusOK, list)
+}
+
+func (fake *fakeServer) folderRoots(w http.ResponseWriter, _ *http.Request) {
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	list := apigen.FolderRootList{Roots: []apigen.FolderRoot{}, InstallKind: "docker"}
+	if !fake.noRoots {
+		list.Roots = append(list.Roots,
+			apigen.FolderRoot{ID: uuid.New(), Path: "/mnt", Available: true},
+			apigen.FolderRoot{ID: uuid.New(), Path: preferredRootPath, Available: true})
+	}
+
+	fake.writeJSON(w, http.StatusOK, list)
+}
+
+func (fake *fakeServer) createLibrary(w http.ResponseWriter, r *http.Request) {
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	var body apigen.LibraryCreate
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.Folders) != 1 || body.Folders[0].RootID == nil {
+		fake.problem(w, http.StatusBadRequest, "invalid", 0)
+
+		return
+	}
+
+	fake.noLibrary = false
+	fake.created++
+	fake.writeJSON(w, http.StatusCreated, fake.libraryValue())
 }
 
 func (fake *fakeServer) library(w http.ResponseWriter, r *http.Request) {

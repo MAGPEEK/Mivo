@@ -37,10 +37,6 @@ type InstallInfo struct {
 
 // ListFolderRoots answers the folder roots with the installation facts.
 func (api *API) ListFolderRoots(ctx context.Context, _ apigen.ListFolderRootsRequestObject) (apigen.ListFolderRootsResponseObject, error) {
-	if api.folders == nil {
-		return nil, errManagementNotWired(operationListFolderRoots)
-	}
-
 	roots, err := api.folders.BrowseRoots(ctx)
 	if err != nil {
 		return nil, operationFailure(operationListFolderRoots, err, http.StatusServiceUnavailable)
@@ -67,10 +63,6 @@ func (api *API) ListFolderRoots(ctx context.Context, _ apigen.ListFolderRootsReq
 // ListFolders answers the sub-folders of one folder of a root. The paths in the answer are
 // relative to the root: the API never shows where on the disk the root lies in a listing.
 func (api *API) ListFolders(ctx context.Context, request apigen.ListFoldersRequestObject) (apigen.ListFoldersResponseObject, error) {
-	if api.folders == nil {
-		return nil, errManagementNotWired(operationListFolders)
-	}
-
 	folderPath := ""
 	if request.Params.Path != nil {
 		folderPath = strings.Trim(*request.Params.Path, pathSeparator)

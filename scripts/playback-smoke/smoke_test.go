@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 )
@@ -106,6 +107,49 @@ func TestSmokePassesAgainstAServerThatMatchesTheExpectations(t *testing.T) {
 	}
 }
 
+// A server without a library gets one over its browse root through the API (the release
+// smoke of a fresh Docker image), preferring /media.
+func TestSmokeCreatesTheLibraryOfAServerWithoutOne(t *testing.T) {
+	t.Parallel()
+
+	fake, server := newFakeServer(t, passingFiles(t)...)
+	fake.noLibrary = true
+
+	var out bytes.Buffer
+
+	err := smoke(t.Context(), testOptions(t, server, passingManifest(t)), testDependencies(t, passingSummaries()), &out)
+	if err != nil {
+		t.Fatalf("smoke = %v, want nil; output:\n%s", err, out.String())
+	}
+
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+
+	if fake.created != 1 {
+		t.Errorf("libraries created through the API = %d, want 1", fake.created)
+	}
+}
+
+func TestPickRootPrefersMediaAndSkipsUnavailableRoots(t *testing.T) {
+	t.Parallel()
+
+	offline := apigen.FolderRoot{ID: uuid.New(), Path: preferredRootPath, Available: false}
+	mnt := apigen.FolderRoot{ID: uuid.New(), Path: "/mnt", Available: true}
+	media := apigen.FolderRoot{ID: uuid.New(), Path: preferredRootPath, Available: true}
+
+	if got, found := pickRoot([]apigen.FolderRoot{offline, mnt, media}); !found || got.ID != media.ID {
+		t.Errorf("pickRoot = %+v, %v; want the available /media", got, found)
+	}
+
+	if got, found := pickRoot([]apigen.FolderRoot{offline, mnt}); !found || got.ID != mnt.ID {
+		t.Errorf("pickRoot without /media = %+v, %v; want the first available root", got, found)
+	}
+
+	if _, found := pickRoot([]apigen.FolderRoot{offline}); found {
+		t.Error("pickRoot of only unavailable roots found one, want none")
+	}
+}
+
 func TestSmokeReportsEveryMismatchAndFails(t *testing.T) {
 	t.Parallel()
 
@@ -163,7 +207,9 @@ func TestSmokeStopsBeforeCasesWhenTheServerCannotScan(t *testing.T) {
 		wantErr error
 	}{
 		{name: "scan failed", prepare: func(fake *fakeServer) { fake.scanState = apigen.ScanStateFailed }, wantErr: errScanFailed},
-		{name: "no library", prepare: func(fake *fakeServer) { fake.noLibrary = true }, wantErr: errNoLibraries},
+		{name: "no library and no browse root", prepare: func(fake *fakeServer) {
+			fake.noLibrary, fake.noRoots = true, true
+		}, wantErr: errNoLibraries},
 	}
 
 	for _, test := range tests {

@@ -38,10 +38,7 @@ func (manager *Manager) UpdateLibrary(ctx context.Context, id string, patch Upda
 	}
 
 	if err := manager.deps.Writer.UpdateLibrary(ctx, updated); err != nil {
-		if rescan {
-			// The scan was cancelled for nothing; bring it back, best effort.
-			manager.startScan(ctx, id)
-		}
+		manager.resumeAfterRejectedUpdate(ctx, id, rescan)
 
 		return library.ManagedLibrary{}, fmt.Errorf("update library %q: %w", id, storeWriteError(err))
 	}
@@ -60,6 +57,21 @@ func (manager *Manager) UpdateLibrary(ctx context.Context, id string, patch Upda
 	}
 
 	return stored, nil
+}
+
+// resumeAfterRejectedUpdate undoes the stop of a rescanning update the store rejected: the
+// scan was cancelled and the trigger suspended for nothing, so the trigger is told to resume
+// at once instead of after its hold timeout, and the scan is brought back.
+func (manager *Manager) resumeAfterRejectedUpdate(ctx context.Context, id string, rescan bool) {
+	if !rescan {
+		return
+	}
+
+	if manager.deps.Events != nil {
+		manager.deps.Events.Changed(id)
+	}
+
+	manager.startScan(ctx, id)
 }
 
 func (manager *Manager) applyPatch(ctx context.Context, current library.ManagedLibrary,
