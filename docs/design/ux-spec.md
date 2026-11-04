@@ -66,7 +66,8 @@ parts are named in its row. "Data" means the server work, "UI" the screen work.
 | `/settings/account/*` | Own account and profile | 11.3 | M7 |
 | `/admin/status/*` | Admin – Status group | 11.4 | M5 (read-only dashboard), M7 |
 | `/admin/settings/*` | Admin – Server settings | 11.5 | M7 (pages per milestone) |
-| `/admin/manage/*` | Admin – Manage group | 11.6 | M7 |
+| `/admin/manage/libraries` | Admin – Manage › Libraries ("Settings › Libraries") | 11.6, 12 | M3 (owner decision 2026-11-04) |
+| `/admin/manage/*` (other pages) | Admin – Manage group | 11.6 | M7 |
 | `/admin/users/*` | Admin – Users and access | 10.3 | M7 |
 
 ## 2 Shell
@@ -96,7 +97,7 @@ parts are named in its row. "Data" means the server work, "UI" the screen work.
 | SH-15 | Playlists entry | Appears when the profile has playlists. | M7 |
 | SH-16 | Persistence | Pins and order are a per-device preference (local storage) in M5 and move to the server per profile in M7 (with a one-time import of the device layout). | M5, M7 |
 | SH-17 | Phone layout | Below the small breakpoint the sidebar becomes a bottom navigation: Home, Libraries (sheet with the pinned list), Search, Profile. | M5 |
-| SH-18 | Settings entry | Last sidebar entry: Settings (opens `/admin` for admins, `/settings/app` for others, like SH-05). | M5 |
+| SH-18 | Settings entry | Last sidebar entry: Settings (opens `/admin` for admins, `/settings/app` for others, like SH-05). | M3 (links to Settings › Libraries), M5 |
 
 The sidebar contains **only** Home, the server's own libraries (pinnable, reorderable) and
 Mivo's own sections (playlists, settings). Plex's online sidebar part is not adopted
@@ -119,6 +120,7 @@ Mivo keeps the hero of ADR 0011 as an **optional** element above the rows.
 | HO-06 | Recently played (music) | Albums and tracks played recently. | M7 (watch/listen state) |
 | HO-07 | Row source | Rows are generated on the server (one endpoint returning row definitions with their first page of items; "See all" opens the library's Browse pivot with the row's filter and sort in the URL). The client renders them, it does not compute them. | M5 |
 | HO-08 | Row configuration | Which libraries feed Home and which rows appear, in which order: admin per library ("Customize rows", 11.6) and per profile (hide a row). | M7 |
+| HO-09 | No libraries yet | With zero libraries, Home and the sidebar's library section show an empty state ("No libraries yet") with an **Add library** button that opens Settings › Libraries with the add dialog (12). Owner decision 2026-11-04: installers no longer ask for a media folder. | M3 |
 | – | Social pivots (trending, activity feed, friends, public profile) | Not adopted. | – |
 
 ## 4 Library page
@@ -422,7 +424,10 @@ Users         Users · Invites · Devices · Sign-in log
 ```
 
 Writing settings needs authentication; until milestone 7, settings stay in `config.yaml`
-(ADR 0022) and the admin area is read-only.
+(ADR 0022) and the admin area is read-only. **Exception (owner decision 2026-11-04):** library
+management (AD-40, section 12) is writable from milestone 3, for requests from the local network
+and the server's own origin only, until accounts exist (task M3-19, ADR 0028 to follow).
+Libraries then live in the database; `libraries` in `config.yaml` is imported once.
 
 ### 11.2 Settings for this device (`/settings/app`, every user)
 
@@ -469,7 +474,7 @@ mode (Off / Forced only / When audio is foreign / Always), 2FA (M7b). Milestone 
 
 | Id | Page | Content | Milestone |
 |---|---|---|---|
-| AD-40 | Libraries | List with kind icon, name, folders, item count, last scan, availability; per library **Scan**, **Edit** (12), **Customize rows** (HO-08, LB rows), **Remove** (confirm; watch state is kept by item identity where possible). "Add library" opens 12. Option "Merge recently added by media type". | M7 (the list read-only with scan buttons in M5) |
+| AD-40 | Libraries | List with kind icon, name, folders, item count, last scan, availability; per library **Scan**, **Edit** (12), **Customize rows** (HO-08, LB rows), **Remove** (confirm; watch state is kept by item identity where possible). "Add library" opens 12. Option "Merge recently added by media type". | M3 (list, Scan, Add, Edit, Remove under the local-network guard; reached as "Settings › Libraries"), M7 (behind sign-in; Customize rows, merge option) |
 | AD-41 | Troubleshooting | Optimise database, clean caches (images, trickplay), download logs (zip, secrets redacted), download a support bundle (config with secrets removed, capability report), download database (admin, with a warning). | M7 |
 | AD-42 | Live log | Streaming server log with level filter, search, pause, download; secrets redacted as in the file log (M1-05b). | M7 |
 | – | Plugins | Not adopted in v1 (plan: no in-process plugins; webhooks and provider interface later). | – |
@@ -477,14 +482,16 @@ mode (Off / Forced only / When audio is foreign / Always), 2FA (M7b). Milestone 
 
 ## 12 Library settings dialog (add / edit library)
 
-Admin dialog with tabs on the left; from M7 it replaces editing `libraries` in `config.yaml`
-(ADR 0022: no unauthenticated library management).
+Admin dialog with tabs on the left; from M3 it replaces editing `libraries` in `config.yaml`
+(owner decision 2026-11-04, task M3-19). Until accounts exist (M7) it works only from the local
+network and the server's own origin; ADR 0028 (to follow) records this and supersedes the
+"no unauthenticated library management" part of ADR 0022.
 
 | Id | Tab | Content | Milestone |
 |---|---|---|---|
-| LS-01 | General | **Kind** as large tiles: Movies, Shows, Music, Photos, Audiobooks, Mixed videos; name; metadata language; certification country. The kind cannot change after creation (create a new library instead). | M7 |
-| LS-02 | Folders | One or more root folders; a **server-side folder browser** limited to the allowed browse roots (config key; in Docker `/media`, on DSM the granted shares, on Windows drive roots) so the browser cannot list system directories; checks of ADR 0022 (absolute, unique, not nested, not in data/cache/transcode). | M7 |
-| LS-03 | Advanced | Visibility: in Home and search / only search / hidden (only via the sidebar); prefer local metadata (NFO, embedded tags) over providers; use local artwork; use original titles; artwork language; find extras (on/off); trickplay and chapter images (inherit / on / off); intro detection for shows; collections: show collections / hide items that are in a collection / show both; minimum size of automatic collections; ratings source shown first; episode ordering for shows (aired / absolute / DVD, M6). | M7 (effects implemented in M3/M4/M6) |
+| LS-01 | General | **Kind** as large tiles: Movies, Shows, Music, Photos, Audiobooks, Mixed videos; name; metadata language; certification country. The kind cannot change after creation (create a new library instead). | M3 (tiles of the kinds the server supports – Movies and Shows, more with the M3 second wave; name; metadata language stored, used from M6), M7 (certification country), Mixed videos later |
+| LS-02 | Folders | One or more root folders; a **server-side folder browser** limited to the allowed browse roots (config key `browse.roots`; in Docker `/media`, on DSM the volumes, of which only the shares granted to the package user are listed, on Windows drive roots) so the browser cannot list system directories; only directories the server can read are listed, hidden and system folders (`@eaDir`, `@appdata`, `#recycle`, …) never; checks of ADR 0022 (absolute, unique, not nested, not in data/cache/transcode, not in another library). When folders are not readable, install-specific help: DSM – Control Panel › Shared Folder › Edit › Permissions › "System internal user" › package user › Read only; Docker – mount the folder below `/media`. | M3 |
+| LS-03 | Advanced | Visibility: in Home and search / only search / hidden (only via the sidebar); prefer local metadata (NFO, embedded tags) over providers; use local artwork; use original titles; artwork language; find extras (on/off); trickplay and chapter images (inherit / on / off); intro detection for shows; collections: show collections / hide items that are in a collection / show both; minimum size of automatic collections; ratings source shown first; episode ordering for shows (aired / absolute / DVD, M6). | M3 (find extras, read NFO files, use local artwork – the options M3 implements), M7 (the rest; effects implemented in M4/M6) |
 | – | Scanner and agent selection | Not adopted as separate concepts: Mivo has one scanner per kind and the ordered provider list (AD-22) per library. | – |
 
 ## 13 Not adopted
@@ -536,11 +543,11 @@ Mivo uses its own wording; German strings follow the same choices in the locale 
 
 | Milestone | UX elements delivered |
 |---|---|
-| M3 Libraries complete | Show → season → episode hierarchy with minimal pages (DT-20…22), local artwork and image endpoint (LB-44, LB-40), NFO fields (summary, genres, people names), extras scan, absolute-numbering parser test (DT-24), config keys for watcher and periodic scan (AD-23) |
+| M3 Libraries complete | Show → season → episode hierarchy with minimal pages (DT-20…22), local artwork and image endpoint (LB-44, LB-40), NFO fields (summary, genres, people names), extras scan, absolute-numbering parser test (DT-24), config keys for watcher and periodic scan (AD-23); library management in the app (owner decision 2026-11-04): Settings › Libraries (AD-40), add/edit dialog with kind, folders and folder browser, language and the M3 options (LS-01…03 M3 parts), settings entry (SH-18 part), "No libraries yet" (HO-09) |
 | M4 Streaming | Playback options panel: quality ladder, audio, subtitles, subtitle style (PL-10…13); detail technical selectors (DT-07); chapters (PL-30); trickplay and chapter ticks (PL-05); skip segment (PL-07); generated episode stills (DT-23); overlay extensions (PL-41); hardware test and transcoder keys (AD-25); device playback settings (AD-02) |
 | M5 Web UI complete | Shell (SH-03, SH-04, SH-12…18), Home rows and optional hero (HO-01, HO-02, HO-05, HO-07), library pivots, toolbar, filters, sort, folders, views, size slider, A–Z, virtual grid, selection (LB-02…04, LB-09, LB-20…30, LB-41…43), detail layout (DT-01…03, DT-05, DT-06, DT-08, DT-09, DT-11), search (SR-01…03), player layout, queue, mini player, media info, mode indicator (PL-01…04, PL-08, PL-09, PL-14, PL-15, PL-31…36, PL-38, PL-40, PL-42), read-only dashboard (AD-10, PL-43), settings for this device (AD-01, AD-03) |
 | M6 Online metadata | Edit details dialog (ED-01…03, ED-05…07), ratings (DT-04), portraits and person pages (DT-08, DT-30), related (DT-10), people rows and top rated (LB-05, LB-08), unmatched filter, online subtitle search (PL-20), metadata settings (AD-22), provider episode ordering |
-| M7 Users and administration | Profiles and picker (US-01…03), managed profiles and content limits (US-10…12), users, invites, access, permissions, guest (US-20…24), watch state everywhere (HO-03, HO-04, HO-06, LB-01, LB-06, LB-07, badges), labels and batch edit (ED-04, ED-08), playlists, collections, history, downloads, subtitle upload (PL-21, PL-22), row configuration (HO-08), admin settings pages (AD-11, AD-12, AD-20, AD-23…26, AD-28…30), manage pages (AD-40…42), library dialog (LS-01…03) |
+| M7 Users and administration | Profiles and picker (US-01…03), managed profiles and content limits (US-10…12), users, invites, access, permissions, guest (US-20…24), watch state everywhere (HO-03, HO-04, HO-06, LB-01, LB-06, LB-07, badges), labels and batch edit (ED-04, ED-08), playlists, collections, history, downloads, subtitle upload (PL-21, PL-22), row configuration (HO-08), admin settings pages (AD-11, AD-12, AD-20, AD-23…26, AD-28…30), manage pages (AD-41, AD-42; AD-40 behind sign-in with Customize rows), remaining library dialog options (LS-01 certification country, LS-03 rest) |
 | M7b Remote access | Remote access page (AD-21), devices and revoke (US-25), sign-in log (US-26), remote permissions and bitrate limits |
 | M8 DLNA + Chromecast | Cast button (SH-06), DLNA page (AD-27) |
 | M10 webOS | The same IA in 10-foot form: Home rows, library Browse with filters and sort, detail, player with the playback options side panel and stream info, profile picker with PIN pad, Quick Connect |

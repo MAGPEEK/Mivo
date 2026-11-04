@@ -18,6 +18,11 @@ In scope since 2026-11-04 (owner request, ADR 0026 Notes "UX plan"): one **DSM m
 entry** of type `url` (INFO `dsmuidir`, title from the brand, the package icon) that opens the
 web app on port 8460 in a new browser window, like the "Open" button.
 
+Owner decision 2026-11-04: the install wizard must no longer ask for a media folder; libraries
+are configured in the Mivo web app. The 0.1.0-alpha.2 SPKs keep the wizard (alpha.2 has no
+other way to add a library); the release after alpha.2 removes the folder question (SPK-17,
+after the library management of milestone 3, M3-19).
+
 Not in scope: hardware transcoding, HTTPS, an app embedded in the DSM desktop (DSM window or
 iframe), single sign-on with DSM accounts, a DSM-side settings UI, reverse-proxy integration,
 migration from Docker, package signing, a package source feed, the GitHub Actions workflow
@@ -105,6 +110,7 @@ time (SPK-09 after M2-36, or M2-36 rebased on SPK-09).
 | [SPK-11](SPK-11-emulated-smoke.md) | Emulated install + playback smoke per family | mivo-synology | 07, 10, 16, M2-32, M2-35 | 7 | |
 | [SPK-12](SPK-12-owner-dsm-install-test.md) | Manual install test on the owner's Synology | mivo-tester | 09, 10, 11, 16 | 8 | |
 | [SPK-13](SPK-13-publish-github-release.md) | Attach SPKs to the GitHub Release | mivo-release | 12, 16, M2-36, release decision | 9 | |
+| [SPK-17](SPK-17-remove-install-folder-question.md) | Install wizard without the media folder question (release after alpha.2) | mivo-synology | 12, 13, M3-19 (through M3-19o) | 10 | |
 
 Task ids are stable identifiers, not the order: SPK-14 runs before SPK-07, SPK-15 starts in
 wave 2.
@@ -126,6 +132,8 @@ wave 2.
 8. SPK-12 (owner's hardware, including the version-scheme and wizard checks) – fixes, if any, as
    `SPK-12b…`
 9. SPK-13 (publishing; refuses interim FFmpeg)
+10. SPK-17 (release after 0.1.0-alpha.2): wizard without the folder question, after M3-19 has
+    merged; includes an owner device test of the upgrade from the published alpha.2 SPK
 
 The toolkit risk of OD-SPK-2 B is retired: SPK-04 packed placeholder SPKs for all three families
 in Docker Desktop. The biggest remaining risks are the own FFmpeg build (SPK-15) and the

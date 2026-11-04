@@ -7,6 +7,12 @@ embedded artwork, an image endpoint with fixed sizes and a cache (LB-44) and pos
 detail (LB-40), versions and extras folders, watcher and periodic scan with their config keys
 (AD-23). Second wave: music tags, audiobook chapters, photo EXIF, disc images.
 
+Added by the owner on 2026-11-04: **library management in the app** – Settings › Libraries
+with add / edit / remove, a server-side folder browser, several folders per library, metadata
+language, the M3 advanced options, a scan after adding, a local-network-only guard until
+accounts exist (AD-40, LS-01 … LS-03, M3-19 and its slices). It lets the release after
+0.1.0-alpha.2 drop the folder question of the Synology install wizard (SPK-17).
+
 Not in scope: TMDB/MusicBrainz, the edit dialog and "correct match" (M6 – but the model leaves
 room: provider IDs, field locks, provider/upload artwork sources, per-item metadata language);
 the full detail layout, cast row, extras row, virtualised grid, filters (M5); version/audio/
@@ -18,13 +24,15 @@ subtitle selectors and generated episode stills (M4); watch state (M7, OD-UX-3);
 | ADR | Decision | Status |
 |---|---|---|
 | [0027](../adr/0027-library-model-v2.md) | Library model v2: kinds, hierarchy, match keys and placement, parser rules incl. DT-24, migration `00003`, metadata merge with field locks, Kodi NFO, local artwork, FFmpeg-rendered image endpoint and cache, scanning v2, watcher and periodic scan, second-wave outline | Proposed (M3-01) |
+| 0028 (to be written) | Library management in the app: database as source of truth, configuration as one-time import seed, several folders per library, browse roots and install kind, management guard (local peers, same origin) until M7; supersedes parts of ADR 0022 | Pending – mivo-architect writes it from the M3-19 Notes before lane L1 starts |
 
 ## Numbering
 
 The number is the area, a letter suffix a further one-sitting slice of the same area (as with
 M2-24b): 02 contract, 03 naming, 04 domain, 05 sqlite, 06 read API, 07 local metadata sources,
 08 FFmpeg images, 09 image service and endpoint, 10 scan, 11 triggers and wiring, 12 web,
-17 corpus, 18 E2E. 13 … 16 are the second wave.
+17 corpus, 18 E2E. 13 … 16 are the second wave. 19 is library management: `M3-19` is the
+parent file (scope and decisions), `M3-19a` … `M3-19o` are its one-sitting slices.
 
 ## Tasks – video slice
 
@@ -56,7 +64,30 @@ M2-24b): 02 contract, 03 naming, 04 domain, 05 sqlite, 06 read API, 07 local met
 | [M3-11b](M3-11b-composition-root-library-v2.md) | Composition root + integration test | mivo-backend | 05b, 05c, 05d, 06b, 08, 09b, 10b, 11, 17 | 6 | checkpoint |
 | [M3-18](M3-18-e2e-library-v2.md) | E2E: posters, show → season → episode, DT-24 | mivo-frontend | 11b, 12b, 17 | 7 | LB-40, LB-44, DT-20…22, DT-24 |
 
-## Tasks – second wave (after M3-18 is green)
+## Tasks – library management (owner decision 2026-11-04, after the data model tasks)
+
+Parent: [M3-19](M3-19-library-management-ui.md) (scope, persistence decision, security, open
+decisions OD-M3-6/7). UX ids: AD-40, LS-01, LS-02, LS-03 (M3 subset), SH-18 (entry), HO-09.
+
+| ID | Title | Owner | Depends on | Lane |
+|---|---|---|---|---|
+| [M3-19a](M3-19a-api-contract-library-management.md) | Contract: library CRUD, folder roots/listing + generated code | mivo-backend | 02, ADR 0028 | L1 |
+| [M3-19b](M3-19b-domain-library-management.md) | Domain: library v2, folder rules, browse name policy | mivo-backend | 04, ADR 0028 | L1 |
+| [M3-19c](M3-19c-config-browse-roots-and-library-seed.md) | Config: `browse.roots`, `install.kind`, `libraries` as seed | mivo-backend | 11, ADR 0028 | L1 |
+| [M3-19d](M3-19d-fs-folder-browser.md) | FS: folder browser and folder check | mivo-backend | 19b | L2 |
+| [M3-19e](M3-19e-app-library-management.md) | App: create/update/remove/import/browse | mivo-backend | 19b, 06 | L2 |
+| [M3-19f](M3-19f-sqlite-migration-library-folders.md) | SQLite: migration `00004` folders, options, import ledger | mivo-backend | 11b | L3 |
+| [M3-19i](M3-19i-scan-multi-folder-and-options.md) | Scan: several folders, options, cancel | mivo-backend | 19b, 11b | L3 |
+| [M3-19j](M3-19j-scantrigger-dynamic-libraries.md) | Scan triggers: dynamic libraries, watch per folder | mivo-backend | 19b, 11b | L3 |
+| [M3-19k](M3-19k-http-library-management.md) | HTTP: management handlers + guard | mivo-backend | 19a, 19e, 11b | L3 |
+| [M3-19m](M3-19m-web-settings-libraries.md) | Web: Settings › Libraries, settings entry, empty states | mivo-frontend | 19a, 12b | L3 |
+| [M3-19g](M3-19g-sqlite-library-store-v2.md) | SQLite: library store v2 | mivo-backend | 19e, 19f | L4 |
+| [M3-19h](M3-19h-sqlite-multi-folder-catalog.md) | SQLite: catalog per folder | mivo-backend | 19f, 19i | L4 |
+| [M3-19n](M3-19n-web-library-dialog-folder-browser.md) | Web: add/edit dialog, folder browser, permission help | mivo-frontend | 19m | L4 |
+| [M3-19l](M3-19l-composition-root-library-management.md) | Composition root, Docker defaults, integration test | mivo-backend | 19c, 19d, 19g, 19h, 19i, 19j, 19k | L5 |
+| [M3-19o](M3-19o-e2e-library-management.md) | E2E: empty state → add → scan → edit → remove | mivo-frontend | 19l, 19n, 18 | L6 |
+
+## Tasks – second wave (after M3-18 and M3-19l are green)
 
 | ID | Title | Owner | Depends on | Gate |
 |---|---|---|---|---|
@@ -68,7 +99,9 @@ M2-24b): 02 contract, 03 naming, 04 domain, 05 sqlite, 06 read API, 07 local met
 The second-wave files fix scope and acceptance criteria; each spans several layers and is split
 into one-sitting tasks by the architect once the video slice has merged (and, for 15/16, the
 owner has answered the tooling decision). M3-13 and M3-15/M3-16 can then run in parallel;
-M3-14 reuses M3-13's audio classification and covers.
+M3-14 reuses M3-13's audio classification and covers. Second-wave migrations number from
+`00005` (M3-19f takes `00004`); each second-wave kind is enabled in `libraryKinds` (M3-19k/l)
+by its own task, so its tile appears in the add-library dialog.
 
 ## Waves (parallel within a wave; no two tasks of a wave share a file)
 
@@ -88,7 +121,25 @@ M3-14 reuses M3-13's audio classification and covers.
 6. M3-11b – **walking-skeleton checkpoint**: `go run -tags webui ./cmd/mivo` with a movies and
    a shows library shows posters and the hierarchy; the Go integration test over
    `testdata/library` passes, including DT-24.
-7. M3-18, then the milestone summary for the owner and the release decision.
+7. M3-18, then the milestone summary for the owner and the release decision (after lane L of
+   the library management, below).
+
+**Lane L – library management (M3-19).** Runs beside the waves above; it starts after the
+data model tasks of wave 1 and after ADR 0028 is written. No lane task shares a file with a
+wave task running at the same time.
+
+| Lane | Tasks (parallel) | Runs beside | Entry condition |
+|---|---|---|---|
+| L1 | M3-19a ‖ M3-19b ‖ M3-19c | wave 2 | M3-02, M3-04, M3-11 merged; ADR 0028 written. In wave 2 nobody else edits `api/openapi.yaml`, `restapi`, `platform/config`; M3-19b adds new files to `domain/library` only |
+| L2 | M3-19d ‖ M3-19e | waves 3–5 | L1; M3-06 merged (M3-19e adds new files to `app/library`; `service.go` only through an options struct) |
+| L3 | M3-19f ‖ M3-19i ‖ M3-19j ‖ M3-19k ‖ M3-19m | wave 7 (M3-18 touches only `e2e/**`) | M3-11b merged (it owns `sqlite`, `app/scan`, `restapi` and `cmd/mivo` until then); M3-12b merged (router) |
+| L4 | M3-19g ‖ M3-19h ‖ M3-19n | – | L3. M3-19g and M3-19h own different `queries/*.sql`; if sqlc emits a shared `querier.go`, the second to merge rebases and regenerates |
+| L5 | M3-19l – **checkpoint**: libraries are managed through the API, Docker starts empty | – | L4, M3-19c, M3-19d |
+| L6 | M3-19o | – | M3-19l, M3-19n, M3-18 |
+
+The milestone summary and the release decision follow M3-18 **and** M3-19o. The second wave
+(M3-13 … M3-16) starts after M3-19l, because it touches the same migrations, scan and
+contract.
 
 Shared files: `docs/tasks/BACKLOG.md` (each task deletes only its own rows, named in its
 file); `web/apps/web/src/test/**` belongs to M3-12 in wave 2, M3-12b keeps new fakes inside
@@ -108,10 +159,11 @@ wired earlier only with a second, throw-away wiring of `cmd/mivo`.
 
 | Agent | Tasks |
 |---|---|
-| mivo-architect | M3-01 (done), the split of M3-13 … M3-16, ADR 0027 Notes after deviations |
-| mivo-backend | M3-02, M3-03, M3-03b, M3-04, M3-04b, M3-05, M3-05b, M3-05c, M3-05d, M3-06, M3-06b, M3-07, M3-07b, M3-09, M3-09b, M3-10, M3-10b, M3-11, M3-11b, M3-13, M3-14 |
+| mivo-architect | M3-01 (done), M3-19 (parent, done), ADR 0028 (before lane L1), the split of M3-13 … M3-16, ADR 0027 Notes after deviations |
+| mivo-backend | M3-02, M3-03, M3-03b, M3-04, M3-04b, M3-05, M3-05b, M3-05c, M3-05d, M3-06, M3-06b, M3-07, M3-07b, M3-09, M3-09b, M3-10, M3-10b, M3-11, M3-11b, M3-13, M3-14, M3-19a … M3-19l |
 | mivo-media | M3-08, M3-17, M3-15, M3-16 (and the probing/cover parts of M3-13, M3-14) |
-| mivo-frontend | M3-12, M3-12b, M3-18 |
+| mivo-frontend | M3-12, M3-12b, M3-18, M3-19m, M3-19n, M3-19o |
+| mivo-synology | none in milestone 3; SPK-17 (wizard without folder question) depends on M3-19 |
 | mivo-webos | none in milestone 3 |
 
 ## Milestone 6 readiness (keep in mind for review)
@@ -152,6 +204,14 @@ Tasks follow the recommendation until answered (details in ADR 0027).
   the SPK FFmpeg build).
 - **Scope cut to confirm:** air-date episode names (`Show 2024-01-05`) are not parsed in M3;
   such files become unnumbered episodes (ADR 0027 §4).
+- **ADR 0028 acceptance** (library management before accounts; residual risks: reverse
+  proxies and DNS rebinding until M7, details in M3-19 Notes "Security").
+- **OD-M3-6 Several folders per library** (M3-19f, M3-19h, M3-19i): A now, as asked in the
+  owner's request (recommended) / B one folder per library in M3, several in M7 (saves M3-19h
+  and part of M3-19f/i).
+- **OD-M3-7 Docker default** (M3-19l): A replace `MIVO_LIBRARIES=/media` by
+  `MIVO_BROWSE_ROOTS=/media` so Docker starts empty like the SPK (recommended) / B keep the
+  variable as a one-time seed.
 
 ## Approvals the orchestrator needs from the user
 
@@ -161,7 +221,12 @@ Tasks follow the recommendation until answered (details in ADR 0027).
 - Docker: `sqlc/sqlc:1.31.1` for M3-05, M3-05b, M3-05c, M3-05d, M3-11b; the FFmpeg 7.1 image
   check of M3-08; the Linux watcher tests of M3-11.
 - Release notes of the next version must announce the one-time catalog rebuild (re-probe of
-  every file) – collected by M3-11b.
+  every file) – collected by M3-11b – and library management in the app (Docker: add the
+  library once in Settings › Libraries) – collected by M3-19l.
+- Docker: `sqlc/sqlc:1.31.1` also for M3-19f, M3-19g, M3-19h; the image build and release
+  smoke of M3-19l; Linux permission tests of M3-19d.
+- A `CLAUDE.md` change, if M3-19l proposes one for the release smoke (only with the owner's
+  approval).
 
 ## Risks and notes
 
@@ -175,3 +240,8 @@ Tasks follow the recommendation until answered (details in ADR 0027).
   entries at startup and after scans.
 - 25 task files in the video slice: plan for several review rounds; the stop rule (3 failed
   rounds) applies per task as usual.
+- Library management (15 slices) adds a second migration (`00004`) to the same release as
+  `00003`; users upgrading from 0.1.0-alpha.2 see one catalog rebuild, and configured libraries
+  are imported again on the first start (M3-19 Notes "Persistence").
+- Management without accounts: the guard admits local, same-origin requests only; reverse
+  proxies (DSM's included) and DNS rebinding remain open until M7 and are documented.
