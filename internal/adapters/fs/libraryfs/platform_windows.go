@@ -127,9 +127,9 @@ func identityFromIndex(volume, indexHigh, indexLow uint32) directoryID {
 	return directoryID{device: uint64(volume), indexLow: index}
 }
 
-// videoFileInfo reads the metadata of a regular file found by listing its directory. On
+// libraryFileInfo reads the metadata of a regular library file found by listing its directory. On
 // Windows the listing of the confined directory handle already carries it, without I/O.
-func videoFileInfo(_ *os.Root, _ string, entry fs.DirEntry) (fs.FileInfo, error) {
+func libraryFileInfo(_ *os.Root, _ string, entry fs.DirEntry) (fs.FileInfo, error) {
 	info, err := entry.Info()
 	if err != nil {
 		return nil, fmt.Errorf("read entry info: %w", err)

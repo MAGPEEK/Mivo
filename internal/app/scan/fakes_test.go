@@ -132,6 +132,11 @@ func (walker *scriptedWalker) Walk(
 			return nil, err
 		}
 
+		// Like the real walker, every reported file carries its class; scripts may leave it out.
+		if file.Class == "" {
+			file.Class, _ = library.ClassifyFile(file.RelativePath)
+		}
+
 		if err := visit(file); err != nil {
 			return nil, err
 		}

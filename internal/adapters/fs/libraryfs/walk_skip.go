@@ -71,14 +71,20 @@ func (w *walk) requireReadableRoot() error {
 }
 
 // isSkippedName reports hidden entries and system folders. Checking the name before the type
-// is safe: no video file is named like a system folder.
+// is safe: no library file is named like a system folder.
 func isSkippedName(name string) bool {
 	return library.IsHiddenEntry(name) || library.IsIgnoredDirectory(name)
 }
 
-// isPlainNonVideoFile lets the walk skip most files without any I/O.
-func isPlainNonVideoFile(entry fs.DirEntry) bool {
-	return entry.Type().IsRegular() && !library.IsVideoFileName(entry.Name())
+// isPlainUnclassifiedFile lets the walk skip most non-library files without any I/O.
+func isPlainUnclassifiedFile(entry fs.DirEntry) bool {
+	if !entry.Type().IsRegular() {
+		return false
+	}
+
+	_, ok := library.ClassifyFile(entry.Name())
+
+	return !ok
 }
 
 func pathAttr(relativePath string) slog.Attr {

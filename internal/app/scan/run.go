@@ -75,6 +75,12 @@ func (scanRun *run) walk(ctx context.Context) ([]library.FileState, []string, er
 	var seen []library.FileState
 
 	skipped, err := scanRun.service.walker.Walk(ctx, scanRun.library.Root, func(state library.FileState) error {
+		// The milestone-2 scan places videos only; sidecars wait for the scan v2 (M3-10).
+		// TODO(M3-10): use NFO and image sidecars.
+		if state.Class != library.FileClassVideo {
+			return nil
+		}
+
 		seen = append(seen, state)
 
 		return nil

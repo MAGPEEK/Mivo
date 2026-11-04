@@ -45,6 +45,31 @@ func TestFirstScanAddsEveryVideoFile(t *testing.T) {
 	}
 }
 
+func TestScanIgnoresSidecarFiles(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	h.walker.set(moviesRoot, walkResult{files: []library.FileState{
+		fileAt("Movie (2020)/poster.jpg", 5), fileAt("Movie (2020)/movie.nfo", 6),
+		fileAt("Movie (2020)/Movie (2020).mkv", 7),
+	}})
+	h.start(t)
+
+	status := h.scan(t, moviesID)
+
+	assertState(t, status, scan.StateIdle, scan.ErrorCodeNone)
+	assertCounts(t, status, scan.Counts{Added: 1})
+
+	wantProbed := []string{absolutePath(moviesRoot, "Movie (2020)/Movie (2020).mkv")}
+	if got := h.prober.probedPaths(); !slices.Equal(got, wantProbed) {
+		t.Errorf("probed %q, want %q", got, wantProbed)
+	}
+
+	if stored := h.catalog.byPath(); len(stored) != 1 {
+		t.Errorf("catalog holds %d files, want only the video", len(stored))
+	}
+}
+
 func assertAddedFile(t *testing.T, record scan.ProbedFile, state library.FileState, title string) {
 	t.Helper()
 

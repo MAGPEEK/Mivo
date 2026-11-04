@@ -55,7 +55,10 @@ func New(logger *slog.Logger) (*FileSystem, error) {
 	return &FileSystem{logger: logger}, nil
 }
 
-// Walk calls visit once for every video file below the absolute library root.
+// Walk calls visit once for every library file below the absolute library root: every file
+// library.ClassifyFile accepts (videos, NFO and image sidecars), with its class and, when the
+// raw path is not in Unicode NFC, its NFC form (ADR 0027 §3). The raw path stays the one that
+// opens and is stored; only parsing uses the NFC form.
 //
 // The real directory tree is walked first, directories in name order; directory links are
 // followed afterwards, and every physical directory is listed once, so a file keeps the path
@@ -63,7 +66,7 @@ func New(logger *slog.Logger) (*FileSystem, error) {
 // a directory reached through a link whose identity the file system does not report is not
 // listed (logged at info), while real-tree directories are listed with any identity. File
 // links are reported under their own path, so one file may appear under several paths. Hidden
-// entries, NAS and OS system folders (library.IsIgnoredDirectory), non-video files, special
+// entries, NAS and OS system folders (library.IsIgnoredDirectory), unclassified files, special
 // files and links that leave the root are skipped. Entries whose path the catalog cannot
 // store are logged and skipped.
 //
@@ -274,7 +277,7 @@ func (w *walk) unknownLinkedDirectory(at location) {
 
 func (w *walk) entry(ctx context.Context, parent location, entry fs.DirEntry) error {
 	name := entry.Name()
-	if isSkippedName(name) || isPlainNonVideoFile(entry) {
+	if isSkippedName(name) || isPlainUnclassifiedFile(entry) {
 		return nil
 	}
 
@@ -290,15 +293,15 @@ func (w *walk) entry(ctx context.Context, parent location, entry fs.DirEntry) er
 	case entry.Type()&linkModes != 0:
 		return w.link(at)
 	case entry.Type().IsRegular():
-		return w.videoFile(at.relativePath, entry)
+		return w.regularFile(at.relativePath, entry)
 	default:
 		// FIFOs, sockets and devices: never opened, never reported.
 		return nil
 	}
 }
 
-func (w *walk) videoFile(relativePath string, entry fs.DirEntry) error {
-	info, err := videoFileInfo(w.root, relativePath, entry)
+func (w *walk) regularFile(relativePath string, entry fs.DirEntry) error {
+	info, err := libraryFileInfo(w.root, relativePath, entry)
 	if err != nil {
 		return w.unreadable(relativePath, err)
 	}
@@ -326,10 +329,6 @@ func (w *walk) link(at location) error {
 
 		return nil
 	case info.Mode().IsRegular():
-		if !library.IsVideoFileName(at.relativePath) {
-			return nil
-		}
-
 		return w.file(at.relativePath, info)
 	default:
 		// For example cloud-sync placeholders on Windows, which Go reports as irregular.
@@ -338,8 +337,20 @@ func (w *walk) link(at location) error {
 	}
 }
 
+// file reports a regular file whose name classifies; any other file is not a library file.
 func (w *walk) file(relativePath string, info fs.FileInfo) error {
-	state := library.FileState{RelativePath: relativePath, Size: info.Size(), ModifiedAt: info.ModTime()}
+	class, ok := library.ClassifyFile(relativePath)
+	if !ok {
+		return nil
+	}
+
+	state := library.FileState{
+		RelativePath:   relativePath,
+		NormalizedPath: normalizedPath(relativePath),
+		Class:          class,
+		Size:           info.Size(),
+		ModifiedAt:     info.ModTime(),
+	}
 	if err := w.visit(state); err != nil {
 		return fmt.Errorf("visit %s: %w", relativePath, err)
 	}
