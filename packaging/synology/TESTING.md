@@ -126,18 +126,18 @@ ADR 0026 Notes). The tester fills this table from the steps named.
 
 | Fact (assumption) | Step | Result |
 |---|---|---|
-| Manual Install order: alert → licence page → wizard; alert wording | A2 | |
-| classic JSON wizard renders on DSM 7.2.x; `invalid_next_disabled_v2` disables Next | A3, A4 | |
-| German wizard files and script messages are used on a German DSM | A3, A5, F1 | |
+| Manual Install order: alert → licence page → wizard; alert wording | A2 | order confirmed on DSM 7.4.1 (SPK-12 run 1); wording not recorded |
+| classic JSON wizard renders on DSM 7.2.x; `invalid_next_disabled_v2` disables Next | A3, A4 | renders on DSM 7.4.1 with `video` prefilled (SPK-12 run 1); Next-disabling not tested |
+| German wizard files and script messages are used on a German DSM | A3, A5, F1 | install wizard German on DSM 7.4.1 (SPK-12 run 1); script messages and F1 text not checked |
 | a failing `preinst` shows the text of `$SYNOPKG_TEMP_LOGFILE` in the error dialog | A5 | |
 | a failing `start` shows the text of `$SYNOPKG_TEMP_LOGFILE` (reason and last log lines) in a dialog | C2a | |
-| `arch="x86_64"` installs on the owner's platform (the toolkit maps it to the family; the guide's table may not list it) | A6 | |
+| `arch="x86_64"` installs on the owner's platform (the toolkit maps it to the family; the guide's table may not list it) | A6 | confirmed: installs on `v1000nk`, DSM 7.4.1 (SPK-12 run 1) |
 | INFO texts are displayed as written (`description`, `description_ger`, `displayname`; no truncation, no broken characters) | A7 | |
 | `data-share` templating `{{wizard_media_share}}` grants the share read-only to `<id>` | A8 | |
 | `/var/packages/<id>/shares/<share>` link exists before the first start | A9, B2 | |
 | extra files in `scripts/` (`common.sh`, `package.env`) are kept by DSM | A10 | |
 | path variables (`SYNOPKG_PKGVAR`, …) are set in every script | A11, B9 | |
-| `/bin/sh` of DSM (bash or BusyBox) | report table | |
+| `/bin/sh` of DSM (bash or BusyBox) | report table | bash on DS925+, DSM 7.4.1 (SPK-12) |
 | "Open" button exists without `adminurl`; which host it uses | B1 | |
 | no package log view in Package Center | B7 | |
 | start and stop finish within Package Center's limits (30 s / 20 s budgets) | C1, C2 | |

@@ -48,8 +48,11 @@ FFmpeg 9.0.2-static1; release files are rebuilt in SPK-13).
 | Step | Result |
 |---|---|
 | Install through Package Center (manual install) | **pass** (owner) – DSM 7.4.1 accepted `arch="x86_64"` on platform `v1000nk` |
-| Uninstall | **pass** (owner) |
-| Detailed steps A2–A12, B–F | not yet recorded step by step |
+| A2 dialog order | **pass** (owner) – third-party alert, then licence page, then wizard; alert wording not recorded |
+| A3 wizard | **pass** (owner) – classic wizard rendered in **German**, share field prefilled with `video` |
+| B playback | **pass** (owner) – a video played in the web app; the stream mode (Direct Play, Remux, Transcode) was not recorded |
+| Uninstall (F4 path) | **pass** (owner) – the "delete data" checkbox was present and the owner **ticked** it |
+| Not run or not recorded | A4–A5 (refusals), A7–A12 details, B1/B3–B12 details, C (stop/start/reboot), D (upgrade), F1–F3 (keep data and reinstall), F5 leftover check |
 
 Owner's verdict: everything works but is "very rudimentary" so far – expected for 0.1.0-alpha.2
 (milestone 2 scope: scan, browse, play; no accounts, metadata, subtitles or artwork yet).
