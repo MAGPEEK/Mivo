@@ -162,6 +162,7 @@ func placedStates(files []sqlcgen.ListPlacedFilesRow, index chainIndex) ([]scan.
 			PlacementKey: placement.Key(),
 			ItemIDs:      ids,
 			State: library.FileState{
+				RootID:       file.RootID,
 				RelativePath: file.RelativePath,
 				Class:        library.FileClassVideo,
 				Size:         file.SizeBytes,

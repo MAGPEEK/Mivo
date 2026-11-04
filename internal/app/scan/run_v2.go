@@ -116,10 +116,6 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 		return placementPlan{}, catalogFailure("load placed files", err)
 	}
 
-	for position := range stored {
-		stored[position].State.RootID = canonicalRootID(base.library, stored[position].State.RootID)
-	}
-
 	placed, ignored := placeVideos(base.library.Kind, files.videos)
 
 	if !base.library.Options.ScanExtras {
@@ -221,10 +217,6 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 	storedSidecars, err := scanRun.catalog.SidecarStates(ctx, base.library.ID)
 	if err != nil {
 		return catalogFailure("load sidecar states", err)
-	}
-
-	for position := range storedSidecars {
-		storedSidecars[position].RootID = canonicalRootID(base.library, storedSidecars[position].RootID)
 	}
 
 	diff := diffSidecars(storedSidecars, files.sidecars, files.skipped)

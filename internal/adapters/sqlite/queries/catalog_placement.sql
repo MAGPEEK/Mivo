@@ -17,15 +17,12 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- UpsertPlacedFile writes a probe result together with the file's placement. library_id and
 -- root_id are never changed by the update: the repository has checked that a stored file
--- keeps its library. A new file goes into the first folder of its library (single-folder
--- behaviour until M3-19h).
+-- keeps its library and that root_id is a folder of that library.
 -- name: UpsertPlacedFile :exec
 INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error,
                          version_label, part_number)
-VALUES (sqlc.arg(id), sqlc.arg(item_id), sqlc.arg(library_id),
-        (SELECT library_roots.id FROM library_roots
-         WHERE library_roots.library_id = sqlc.arg(library_id) AND library_roots.position = 0),
+VALUES (sqlc.arg(id), sqlc.arg(item_id), sqlc.arg(library_id), sqlc.arg(root_id),
         sqlc.arg(relative_path), sqlc.arg(size_bytes), sqlc.arg(modified_at), sqlc.arg(container),
         sqlc.arg(format_name), sqlc.arg(duration_ms), sqlc.arg(bit_rate), sqlc.arg(probed_at),
         sqlc.arg(probe_error), sqlc.arg(version_label), sqlc.arg(part_number))
@@ -58,10 +55,15 @@ WHERE items.id = ?
 RETURNING parent_id;
 
 -- name: ListPlacedFiles :many
-SELECT id, item_id, relative_path, size_bytes, modified_at, version_label, part_number
+SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number
 FROM media_files
 WHERE library_id = ?
-ORDER BY relative_path;
+ORDER BY relative_path, root_id;
+
+-- RootBelongsToLibrary tells whether the folder is one of the library's folders: the writers
+-- check it because media_files and library_sidecars carry no composite foreign key.
+-- name: RootBelongsToLibrary :one
+SELECT EXISTS (SELECT 1 FROM library_roots WHERE id = ? AND library_id = ?) AS found;
 
 -- name: ListLibraryChainItems :many
 SELECT id, parent_id, kind, match_key
@@ -69,17 +71,14 @@ FROM items
 WHERE library_id = ?;
 
 -- name: ListSidecarStates :many
-SELECT relative_path, kind, size_bytes, modified_at
+SELECT root_id, relative_path, kind, size_bytes, modified_at
 FROM library_sidecars
 WHERE library_id = ?
-ORDER BY relative_path;
+ORDER BY relative_path, root_id;
 
 -- name: UpsertSidecarState :exec
 INSERT INTO library_sidecars (library_id, root_id, relative_path, kind, size_bytes, modified_at)
-VALUES (sqlc.arg(library_id),
-        (SELECT library_roots.id FROM library_roots
-         WHERE library_roots.library_id = sqlc.arg(library_id) AND library_roots.position = 0),
-        sqlc.arg(relative_path), sqlc.arg(kind), sqlc.arg(size_bytes), sqlc.arg(modified_at))
+VALUES (sqlc.arg(library_id), sqlc.arg(root_id), sqlc.arg(relative_path), sqlc.arg(kind), sqlc.arg(size_bytes), sqlc.arg(modified_at))
 ON CONFLICT (root_id, relative_path) DO UPDATE
 SET kind        = excluded.kind,
     size_bytes  = excluded.size_bytes,
@@ -87,4 +86,4 @@ SET kind        = excluded.kind,
 
 -- name: DeleteSidecarState :exec
 DELETE FROM library_sidecars
-WHERE library_id = ? AND relative_path = ?;
+WHERE library_id = ? AND root_id = ? AND relative_path = ?;

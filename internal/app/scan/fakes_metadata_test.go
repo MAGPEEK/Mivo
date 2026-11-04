@@ -146,15 +146,24 @@ func nfoWith(record metadata.Record, warnings ...string) scan.NFOResult {
 	return scan.NFOResult{Records: []metadata.Record{record}, Warnings: warnings}
 }
 
-func nfoFile(path string, size int64) library.FileState {
+// inMoviesFolder returns a file state in the only folder of the movies library of the refresh
+// rig; the refresh finds a file's folder by RootID.
+func inMoviesFolder(path string, size int64) library.FileState {
 	state := fileAt(path, size)
+	state.RootID = moviesID
+
+	return state
+}
+
+func nfoFile(path string, size int64) library.FileState {
+	state := inMoviesFolder(path, size)
 	state.Class = library.FileClassNFO
 
 	return state
 }
 
 func imageFile(path string, size int64) library.FileState {
-	state := fileAt(path, size)
+	state := inMoviesFolder(path, size)
 	state.Class = library.FileClassImage
 
 	return state
@@ -162,7 +171,7 @@ func imageFile(path string, size int64) library.FileState {
 
 func refreshFile(path, itemID string, level library.Level) scan.RefreshFile {
 	return scan.RefreshFile{
-		State:     fileAt(path, 1),
+		State:     inMoviesFolder(path, 1),
 		Placement: library.Placement{Levels: []library.Level{level}},
 		ItemIDs:   []string{itemID},
 	}
@@ -175,7 +184,7 @@ func movieLevel(title string, year int) library.Level {
 // episodeFile is an episode of show "Show" in season 1 at path.
 func episodeFile(path, episodeNumberID string, number int) scan.RefreshFile {
 	return scan.RefreshFile{
-		State: fileAt(path, 1),
+		State: inMoviesFolder(path, 1),
 		Placement: library.Placement{Levels: []library.Level{
 			{Kind: library.ItemKindShow, MatchKey: "show", Title: "Show"},
 			{Kind: library.ItemKindSeason, MatchKey: "1", Title: "Season 1", Number: library.NumberOf(1)},

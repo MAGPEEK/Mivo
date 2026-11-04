@@ -12,8 +12,8 @@ import "time"
 // match keys. An empty NormalizedPath means the relative path is already NFC.
 //
 // RootID is the ID of the library folder the path is relative to (ADR 0028); the same
-// relative path in two folders of a library names two files. It is empty for states a
-// catalog without folders returns.
+// relative path in two folders of a library names two files. Catalogs store and return it
+// for every file and sidecar.
 type FileState struct {
 	RootID         string
 	RelativePath   string

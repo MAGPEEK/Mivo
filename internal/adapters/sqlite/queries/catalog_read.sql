@@ -121,7 +121,8 @@ WHERE seasons.parent_id = ? AND seasons.kind = 'season' AND seasons.number > 0
 ORDER BY seasons.number, episodes.number IS NULL, episodes.number, episodes.sort_title, episodes.id
 LIMIT 1;
 
--- ListPrimaryFiles returns the primary file (first by part number, relative path) of each
+-- ListPrimaryFiles returns the primary file (first by part number, folder position, relative
+-- path) of each
 -- listed item that has a file; the file row names its item.
 -- name: ListPrimaryFiles :many
 SELECT sqlc.embed(media_files)
@@ -129,8 +130,9 @@ FROM items
 JOIN media_files ON media_files.id = (
     SELECT candidates.id
     FROM media_files AS candidates
+    JOIN library_roots AS candidate_roots ON candidate_roots.id = candidates.root_id
     WHERE candidates.item_id = items.id
-    ORDER BY candidates.part_number, candidates.relative_path, candidates.id
+    ORDER BY candidates.part_number, candidate_roots.position, candidates.relative_path, candidates.id
     LIMIT 1)
 WHERE items.id IN (sqlc.slice(item_ids));
 

@@ -11,7 +11,7 @@ import (
 
 func sidecar(path string, class library.FileClass, size int64) library.FileState {
 	return library.FileState{
-		RelativePath: path, Class: class, Size: size, ModifiedAt: time.UnixMilli(fileModifiedMilli).UTC(),
+		RootID: moviesLibraryID, RelativePath: path, Class: class, Size: size, ModifiedAt: time.UnixMilli(fileModifiedMilli).UTC(),
 	}
 }
 

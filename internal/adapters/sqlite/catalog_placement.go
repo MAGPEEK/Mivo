@@ -174,6 +174,10 @@ func (run placedSave) apply(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("library %q: %w", file.LibraryID, domain.ErrNotFound)
 	}
 
+	if err := requireLibraryRoot(ctx, run.queries, file.LibraryID, run.record.RootID); err != nil {
+		return nil, err
+	}
+
 	formerItemID, err := run.formerItem(ctx)
 	if err != nil {
 		return nil, err
@@ -220,7 +224,7 @@ func (run placedSave) formerItem(ctx context.Context) (string, error) {
 func (run placedSave) writeFile(ctx context.Context, file media.File) error {
 	base := fileParams(file, run.record.ProbedAt.UnixMilli())
 	params := sqlcgen.UpsertPlacedFileParams{
-		ID: base.ID, ItemID: base.ItemID, LibraryID: base.LibraryID, RelativePath: base.RelativePath,
+		ID: base.ID, ItemID: base.ItemID, LibraryID: base.LibraryID, RootID: run.record.RootID, RelativePath: base.RelativePath,
 		SizeBytes: base.SizeBytes, ModifiedAt: base.ModifiedAt, Container: base.Container,
 		FormatName: base.FormatName, DurationMs: base.DurationMs, BitRate: base.BitRate,
 		ProbedAt: base.ProbedAt, ProbeError: base.ProbeError,

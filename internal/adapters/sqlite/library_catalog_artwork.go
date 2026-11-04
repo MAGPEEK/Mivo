@@ -19,6 +19,7 @@ import (
 type artworkKey struct {
 	kind   artwork.Kind
 	source artwork.SourceKind
+	rootID string
 	path   string
 	stream int
 	data   string
@@ -26,7 +27,7 @@ type artworkKey struct {
 
 func candidateKey(candidate artwork.Candidate) artworkKey {
 	return artworkKey{
-		kind: candidate.Kind, source: candidate.Source, path: candidate.Location.RelativePath,
+		kind: candidate.Kind, source: candidate.Source, rootID: candidate.Location.RootID, path: candidate.Location.RelativePath,
 		stream: candidate.Location.StreamIndex, data: candidate.Location.DataPath,
 	}
 }
@@ -45,9 +46,10 @@ func storedArtworkKey(row sqlcgen.ListItemArtworkRow) (artworkKey, bool) {
 
 	switch source {
 	case artwork.SourceLocal:
-		key.path = row.RelativePath.String
+		key.rootID, key.path = row.RootID.String, row.RelativePath.String
 	case artwork.SourceEmbedded:
-		key.path, key.stream = row.MediaRelativePath.String, int(row.StreamIndex.Int64)
+		key.rootID, key.path = row.MediaRootID.String, row.MediaRelativePath.String
+		key.stream = int(row.StreamIndex.Int64)
 	case artwork.SourceProvider, artwork.SourceUpload:
 	}
 
@@ -69,8 +71,10 @@ func readSelectedArtwork(ctx context.Context, queries *sqlcgen.Queries, itemID s
 
 		state.CurrentArtwork[key.kind] = artwork.Candidate{
 			Kind: key.kind, Source: key.source,
-			Location: artwork.Location{RelativePath: key.path, StreamIndex: key.stream, DataPath: key.data},
-			Size:     row.SizeBytes, ModifiedAt: time.UnixMilli(row.ModifiedAt).UTC(),
+			Location: artwork.Location{
+				RootID: key.rootID, RelativePath: key.path, StreamIndex: key.stream, DataPath: key.data,
+			},
+			Size: row.SizeBytes, ModifiedAt: time.UnixMilli(row.ModifiedAt).UTC(),
 		}
 	}
 
@@ -269,11 +273,17 @@ func (run artworkSave) insert(ctx context.Context, key artworkKey, candidate art
 		ModifiedAt: candidate.ModifiedAt.UnixMilli(), Tag: candidate.Tag(), CreatedAt: run.now.UnixMilli(),
 	}
 
+	location := candidate.Location
+
+	if err := requireLibraryRoot(ctx, run.queries, run.libraryID, location.RootID); err != nil {
+		return fmt.Errorf("artwork %q: %w", location.RelativePath, err)
+	}
+
 	if candidate.Source == artwork.SourceLocal {
-		params.LibraryID = sql.NullString{String: run.libraryID, Valid: true}
-		params.RelativePath = sql.NullString{String: candidate.Location.RelativePath, Valid: true}
+		params.RootID = sql.NullString{String: location.RootID, Valid: true}
+		params.RelativePath = sql.NullString{String: location.RelativePath, Valid: true}
 	} else {
-		fileID, err := run.ownedMediaFile(ctx, candidate.Location.RelativePath)
+		fileID, err := run.ownedMediaFile(ctx, location)
 		if err != nil {
 			return err
 		}
@@ -291,11 +301,12 @@ func (run artworkSave) insert(ctx context.Context, key artworkKey, candidate art
 	return nil
 }
 
-// ownedMediaFile finds the media file an embedded picture comes from. It must be stored in
-// the item's own library: a file of another library would leak its pictures into this one.
-func (run artworkSave) ownedMediaFile(ctx context.Context, relativePath string) (string, error) {
+// ownedMediaFile finds the media file an embedded picture comes from. Its folder must belong
+// to the item's own library (the caller checked it): a file of another library would leak
+// its pictures into this one.
+func (run artworkSave) ownedMediaFile(ctx context.Context, location artwork.Location) (string, error) {
 	id, err := run.queries.FindMediaFileID(ctx, sqlcgen.FindMediaFileIDParams{
-		LibraryID: run.libraryID, RelativePath: relativePath,
+		RootID: location.RootID, RelativePath: location.RelativePath,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", fmt.Errorf("embedded artwork: no media file in the item's library: %w", domain.ErrInvalid)

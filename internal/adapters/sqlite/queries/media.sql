@@ -93,13 +93,14 @@ SELECT *
 FROM items
 WHERE id = ?;
 
--- ListItemFiles returns an item's files, the primary file (first by part number and
--- relative path) first.
+-- ListItemFiles returns an item's files, the primary file (first by part number, folder
+-- position and relative path; ADR 0027 section 5) first.
 -- name: ListItemFiles :many
-SELECT *
+SELECT media_files.*
 FROM media_files
-WHERE item_id = ?
-ORDER BY part_number, relative_path, id;
+JOIN library_roots ON library_roots.id = media_files.root_id
+WHERE media_files.item_id = ?
+ORDER BY media_files.part_number, library_roots.position, media_files.relative_path, media_files.id;
 
 -- name: GetFileWithRoot :one
 SELECT sqlc.embed(media_files), library_roots.path AS root_path

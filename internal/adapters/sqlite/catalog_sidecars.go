@@ -35,6 +35,7 @@ func (catalog *LibraryCatalog) SidecarStates(ctx context.Context, libraryID stri
 		}
 
 		states = append(states, library.FileState{
+			RootID:       row.RootID,
 			RelativePath: row.RelativePath,
 			Class:        class,
 			Size:         row.SizeBytes,
@@ -45,8 +46,10 @@ func (catalog *LibraryCatalog) SidecarStates(ctx context.Context, libraryID stri
 	return states, nil
 }
 
-// SaveSidecarStates upserts the sidecars and deletes the removed paths in one write
-// transaction. Paths that are not stored are ignored, so a repeated call changes nothing.
+// SaveSidecarStates upserts the sidecars by (folder, path) and deletes the removed ones in
+// one write transaction. Removals that are not stored are ignored, so a repeated call changes
+// nothing. An upsert whose RootID is not a folder of the library is refused with
+// domain.ErrInvalid; a removal only touches its own library's row.
 func (catalog *LibraryCatalog) SaveSidecarStates(
 	ctx context.Context, libraryID string, upserts, removals []library.FileState,
 ) error {
@@ -62,6 +65,10 @@ func (catalog *LibraryCatalog) SaveSidecarStates(
 
 		if !found {
 			return fmt.Errorf("library: %w", domain.ErrNotFound)
+		}
+
+		if err := checkRoots(ctx, queries, libraryID, upserts); err != nil {
+			return err
 		}
 
 		return applySidecars(ctx, queries, sidecarChanges{libraryID: libraryID, upserts: upserts, removals: removals})
@@ -85,7 +92,7 @@ func applySidecars(ctx context.Context, queries *sqlcgen.Queries, changes sideca
 
 	for _, state := range changes.upserts {
 		err := queries.UpsertSidecarState(ctx, sqlcgen.UpsertSidecarStateParams{
-			LibraryID: libraryID, RelativePath: state.RelativePath, Kind: state.Class.String(),
+			LibraryID: libraryID, RootID: state.RootID, RelativePath: state.RelativePath, Kind: state.Class.String(),
 			SizeBytes: state.Size, ModifiedAt: state.ModifiedAt.UnixMilli(),
 		})
 		if err != nil {
@@ -95,11 +102,49 @@ func applySidecars(ctx context.Context, queries *sqlcgen.Queries, changes sideca
 
 	for _, removed := range changes.removals {
 		err := queries.DeleteSidecarState(ctx, sqlcgen.DeleteSidecarStateParams{
-			LibraryID: libraryID, RelativePath: removed.RelativePath,
+			LibraryID: libraryID, RootID: removed.RootID, RelativePath: removed.RelativePath,
 		})
 		if err != nil {
 			return fmt.Errorf("delete sidecar %q: %w", removed.RelativePath, err)
 		}
+	}
+
+	return nil
+}
+
+// checkRoots refuses states whose folder is empty or not a folder of the library. The schema
+// has no composite foreign key for this (migration 00004), so every writer checks it.
+func checkRoots(ctx context.Context, queries *sqlcgen.Queries, libraryID string, states []library.FileState) error {
+	checked := map[string]bool{}
+
+	for _, state := range states {
+		if checked[state.RootID] {
+			continue
+		}
+
+		if err := requireLibraryRoot(ctx, queries, libraryID, state.RootID); err != nil {
+			return fmt.Errorf("sidecar %q: %w", state.RelativePath, err)
+		}
+
+		checked[state.RootID] = true
+	}
+
+	return nil
+}
+
+// requireLibraryRoot returns domain.ErrInvalid unless rootID is a folder of the library.
+func requireLibraryRoot(ctx context.Context, queries *sqlcgen.Queries, libraryID, rootID string) error {
+	if rootID == "" {
+		return fmt.Errorf("empty folder id: %w", domain.ErrInvalid)
+	}
+
+	found, err := queries.RootBelongsToLibrary(ctx, sqlcgen.RootBelongsToLibraryParams{ID: rootID, LibraryID: libraryID})
+	if err != nil {
+		return fmt.Errorf("read folder %q: %w", rootID, err)
+	}
+
+	if !found {
+		return fmt.Errorf("folder %q is not a folder of library %q: %w", rootID, libraryID, domain.ErrInvalid)
 	}
 
 	return nil

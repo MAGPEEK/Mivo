@@ -40,28 +40,16 @@ func (skipped skipSet) covers(state library.FileState) bool {
 	return belowAny(state.RelativePath, skipped[state.RootID])
 }
 
-// folderRoot returns the path of the folder with rootID. An empty rootID stands for the first
-// folder: catalogs that do not store folders yet (BACKLOG, M3-19h) return states without one,
-// and a library with a single folder is the only kind they hold. Once the writer stores
-// RootID (M3-19h) rows written before it must be migrated once, else a library that gained a
-// folder would attribute them wrongly (BACKLOG, M3-19h/19l).
+// folderRoot returns the path of the folder with rootID. Catalogs store the folder of every row
+// (M3-19h), so an empty or unknown ID names no folder.
 func folderRoot(scanned library.ManagedLibrary, rootID string) (string, bool) {
-	for position, folder := range scanned.Folders {
-		if folder.ID == rootID || (rootID == "" && position == 0) {
+	for _, folder := range scanned.Folders {
+		if folder.ID == rootID {
 			return folder.Path, true
 		}
 	}
 
 	return "", false
-}
-
-// canonicalRootID returns the folder ID a stored state belongs to (see folderRoot).
-func canonicalRootID(scanned library.ManagedLibrary, rootID string) string {
-	if rootID != "" || len(scanned.Folders) == 0 {
-		return rootID
-	}
-
-	return scanned.Folders[0].ID
 }
 
 // folderRanks maps folder IDs to their position, so files of several folders sort by folder

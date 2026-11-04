@@ -366,14 +366,15 @@ func (q *Queries) ListFileStates(ctx context.Context, libraryID string) ([]ListF
 }
 
 const listItemFiles = `-- name: ListItemFiles :many
-SELECT id, item_id, library_id, root_id, relative_path, size_bytes, modified_at, container, format_name, duration_ms, bit_rate, probed_at, probe_error, version_label, part_number, layout
+SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.root_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout
 FROM media_files
-WHERE item_id = ?
-ORDER BY part_number, relative_path, id
+JOIN library_roots ON library_roots.id = media_files.root_id
+WHERE media_files.item_id = ?
+ORDER BY media_files.part_number, library_roots.position, media_files.relative_path, media_files.id
 `
 
-// ListItemFiles returns an item's files, the primary file (first by part number and
-// relative path) first.
+// ListItemFiles returns an item's files, the primary file (first by part number, folder
+// position and relative path; ADR 0027 section 5) first.
 func (q *Queries) ListItemFiles(ctx context.Context, itemID string) ([]MediaFile, error) {
 	rows, err := q.db.QueryContext(ctx, listItemFiles, itemID)
 	if err != nil {

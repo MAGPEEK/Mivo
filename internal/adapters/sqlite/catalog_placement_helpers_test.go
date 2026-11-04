@@ -51,7 +51,7 @@ func (fixture *placementFixture) save(t *testing.T, record scan.PlacedFile) []st
 func placedFile(libraryID, fileID, relativePath string, placement library.Placement) scan.PlacedFile {
 	record := probedRecord(libraryID, "", fileID, relativePath)
 
-	return scan.PlacedFile{Placement: placement, File: record.File, ProbedAt: record.ProbedAt}
+	return scan.PlacedFile{RootID: libraryID, Placement: placement, File: record.File, ProbedAt: record.ProbedAt}
 }
 
 func moviePlacement(key, title string, year int, version string) library.Placement {

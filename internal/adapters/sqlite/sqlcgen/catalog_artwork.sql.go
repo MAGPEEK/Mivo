@@ -39,17 +39,17 @@ func (q *Queries) DeleteArtwork(ctx context.Context, id string) error {
 const findMediaFileID = `-- name: FindMediaFileID :one
 SELECT id
 FROM media_files
-WHERE library_id = ? AND relative_path = ?
+WHERE root_id = ? AND relative_path = ?
 `
 
 type FindMediaFileIDParams struct {
-	LibraryID    string
+	RootID       string
 	RelativePath string
 }
 
-// FindMediaFileID finds a media file by its place in a library.
+// FindMediaFileID finds a media file by its place in a library folder.
 func (q *Queries) FindMediaFileID(ctx context.Context, arg FindMediaFileIDParams) (string, error) {
-	row := q.db.QueryRowContext(ctx, findMediaFileID, arg.LibraryID, arg.RelativePath)
+	row := q.db.QueryRowContext(ctx, findMediaFileID, arg.RootID, arg.RelativePath)
 	var id string
 	err := row.Scan(&id)
 	return id, err
@@ -59,9 +59,7 @@ const insertArtwork = `-- name: InsertArtwork :exec
 INSERT INTO artwork (id, item_id, kind, source, root_id, relative_path, media_file_id,
                      stream_index, size_bytes, modified_at, tag, created_at)
 VALUES (?1, ?2, ?3, ?4,
-        (SELECT library_roots.id FROM library_roots
-         WHERE library_roots.library_id = ?5 AND library_roots.position = 0),
-        ?6, ?7, ?8,
+        ?5, ?6, ?7, ?8,
         ?9, ?10, ?11, ?12)
 `
 
@@ -70,7 +68,7 @@ type InsertArtworkParams struct {
 	ItemID       string
 	Kind         string
 	Source       string
-	LibraryID    sql.NullString
+	RootID       sql.NullString
 	RelativePath sql.NullString
 	MediaFileID  sql.NullString
 	StreamIndex  sql.NullInt64
@@ -86,7 +84,7 @@ func (q *Queries) InsertArtwork(ctx context.Context, arg InsertArtworkParams) er
 		arg.ItemID,
 		arg.Kind,
 		arg.Source,
-		arg.LibraryID,
+		arg.RootID,
 		arg.RelativePath,
 		arg.MediaFileID,
 		arg.StreamIndex,
@@ -100,8 +98,9 @@ func (q *Queries) InsertArtwork(ctx context.Context, arg InsertArtworkParams) er
 
 const listItemArtwork = `-- name: ListItemArtwork :many
 
-SELECT artwork.id, artwork.kind, artwork.source, artwork.relative_path, artwork.stream_index,
-       artwork.data_path, artwork.size_bytes, artwork.modified_at, artwork.tag, artwork.selected,
+SELECT artwork.id, artwork.kind, artwork.source, artwork.root_id, artwork.relative_path,
+       artwork.stream_index, artwork.data_path, artwork.size_bytes, artwork.modified_at, artwork.tag,
+       artwork.selected, media_files.root_id AS media_root_id,
        media_files.relative_path AS media_relative_path
 FROM artwork
 LEFT JOIN media_files ON media_files.id = artwork.media_file_id
@@ -113,6 +112,7 @@ type ListItemArtworkRow struct {
 	ID                string
 	Kind              string
 	Source            string
+	RootID            sql.NullString
 	RelativePath      sql.NullString
 	StreamIndex       sql.NullInt64
 	DataPath          sql.NullString
@@ -120,6 +120,7 @@ type ListItemArtworkRow struct {
 	ModifiedAt        int64
 	Tag               string
 	Selected          int64
+	MediaRootID       sql.NullString
 	MediaRelativePath sql.NullString
 }
 
@@ -139,6 +140,7 @@ func (q *Queries) ListItemArtwork(ctx context.Context, itemID string) ([]ListIte
 			&i.ID,
 			&i.Kind,
 			&i.Source,
+			&i.RootID,
 			&i.RelativePath,
 			&i.StreamIndex,
 			&i.DataPath,
@@ -146,6 +148,7 @@ func (q *Queries) ListItemArtwork(ctx context.Context, itemID string) ([]ListIte
 			&i.ModifiedAt,
 			&i.Tag,
 			&i.Selected,
+			&i.MediaRootID,
 			&i.MediaRelativePath,
 		); err != nil {
 			return nil, err

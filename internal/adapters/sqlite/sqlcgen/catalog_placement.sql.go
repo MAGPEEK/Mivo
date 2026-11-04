@@ -29,16 +29,17 @@ func (q *Queries) DeleteItemIfUnused(ctx context.Context, id string) (sql.NullSt
 
 const deleteSidecarState = `-- name: DeleteSidecarState :exec
 DELETE FROM library_sidecars
-WHERE library_id = ? AND relative_path = ?
+WHERE library_id = ? AND root_id = ? AND relative_path = ?
 `
 
 type DeleteSidecarStateParams struct {
 	LibraryID    string
+	RootID       string
 	RelativePath string
 }
 
 func (q *Queries) DeleteSidecarState(ctx context.Context, arg DeleteSidecarStateParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSidecarState, arg.LibraryID, arg.RelativePath)
+	_, err := q.db.ExecContext(ctx, deleteSidecarState, arg.LibraryID, arg.RootID, arg.RelativePath)
 	return err
 }
 
@@ -159,15 +160,16 @@ func (q *Queries) ListLibraryChainItems(ctx context.Context, libraryID string) (
 }
 
 const listPlacedFiles = `-- name: ListPlacedFiles :many
-SELECT id, item_id, relative_path, size_bytes, modified_at, version_label, part_number
+SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number
 FROM media_files
 WHERE library_id = ?
-ORDER BY relative_path
+ORDER BY relative_path, root_id
 `
 
 type ListPlacedFilesRow struct {
 	ID           string
 	ItemID       string
+	RootID       string
 	RelativePath string
 	SizeBytes    int64
 	ModifiedAt   int64
@@ -187,6 +189,7 @@ func (q *Queries) ListPlacedFiles(ctx context.Context, libraryID string) ([]List
 		if err := rows.Scan(
 			&i.ID,
 			&i.ItemID,
+			&i.RootID,
 			&i.RelativePath,
 			&i.SizeBytes,
 			&i.ModifiedAt,
@@ -207,13 +210,14 @@ func (q *Queries) ListPlacedFiles(ctx context.Context, libraryID string) ([]List
 }
 
 const listSidecarStates = `-- name: ListSidecarStates :many
-SELECT relative_path, kind, size_bytes, modified_at
+SELECT root_id, relative_path, kind, size_bytes, modified_at
 FROM library_sidecars
 WHERE library_id = ?
-ORDER BY relative_path
+ORDER BY relative_path, root_id
 `
 
 type ListSidecarStatesRow struct {
+	RootID       string
 	RelativePath string
 	Kind         string
 	SizeBytes    int64
@@ -230,6 +234,7 @@ func (q *Queries) ListSidecarStates(ctx context.Context, libraryID string) ([]Li
 	for rows.Next() {
 		var i ListSidecarStatesRow
 		if err := rows.Scan(
+			&i.RootID,
 			&i.RelativePath,
 			&i.Kind,
 			&i.SizeBytes,
@@ -246,6 +251,24 @@ func (q *Queries) ListSidecarStates(ctx context.Context, libraryID string) ([]Li
 		return nil, err
 	}
 	return items, nil
+}
+
+const rootBelongsToLibrary = `-- name: RootBelongsToLibrary :one
+SELECT EXISTS (SELECT 1 FROM library_roots WHERE id = ? AND library_id = ?) AS found
+`
+
+type RootBelongsToLibraryParams struct {
+	ID        string
+	LibraryID string
+}
+
+// RootBelongsToLibrary tells whether the folder is one of the library's folders: the writers
+// check it because media_files and library_sidecars carry no composite foreign key.
+func (q *Queries) RootBelongsToLibrary(ctx context.Context, arg RootBelongsToLibraryParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, rootBelongsToLibrary, arg.ID, arg.LibraryID)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
 }
 
 const updateFilePlacement = `-- name: UpdateFilePlacement :execrows
@@ -280,12 +303,10 @@ const upsertPlacedFile = `-- name: UpsertPlacedFile :exec
 INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error,
                          version_label, part_number)
-VALUES (?1, ?2, ?3,
-        (SELECT library_roots.id FROM library_roots
-         WHERE library_roots.library_id = ?3 AND library_roots.position = 0),
-        ?4, ?5, ?6, ?7,
-        ?8, ?9, ?10, ?11,
-        ?12, ?13, ?14)
+VALUES (?1, ?2, ?3, ?4,
+        ?5, ?6, ?7, ?8,
+        ?9, ?10, ?11, ?12,
+        ?13, ?14, ?15)
 ON CONFLICT (id) DO UPDATE
 SET item_id       = excluded.item_id,
     relative_path = excluded.relative_path,
@@ -305,6 +326,7 @@ type UpsertPlacedFileParams struct {
 	ID           string
 	ItemID       string
 	LibraryID    string
+	RootID       string
 	RelativePath string
 	SizeBytes    int64
 	ModifiedAt   int64
@@ -320,13 +342,13 @@ type UpsertPlacedFileParams struct {
 
 // UpsertPlacedFile writes a probe result together with the file's placement. library_id and
 // root_id are never changed by the update: the repository has checked that a stored file
-// keeps its library. A new file goes into the first folder of its library (single-folder
-// behaviour until M3-19h).
+// keeps its library and that root_id is a folder of that library.
 func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFileParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPlacedFile,
 		arg.ID,
 		arg.ItemID,
 		arg.LibraryID,
+		arg.RootID,
 		arg.RelativePath,
 		arg.SizeBytes,
 		arg.ModifiedAt,
@@ -344,10 +366,7 @@ func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFilePara
 
 const upsertSidecarState = `-- name: UpsertSidecarState :exec
 INSERT INTO library_sidecars (library_id, root_id, relative_path, kind, size_bytes, modified_at)
-VALUES (?1,
-        (SELECT library_roots.id FROM library_roots
-         WHERE library_roots.library_id = ?1 AND library_roots.position = 0),
-        ?2, ?3, ?4, ?5)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT (root_id, relative_path) DO UPDATE
 SET kind        = excluded.kind,
     size_bytes  = excluded.size_bytes,
@@ -356,6 +375,7 @@ SET kind        = excluded.kind,
 
 type UpsertSidecarStateParams struct {
 	LibraryID    string
+	RootID       string
 	RelativePath string
 	Kind         string
 	SizeBytes    int64
@@ -365,6 +385,7 @@ type UpsertSidecarStateParams struct {
 func (q *Queries) UpsertSidecarState(ctx context.Context, arg UpsertSidecarStateParams) error {
 	_, err := q.db.ExecContext(ctx, upsertSidecarState,
 		arg.LibraryID,
+		arg.RootID,
 		arg.RelativePath,
 		arg.Kind,
 		arg.SizeBytes,

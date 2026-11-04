@@ -110,16 +110,23 @@ func otherRecord(t *testing.T) metadata.Record {
 	}
 }
 
+// withRoot puts a location into a library folder; the fixture names each folder like its library.
+func withRoot(location artwork.Location, rootID string) artwork.Location {
+	location.RootID = rootID
+
+	return location
+}
+
 func localCandidate(kind artwork.Kind, path string, size int64) artwork.Candidate {
 	return artwork.Candidate{
-		Kind: kind, Source: artwork.SourceLocal, Location: artwork.LocalLocation(path), Size: size,
+		Kind: kind, Source: artwork.SourceLocal, Location: withRoot(artwork.LocalLocation(path), moviesLibraryID), Size: size,
 		ModifiedAt: time.UnixMilli(fileModifiedMilli).UTC(),
 	}
 }
 
 func embeddedCandidate(kind artwork.Kind, mediaPath string, stream int) artwork.Candidate {
 	return artwork.Candidate{
-		Kind: kind, Source: artwork.SourceEmbedded, Location: artwork.EmbeddedLocation(mediaPath, stream), Size: 10,
+		Kind: kind, Source: artwork.SourceEmbedded, Location: withRoot(artwork.EmbeddedLocation(mediaPath, stream), moviesLibraryID), Size: 10,
 		ModifiedAt: time.UnixMilli(fileModifiedMilli).UTC(),
 	}
 }
