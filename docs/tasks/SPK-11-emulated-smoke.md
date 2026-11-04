@@ -48,3 +48,16 @@ before release even though the owner only has an x86_64 Synology (OD-9 rule, OD-
   files must be readable by the container user (M2-35 note).
 - If an emulated family fails for reasons outside the package (QEMU bug), document the evidence
   and mark the case; the owner decides about publishing that family (OD-SPK-4).
+
+## Orchestrator note (2026-11-04): accepted deviations
+
+- **x86_64 `uname`**: the x86_64 run is native (no binfmt QEMU path on an x86_64 host). The
+  kernelsim 3.10 syscall filter applies to the server and FFmpeg, but `uname` shows the Docker
+  host's kernel; only the version commands run under `qemu-x86_64 -r 3.10.108`. The criterion
+  "uname reporting the DSM kernel" is therefore met for armv8/armv7 only; the real DSM kernel
+  for x86_64 is covered by the owner's device test (SPK-12, DS925+, kernel 5.10.55).
+- **QEMU process check**: under QEMU user mode `/proc/<pid>/exe` names the interpreter, so for
+  armv8/armv7 the harness appends `qemu-shim.sh` to the installed copy of `scripts/common.sh`
+  (never the SPK); the original check runs first. x86_64 runs the scripts unchanged.
+- Upgrade, uninstall keeping data plus reinstall, and uninstall deleting data are part of the
+  harness although not listed in the criteria above.
