@@ -585,12 +585,14 @@ platform environments DSM 7.2.2 build 72723)**
 ## Notes (SPK-15, SPK-16)
 
 - **Own static FFmpeg** (owner decision OD-SPK-3, revised 2026-10-31): the SPKs bundle FFmpeg
-  9.0.2-static1 built by `packaging/synology/ffmpeg/build/` against musl 1.2.6 with own cross
+  9.0.2-static2 built by `packaging/synology/ffmpeg/build/` against musl 1.2.6 with own cross
   toolchains: fully static (no PT_INTERP, no NEEDED, no ELF ABI note), GPLv3 + libx264 and the
   native AAC encoder, no nonfree, no fdk-aac; baselines x86-64 v1, armv8-a, armv7-a VFPv3-D16
   hard-float with NEON only behind run-time detection (`HAVE_NEON=1`, inline/external 0,
   recorded in `SOURCE.txt`). Demuxers are exactly the server's `allowedDemuxers` plus `image2`;
   `packaging/synology/internal/recipecheck` fails on drift in either direction.
+  Revision 2 (M3-08) adds the muxer `image2pipe` and the encoders `mjpeg` and `png` for the image
+  renderer; `verify/checks.sh` renders a JPEG and a PNG poster with the built binary.
 - **Pins**: `ffmpeg/sources.lock` pins the SHA-256 of `ffmpeg` and `ffprobe`, the version and
   the licence per family, all `selected`; no interim builds remain. The build scripts build the
   recipe as step 0 (`spk-ffmpeg-static:dev`, cached) and compare the staged binaries and

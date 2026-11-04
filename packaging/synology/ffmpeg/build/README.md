@@ -27,7 +27,7 @@ docker build --output type=local,dest=out packaging/synology/ffmpeg/build   # ta
 | Target | Output |
 |---|---|
 | `x86_64`, `armv8`, `armv7` | `ffmpeg`, `ffprobe` (0755), licence texts, `SOURCE.txt` |
-| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static1-source.tar`) |
+| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static2-source.tar`) |
 | `all` | `x86_64/`, `armv8/`, `armv7/`, `source/` |
 
 Build argument `JOBS` limits the parallel compile jobs per stage (default: all CPUs). Keep build
@@ -103,8 +103,8 @@ notice, `-version` prints the configure line. Reduced to what the server needs
 |---|---|---|
 | Demuxers | exactly the server's `-format_whitelist` (`allowedDemuxers` in `internal/adapters/ffmpeg/probe.go`) plus `image2`: matroska, mov, mpegts, mpegps ("mpeg"), mpegvideo, avi, flv, live_flv, ogg, asf, mxf, rm, flac, mp3, wav, aiff, wv, ape, dsf, iff, aac, ac3, eac3, dts, gif, image_{png,jpeg,tiff,webp}_pipe, srt, webvtt, ass, sup, image2 | ADR 0022 Notes M2-24b. `concat`, `hls`, `dash`, `imf` and `vobsub` are not built at all, so a hostile list cannot be followed even without the whitelist. **When `allowedDemuxers` changes, change this list**: the Go test `packaging/synology/internal/recipecheck` (`go test ./...`) compares the two lists without a build, and `verify.sh` checks the built binary against probe.go. |
 | Decoders, parsers, bitstream filters | all (no external libraries besides those below) | the server plays any format; transcode needs the decoder of whatever is in a library |
-| Muxers | hls, mp4, null (hls selects mov, mpegts, webvtt) | fMP4 HLS of ADR 0024; `null` for diagnostics |
-| Encoders | libx264, aac | software transcode targets of ADR 0023 |
+| Muxers | hls, mp4, null, image2pipe (hls selects mov, mpegts, webvtt; image2pipe writes the M3-08 posters) | fMP4 HLS of ADR 0024; `null` for diagnostics |
+| Encoders | libx264, aac, mjpeg, png | software transcode targets of ADR 0023; mjpeg and png for the M3-08 image renderer (`image_args.go`), checked by `recipecheck` and rendered by `verify/checks.sh` (JPEG and PNG poster of `testdata/library`) |
 | Filters | buffer, buffersink, abuffer, abuffersink, format, aformat, null, anull, scale, aresample, trim, atrim, crop, hflip, vflip, transpose, rotate, setpts, asetpts, fps, pad, setsar, apad, volume | graph endpoints, what `ffmpeg` inserts itself (format conversion, `-t`/`-ss`, display-matrix rotation, crop metadata, `-r`, `-apad`, `-vol`) and the producer's `scale` |
 | Protocols | file, pipe; `--disable-network` | the server passes `-protocol_whitelist file` |
 | Libraries | zlib 1.3.2 (PNG decoder, compressed Matroska/MP4 headers), x264 (8-bit 4:2:0 only, the ADR 0023 target), dav1d 1.5.4 (FFmpeg's own AV1 decoder needs a hardware decoder), iconv from musl | `--disable-autodetect`: nothing else is picked up |
@@ -187,7 +187,7 @@ without downloading the sources (the base image and Debian's build tools still c
 network):
 
 ```sh
-tar -xf ffmpeg-9.0.2-static1-source.tar && cd ffmpeg-9.0.2-static1-source
+tar -xf ffmpeg-9.0.2-static2-source.tar && cd ffmpeg-9.0.2-static2-source
 docker build --build-context sources=sources --target all --output type=local,dest=out recipe
 ```
 

@@ -100,8 +100,16 @@ check_components() {
 	ffmpeg -hide_banner -encoders >"$scratch/encoders" 2>/dev/null
 	ffmpeg -hide_banner -muxers >"$scratch/muxers" 2>/dev/null
 	ffmpeg -hide_banner -demuxers >"$scratch/demuxers" 2>/dev/null
-	for encoder in libx264 aac; do check "encoder $encoder" listed "$scratch/encoders" "$encoder"; done
-	for muxer in hls mp4; do check "muxer $muxer" listed "$scratch/muxers" "$muxer"; done
+	for encoder in libx264 aac mjpeg png; do check "encoder $encoder" listed "$scratch/encoders" "$encoder"; done
+	for muxer in hls mp4 image2pipe; do check "muxer $muxer" listed "$scratch/muxers" "$muxer"; done
+	# The sets stay minimal: names of the configure lists, one per row of the listings.
+	# (mpegts is built on purpose: the hls muxer selects it.)
+	for muxer in image2 matroska webm gif; do
+		if listed "$scratch/muxers" "$muxer"; then failed "muxer $muxer is not built"; else pass "muxer $muxer is not built"; fi
+	done
+	for encoder in libx265 libvpx gif mpeg4 libopus; do
+		if listed "$scratch/encoders" "$encoder"; then failed "encoder $encoder is not built"; else pass "encoder $encoder is not built"; fi
+	done
 	missing=""
 	for demuxer in $(printf '%s' "$WHITELIST,image2" | tr ',' ' '); do
 		listed "$scratch/demuxers" "$demuxer" || missing="$missing $demuxer"
@@ -235,6 +243,35 @@ check_hls() {
 	check "HLS output covers the 2 s clip within -t 3 (got ${duration:-?} s)" test "${duration:-0}" -ge 2 -a "${duration:-0}" -le 3
 }
 
+# render_poster <format> <encoder args...>: the image renderer's arguments (image_args.go) on a
+# library poster, written to standard output through image2pipe.
+render_poster() {
+	format=$1
+	shift
+	filter="scale='min(iw,300)':-2:flags=lanczos"
+	[ "$format" = jpeg ] && filter="$filter,format=yuvj420p"
+	ffmpeg -hide_banner -nostdin -loglevel error -max_pixels 64000000 \
+		-format_whitelist "$(whitelist_for "$poster_source")" -protocol_whitelist file \
+		-i "file:$poster_source" -map 0:v:0 -frames:v 1 -map_metadata -1 \
+		-vf "$filter" "$@" -f image2pipe pipe:1 >"$scratch/poster.$format"
+}
+
+# first_bytes <file> <count>: the leading bytes as lowercase hex.
+first_bytes() { head -c "$2" "$1" | od -An -tx1 | tr -d ' \n'; }
+
+# check_images renders a JPEG and a PNG poster of a library image with the built encoders.
+check_images() {
+	poster_source=$(find /repo/testdata/library/movies -name poster.jpg | sort | head -n 1)
+	if [ -z "$poster_source" ]; then
+		failed "library poster for the image renderer (run go run ./scripts/gen-testmedia)"
+		return
+	fi
+	check "renders a JPEG poster (mjpeg, image2pipe)" render_poster jpeg -c:v mjpeg -q:v 3
+	check "JPEG poster has the JPEG signature" test "$(first_bytes "$scratch/poster.jpeg" 3)" = ffd8ff
+	check "renders a PNG poster (png, image2pipe)" render_poster png -c:v png
+	check "PNG poster has the PNG signature" test "$(first_bytes "$scratch/poster.png" 4)" = 89504e47
+}
+
 # run_go_tests runs the server's own FFmpeg adapter tests (corpus probe against the manifest,
 # hostile inputs, keyframes, HLS producer) against this build.
 run_go_tests() {
@@ -262,6 +299,7 @@ check_components
 check_corpus
 check_hostile
 check_hls
+check_images
 run_go_tests
 printf 'SUMMARY %s %s: %s/%s checks passed\n' "$FAMILY" "$CPU_MODEL" "$((total - failures))" "$total"
 [ "$failures" -eq 0 ]

@@ -99,6 +99,10 @@ main() {
 		printf 'verify.sh: testdata/media is missing; run go run ./scripts/gen-testmedia\n' >&2
 		exit 2
 	}
+	[ -n "$(find "$repo/testdata/library/movies" -name poster.jpg 2>/dev/null | head -n 1)" ] || {
+		printf 'verify.sh: testdata/library has no poster.jpg; run go run ./scripts/gen-testmedia\n' >&2
+		exit 2
+	}
 	if [ -n "${VERIFY_WORK:-}" ]; then
 		work=$VERIFY_WORK
 	else

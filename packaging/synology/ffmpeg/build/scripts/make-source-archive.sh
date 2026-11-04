@@ -5,7 +5,7 @@
 #
 # <sources> holds the verified inputs below <stage>/ (fetch-sources.sh verify), <recipe> this
 # build directory. Writes <out>/ffmpeg-<label>-source.tar and its .sha256, where <label> is
-# the build's version label (recipe.sh), for example 9.0.2-static1.
+# the build's version label (recipe.sh), for example 9.0.2-static2.
 # The archive holds every source the binaries are built from (FFmpeg, x264, dav1d, zlib, musl,
 # gcc for libgcc), the tools that build them, and the recipe with musl-cross-make's patches: the
 # "Corresponding Source" of GPL-3.0 section 1, attached to each GitHub Release (section 6).

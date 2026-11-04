@@ -328,7 +328,7 @@ separate processes (ADR 0015). They are an **own static build** for each family 
 [`ffmpeg/build/`](ffmpeg/build/README.md), task SPK-15; measurements and the comparison with
 prebuilt builds in [`ffmpeg/README.md`](ffmpeg/README.md)):
 
-- FFmpeg 9.0.2 (recipe revision 1), built against musl, fully static, no dynamic loader, no
+- FFmpeg 9.0.2 (recipe revision 2), built against musl, fully static, no dynamic loader, no
   ELF ABI note – it runs on the oldest DSM 7.2 kernels (3.10 on x86_64 and armv7, 4.4 on armv8);
 - **GPL version 3 or later** (`--enable-gpl --enable-version3`) with libx264 (H.264 encoder),
   FFmpeg's native AAC encoder, dav1d (AV1 decoder) and zlib; **no** libfdk-aac and nothing

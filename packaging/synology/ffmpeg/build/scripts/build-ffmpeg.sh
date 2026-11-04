@@ -51,10 +51,11 @@ readonly DEMUXERS="matroska,mov,mpegts,mpegps,mpegvideo,avi,flv,live_flv,ogg,asf
 flac,mp3,wav,aiff,wv,ape,dsf,iff,aac,ac3,eac3,dts,\
 gif,image_png_pipe,image_jpeg_pipe,image_tiff_pipe,image_webp_pipe,\
 srt,webvtt,ass,sup,image2"
-# Output: fMP4 HLS (ADR 0024) selects mov, mpegts and webvtt itself; null serves diagnostics.
-readonly MUXERS="hls,mp4,null"
-# Encoders: the software transcode targets of ADR 0023.
-readonly ENCODERS="libx264,aac"
+# Output: fMP4 HLS (ADR 0024) selects mov, mpegts and webvtt itself; null serves diagnostics;
+# image2pipe writes the rendered posters (M3-08, internal/adapters/ffmpeg/image_args.go).
+readonly MUXERS="hls,mp4,null,image2pipe"
+# Encoders: the software transcode targets of ADR 0023, plus mjpeg and png for the image renderer.
+readonly ENCODERS="libx264,aac,mjpeg,png"
 # Filters: the graph endpoints and those ffmpeg inserts itself (pixel/sample format conversion,
 # -t/-ss trimming, display-matrix rotation, crop metadata, -r, -apad, -vol), plus the producer's
 # scale. Decoders, parsers and bitstream filters stay complete: the server plays any format.
