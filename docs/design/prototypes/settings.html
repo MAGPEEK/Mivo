@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mivo – Einstellungen für dieses Gerät (Prototyp)</title>
+<style>
+:root{
+  --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#a3a9b0;
+  --accent:#ff6b57;--accent-hover:#ff8572;--on-accent:#3a0e07;--dp:#3dd68c;--ds:#4c9aff;--tc:#f5b544;--err:#ff7a7a;
+  --r-sm:6px;--r-md:8px;--r-lg:10px;--shadow:0 16px 48px rgb(0 0 0/.55);
+  --font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend{background:var(--surface);border-bottom:1px solid var(--divider);padding:12px 20px;font-size:13px;color:var(--muted)}
+.legend summary{cursor:pointer;color:var(--text);font-weight:600}
+.legend ul{margin:6px 0 0;padding-left:18px}
+.legend code{font-family:var(--mono);color:var(--text)}
+header.top{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--divider)}
+.logo{font-weight:700;color:var(--accent);font-size:18px}
+.spacer{flex:1}
+.btn{background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);padding:7px 14px;cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.danger{color:var(--err)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.icon-btn{width:36px;height:36px;padding:0}
+.layout{display:grid;grid-template-columns:220px 1fr;min-height:calc(100vh - 56px - 60px)}
+nav.side{background:var(--surface);border-right:1px solid var(--divider);padding:12px 8px}
+nav.side a{display:block;padding:8px 12px;border-radius:var(--r-sm);color:var(--muted);text-decoration:none}
+nav.side a:hover{background:var(--raised);color:var(--text)}
+nav.side a[aria-current=page]{background:var(--raised);color:var(--text);border-left:3px solid var(--accent)}
+nav.side .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 12px 4px}
+main{padding:24px 32px;max-width:900px}
+h1{margin:0 0 4px;font-size:24px}
+.desc{color:var(--muted);margin:0 0 20px}
+.pagehead{display:flex;align-items:flex-start;gap:12px}
+.subnav{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 20px;border-bottom:1px solid var(--divider)}
+.subnav a{padding:8px 12px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent}
+.subnav a:hover{color:var(--text)}
+.subnav a.on{color:var(--text);border-color:var(--accent)}
+section.card{background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-lg);margin-bottom:20px}
+section.card>h2{margin:0;padding:14px 18px;font-size:16px;border-bottom:1px solid var(--divider)}
+.row{display:grid;grid-template-columns:1fr minmax(180px,260px);gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--divider)}
+.row:last-child{border-bottom:0}
+.row .lbl{font-weight:600;display:block}
+.row .hint{color:var(--muted);font-size:13px;display:block}
+.chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.chip{font-size:11px;border-radius:99px;padding:1px 8px;border:1px solid var(--divider);color:var(--muted)}
+.chip.m4{border-color:var(--tc);color:var(--tc)}
+.chip.m5{border-color:var(--ds);color:var(--ds)}
+.ctl{justify-self:end;width:100%;display:flex;justify-content:flex-end}
+select,input[type=text]{background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-sm);padding:7px 10px;width:100%}
+.seg{display:inline-flex;border:1px solid var(--divider);border-radius:var(--r-md);overflow:hidden}
+.seg button{background:var(--raised);border:0;padding:7px 14px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);font-weight:600}
+.switch{position:relative;width:44px;height:24px;flex:none}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;width:100%;height:100%}
+.switch span{position:absolute;inset:0;background:var(--divider);border-radius:99px;transition:.15s;pointer-events:none}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text);transition:.15s}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::after{left:23px;background:#fff}
+.switch input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.switch input:disabled{cursor:not-allowed}
+.row.placeholder{opacity:.6}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.preview{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+.pv{border-radius:var(--r-sm);background:linear-gradient(135deg,#ff6b57,#4c9aff);aspect-ratio:2/3}
+.mode{display:inline-block;border-radius:var(--r-sm);padding:1px 8px;font-size:12px;font-weight:600;color:#0e1014}
+.mode.dp{background:var(--dp)}.mode.ds{background:var(--ds)}.mode.tc{background:var(--tc)}
+pre.diag{margin:0;padding:12px 18px;font:12px/1.5 var(--mono);color:var(--muted);overflow:auto;white-space:pre-wrap}
+.expert-box{display:flex;align-items:center;gap:8px;margin-left:auto;white-space:nowrap}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);padding:10px 16px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.2s}
+.toast.show{opacity:1}
+.savebar{color:var(--muted);font-size:13px;margin:0 0 40px}
+dialog{background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:0;max-width:640px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgb(0 0 0/.6)}
+dialog .dh{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--divider)}
+dialog .dh h2{margin:0;font-size:17px;flex:1}
+dialog .db{padding:16px 18px;max-height:70vh;overflow:auto}
+dialog .df{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--divider)}
+.keys{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:0 0 12px}
+.keys h3{grid-column:1/-1;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:10px 0 2px}
+.keys div{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--divider)}
+kbd{font:12px var(--mono);background:var(--raised);border:1px solid var(--divider);border-bottom-width:2px;border-radius:var(--r-sm);padding:1px 7px;white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (max-width:1100px){.layout{grid-template-columns:64px 1fr}nav.side a span{display:none}nav.side .h{display:none}main{padding:20px}}
+@media (max-width:700px){
+  .layout{grid-template-columns:1fr}nav.side{display:none}
+  main{padding:16px 16px 80px}.row{grid-template-columns:1fr}.ctl{justify-content:flex-start}
+  .keys{grid-template-columns:1fr}.pagehead{flex-direction:column}.expert-box{margin-left:0}
+  .bottom{display:flex!important}
+}
+.bottom{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--divider);justify-content:space-around;padding:8px}
+.bottom a{color:var(--muted);text-decoration:none;font-size:12px;padding:6px 10px}
+.bottom a[aria-current=page]{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<details class="legend" open>
+  <summary data-i18n="legend_title">Legende</summary>
+  <ul>
+    <li data-i18n-html="legend_ids">ux-spec: <code>AD-01</code>, <code>AD-02</code> (Platzhalter M4), <code>AD-03</code> (Experten), <code>SH-14</code>, <code>HO-01</code>, <code>PL-09</code>, <code>SR-02</code> (zuletzt gesucht), <code>LB-20</code>-Ansicht; Route <code>/settings/app</code>.</li>
+    <li data-i18n-html="legend_ms">Ziel-Meilenstein: M5 (Seite, Layout, Wiedergabe-Grundlagen, Suche, Diagnose). Orange Chips &quot;M4&quot; sind Platzhalter, die erst mit M4 aktiv werden.</li>
+    <li data-i18n="legend_try">Zum Ausprobieren: Taste <kbd>?</kbd> oder Ctrl+K-Hilfe oeffnet das Tastaturblatt; Sprache oben rechts; &quot;Experteneinstellungen&quot; blendet Diagnose ein; Viewport verkleinern fuer Tablet/Handy.</li>
+    <li data-i18n="legend_q"><strong>Offene Fragen (Standard in Klammern):</strong> 1. Eine Seite mit Anker-Tabs statt getrennter Routen (ja). 2. Gespeichert wird sofort beim Aendern, ohne Speichern-Button, da nur lokal (ja). 3. Theme-Zeile jetzt zeigen, Hell deaktiviert (ja). 4. Standard-Ansicht gilt fuer Bibliotheken ohne eigene Wahl (ja). 5. Wiedergabegeschwindigkeit nur 0,5-2x (ja). 6. Info-Zeile fuer Ctrl+K zusaetzlich im Hilfeblatt (ja).</li>
+  </ul>
+</details>
+
+<header class="top">
+  <span class="logo" id="brand">Mivo</span>
+  <span class="spacer"></span>
+  <button class="btn" id="help-btn" aria-haspopup="dialog" data-i18n="keys_btn">Tastenkuerzel (?)</button>
+  <div class="seg" role="group" aria-label="Language">
+    <button type="button" data-lang="de" aria-pressed="true">DE</button>
+    <button type="button" data-lang="en" aria-pressed="false">EN</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="side" aria-label="Main">
+    <a href="#"><span data-i18n="nav_home">Start</span></a>
+    <div class="h" data-i18n="nav_libs">Bibliotheken</div>
+    <a href="#"><span data-i18n="nav_movies">Filme</span></a>
+    <a href="#"><span data-i18n="nav_shows">Serien</span></a>
+    <div class="h" data-i18n="nav_own">Eigenes</div>
+    <a href="#"><span data-i18n="nav_playlists">Playlists</span></a>
+    <a href="#" aria-current="page"><span data-i18n="nav_settings">Einstellungen</span></a>
+  </nav>
+
+  <main>
+    <div class="pagehead">
+      <div>
+        <h1 data-i18n="title">Einstellungen für dieses Gerät</h1>
+        <p class="desc" data-i18n="desc">Gelten nur für diesen Browser und werden lokal gespeichert. Sie wirken sich nicht auf andere Geräte oder den Server aus.</p>
+      </div>
+      <label class="expert-box"><span data-i18n="expert">Experteneinstellungen</span>
+        <span class="switch"><input type="checkbox" id="expert"><span></span></span></label>
+    </div>
+
+    <nav class="subnav" aria-label="Sections" id="subnav">
+      <a href="#appearance" class="on" data-i18n="s_appearance">Darstellung</a>
+      <a href="#layout" data-i18n="s_layout">Bibliotheksansicht</a>
+      <a href="#playback" data-i18n="s_playback">Wiedergabe</a>
+      <a href="#search" data-i18n="s_search">Suche</a>
+      <a href="#diagnostics" id="diag-link" hidden data-i18n="s_diag">Diagnose</a>
+      <a href="#about" data-i18n="s_about">Info</a>
+    </nav>
+
+    <section class="card" id="appearance" aria-labelledby="h-appearance">
+      <h2 id="h-appearance" data-i18n="s_appearance">Darstellung</h2>
+      <div class="row">
+        <div><label class="lbl" for="lang" data-i18n="lang">Sprache der Oberfläche</label><span class="hint" data-i18n="lang_h">Deutsch oder Englisch.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-01</span></div></div>
+        <div class="ctl"><select id="lang"><option value="de">Deutsch</option><option value="en">English</option></select></div>
+      </div>
+      <div class="row">
+        <div><label class="lbl" for="time" data-i18n="time">Zeitformat</label><span class="hint" data-i18n="time_h">Automatisch folgt der Systemeinstellung.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-01</span></div></div>
+        <div class="ctl"><select id="time"><option data-i18n="t_auto">Automatisch</option><option>24 h</option><option>12 h</option></select></div>
+      </div>
+      <div class="row">
+        <div><label class="lbl" for="hero" data-i18n="hero">Hero auf der Startseite</label><span class="hint" data-i18n="hero_h">Große Titelleiste mit Vorschaubildern oben auf Start.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">HO-01</span></div></div>
+        <div class="ctl"><span class="switch"><input type="checkbox" id="hero" checked><span></span></span></div>
+      </div>
+      <div class="row">
+        <div><label class="lbl" for="theme" data-i18n="theme">Farbschema</label><span class="hint" data-i18n="theme_h">Dunkel. Hell folgt später.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-01</span></div></div>
+        <div class="ctl"><select id="theme"><option data-i18n="th_dark">Dunkel</option><option disabled data-i18n="th_light">Hell (später)</option></select></div>
+      </div>
+    </section>
+
+    <section class="card" id="layout" aria-labelledby="h-layout">
+      <h2 id="h-layout" data-i18n="s_layout">Bibliotheksansicht</h2>
+      <div class="row">
+        <div><span class="lbl" id="vs-l" data-i18n="viewstyle">Standardansicht</span><span class="hint" data-i18n="viewstyle_h">Für Bibliotheken, in denen Sie noch nichts gewählt haben.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">LB-20</span></div></div>
+        <div class="ctl"><div class="seg" role="group" aria-labelledby="vs-l" id="viewstyle">
+          <button type="button" aria-pressed="true" data-v="grid" data-i18n="grid">Raster</button>
+          <button type="button" aria-pressed="false" data-v="list" data-i18n="list">Liste</button></div></div>
+      </div>
+      <div class="row">
+        <div><label class="lbl" for="size" data-i18n="cardsize">Kartengröße</label><span class="hint" data-i18n="cardsize_h">Gilt für Raster und Reihen.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">LB-20</span></div></div>
+        <div class="ctl" style="flex-direction:column;align-items:stretch">
+          <input type="range" id="size" min="1" max="3" value="2" aria-valuetext="M">
+          <div class="preview" aria-hidden="true" id="preview"></div></div>
+      </div>
+      <div class="row">
+        <div><span class="lbl" data-i18n="resetside">Seitenleiste zurücksetzen</span><span class="hint" data-i18n="resetside_h">Setzt Reihenfolge, angeheftete und ausgeblendete Bibliotheken auf den Standard.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">SH-14</span></div></div>
+        <div class="ctl"><button class="btn" id="reset-side" data-i18n="reset">Zurücksetzen</button></div>
+      </div>
+    </section>
+
+    <section class="card" id="playback" aria-labelledby="h-playback">
+      <h2 id="h-playback" data-i18n="s_playback">Wiedergabe</h2>
+      <div class="row">
+        <div><label class="lbl" for="autoplay" data-i18n="autoplay">Automatisch weiterspielen</label><span class="hint" data-i18n="autoplay_h">Nächste Folge starten, wenn die aktuelle endet.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-02</span></div></div>
+        <div class="ctl"><span class="switch"><input type="checkbox" id="autoplay" checked><span></span></span></div>
+      </div>
+      <div class="row">
+        <div><label class="lbl" for="speed" data-i18n="speed">Standard-Geschwindigkeit</label><span class="hint" data-i18n="speed_h">Startwert beim Öffnen des Players.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-02</span></div></div>
+        <div class="ctl"><select id="speed"><option>0,5×</option><option>0,75×</option><option selected>1×</option><option>1,25×</option><option>1,5×</option><option>2×</option></select></div>
+      </div>
+      <div class="row placeholder">
+        <div><label class="lbl" for="subsize" data-i18n="subsize">Untertitelgröße</label><span class="hint" data-i18n="ph_h">Platzhalter, wird mit M4 aktiv.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m4">M4</span><span class="chip">PL-13</span></div></div>
+        <div class="ctl"><select id="subsize" disabled><option>M</option></select></div>
+      </div>
+      <div class="row placeholder">
+        <div><label class="lbl" for="qhome" data-i18n="qhome">Qualität im Heimnetz</label><span class="hint" data-i18n="ph_h">Platzhalter, wird mit M4 aktiv.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m4">M4</span><span class="chip">PL-10</span></div></div>
+        <div class="ctl"><select id="qhome" disabled><option data-i18n="q_orig">Original</option></select></div>
+      </div>
+      <div class="row placeholder">
+        <div><label class="lbl" for="qremote" data-i18n="qremote">Qualität unterwegs</label><span class="hint" data-i18n="ph_h">Platzhalter, wird mit M4 aktiv.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m4">M4</span><span class="chip">PL-10</span></div></div>
+        <div class="ctl"><select id="qremote" disabled><option data-i18n="q_auto">Automatisch</option></select></div>
+      </div>
+      <div class="row placeholder">
+        <div><label class="lbl" for="skip" data-i18n="skip">Intro automatisch überspringen</label><span class="hint" data-i18n="ph_h">Platzhalter, wird mit M4 aktiv.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m4">M4</span><span class="chip">AD-02</span></div></div>
+        <div class="ctl"><span class="switch"><input type="checkbox" id="skip" disabled><span></span></span></div>
+      </div>
+    </section>
+
+    <section class="card" id="search" aria-labelledby="h-search">
+      <h2 id="h-search" data-i18n="s_search">Suche</h2>
+      <div class="row">
+        <div><span class="lbl" data-i18n="recent">Zuletzt gesucht löschen</span><span class="hint"><span id="recent-count">3</span> <span data-i18n="recent_h">gespeicherte Suchen auf diesem Gerät.</span></span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">SR-02</span></div></div>
+        <div class="ctl"><button class="btn danger" id="clear-recent" data-i18n="clear">Löschen</button></div>
+      </div>
+    </section>
+
+    <section class="card" id="diagnostics" aria-labelledby="h-diag" hidden>
+      <h2 id="h-diag"><span data-i18n="s_diag">Diagnose</span> <span class="chip" data-i18n="expert_chip">Experten</span></h2>
+      <div class="row">
+        <div><label class="lbl" for="force" data-i18n="force">Wiedergabemodus erzwingen (Test)</label><span class="hint" data-i18n="force_h">Nur zum Testen. Normalerweise wählt der Server selbst.</span>
+          <div class="chips"><span class="chip" data-i18n="dev">Pro Gerät · lokal</span><span class="chip m5">M5</span><span class="chip">AD-03</span></div></div>
+        <div class="ctl"><select id="force"><option data-i18n="f_none">Nicht erzwingen</option><option data-i18n="f_ds">Direct Stream erzwingen</option><option data-i18n="f_tc">Transcodieren erzwingen</option></select></div>
+      </div>
+      <div class="row">
+        <div><span class="lbl" data-i18n="profile">Fähigkeitsprofil dieses Browsers</span><span class="hint" data-i18n="profile_h">Was dieser Browser dem Server gemeldet hat.</span></div>
+        <div class="ctl"><span><span class="mode dp">Direct Play</span> <span class="mode ds">Direct Stream</span> <span class="mode tc">Transcode</span></span></div>
+      </div>
+      <pre class="diag" tabindex="0" aria-label="Profile">video: h264, hevc(no), vp9, av1(no)
+audio: aac, opus, mp3, flac, ac3(no)
+containers: mp4, webm, hls(mse)
+max: 1920x1080 @ 60</pre>
+      <div class="row"><span class="hint" data-i18n="diag_copy_h">Profil und Browserdaten, ohne persönliche Angaben.</span>
+        <div class="ctl"><button class="btn" id="copy-diag" data-i18n="copy">Diagnose kopieren</button></div></div>
+    </section>
+
+    <section class="card" id="about" aria-labelledby="h-about">
+      <h2 id="h-about" data-i18n="s_about">Info</h2>
+      <div class="row">
+        <div><span class="lbl" data-i18n="server">Server-Version</span><span class="hint" data-i18n="server_h">Vom verbundenen Server gelesen, nicht änderbar.</span>
+          <div class="chips"><span class="chip" data-i18n="readonly">Schreibgeschützt</span><span class="chip m5">M5</span></div></div>
+        <div class="ctl"><code style="font-family:var(--mono)">Mivo 0.1.0-beta.1 (a1b2c3d)</code></div>
+      </div>
+      <div class="row">
+        <div><span class="lbl" data-i18n="web">Web-App</span></div>
+        <div class="ctl"><code style="font-family:var(--mono)">0.1.0-beta.1</code></div>
+      </div>
+    </section>
+
+    <p class="savebar" data-i18n="autosave">Änderungen werden sofort auf diesem Gerät gespeichert.</p>
+  </main>
+</div>
+
+<nav class="bottom" aria-label="Phone">
+  <a href="#" data-i18n="nav_home">Start</a><a href="#" data-i18n="nav_libs">Bibliotheken</a><a href="#" data-i18n="search_short">Suche</a><a href="#" aria-current="page" data-i18n="nav_settings">Einstellungen</a>
+</nav>
+
+<div class="toast" role="status" id="toast"></div>
+
+<dialog id="help" aria-labelledby="help-t">
+  <div class="dh"><h2 id="help-t" data-i18n="keys_title">Tastenkürzel</h2><button class="btn icon-btn" id="help-x" aria-label="Close">✕</button></div>
+  <div class="db">
+    <div class="keys">
+      <h3 data-i18n="k_player">Player</h3>
+      <div><span data-i18n="k_play">Wiedergabe / Pause</span><span><kbd>Space</kbd> <kbd>K</kbd></span></div>
+      <div><span data-i18n="k_seek">±10 s springen</span><span><kbd>←</kbd> <kbd>→</kbd></span></div>
+      <div><span data-i18n="k_jl">−10 s / +30 s</span><span><kbd>J</kbd> <kbd>L</kbd></span></div>
+      <div><span data-i18n="k_vol">Lautstärke</span><span><kbd>↑</kbd> <kbd>↓</kbd></span></div>
+      <div><span data-i18n="k_full">Vollbild</span><span><kbd>F</kbd></span></div>
+      <div><span data-i18n="k_mute">Stumm</span><span><kbd>M</kbd></span></div>
+      <div><span data-i18n="k_info">Stream-Info</span><span><kbd>I</kbd></span></div>
+      <div><span data-i18n="k_sub">Untertitel an/aus</span><span><kbd>C</kbd></span></div>
+      <div><span data-i18n="k_next">Nächste Folge</span><span><kbd>N</kbd></span></div>
+      <div><span data-i18n="k_prev">Vorherige Folge</span><span><kbd>P</kbd></span></div>
+      <div><span data-i18n="k_esc">Oberstes Panel schließen / Vollbild verlassen</span><span><kbd>Esc</kbd></span></div>
+      <h3 data-i18n="k_global">Überall</h3>
+      <div><span data-i18n="k_search">Suche öffnen</span><span><kbd>Ctrl</kbd> + <kbd>K</kbd></span></div>
+      <div><span data-i18n="k_help">Diese Hilfe</span><span><kbd>?</kbd></span></div>
+    </div>
+    <p class="hint" style="color:var(--muted);font-size:13px;margin:0" data-i18n="k_note">Im Player gelten die Player-Tasten; in Eingabefeldern sind Kürzel außer Esc und Ctrl+K aus.</p>
+  </div>
+  <div class="df"><button class="btn primary" id="help-close" data-i18n="close">Schließen</button></div>
+</dialog>
+
+<script>
+const T={
+legend_title:["Legende (Prototyp, Entwurf)","Legend (prototype, draft)"],
+legend_ids:["ux-spec: <code>AD-01</code>, <code>AD-02</code> (Platzhalter M4), <code>AD-03</code> (Experten), <code>SH-14</code>, <code>HO-01</code>, <code>PL-09</code>, <code>SR-02</code>, <code>LB-20</code>; Route <code>/settings/app</code>.","ux-spec: <code>AD-01</code>, <code>AD-02</code> (M4 placeholders), <code>AD-03</code> (expert), <code>SH-14</code>, <code>HO-01</code>, <code>PL-09</code>, <code>SR-02</code>, <code>LB-20</code>; route <code>/settings/app</code>."],
+legend_ms:["Ziel-Meilenstein M5. Orange &quot;M4&quot;-Chips sind Platzhalter, die erst mit M4 aktiv werden.","Target milestone M5. Amber &quot;M4&quot; chips are placeholders that become active with M4."],
+legend_try:["Ausprobieren: Taste ? öffnet das Tastaturblatt; Sprache oben rechts; &quot;Experteneinstellungen&quot; blendet Diagnose ein; Fenster verkleinern für Tablet/Handy.","Try: press ? for the key sheet; language top right; &quot;Expert settings&quot; reveals Diagnostics; shrink the window for tablet/phone."],
+legend_q:["Offene Fragen (Standard): 1. Eine Seite mit Anker-Tabs statt getrennter Routen (ja). 2. Speichern sofort beim Ändern, kein Speichern-Button, da nur lokal (ja). 3. Theme-Zeile jetzt zeigen, Hell deaktiviert (ja). 4. Standardansicht gilt nur für Bibliotheken ohne eigene Wahl (ja). 5. Geschwindigkeit 0,5-2× (ja). 6. Hilfeblatt auch über ? in der Kopfzeile erreichbar (ja).","Open questions (default): 1. One page with anchor tabs, not separate routes (yes). 2. Save immediately on change, no Save button, as it is local only (yes). 3. Show the theme row now, Light disabled (yes). 4. Default view applies only to libraries without their own choice (yes). 5. Speed 0.5-2× (yes). 6. Help sheet also reachable via the header button (yes)."],
+keys_btn:["Tastenkürzel (?)","Keyboard shortcuts (?)"],
+nav_home:["Start","Home"],nav_libs:["Bibliotheken","Libraries"],nav_movies:["Filme","Movies"],nav_shows:["Serien","Shows"],nav_own:["Eigenes","Your stuff"],nav_playlists:["Playlists","Playlists"],nav_settings:["Einstellungen","Settings"],search_short:["Suche","Search"],
+title:["Einstellungen für dieses Gerät","Settings for this device"],
+desc:["Gelten nur für diesen Browser und werden lokal gespeichert. Sie wirken sich nicht auf andere Geräte oder den Server aus.","These apply to this browser only and are stored locally. They do not affect other devices or the server."],
+expert:["Experteneinstellungen","Expert settings"],expert_chip:["Experten","Expert"],
+s_appearance:["Darstellung","Appearance"],s_layout:["Bibliotheksansicht","Library layout"],s_playback:["Wiedergabe","Playback"],s_search:["Suche","Search"],s_diag:["Diagnose","Diagnostics"],s_about:["Info","About"],
+dev:["Pro Gerät · lokal","Per device · local"],
+lang:["Sprache der Oberfläche","Interface language"],lang_h:["Deutsch oder Englisch.","German or English."],
+time:["Zeitformat","Time format"],time_h:["Automatisch folgt der Systemeinstellung.","Automatic follows the system setting."],t_auto:["Automatisch","Automatic"],
+hero:["Hero auf der Startseite","Hero on Home"],hero_h:["Große Titelleiste mit Hintergrundbild oben auf Start.","Large title banner with backdrop at the top of Home."],
+theme:["Farbschema","Theme"],theme_h:["Dunkel. Hell folgt später.","Dark. Light follows later."],th_dark:["Dunkel","Dark"],th_light:["Hell (später)","Light (later)"],
+viewstyle:["Standardansicht","Default view style"],viewstyle_h:["Für Bibliotheken, in denen Sie noch nichts gewählt haben.","For libraries where you have not chosen yet."],grid:["Raster","Grid"],list:["Liste","List"],
+cardsize:["Kartengröße","Card size"],cardsize_h:["Gilt für Raster und Reihen.","Applies to grids and rows."],
+resetside:["Seitenleiste zurücksetzen","Reset sidebar layout"],resetside_h:["Setzt Reihenfolge, angeheftete und ausgeblendete Bibliotheken auf den Standard.","Resets order, pinned and hidden libraries to the default."],reset:["Zurücksetzen","Reset"],
+autoplay:["Automatisch weiterspielen","Auto play next"],autoplay_h:["Nächste Folge starten, wenn die aktuelle endet.","Start the next episode when the current one ends."],
+speed:["Standard-Geschwindigkeit","Default speed"],speed_h:["Startwert beim Öffnen des Players.","Initial value when the player opens."],
+subsize:["Untertitelgröße","Subtitle size"],qhome:["Qualität im Heimnetz","Home quality"],qremote:["Qualität unterwegs","Remote quality"],skip:["Intro automatisch überspringen","Skip intro automatically"],
+ph_h:["Platzhalter, wird mit M4 aktiv.","Placeholder, becomes active with M4."],q_orig:["Original","Original"],q_auto:["Automatisch","Automatic"],
+recent:["Zuletzt gesucht löschen","Clear recent searches"],recent_h:["gespeicherte Suchen auf diesem Gerät.","saved searches on this device."],clear:["Löschen","Clear"],
+force:["Wiedergabemodus erzwingen (Test)","Force playback mode (test)"],force_h:["Nur zum Testen. Normalerweise wählt der Server selbst.","For tests only. Normally the server decides."],f_none:["Nicht erzwingen","Do not force"],f_ds:["Direct Stream erzwingen","Force Direct Stream"],f_tc:["Transcodieren erzwingen","Force transcode"],
+profile:["Fähigkeitsprofil dieses Browsers","Capability profile of this browser"],profile_h:["Was dieser Browser dem Server gemeldet hat.","What this browser reported to the server."],diag_copy_h:["Profil und Browserdaten, ohne persönliche Angaben.","Profile and browser data, no personal details."],copy:["Diagnose kopieren","Copy diagnostics"],
+server:["Server-Version","Server version"],server_h:["Vom verbundenen Server gelesen, nicht änderbar.","Read from the connected server, not editable."],readonly:["Schreibgeschützt","Read-only"],web:["Web-App","Web app"],
+autosave:["Änderungen werden sofort auf diesem Gerät gespeichert.","Changes are saved on this device immediately."],
+keys_title:["Tastenkürzel","Keyboard shortcuts"],k_player:["Player","Player"],k_global:["Überall","Everywhere"],
+k_play:["Wiedergabe / Pause","Play / pause"],k_seek:["±10 s springen","Seek ±10 s"],k_jl:["−10 s / +30 s","−10 s / +30 s"],k_vol:["Lautstärke","Volume"],k_full:["Vollbild","Fullscreen"],k_mute:["Stumm","Mute"],k_info:["Stream-Info","Stream info"],k_sub:["Untertitel an/aus","Subtitles on/off"],k_next:["Nächste Folge","Next"],k_prev:["Vorherige Folge","Previous"],k_esc:["Oberstes Panel schließen / Vollbild verlassen","Close top panel / leave fullscreen"],
+k_search:["Suche öffnen","Open search"],k_help:["Diese Hilfe","This help"],
+k_note:["Player-Tasten gelten nur im Player; in Eingabefeldern sind Kürzel außer Esc und Ctrl+K aus.","Player keys only apply in the player; in text fields shortcuts are off except Esc and Ctrl+K."],close:["Schließen","Close"],
+t_copied:["Diagnose kopiert","Diagnostics copied"],t_reset:["Seitenleiste zurückgesetzt","Sidebar layout reset"],t_cleared:["Suchverlauf gelöscht","Recent searches cleared"],t_saved:["Gespeichert","Saved"]
+};
+let lang="de";
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+function apply(l){lang=l;document.documentElement.lang=l;const i=l==="de"?0:1;
+  $$("[data-i18n]").forEach(e=>{const v=T[e.dataset.i18n];if(v)e.textContent=v[i]});
+  $$("[data-i18n-html]").forEach(e=>{const v=T[e.dataset.i18nHtml];if(v)e.innerHTML=v[i]});
+  $$("[data-lang]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lang===l));
+  $("#lang").value=l;document.title="Mivo – "+T.title[i]+" (Prototype)";}
+function toast(k){const t=$("#toast");t.textContent=T[k][lang==="de"?0:1];t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),1800)}
+$$("[data-lang]").forEach(b=>b.onclick=()=>apply(b.dataset.lang));
+$("#lang").onchange=e=>{apply(e.target.value);toast("t_saved")};
+$("#expert").onchange=e=>{$("#diagnostics").hidden=!e.target.checked;$("#diag-link").hidden=!e.target.checked};
+$$("#viewstyle button").forEach(b=>b.onclick=()=>{$$("#viewstyle button").forEach(x=>x.setAttribute("aria-pressed",x===b));toast("t_saved")});
+const sizes=[["S",56],["M",72],["L",92]];
+function pv(){const [n,w]=sizes[$("#size").value-1];$("#size").setAttribute("aria-valuetext",n);$("#preview").innerHTML=[0,1,2,3].map(()=>`<div class="pv" style="width:${w*0.6}px"></div>`).join("")}
+$("#size").oninput=pv;$("#size").onchange=()=>toast("t_saved");pv();
+["hero","autoplay","speed","time","force"].forEach(id=>$("#"+id).addEventListener("change",()=>toast("t_saved")));
+$("#reset-side").onclick=()=>toast("t_reset");
+$("#clear-recent").onclick=()=>{$("#recent-count").textContent="0";$("#clear-recent").disabled=true;toast("t_cleared")};
+$("#copy-diag").onclick=()=>toast("t_copied");
+$$("#subnav a").forEach(a=>a.onclick=()=>{$$("#subnav a").forEach(x=>x.classList.toggle("on",x===a))});
+const dlg=$("#help");
+function openHelp(){if(!dlg.open)dlg.showModal()}
+$("#help-btn").onclick=openHelp;$("#help-x").onclick=$("#help-close").onclick=()=>dlg.close();
+document.addEventListener("keydown",e=>{
+  const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)&&document.activeElement.type!=="checkbox"&&document.activeElement.type!=="range";
+  if(e.key==="?"&&!typing){e.preventDefault();openHelp()}
+});
+apply("de");
+</script>
+</body>
+</html>

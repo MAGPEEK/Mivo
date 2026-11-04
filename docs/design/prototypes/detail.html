@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mivo – Prototype: Detail pages, edit dialog, player</title>
+<title>Prototype: Detail pages and player</title>
 <style>
 :root{
   --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#9aa0a6;
@@ -199,6 +199,28 @@ th{color:var(--muted);font-weight:500}
 .nextup.show{display:flex}
 .nextup .art{width:120px;font-size:11px;padding:6px}
 .statebar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 16px;background:var(--surface);font-size:12px;border-bottom:1px solid var(--divider)}
+/* later-milestone placeholders (M4/M6/M7): hidden unless the toggle is on */
+body:not(.show-later) .later{display:none!important}
+body.show-later .later{outline:1px dashed var(--muted);outline-offset:2px}
+/* contrast over the backdrop: worst case brightest gradient stop at brightness .45 (lum 0.06): white 9.6:1, #c9ced3 6.3:1, #ffb0a4 5.6:1 */
+.hero .muted,.hero .orig,.hero .hint,.hero .tagline{color:#c9ced3}
+.hero .linkbtn{color:#ffb0a4}
+.hero .badge{border-color:#c9ced3}
+/* no-artwork variant */
+.art.noart{background:repeating-linear-gradient(45deg,#22262e,#22262e 12px,#1d2027 12px,#1d2027 24px);color:var(--text);flex-direction:column;justify-content:flex-end;align-items:flex-start;text-shadow:none;border:1px dashed var(--muted)}
+.art.noart .glyph{font-size:48px;opacity:.5;position:absolute;top:30%;left:50%;transform:translateX(-50%)}
+/* mini player PL-38 */
+.mini{position:fixed;right:16px;bottom:16px;width:340px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);z-index:30;overflow:hidden}
+.mini[hidden]{display:none}
+.mini .mv{aspect-ratio:16/9;background:radial-gradient(ellipse at 30% 40%,#3b2a5a,#0b0b14 70%);display:grid;place-items:center;color:rgb(255 255 255/.2);font-weight:800}
+.mini .mrow{display:flex;align-items:center;gap:4px;padding:6px 8px}
+.mini .mt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:13px}
+.mini .progress{margin:0;border-radius:0}
+.kbd{font-family:var(--mono);background:var(--raised);border:1px solid var(--divider);border-radius:4px;padding:0 6px}
+.preview-frame{position:fixed;inset:0;z-index:100;background:rgb(0 0 0/.8);display:grid;place-items:center}
+.preview-frame[hidden]{display:none}
+.preview-frame iframe{border:1px solid var(--divider);background:var(--bg);height:calc(100vh - 80px);max-width:100%}
+body.embedded .legend,body.embedded .previewctl{display:none}
 @media (max-width:1024px){
   .hero-inner{grid-template-columns:200px 1fr;padding:24px}
   section.row{padding:12px 24px}
@@ -220,7 +242,13 @@ th{color:var(--muted);font-weight:500}
   .ep-grid.list .ep{grid-template-columns:1fr}
   .queue li{grid-template-columns:20px 64px 1fr auto}
   .queue li .dur{display:none}
-  .panel{bottom:170px}
+  /* Q5: playback options and other panels become bottom sheets on phones */
+  .panel{position:fixed;left:0;right:0;bottom:0;max-height:70vh;border-radius:var(--r-lg) var(--r-lg) 0 0;z-index:35}
+  .mini{left:8px;right:8px;width:auto;bottom:64px}
+  .nextup{left:12px;right:12px;width:auto;bottom:210px}
+  .skip{bottom:210px}
+  .subline{bottom:210px}
+  .player{min-height:700px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -228,34 +256,43 @@ th{color:var(--muted);font-weight:500}
 <body>
 
 <details class="legend" open>
-  <summary data-i18n="legend.title">Legende – Prototyp „Detailseiten, Bearbeiten, Player" (Entwurf)</summary>
+  <summary data-i18n="legend.title">Legende – Prototyp „Detailseiten und Player" (Entwurf, M5)</summary>
   <ul>
-    <li><b>ux-spec ids:</b> DT-01 … DT-11, DT-20 … DT-23, section 7 (overflow menu), ED-01 … ED-07, PL-01 … PL-15, PL-20 … PL-22, PL-30 … PL-36, PL-40 … PL-42.</li>
-    <li><b>Target milestones:</b> M5 layout (detail pages, player bar, queue, media info), M4 selectors/quality/chapters/stream-info extensions, M6 ratings, edit dialog, online subtitle search, related; M7 markers (own rating, watched, upload) are shown greyed with a <span class="badge">M7</span> tag.</li>
-    <li><b>Sample data</b> is invented; artwork is generated gradients. Not shown here: shell/sidebar, home, library (see <code>browse.html</code>), mini player PL-38.</li>
-    <li><b>Open questions for the owner:</b>
+    <li><b>ux-spec ids (M5, shown by default):</b> DT-01…03, DT-05, DT-06, DT-08, DT-09 (extra page), DT-11, DT-20…22, section 7 (M5 actions only: Play next, Add to queue, Re-analyze, Media info), PL-01…05, PL-08, PL-09 (help sheet "?"), PL-14, PL-15, PL-32, PL-35, PL-36, PL-38, PL-40…42. Variants: season as grid and list, no-artwork movie.</li>
+    <li><b>Later milestones</b> (M4 version/audio/subtitle selectors, quality, subtitle style, chapters, skip intro, trickplay, extended stream info; M6 ratings, related, edit dialog ED-01…07, online subtitle search PL-20; M7 watched, own rating, playlists, download, history, share, upload) are hidden. Tick <i>"Show later milestones"</i> in the top bar to see them as dashed placeholders with their milestone tag.</li>
+    <li><b>Responsive:</b> use the <i>Preview</i> buttons (desktop 1440 / tablet 1024 / phone 390) – they open this file in a frame of that width. On phones the panels are bottom sheets and the mini player sits above the bottom navigation (see <code>browse.html</code>).</li>
+    <li><b>Contrast:</b> text over the backdrop is checked for the worst case (brightest gradient stop at brightness .45): white 9.6:1, muted text 6.3:1, links 5.6:1 (AA ≥ 4.5).</li>
+    <li><b>Sample data</b> is invented; artwork is generated gradients. Shell, sidebar, home and library are in <code>browse.html</code>.</li>
+    <li><b>Open questions for the owner</b> (default in brackets – used if you do not object):
       <ol>
-        <li>Q1 – Resume split button: is "Play from start" in the split menu enough, or should it be a visible second button?</li>
-        <li>Q2 – Mode badge: short name only ("Transcode"), or with reason on hover ("Transcode · audio")?</li>
-        <li>Q3 – Episode grid default: grid (as drawn) or list for seasons with long summaries?</li>
-        <li>Q4 – Edit dialog: should "Save" stay disabled until something changes, and should locking an artwork be visible as a lock icon on the gallery item?</li>
-        <li>Q5 – Playback options on phone: bottom sheet (as drawn) vs. full-screen page?</li>
-        <li>Q6 – Stream-info overlay: open as a corner overlay (as drawn) or as a panel like the other panels?</li>
+        <li>Q1 – Resume: "Play from start" only in the split menu, or also a visible second button? [split menu only]</li>
+        <li>Q2 – Mode badge: short name only, reason on hover/focus? [short name; reason in the overlay]</li>
+        <li>Q3 – Episodes as grid or list by default? [grid, view and size remembered per device]</li>
+        <li>Q4 – Playback options on phones: bottom sheet or full-screen page? [bottom sheet]</li>
+        <li>Q5 – Stream-info: corner overlay or panel like the others? [corner overlay]</li>
+        <li>Q6 – Extras open an own extra page (as drawn) or play directly in the player? [own page, Play button on it]</li>
+        <li>Q7 – Mini player: bottom right, with play/pause, progress, expand, close; clicking the video area expands. OK? [yes]</li>
+        <li>Q8 – No artwork: typographic placeholder with title and neutral backdrop, no blur. OK? [yes]</li>
       </ol>
     </li>
   </ul>
 </details>
 
 <header class="topbar">
-  <a class="logo" href="#" id="brand">Mivo</a>
+  <a class="logo" href="#" id="brand"></a>
   <nav class="screens" aria-label="Prototype screens">
     <button data-screen="movie" aria-current="page" data-i18n="nav.movie">Film</button>
+    <button data-screen="noart" data-i18n="nav.noart">Film ohne Artwork</button>
     <button data-screen="show" data-i18n="nav.show">Serie</button>
     <button data-screen="season" data-i18n="nav.season">Staffel</button>
     <button data-screen="episode" data-i18n="nav.episode">Episode</button>
+    <button data-screen="extra" data-i18n="nav.extra">Extra</button>
     <button data-screen="player" data-i18n="nav.player">Player</button>
   </nav>
   <div class="toggles">
+    <span class="previewctl" style="display:flex;gap:4px;align-items:center"><span class="muted" style="font-size:12px" data-i18n="nav.preview">Vorschau:</span>
+      <button class="chip-btn" data-preview="1440">1440</button><button class="chip-btn" data-preview="1024">1024</button><button class="chip-btn" data-preview="390">390</button></span>
+    <label class="muted" style="font-size:12px"><input type="checkbox" id="laterToggle"> <span data-i18n="nav.later">Spätere Meilensteine zeigen</span></label>
     <label class="muted" style="font-size:12px"><input type="checkbox" id="adminToggle" checked> <span data-i18n="nav.admin">Admin</span></label>
     <button class="chip-btn" id="langToggle" aria-label="Sprache / language">DE · <b>EN</b></button>
   </div>
@@ -281,7 +318,7 @@ th{color:var(--muted);font-weight:500}
         </div>
         <p class="muted" style="margin:6px 0 0"><span data-i18n="d.director">Regie</span>: Mara Lindqvist</p>
         <!-- DT-04 -->
-        <div class="ratings">
+        <div class="ratings later">
           <span class="rating"><span class="badge">TMDB</span><b>7,4</b><span class="muted">/10</span></span>
           <span class="rating" title="M7"><span class="muted" data-i18n="d.own">Eigene Bewertung</span> <span class="stars" aria-label="4 von 5 Sternen">★★★★☆</span><span class="badge">M7</span></span>
         </div>
@@ -295,27 +332,27 @@ th{color:var(--muted);font-weight:500}
             </ul>
           </div>
           <button class="btn" data-i18n="d.trailer">🎞 Trailer</button>
-          <button class="btn" aria-pressed="false" id="watchedBtn">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
-          <button class="btn admin-only" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span></button>
+          <button class="btn later" aria-pressed="false" id="watchedBtn">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
+          <button class="btn admin-only later" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span> <span class="badge">M6</span></button>
           <div class="menu-wrap">
             <button class="btn icon" aria-haspopup="menu" aria-expanded="false" data-menu="itemMenu" aria-label="Weitere Aktionen">⋮</button>
             <!-- Section 7 overflow menu -->
             <ul class="menu" id="itemMenu" role="menu" hidden>
-              <li role="none"><button role="menuitem" data-i18n="m.playNext">Als Nächstes abspielen</button></li>
-              <li role="none"><button role="menuitem" data-i18n="m.addQueue">Zur Warteschlange hinzufügen</button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.addPlaylist">Zu Playlist / Sammlung hinzufügen</span><span class="tag">M7</span></button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.markWatched">Als gesehen markieren</span><span class="tag">M7</span></button></li>
+              <li role="none"><button role="menuitem" data-toast="t.playNext" data-i18n="m.playNext">Als Nächstes abspielen</button></li>
+              <li role="none"><button role="menuitem" data-toast="t.addQueue" data-i18n="m.addQueue">Zur Warteschlange hinzufügen</button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.addPlaylist">Zu Playlist / Sammlung hinzufügen</span><span class="tag">M7</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.markWatched">Als gesehen markieren</span><span class="tag">M7</span></button></li>
               <li class="sep" role="separator"></li>
-              <li role="none" class="admin-only"><button role="menuitem" data-open="editDialog"><span data-i18n="m.edit">Details bearbeiten</span><span class="tag">Admin</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.refresh">Metadaten aktualisieren</span><span class="tag">Admin</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.match">Zuordnung korrigieren…</span><span class="tag">Admin</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.unmatch">Zuordnung entfernen</span><span class="tag">Admin</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.reanalyze">Datei neu analysieren</span><span class="tag">Admin</span></button></li>
+              <li role="none" class="admin-only later"><button role="menuitem" data-open="editDialog"><span data-i18n="m.edit">Details bearbeiten</span><span class="tag">M6</span></button></li>
+              <li role="none" class="admin-only later"><button role="menuitem"><span data-i18n="m.refresh">Metadaten aktualisieren</span><span class="tag">M6</span></button></li>
+              <li role="none" class="admin-only later"><button role="menuitem"><span data-i18n="m.match">Zuordnung korrigieren…</span><span class="tag">M6</span></button></li>
+              <li role="none" class="admin-only later"><button role="menuitem"><span data-i18n="m.unmatch">Zuordnung entfernen</span><span class="tag">M6</span></button></li>
+              <li role="none" class="admin-only"><button role="menuitem" data-toast="t.reanalyze"><span data-i18n="m.reanalyze">Datei neu analysieren</span><span class="tag">Admin</span></button></li>
               <li class="sep" role="separator"></li>
               <li role="none"><button role="menuitem" data-open="mediaDialog" data-i18n="m.mediaInfo">Medieninfo</button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.download">Originaldatei herunterladen</span><span class="tag">M7</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.share">Mit Benutzer teilen…</span><span class="tag">M7</span></button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.history">Wiedergabeverlauf</span><span class="tag">M7</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.download">Originaldatei herunterladen</span><span class="tag">M7</span></button></li>
+              <li role="none" class="admin-only later"><button role="menuitem"><span data-i18n="m.share">Mit Benutzer teilen…</span><span class="tag">M7</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.history">Wiedergabeverlauf</span><span class="tag">M7</span></button></li>
             </ul>
           </div>
         </div>
@@ -325,7 +362,7 @@ th{color:var(--muted);font-weight:500}
         <p class="summary" id="summary" data-i18n="d.summary">Nach dem Tod ihres Vaters übernimmt Ines den Leuchtturm auf einer abgelegenen Insel vor der bretonischen Küste. In den Logbüchern findet sie Einträge über Schiffe, die es nie gegeben hat – und über einen Sturm, der erst noch kommen soll. Während die Nächte länger werden, beginnt das Licht in Rhythmen zu blinken, die niemand programmiert hat. Ein ruhiger, atmosphärischer Thriller über Erinnerung, Schuld und das, was wir weitergeben.</p>
         <button class="linkbtn" id="moreSummary" aria-controls="summary" aria-expanded="false" data-i18n="d.more">Mehr</button>
         <!-- DT-07 -->
-        <div class="tech">
+        <div class="tech later">
           <div class="field"><label for="selVersion" data-i18n="d.version">Version</label>
             <select id="selVersion"><option>2160p · HEVC HDR10 · 58 GB</option><option>1080p · H.264 · 12 GB</option></select></div>
           <div class="field"><label for="selAudio" data-i18n="d.audio">Audio</label>
@@ -342,7 +379,7 @@ th{color:var(--muted);font-weight:500}
   <!-- DT-09 -->
   <section class="row" aria-labelledby="extrasH"><h2 id="extrasH" data-i18n="d.extras">Extras</h2><ul class="scroller" id="extrasRow"></ul></section>
   <!-- DT-10 -->
-  <section class="row" aria-labelledby="relH"><h2 id="relH" data-i18n="d.related">Mehr wie dies</h2><ul class="scroller" id="relatedRow"></ul></section>
+  <section class="row later" aria-labelledby="relH"><h2 id="relH" data-i18n="d.related">Mehr wie dies</h2><ul class="scroller" id="relatedRow"></ul></section>
 </div>
 
 <!-- ===================== SHOW ===================== -->
@@ -351,17 +388,17 @@ th{color:var(--muted);font-weight:500}
     <div class="backdrop" aria-hidden="true" style="background:linear-gradient(135deg,#0f3d3a,#4c9aff 50%,#1d1a3a)"></div>
     <div class="hero-inner">
       <div class="posterbox">
-        <div class="art" role="img" aria-label="Poster: Salt &amp; Static" style="background:linear-gradient(160deg,#2bb5a0,#163f6b 60%,#0d1220)"><span class="badge">FSK 16</span><span class="unwatched">14</span>Salt &amp; Static</div>
+        <div class="art" role="img" aria-label="Poster: Salt &amp; Static" style="background:linear-gradient(160deg,#2bb5a0,#163f6b 60%,#0d1220)"><span class="badge">FSK 16</span><span class="unwatched later">14</span>Salt &amp; Static</div>
         <p class="upnext"><span class="muted" data-i18n="s.upnext">Als Nächstes:</span> <b>S1 · E4</b></p>
       </div>
       <div>
         <h1>Salt &amp; Static</h1>
         <div class="meta"><span class="badge">FSK 16</span><span>2019–2023</span><span data-i18n="s.seasons2">2 Staffeln</span><span><a href="#">Sci-Fi</a>, <a href="#">Drama</a></span></div>
-        <div class="ratings"><span class="rating"><span class="badge">TMDB</span><b>8,1</b><span class="muted">/10</span></span></div>
+        <div class="ratings later"><span class="rating"><span class="badge">TMDB</span><b>8,1</b><span class="muted">/10</span></span></div>
         <div class="actions">
           <button class="btn primary" data-goto="player">▶ <span data-i18n="s.play">S1 · E4 abspielen</span></button>
-          <button class="btn">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
-          <button class="btn admin-only" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span></button>
+          <button class="btn later">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
+          <button class="btn admin-only later" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span> <span class="badge">M6</span></button>
           <button class="btn icon" aria-label="Weitere Aktionen" data-menu-clone="itemMenu">⋮</button>
         </div>
         <p class="summary" data-i18n="s.summary">Eine Radiotechnikerin auf einer Bohrinsel empfängt Signale aus einer Zukunft, in der die Insel nicht mehr existiert.</p>
@@ -371,14 +408,14 @@ th{color:var(--muted);font-weight:500}
   <!-- DT-20 seasons row -->
   <section class="row" aria-labelledby="seasH"><h2 id="seasH" data-i18n="s.seasons">Staffeln</h2>
     <ul class="scroller">
-      <li><a class="card" href="#" data-goto="season"><div class="art" style="background:linear-gradient(160deg,#2bb5a0,#163f6b)"><span class="unwatched">6</span><span data-i18n="s.season1">Staffel 1</span></div><div class="t" data-i18n="s.season1">Staffel 1</div><div class="muted" data-i18n="s.eps9">9 Episoden</div></a></li>
-      <li><a class="card" href="#" data-goto="season"><div class="art" style="background:linear-gradient(160deg,#4c9aff,#2a1b47)"><span class="unwatched">8</span><span data-i18n="s.season2">Staffel 2</span></div><div class="t" data-i18n="s.season2">Staffel 2</div><div class="muted" data-i18n="s.eps8">8 Episoden</div></a></li>
+      <li><a class="card" href="#" data-goto="season"><div class="art" style="background:linear-gradient(160deg,#2bb5a0,#163f6b)"><span class="unwatched later">6</span><span data-i18n="s.season1">Staffel 1</span></div><div class="t" data-i18n="s.season1">Staffel 1</div><div class="muted" data-i18n="s.eps9">9 Episoden</div></a></li>
+      <li><a class="card" href="#" data-goto="season"><div class="art" style="background:linear-gradient(160deg,#4c9aff,#2a1b47)"><span class="unwatched later">8</span><span data-i18n="s.season2">Staffel 2</span></div><div class="t" data-i18n="s.season2">Staffel 2</div><div class="muted" data-i18n="s.eps8">8 Episoden</div></a></li>
       <li><a class="card" href="#" data-goto="season"><div class="art" style="background:linear-gradient(160deg,#555,#222)" data-i18n="s.specials">Specials</div><div class="t" data-i18n="s.specials">Specials</div><div class="muted" data-i18n="s.eps2">2 Episoden</div></a></li>
     </ul>
     <p class="hint" data-i18n="s.specialsHint">Specials (Staffel 0) stehen immer zuletzt.</p>
   </section>
   <section class="row"><h2 data-i18n="d.cast">Besetzung &amp; Crew</h2><ul class="scroller castclone"></ul></section>
-  <section class="row"><h2 data-i18n="d.related">Mehr wie dies</h2><ul class="scroller relclone"></ul></section>
+  <section class="row later"><h2 data-i18n="d.related">Mehr wie dies</h2><ul class="scroller relclone"></ul></section>
 </div>
 
 <!-- ===================== SEASON ===================== -->
@@ -393,8 +430,8 @@ th{color:var(--muted);font-weight:500}
         <div class="meta"><span>2019</span><span data-i18n="s.eps9">9 Episoden</span></div>
         <div class="actions">
           <button class="btn primary" data-goto="player">▶ <span data-i18n="d.play">Abspielen</span></button>
-          <button class="btn">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
-          <button class="btn admin-only" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span></button>
+          <button class="btn later">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
+          <button class="btn admin-only later" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span> <span class="badge">M6</span></button>
           <button class="btn icon" aria-label="Weitere Aktionen" data-menu-clone="itemMenu">⋮</button>
         </div>
         <p class="summary" data-i18n="s.s1summary">Die erste Staffel folgt Juna in ihren ersten Wochen auf der Plattform „Nordlicht 7".</p>
@@ -430,12 +467,12 @@ th{color:var(--muted);font-weight:500}
         <div class="meta"><b>S1 · E3</b><span class="badge">FSK 16</span><span data-i18n="e.aired">Ausgestrahlt 14.03.2019</span><span>47 Min.</span></div>
         <div class="actions">
           <button class="btn primary" data-goto="player">▶ <span data-i18n="d.play">Abspielen</span></button>
-          <button class="btn">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
-          <button class="btn admin-only" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span></button>
+          <button class="btn later">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
+          <button class="btn admin-only later" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span> <span class="badge">M6</span></button>
           <button class="btn icon" aria-label="Weitere Aktionen" data-menu-clone="itemMenu">⋮</button>
         </div>
         <p class="summary" data-i18n="e.summary">Ein Funkspruch kündigt einen Unfall an, der erst in drei Tagen passieren soll. Juna muss entscheiden, wem sie davon erzählt.</p>
-        <div class="tech">
+        <div class="tech later">
           <div class="field"><label for="eAudio" data-i18n="d.audio">Audio</label><select id="eAudio"><option>English · EAC3 5.1</option><option>Deutsch · AC3 5.1</option></select></div>
           <div class="field"><label for="eSubs" data-i18n="d.subs">Untertitel</label><select id="eSubs" class="subsel"><option data-i18n="d.off">Aus</option><option>Deutsch · SRT</option><option value="search" data-i18n="d.searchOnline">Online suchen…</option></select></div>
         </div>
@@ -444,6 +481,53 @@ th{color:var(--muted);font-weight:500}
     </div>
   </div>
   <section class="row"><h2 data-i18n="d.cast">Besetzung &amp; Crew</h2><ul class="scroller castclone"></ul></section>
+</div>
+
+<!-- ===================== MOVIE WITHOUT ARTWORK (Q8) ===================== -->
+<div class="screen" id="screen-noart" hidden>
+  <div class="hero">
+    <div class="backdrop" aria-hidden="true" style="filter:none;transform:none;background:linear-gradient(135deg,#1d2027,#14171c)"></div>
+    <div class="hero-inner">
+      <div class="posterbox">
+        <div class="art noart" role="img" aria-label="Kein Poster / No poster"><span class="glyph" aria-hidden="true">▣</span><span class="badge" style="position:static;margin-bottom:6px">FSK 0</span>Sommerfest am See</div>
+      </div>
+      <div>
+        <h1>Sommerfest am See</h1>
+        <div class="meta"><span class="badge">FSK 0</span><span>2019</span><span>24 Min.</span></div>
+        <p class="muted" style="margin:6px 0"><span data-i18n="n.hint">Keine Metadaten gefunden: Titel und Jahr stammen aus dem Dateinamen. Poster und Hintergrund fehlen, deshalb zeigt die Seite einen neutralen Platzhalter (kein Verlauf aus Artwork).</span></p>
+        <div class="actions">
+          <button class="btn primary" data-goto="player">▶ <span data-i18n="d.play">Abspielen</span></button>
+          <button class="btn later">✓ <span data-i18n="d.markWatched">Als gesehen markieren</span> <span class="badge">M7</span></button>
+          <button class="btn admin-only later" data-open="editDialog">✎ <span data-i18n="d.edit">Bearbeiten</span> <span class="badge">M6</span></button>
+          <button class="btn icon" aria-label="Weitere Aktionen" data-menu-clone="itemMenu">⋮</button>
+        </div>
+        <div class="chips"><span class="chip">MP4</span><span class="chip">H.264</span><span class="chip">AAC 2.0</span><span class="chip">1080p</span></div>
+        <p class="hint" data-i18n="n.cast">Keine Besetzung: Der Bereich „Besetzung &amp; Crew" und „Extras" erscheinen nur, wenn Daten vorhanden sind.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EXTRA (DT-09, Q6) ===================== -->
+<div class="screen" id="screen-extra" hidden>
+  <div class="hero">
+    <div class="backdrop" aria-hidden="true" style="background:linear-gradient(135deg,#4c9aff,#14233a)"></div>
+    <div class="hero-inner" style="grid-template-columns:minmax(0,420px) 1fr">
+      <div class="posterbox"><button class="art wide" style="all:unset;cursor:pointer;display:flex;aspect-ratio:16/9;border-radius:10px;background:linear-gradient(120deg,#4c9aff,#14233a);align-items:center;justify-content:center;font-size:48px;width:100%" data-goto="player" aria-label="Making-of abspielen">▶</button></div>
+      <div>
+        <p style="margin:0"><a href="#" data-goto="movie">The Lighthouse Keeper</a> › <span data-i18n="d.extras">Extras</span></p>
+        <h1>Making-of</h1>
+        <div class="meta"><span class="badge" data-i18n="x.type">Featurette</span><span>18 Min.</span><span class="mono" style="font-size:12px">Extras/Making-of.mkv</span></div>
+        <div class="actions">
+          <button class="btn primary" data-goto="player">▶ <span data-i18n="d.play">Abspielen</span></button>
+          <button class="btn icon" aria-label="Weitere Aktionen" data-menu-clone="itemMenu">⋮</button>
+        </div>
+        <p class="summary" data-i18n="x.summary">Die Dreharbeiten auf der Île de Sein: Kamera, Licht und der echte Leuchtturm. Titel und Typ stammen aus dem Ordnernamen (Featurettes/).</p>
+        <div class="chips"><span class="chip">MKV</span><span class="chip">H.264</span><span class="chip">AAC 2.0</span><span class="chip">1080p</span></div>
+      </div>
+    </div>
+  </div>
+  <section class="row"><h2 data-i18n="d.extras">Extras</h2><ul class="scroller extraclone"></ul></section>
 </div>
 
 <!-- ===================== PLAYER ===================== -->
@@ -460,11 +544,11 @@ th{color:var(--muted);font-weight:500}
     <div class="subline" id="subline"><span data-i18n="p.subsample">Hörst du das? Es kommt wieder.</span></div>
     <!-- PL-01 -->
     <div class="p-top">
-      <button class="pbtn" aria-label="Minimieren (Mini-Player)" title="PL-38">▾</button>
-      <button class="pbtn" aria-label="Vollbild" title="F">⛶</button>
+      <button class="pbtn" id="minimise" aria-label="Minimieren (Mini-Player)" title="PL-38">▾</button>
+      <span><button class="pbtn" data-open="helpDialog" aria-label="Tastaturkürzel (?)" title="?">?</button><button class="pbtn" id="fsBtn" aria-label="Vollbild" title="F">⛶</button></span>
     </div>
     <!-- PL-07 -->
-    <button class="btn skip" data-i18n="p.skipIntro">Intro überspringen ›</button>
+    <button class="btn skip later" data-i18n="p.skipIntro">Intro überspringen ›</button>
     <!-- PL-08 -->
     <div class="nextup" id="nextup" role="status"><div class="art wide" style="background:linear-gradient(120deg,#163f6b,#ff6b57)">S1 · E4</div><div><div class="muted" data-i18n="p.upnext">Als Nächstes in 8 s</div><b>S1 · E4 · Low Tide</b><div style="margin-top:6px;display:flex;gap:6px"><button class="btn primary" style="padding:4px 10px" data-i18n="p.playNow">Jetzt</button><button class="btn" style="padding:4px 10px" id="nextCancel" data-i18n="p.cancel">Abbrechen</button></div></div></div>
 
@@ -479,7 +563,7 @@ th{color:var(--muted);font-weight:500}
     <div class="panel" id="panel-options" hidden role="region" aria-label="Wiedergabeoptionen">
       <h2><span data-i18n="p.options">Wiedergabeoptionen</span><button class="pbtn" data-close-panel aria-label="Schließen">✕</button></h2>
       <div class="opt-grid">
-        <fieldset style="border:0;padding:0;margin:0"><legend class="sr">Quality</legend><h3 data-i18n="p.quality">Qualität</h3>
+        <fieldset class="later" style="border:0;padding:0;margin:0"><legend class="sr">Quality</legend><h3 data-i18n="p.quality">Qualität</h3>
           <label class="radio"><input type="radio" name="q" value="orig" checked><span><span data-i18n="p.original">Original</span><small>2160p · 48 Mbit/s</small></span></label>
           <label class="radio"><input type="radio" name="q" value="auto"><span><span data-i18n="p.auto">Automatisch</span><small data-i18n="p.autoHint">passt sich der Bandbreite an</small></span></label>
           <button class="linkbtn" id="showAllQ" aria-expanded="false" data-i18n="p.showAll">Alle anzeigen</button>
@@ -492,13 +576,13 @@ th{color:var(--muted);font-weight:500}
             <label class="radio"><input type="radio" name="q" value="1"><span>1 Mbit/s<small>360p</small></span></label>
           </div>
         </fieldset>
-        <fieldset style="border:0;padding:0;margin:0"><legend class="sr">Audio</legend><h3 data-i18n="d.audio">Audio</h3>
+        <fieldset class="later" style="border:0;padding:0;margin:0"><legend class="sr">Audio</legend><h3 data-i18n="d.audio">Audio</h3>
           <label class="radio"><input type="radio" name="a" value="truehd"><span>Deutsch<small>TrueHD 7.1</small></span></label>
           <label class="radio"><input type="radio" name="a" value="ac3" checked><span>Deutsch<small>AC3 5.1</small></span></label>
           <label class="radio"><input type="radio" name="a" value="dts"><span>Français<small>DTS-HD MA 5.1</small></span></label>
           <label class="radio"><input type="radio" name="a" value="aac"><span>English<small>AAC 2.0 · Commentary</small></span></label>
         </fieldset>
-        <fieldset style="border:0;padding:0;margin:0"><legend class="sr">Subtitles</legend><h3 data-i18n="d.subs">Untertitel</h3>
+        <fieldset class="later" style="border:0;padding:0;margin:0"><legend class="sr">Subtitles</legend><h3 data-i18n="d.subs">Untertitel</h3>
           <label class="radio"><input type="radio" name="s" value="off"><span data-i18n="d.off">Aus</span></label>
           <label class="radio"><input type="radio" name="s" value="pgs"><span>Deutsch <span class="badge">Forced</span><small>PGS · <span data-i18n="p.burn">wird eingebrannt</span></small></span></label>
           <label class="radio"><input type="radio" name="s" value="srt" checked><span>Deutsch<small>SRT</small></span></label>
@@ -507,7 +591,7 @@ th{color:var(--muted);font-weight:500}
           <button class="btn" style="margin-top:6px;width:100%">⇪ <span data-i18n="d.upload">Hochladen… (M7)</span></button>
         </fieldset>
         <div>
-          <div id="subStyle"><h3 data-i18n="p.subSize">Untertitelgröße</h3>
+          <div id="subStyle" class="later"><h3 data-i18n="p.subSize">Untertitelgröße</h3>
             <div role="radiogroup" class="subtabs" id="subSizes">
               <button role="radio" aria-checked="false" data-size="16" data-i18n="p.small">Klein</button>
               <button role="radio" aria-checked="true" data-size="22" data-i18n="p.normal">Normal</button>
@@ -520,7 +604,7 @@ th{color:var(--muted);font-weight:500}
             </details>
             <p class="hint" id="burnHint" hidden data-i18n="p.burnHint">Eingebrannte Untertitel lassen sich nicht anpassen.</p>
           </div>
-          <h3 style="margin-top:12px" data-i18n="p.speed">Geschwindigkeit</h3>
+          <h3 data-i18n="p.speed">Geschwindigkeit</h3>
           <select aria-label="Speed"><option>0.5×</option><option>0.75×</option><option selected>1.0×</option><option>1.25×</option><option>1.5×</option><option>2.0×</option></select>
           <label class="radio" style="margin-top:12px"><input type="checkbox" checked><span data-i18n="p.autoplay">Nächste automatisch abspielen</span></label>
         </div>
@@ -544,9 +628,9 @@ th{color:var(--muted);font-weight:500}
       <!-- PL-05 -->
       <div class="seek" tabindex="0" role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="5940" aria-valuenow="724" aria-valuetext="0:12:04 von 1:39:00">
         <div class="rail"><div class="buffered"></div><div class="played"></div>
-          <span class="tick" style="left:9%"></span><span class="tick" style="left:22%"></span><span class="tick" style="left:41%"></span><span class="tick" style="left:63%"></span><span class="tick" style="left:88%"></span>
+          <span class="later"><span class="tick" style="left:9%"></span><span class="tick" style="left:22%"></span><span class="tick" style="left:41%"></span><span class="tick" style="left:63%"></span><span class="tick" style="left:88%"></span></span>
           <div class="knob"></div></div>
-        <div class="tip"><div class="art wide" style="background:linear-gradient(120deg,#2a1b47,#ff6b57)" data-i18n="p.trick">Vorschaubild</div>0:29:42 · <span data-i18n="p.ch3">Kapitel 3</span></div>
+        <div class="tip"><div class="art wide later" style="background:linear-gradient(120deg,#2a1b47,#ff6b57)" data-i18n="p.trick">Vorschaubild</div><span class="tipbg" style="background:rgb(0 0 0/.7);padding:1px 6px;border-radius:4px">0:29:42<span class="later"> · <span data-i18n="p.ch3">Kapitel 3</span></span></span></div>
       </div>
       <div class="p-bar">
         <!-- PL-02 -->
@@ -567,17 +651,17 @@ th{color:var(--muted);font-weight:500}
             <button class="pbtn" aria-label="Mehr" aria-haspopup="menu" aria-expanded="false" data-menu="pMore">⋮</button>
             <!-- PL-35 -->
             <ul class="menu" id="pMore" role="menu" hidden style="bottom:100%;right:0;margin-bottom:6px">
-              <li role="none"><button role="menuitem"><span data-i18n="m.addPlaylist">Zu Playlist hinzufügen</span><span class="tag">M7</span></button></li>
-              <li role="none" class="admin-only"><button role="menuitem"><span data-i18n="m.reanalyze">Neu analysieren</span><span class="tag">Admin</span></button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.download">Herunterladen</span><span class="tag">M7</span></button></li>
-              <li role="none"><button role="menuitem"><span data-i18n="m.history">Wiedergabeverlauf</span><span class="tag">M7</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.addPlaylist">Zu Playlist hinzufügen</span><span class="tag">M7</span></button></li>
+              <li role="none" class="admin-only"><button role="menuitem" data-toast="t.reanalyze"><span data-i18n="m.reanalyze">Neu analysieren</span><span class="tag">Admin</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.download">Herunterladen</span><span class="tag">M7</span></button></li>
+              <li role="none" class="later"><button role="menuitem"><span data-i18n="m.history">Wiedergabeverlauf</span><span class="tag">M7</span></button></li>
               <li role="none"><button role="menuitem" data-open="mediaDialog" data-i18n="m.mediaInfo">Medieninfo</button></li>
             </ul>
           </div>
           <button class="pbtn" id="repeatBtn" aria-label="Wiederholen: aus">🔁</button>
           <button class="pbtn" aria-pressed="false" aria-label="Zufall" data-toggle-pressed>🔀</button>
           <button class="pbtn" aria-label="Wiedergabeoptionen" aria-expanded="false" data-panel="options">⚙</button>
-          <button class="pbtn" aria-label="Kapitel" aria-expanded="false" data-panel="chapters">☰</button>
+          <button class="pbtn later" aria-label="Kapitel (M4)" aria-expanded="false" data-panel="chapters">☰</button>
           <button class="pbtn" aria-label="Warteschlange" aria-expanded="false" data-panel="queue">▤</button>
           <button class="pbtn" aria-label="Stumm (M)">🔊</button><input class="vol" type="range" aria-label="Lautstärke" value="70">
         </div>
@@ -689,6 +773,38 @@ th{color:var(--muted);font-weight:500}
   <div class="dlg-foot"><button class="btn" data-i18n="mi.copy">Als JSON kopieren</button><button class="btn" data-close data-i18n="sub.close">Schließen</button></div>
 </dialog>
 
+<!-- PL-38 mini player -->
+<aside class="mini" id="mini" hidden aria-label="Mini-Player">
+  <button class="mv" style="all:unset;cursor:pointer;display:grid;place-items:center;aspect-ratio:16/9;background:radial-gradient(ellipse at 30% 40%,#3b2a5a,#0b0b14 70%);color:rgb(255 255 255/.25);font-weight:800;width:100%" data-expand aria-label="Player öffnen">VIDEO</button>
+  <div class="progress" aria-hidden="true"><span style="width:12%"></span></div>
+  <div class="mrow">
+    <span class="mt">The Lighthouse Keeper</span>
+    <button class="pbtn" id="miniPlay" aria-label="Pause">❚❚</button>
+    <button class="pbtn" data-expand aria-label="Erweitern">⤢</button>
+    <button class="pbtn" id="miniClose" aria-label="Schließen">✕</button>
+  </div>
+</aside>
+<div id="toast" role="status" aria-live="polite" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);padding:8px 16px;box-shadow:var(--shadow);z-index:60" hidden></div>
+<div class="preview-frame" id="previewFrame" hidden><div style="text-align:right;width:100%;max-width:100%;padding:0 12px"><button class="btn" id="previewClose" data-i18n="nav.close">Vorschau schließen</button></div><iframe id="previewIframe" title="Responsive preview"></iframe></div>
+
+<!-- PL-09 keyboard help -->
+<dialog id="helpDialog" aria-labelledby="helpH" style="max-width:520px">
+  <div class="dlg-head"><h2 id="helpH" data-i18n="h.title">Tastaturkürzel</h2><button class="pbtn" data-close aria-label="Schließen">✕</button></div>
+  <div class="dlg-body"><table>
+    <tr><td><span class="kbd">Space</span> <span class="kbd">K</span></td><td data-i18n="h.pp">Wiedergabe / Pause</td></tr>
+    <tr><td><span class="kbd">←</span> <span class="kbd">→</span></td><td data-i18n="h.seek">±10 s</td></tr>
+    <tr><td><span class="kbd">J</span> <span class="kbd">L</span></td><td data-i18n="h.jl">−10 s / +30 s</td></tr>
+    <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span></td><td data-i18n="h.vol">Lautstärke</td></tr>
+    <tr><td><span class="kbd">F</span> <span class="kbd">M</span></td><td data-i18n="h.fm">Vollbild / Stumm</td></tr>
+    <tr><td><span class="kbd">I</span></td><td data-i18n="h.i">Stream-Info</td></tr>
+    <tr><td><span class="kbd">C</span></td><td data-i18n="h.c">Untertitel an/aus</td></tr>
+    <tr><td><span class="kbd">N</span> <span class="kbd">P</span></td><td data-i18n="h.np">Nächstes / Vorheriges</td></tr>
+    <tr><td><span class="kbd">Esc</span></td><td data-i18n="h.esc">Panel schließen / Vollbild verlassen</td></tr>
+    <tr><td><span class="kbd">?</span></td><td data-i18n="h.help">Diese Hilfe</td></tr>
+  </table></div>
+  <div class="dlg-foot"><span></span><button class="btn" data-close data-i18n="sub.close">Schließen</button></div>
+</dialog>
+
 <script>
 (function(){
 "use strict";
@@ -697,7 +813,7 @@ let lang="de";
 
 /* ---------- i18n: German texts live in the markup, English here ---------- */
 const EN={
-"legend.title":"Legend – prototype \"Detail pages, edit, player\" (draft)",
+"legend.title":"Legend – prototype \"Detail pages and player\" (draft, M5)",
 "nav.movie":"Movie","nav.show":"Show","nav.season":"Season","nav.episode":"Episode","nav.player":"Player","nav.admin":"Admin",
 "d.orig":"Original title","d.runtime":"1 h 39 min","d.director":"Director","d.own":"Your rating","d.resume":"Resume from 0:12:04",
 "m.fromStart":"Play from start","d.trailer":"🎞 Trailer","d.markWatched":"Mark as watched","d.edit":"Edit",
@@ -732,11 +848,23 @@ const EN={
 "sub.title":"Search subtitles online","sub.query":"Search","sub.lang":"Language",
 "sub.provider":"Provider: OpenSubtitles (admin's own API key; off until configured). The download runs through the server; the file is stored in the data directory and appears as a track at once.",
 "sub.release":"Release","sub.dl":"Downloads","sub.hash":"Hash match","sub.get":"Get","sub.close":"Close",
+"nav.noart":"Movie without artwork","nav.extra":"Extra","nav.preview":"Preview:","nav.later":"Show later milestones","nav.close":"Close preview",
+"n.hint":"No metadata found: title and year come from the file name. Poster and backdrop are missing, so the page shows a neutral placeholder (no gradient from artwork).",
+"n.cast":"No cast: the \"Cast & crew\" and \"Extras\" sections only appear when data exists.",
+"x.type":"Featurette","x.summary":"Shooting on the Île de Sein: camera, light and the real lighthouse. Title and type come from the folder name (Featurettes/).",
+"h.title":"Keyboard shortcuts","h.pp":"Play / pause","h.seek":"±10 s","h.jl":"−10 s / +30 s","h.vol":"Volume","h.fm":"Fullscreen / mute","h.i":"Stream info","h.c":"Subtitles on/off","h.np":"Next / previous","h.esc":"Close panel / leave fullscreen","h.help":"This help",
+"t.reanalyze":"Re-analysis queued for this file.","t.playNext":"Will play next.","t.addQueue":"Added to the queue.",
 "mi.title":"Media info","mi.duration":"Duration","mi.file":"File","mi.external":"external (server)","mi.delete":"Delete","mi.copy":"Copy as JSON"
 };
 const DE={};
 $$("[data-i18n]").forEach(el=>{ if(!(el.dataset.i18n in DE)) DE[el.dataset.i18n]=el.textContent; });
+Object.assign(DE,{"t.reanalyze":"Neuanalyse für diese Datei eingeplant.","t.playNext":"Wird als Nächstes abgespielt.","t.addQueue":"Zur Warteschlange hinzugefügt."});
 const t=k=>(lang==="en"?EN:DE)[k]??DE[k]??k;
+/* The product name lives in one constant (real app: web/packages/ui-tokens/src/brand.ts). */
+const BRAND="Mivo";
+$("#brand").textContent=BRAND; document.title=BRAND+" – Prototype: Detail pages and player";
+if(window.self!==window.top) document.body.classList.add("embedded");
+function toast(key){ const el=$("#toast"); el.textContent=t(key); el.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>el.hidden=true,2500); }
 function applyLang(){
   document.documentElement.lang=lang;
   $$("[data-i18n]").forEach(el=>{ el.textContent=t(el.dataset.i18n); });
@@ -749,8 +877,24 @@ $("#langToggle").addEventListener("click",()=>{lang=lang==="de"?"en":"de";applyL
 function go(name){
   $$(".screen").forEach(s=>s.hidden=s.id!=="screen-"+name);
   $$(".screens button").forEach(b=>{ if(b.dataset.screen===name) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+  if(name==="player") $("#mini").hidden=true;
   closeMenus(); window.scrollTo(0,0);
 }
+/* PL-38 mini player: minimise keeps "playing" while browsing; expand returns to the player */
+$("#minimise").addEventListener("click",()=>{ $("#mini").hidden=false; go("movie"); });
+$$("[data-expand]").forEach(b=>b.addEventListener("click",()=>go("player")));
+$("#miniClose").addEventListener("click",()=>$("#mini").hidden=true);
+$("#miniPlay").addEventListener("click",e=>{ const p=e.currentTarget.textContent==="❚❚"; e.currentTarget.textContent=p?"▶":"❚❚"; e.currentTarget.setAttribute("aria-label",p?"Play":"Pause"); });
+$("#fsBtn").addEventListener("click",()=>{ if(document.fullscreenElement) document.exitFullscreen(); else $("#player").requestFullscreen?.(); });
+$("#laterToggle").addEventListener("change",e=>document.body.classList.toggle("show-later",e.target.checked));
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-toast]"); if(b){ closeMenus(); toast(b.dataset.toast); } });
+/* responsive preview: the same file in a frame of the target width */
+$$("[data-preview]").forEach(b=>b.addEventListener("click",()=>{
+  const f=$("#previewIframe"), cur=($$(".screen").find(s=>!s.hidden)||{id:"screen-movie"}).id.replace("screen-","");
+  f.style.width=b.dataset.preview+"px"; f.src=location.href.split("#")[0]+"#"+cur+($("#laterToggle").checked?"+later":"");
+  $("#previewFrame").hidden=false; $("#previewClose").focus();
+}));
+$("#previewClose").addEventListener("click",()=>{ $("#previewFrame").hidden=true; $("#previewIframe").removeAttribute("src"); });
 document.addEventListener("click",e=>{
   const g=e.target.closest("[data-goto],[data-screen]");
   if(g){ e.preventDefault(); go(g.dataset.goto||g.dataset.screen); }
@@ -804,7 +948,8 @@ const hues=["#ff6b57","#4c9aff","#3dd68c","#f5b544","#b07cff","#2bb5a0"];
 function renderStatic(){
   const castHtml=cast.map((c,i)=>`<li class="person"><a href="#" style="text-decoration:none"><div class="portrait" style="background:linear-gradient(135deg,${hues[i]},#22262e)" aria-hidden="true">${c[0][0]}</div><b>${c[0]}</b><div class="muted">${c[1]}</div></a></li>`).join("");
   $$("#castRow,.castclone").forEach(u=>u.innerHTML=castHtml);
-  $("#extrasRow").innerHTML=["Trailer","Making-of","Behind the Scenes","Deleted Scene: The Cellar"].map((x,i)=>`<li><a href="#" class="card wide"><div class="art wide" style="background:linear-gradient(120deg,${hues[i]},#14233a)">▶ ${x}</div><div class="t">${x}</div></a></li>`).join("");
+  $("#extrasRow").innerHTML=["Trailer","Making-of","Behind the Scenes","Deleted Scene: The Cellar"].map((x,i)=>`<li><a href="#" class="card wide" data-goto="extra"><div class="art wide" style="background:linear-gradient(120deg,${hues[i]},#14233a)">▶ ${x}</div><div class="t">${x}</div></a></li>`).join("");
+  $$(".extraclone").forEach(u=>u.innerHTML=$("#extrasRow").innerHTML);
   const rel=["Tidewater","The Quiet Signal","Northern Fog","Fathom","Glass Harbour","Ember Coast","The Ninth Bell"];
   const relHtml=rel.map((x,i)=>`<li><a href="#" class="card"><div class="art" style="background:linear-gradient(160deg,${hues[i%6]},#14233a)">${x}</div><div class="t">${x}</div><div class="muted">${2015+i}</div></a></li>`).join("");
   $$("#relatedRow,.relclone").forEach(u=>u.innerHTML=relHtml);
@@ -855,7 +1000,7 @@ const MODES={
   ds:{cls:"ds",name:"Direct Stream",why:[["ok","Remux","Container MKV wird nicht unterstützt, Streams werden kopiert. / Container not supported by this browser; streams are copied."]],
       dl:[["Container","MKV → HLS (fMP4)"],["Video","HEVC → copy"],["Audio","AC3 5.1 → copy"],["Bitrate","48.2 Mbit/s"],["Buffer","31 s ahead"],["Network","96 Mbit/s"]]},
   tc:{cls:"tc",name:"Transcode",why:[["","Audio","TrueHD 7.1 wird vom Browser nicht unterstützt → AAC 5.1. Tipp: AC3- oder AAC-Spur wählen. / TrueHD not supported → AAC. Hint: choose the AC3 or AAC track."],["","Subtitles","PGS ist ein Bilduntertitel und wird eingebrannt. Tipp: SRT-Spur oder Aus. / PGS is burned in. Hint: choose SRT or Off."]],
-      dl:[["Container","MKV → HLS (fMP4)"],["Video","HEVC 2160p HDR10 → H.264 1080p SDR (tone mapping)"],["Audio","TrueHD 7.1 → AAC 5.1"],["Subtitles","PGS → burned in"],["Encoder","Intel Quick Sync (h264_qsv)"],["Decoder","hevc_qsv"],["Output","8 Mbit/s · 1080p"],["Source","48.2 Mbit/s"],["Speed","2.3× real time · throttled"],["Buffer","18 s ahead"],["Network","24 Mbit/s"]]}
+      dl:[["Container","MKV → HLS (fMP4)"],["Video","HEVC 2160p HDR10 → H.264 1080p SDR (tone mapping)"],["Audio","TrueHD 7.1 → AAC 5.1"],["Subtitles","PGS → burned in"],["Encoder (M4)","Intel Quick Sync (h264_qsv)"],["Decoder (M4)","hevc_qsv"],["Output (M4)","8 Mbit/s · 1080p"],["Source","48.2 Mbit/s"],["Speed (M4)","2.3× real time · throttled"],["Buffer","18 s ahead"],["Network","24 Mbit/s"]]}
 };
 let mode="tc";
 function setMode(m){
@@ -902,6 +1047,8 @@ $("#simNext").addEventListener("click",()=>$("#nextup").classList.toggle("show")
 $("#nextCancel").addEventListener("click",()=>$("#nextup").classList.remove("show"));
 document.addEventListener("keydown",e=>{
   if($("#screen-player").hidden||e.target.matches("input,select,textarea")||document.querySelector("dialog[open]")) return;
+  if(e.key==="?") $("#helpDialog").showModal();
+  if(e.key==="f"||e.key==="F") $("#fsBtn").click();
   if(e.key==="i"||e.key==="I") toggleOverlay();
   if(e.key==="Escape"){ if(!$("#streamInfo").hidden) toggleOverlay(false); else openPanel("__none"); }
   if(e.key===" "||e.key==="k"){ e.preventDefault(); $("#playPause").click(); }
@@ -910,6 +1057,7 @@ document.addEventListener("keydown",e=>{
 
 function renderDynamic(){ renderEpisodes(); }
 renderStatic(); renderArt("Poster"); renderQueue(); setMode("tc"); applyLang();
+{ const [scr,flag]=location.hash.slice(1).split("+"); if(flag==="later"){ $("#laterToggle").checked=true; document.body.classList.add("show-later"); } if(scr&&$("#screen-"+scr)) go(scr); }
 })();
 </script>
 </body>
