@@ -32,7 +32,6 @@
       "scanningLabel": "Scanning {{name}}",
       "edit": "Edit",
       "editLabel": "Edit {{name}}",
-      "editSoon": "Editing arrives with the library dialog",
       "remove": "Remove",
       "removeLabel": "Remove {{name}}"
     },
@@ -45,6 +44,90 @@
     },
     "errors": {
       "forbidden": "Library management is only available from the local network until accounts exist."
+    },
+    "dialog": {
+      "addTitle": "Add library",
+      "editTitle": "Edit library",
+      "close": "Close",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "loading": "Loading…",
+      "infoFailed": "The server information could not be loaded.",
+      "saveFailed": "The library could not be saved: {{reason}}",
+      "scanning": "Scanning {{name}}…",
+      "tabsLabel": "Library settings",
+      "tabs": {
+        "general": "General",
+        "folders": "Folders",
+        "advanced": "Advanced"
+      },
+      "kind": "Kind of library",
+      "kindHint": "Only kinds this server supports can be chosen. The kind cannot be changed later.",
+      "kindLocked": "The kind cannot be changed after creation. Create a new library to change the kind.",
+      "name": "Name",
+      "language": "Metadata language",
+      "languageDefault": "Server default",
+      "languageHint": "Used for online metadata from a later version.",
+      "expert": "Expert settings",
+      "options": {
+        "legend": "Scanning and metadata",
+        "scanExtras": "Find extras (trailers, interviews)",
+        "readNfo": "Read NFO files",
+        "localArtwork": "Use local artwork"
+      },
+      "importedHint": "This library was imported from the configuration.",
+      "foldersHeading": "Folders (1 to {{max}})",
+      "noFolders": "No folder yet.",
+      "addFolder": "Add folder",
+      "removeFolder": "Remove folder {{path}}",
+      "folderRules": "A folder must be readable by the server. It cannot overlap a folder of another library or be the data folder of the server.",
+      "discardTitle": "Discard changes?",
+      "discardDescription": "Your changes to this library are not saved.",
+      "discard": "Discard",
+      "keepEditing": "Keep editing",
+      "problems": {
+        "name_required": "Enter a name for the library.",
+        "folders_required": "Add at least one folder.",
+        "name_invalid": "The name must have 1 to 128 characters.",
+        "conflict": "Another library already has this name.",
+        "language_invalid": "The server does not know this language.",
+        "kind_unsupported": "This server does not support this kind of library.",
+        "too_many_folders": "A library can have at most 16 folders.",
+        "folder_not_found": "This folder does not exist (any more).",
+        "folder_unreadable": "The server cannot read this folder.",
+        "folder_overlap": "This folder overlaps a folder of another library.",
+        "folder_overlap_named": "This folder overlaps a folder of “{{name}}”.",
+        "folder_reserved": "The server uses this folder itself, so it cannot be a library.",
+        "folder_outside_roots": "This folder is outside the folders the server allows."
+      }
+    },
+    "browser": {
+      "title": "Choose folder",
+      "hint": "Shows folders below the locations the server allows. Hidden and system folders are never listed.",
+      "root": "Location",
+      "rootUnavailable": "{{path}} (unavailable)",
+      "up": "Up",
+      "loading": "Loading folders…",
+      "loadFailed": "The folders could not be loaded: {{reason}}",
+      "empty": "This folder has no sub-folders.",
+      "noRoots": "The server has no readable location to browse.",
+      "listLabel": "Sub-folders",
+      "truncated": "Only the first 1000 folders are shown.",
+      "unreadable_one": "{{count}} folder here cannot be read by the server.",
+      "unreadable_other": "{{count}} folders here cannot be read by the server.",
+      "select": "Select this folder",
+      "reason": {
+        "in_use": "Already used by a library",
+        "reserved": "Used by the server"
+      }
+    },
+    "help": {
+      "title": "How to give the server access",
+      "unknownUser": "the server account",
+      "synology": "In DSM open Control Panel › Shared Folder, select the shared folder, choose Edit › Permissions, pick “System internal user” in the drop-down, tick <strong>Read only</strong> for <code>{{user}}</code>, save, then reopen this folder list.",
+      "docker": "Mount the folder into the container below <code>/media</code> (for example <code>{{example}}</code>) and restart the container.",
+      "standard": "Give the user <code>{{user}}</code> read access to the folder."
     }
   }
 }

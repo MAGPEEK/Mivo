@@ -1,7 +1,18 @@
 import { useEffect, type RefObject } from "react";
 
-const focusableSelector =
-  "button:not([disabled]), a[href], input:not([disabled]), select, textarea";
+// aria-disabled buttons stay focusable on purpose. Elements with tabindex="-1" are programmatic
+// focus targets only and skipped by Tab, so they are not part of the cycle.
+const focusableSelector = [
+  "button:not([disabled])",
+  "a[href]",
+  "area[href]",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "summary",
+  "[contenteditable='true']",
+  "[tabindex]:not([tabindex^='-'])",
+].join(", ");
 
 // Tab at either end of the dialog wraps to the other end.
 function wrapTab(dialog: HTMLElement, event: KeyboardEvent): void {

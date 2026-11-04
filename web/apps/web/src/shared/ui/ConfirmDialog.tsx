@@ -38,7 +38,7 @@ export function ConfirmDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   useModalFocus(dialogRef, onCancel);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-scrim/60 p-4">
       <div
         ref={dialogRef}
         role="dialog"

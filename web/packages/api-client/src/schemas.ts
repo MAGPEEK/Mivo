@@ -30,6 +30,33 @@ export type Library = Schemas["Library"];
 /** What a library contains. Later API versions may add values. */
 export type LibraryKind = Schemas["LibraryKind"];
 
+/** Per-library scan and metadata switches. */
+export type LibraryOptions = Schemas["LibraryOptions"];
+
+/** Names one folder of a library: `folderId` (keep) or `rootId` with `path` (new). */
+export type FolderRef = Schemas["FolderRef"];
+
+/** Request body of `createLibrary`. */
+export type LibraryCreate = Schemas["LibraryCreate"];
+
+/** Request body of `updateLibrary`. */
+export type LibraryUpdate = Schemas["LibraryUpdate"];
+
+/** A server folder the folder browser may start from. */
+export type FolderRoot = Schemas["FolderRoot"];
+
+/** Body of `GET /api/v1/folder-roots`: roots plus install facts. */
+export type FolderRootList = Schemas["FolderRootList"];
+
+/** How the server is installed; later API versions may add values. */
+export type InstallKind = Schemas["InstallKind"];
+
+/** The sub-folders of one folder of a root. */
+export type FolderListing = Schemas["FolderListing"];
+
+/** One sub-folder of a listing. */
+export type FolderEntry = Schemas["FolderEntry"];
+
 /** Progress and result of the current or last scan of a library. */
 export type ScanStatus = Schemas["ScanStatus"];
 

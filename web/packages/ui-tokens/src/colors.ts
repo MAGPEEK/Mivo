@@ -24,6 +24,8 @@ export const colors = {
   accentHover: "#FF8572",
   /** Text and icons placed on the accent colour. */
   onAccent: "#3A0E07",
+  /** Backdrop behind modal dialogs; used with an opacity such as `bg-scrim/60`. */
+  scrim: "#000000",
   /** Playback status: the client plays the original file. */
   directPlay: "#3DD68C",
   /** Playback status: the server remuxes into another container. */

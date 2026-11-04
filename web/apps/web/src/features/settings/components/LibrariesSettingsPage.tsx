@@ -1,5 +1,6 @@
+import type { Library } from "@mivo/api-client";
 import { productName } from "@mivo/ui-tokens";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -12,10 +13,17 @@ import {
 } from "../../../shared/ui";
 import { useLibraries } from "../../library";
 import { useLibraryRemoval, type LibraryRemoval } from "../hooks/useLibraryRemoval";
+import type { SettingsSearch } from "../lib/settingsSearch";
 import { settingsNamespace } from "../locales";
+import { LibraryDialog } from "./LibraryDialog";
 import { LibraryRow } from "./LibraryRow";
 
-function LibraryList({ onRemove }: { readonly onRemove: LibraryRemoval["ask"] }) {
+interface LibraryListProps {
+  readonly onEdit: (library: Library) => void;
+  readonly onRemove: LibraryRemoval["ask"];
+}
+
+function LibraryList({ onEdit, onRemove }: LibraryListProps) {
   const { t } = useTranslation(settingsNamespace);
   const libraries = useLibraries();
   if (libraries.isPending) {
@@ -51,7 +59,7 @@ function LibraryList({ onRemove }: { readonly onRemove: LibraryRemoval["ask"] })
   return (
     <ul aria-label={t("libraries.listLabel")} className="flex flex-col gap-3">
       {libraries.data.map((library) => (
-        <LibraryRow key={library.id} library={library} onRemove={onRemove} />
+        <LibraryRow key={library.id} library={library} onEdit={onEdit} onRemove={onRemove} />
       ))}
     </ul>
   );
@@ -76,10 +84,39 @@ function RemoveDialog({ removal }: { readonly removal: LibraryRemoval }) {
   );
 }
 
+/** Props of {@link LibrariesSettingsPage}. */
+export interface LibrariesSettingsPageProps {
+  /** The validated search of the route; it says which dialog is open. */
+  readonly search: SettingsSearch;
+  /** Replaces the search of the route; `{}` closes the dialogs. */
+  readonly onSearchChange: (search: SettingsSearch) => void;
+}
+
+interface FormDialogProps extends LibrariesSettingsPageProps {
+  readonly onSaved: (name: string) => void;
+}
+
+// The edit dialog waits for the list: it needs the library to edit, and an unknown id in the
+// URL (removed meanwhile) simply shows no dialog.
+function FormDialog({ search, onSearchChange, onSaved }: FormDialogProps) {
+  const libraries = useLibraries();
+  const close = () => {
+    onSearchChange({});
+  };
+  if (search.add === true) {
+    return <LibraryDialog onClose={close} onSaved={onSaved} />;
+  }
+  const editing = libraries.data?.find((library) => library.id === search.edit);
+  return editing === undefined ? null : (
+    <LibraryDialog key={editing.id} library={editing} onClose={close} onSaved={onSaved} />
+  );
+}
+
 /** Settings › Libraries: every library with its state and the actions to scan, edit and remove. */
-export function LibrariesSettingsPage() {
+export function LibrariesSettingsPage({ search, onSearchChange }: LibrariesSettingsPageProps) {
   const { t } = useTranslation(settingsNamespace);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [announcement, setAnnouncement] = useState("");
   // The removed row takes the focused button with it; the heading is the stable landmark left.
   const removal = useLibraryRemoval(() => headingRef.current?.focus());
   return (
@@ -95,12 +132,34 @@ export function LibrariesSettingsPage() {
         <h1 ref={headingRef} tabIndex={-1} className="text-3xl font-semibold">
           {t("libraries.heading")}
         </h1>
-        {/* The add dialog arrives with M3-19n; until then the button stays inert. */}
-        <button type="button" disabled className={primaryButtonClass}>
+        <button
+          type="button"
+          onClick={() => {
+            onSearchChange({ add: true });
+          }}
+          className={primaryButtonClass}
+        >
           {t("libraries.add")}
         </button>
       </div>
-      <LibraryList onRemove={removal.ask} />
+      {/* Live region for the scan the server starts after saving; it outlives the dialog. */}
+      <p role="status" className="sr-only">
+        {announcement}
+      </p>
+      <LibraryList
+        onEdit={(library) => {
+          onSearchChange({ edit: library.id });
+        }}
+        onRemove={removal.ask}
+      />
+      <FormDialog
+        search={search}
+        onSearchChange={onSearchChange}
+        onSaved={(name) => {
+          setAnnouncement(t("libraries.dialog.scanning", { name }));
+          onSearchChange({});
+        }}
+      />
       <RemoveDialog removal={removal} />
     </>
   );

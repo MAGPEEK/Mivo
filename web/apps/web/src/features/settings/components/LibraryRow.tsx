@@ -14,6 +14,7 @@ import { settingsNamespace } from "../locales";
 /** Props of {@link LibraryRow}. */
 export interface LibraryRowProps {
   readonly library: Library;
+  readonly onEdit: (library: Library) => void;
   readonly onRemove: (library: Library) => void;
 }
 
@@ -79,7 +80,7 @@ interface ActionsProps extends LibraryRowProps {
   readonly scan: LibraryScan;
 }
 
-function RowActions({ library, onRemove, scan }: ActionsProps) {
+function RowActions({ library, onEdit, onRemove, scan }: ActionsProps) {
   const { t } = useTranslation(settingsNamespace);
   return (
     <div className="flex shrink-0 flex-wrap gap-2">
@@ -98,11 +99,11 @@ function RowActions({ library, onRemove, scan }: ActionsProps) {
       >
         {scan.running ? t("libraries.actions.scanning") : t("libraries.actions.scan")}
       </button>
-      {/* The edit dialog arrives with M3-19n. */}
       <button
         type="button"
-        disabled
-        title={t("libraries.actions.editSoon")}
+        onClick={() => {
+          onEdit(library);
+        }}
         aria-label={t("libraries.actions.editLabel", { name: library.name })}
         className={secondaryButtonClass}
       >
@@ -123,7 +124,7 @@ function RowActions({ library, onRemove, scan }: ActionsProps) {
 }
 
 /** One library of the settings list: kind, name, folders, state and the Scan/Edit/Remove actions. */
-export function LibraryRow({ library, onRemove }: LibraryRowProps) {
+export function LibraryRow({ library, onEdit, onRemove }: LibraryRowProps) {
   const { t } = useTranslation(settingsNamespace);
   const scan = useLibraryScan(library);
   return (
@@ -143,7 +144,7 @@ export function LibraryRow({ library, onRemove }: LibraryRowProps) {
           <p className="mt-1 text-xs text-text-muted">{t("libraries.imported")}</p>
         )}
       </div>
-      <RowActions library={library} onRemove={onRemove} scan={scan} />
+      <RowActions library={library} onEdit={onEdit} onRemove={onRemove} scan={scan} />
     </li>
   );
 }

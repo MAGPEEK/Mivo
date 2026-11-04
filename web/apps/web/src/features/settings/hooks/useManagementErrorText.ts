@@ -12,6 +12,10 @@ export function isManagementForbidden(error: unknown): boolean {
   );
 }
 
+/** Texts with a `{{reason}}` placeholder that {@link useManagementErrorText} can fill. */
+export type ManagementFailedKey =
+  "libraries.remove.failed" | "libraries.dialog.saveFailed" | "libraries.browser.loadFailed";
+
 /**
  * Text for a failed management call: the fixed local-network explanation for a 403, else
  * `failedKey` with the problem detail (title when the server sent none) as reason. Null
@@ -19,7 +23,7 @@ export function isManagementForbidden(error: unknown): boolean {
  */
 export function useManagementErrorText(
   error: Error | null,
-  failedKey: "libraries.remove.failed",
+  failedKey: ManagementFailedKey,
 ): string | null {
   const { t } = useTranslation(settingsNamespace);
   if (error === null) {

@@ -91,7 +91,7 @@ describe("Settings › Libraries", () => {
     expect(moviesRow.querySelector("time")?.getAttribute("datetime")).toBe("2026-10-30T18:04:31Z");
   });
 
-  it("shows the empty state with a disabled add button", async () => {
+  it("shows the empty state with an enabled add button", async () => {
     renderApp(settingsPath, { fetch: serverWith([]).fetch });
 
     const page = await main();
@@ -101,7 +101,7 @@ describe("Settings › Libraries", () => {
     ).toBeTruthy();
     expect(within(page).getByRole("button", { name: "Add library" })).toHaveProperty(
       "disabled",
-      true,
+      false,
     );
   });
 
@@ -148,15 +148,6 @@ describe("Settings › Libraries", () => {
     await waitFor(() => {
       expect(server.countRequests("POST", `/api/v1/libraries/${movies.id}/scan`)).toBe(1);
     });
-  });
-
-  it("disables Edit until the dialog exists", async () => {
-    renderApp(settingsPath, { fetch: serverWith([movies]).fetch });
-
-    expect(await screen.findByRole("button", { name: "Edit Movies" })).toHaveProperty(
-      "disabled",
-      true,
-    );
   });
 
   describe("removing", () => {

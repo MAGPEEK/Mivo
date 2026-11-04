@@ -25,6 +25,10 @@ export interface ApiErrorFields {
   readonly code: string;
   /** English explanation of this occurrence; for logs, not for display. */
   readonly detail?: string | undefined;
+  /** Request property the problem is about, e.g. `folders[1]`; absent when it names none. */
+  readonly field?: string | undefined;
+  /** For `folder_overlap`: the library that holds the overlapping folder, when there is one. */
+  readonly libraryId?: string | undefined;
 }
 
 /** The single error type every failed API call is normalized to. */
@@ -34,6 +38,8 @@ export class ApiError extends Error implements ApiErrorFields {
   readonly title: string;
   readonly code: string;
   readonly detail: string | undefined;
+  readonly field: string | undefined;
+  readonly libraryId: string | undefined;
 
   /**
    * @param options `cause` is for diagnostics only: engines without error causes (webOS 6
@@ -45,6 +51,8 @@ export class ApiError extends Error implements ApiErrorFields {
     this.title = fields.title;
     this.code = fields.code;
     this.detail = fields.detail;
+    this.field = fields.field;
+    this.libraryId = fields.libraryId;
   }
 }
 
@@ -71,6 +79,8 @@ export function toApiError(result: ErrorResult): ApiError {
       title: body.title,
       code: body.code,
       detail: body.detail,
+      field: body.field,
+      libraryId: body.libraryId,
     });
   }
   return new ApiError({
@@ -142,16 +152,24 @@ interface ProblemSummary {
   readonly title: string;
   readonly code: string;
   readonly detail?: string | undefined;
+  readonly field?: string | undefined;
+  readonly libraryId?: string | undefined;
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
 }
 
 function isProblemSummary(body: unknown): body is ProblemSummary {
   if (typeof body !== "object" || body === null) {
     return false;
   }
-  const { title, code, detail } = body as Record<string, unknown>;
+  const { title, code, detail, field, libraryId } = body as Record<string, unknown>;
   return (
     typeof title === "string" &&
     typeof code === "string" &&
-    (detail === undefined || typeof detail === "string")
+    isOptionalString(detail) &&
+    isOptionalString(field) &&
+    isOptionalString(libraryId)
   );
 }

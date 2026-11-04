@@ -1,3 +1,6 @@
-export { LibrariesSettingsPage } from "./components/LibrariesSettingsPage";
+export {
+  LibrariesSettingsPage,
+  type LibrariesSettingsPageProps,
+} from "./components/LibrariesSettingsPage";
 export { validateSettingsSearch, type SettingsSearch } from "./lib/settingsSearch";
 export { settingsLocales, settingsNamespace } from "./locales";

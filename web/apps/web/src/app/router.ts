@@ -2,6 +2,7 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  useNavigate,
   useParams,
   useSearch,
   type RouterHistory,
@@ -41,6 +42,18 @@ function ItemRoute() {
   return createElement(ItemPage, { itemId, search });
 }
 
+// The dialog state of the settings page lives in the URL; the page gets it and a setter.
+function SettingsRoute() {
+  const search = useSearch({ from: "/shell/admin/manage/libraries" });
+  const navigate = useNavigate({ from: "/admin/manage/libraries" });
+  return createElement(LibrariesSettingsPage, {
+    search,
+    onSearchChange: (next) => {
+      void navigate({ search: next });
+    },
+  });
+}
+
 // The whole validated search goes to the player, so new player search params need no edit here.
 function PlayerRoute() {
   const { itemId } = useParams({ from: "/full-screen/items/$itemId/play" });
@@ -74,7 +87,7 @@ function createRouteTree() {
       getParentRoute: () => shellRoute,
       path: "/admin/manage/libraries",
       validateSearch: validateSettingsSearch,
-      component: LibrariesSettingsPage,
+      component: SettingsRoute,
     }),
     createRoute({
       getParentRoute: () => shellRoute,

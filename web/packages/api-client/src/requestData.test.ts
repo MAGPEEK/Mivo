@@ -102,6 +102,39 @@ describe("requestData", () => {
     expect(error.detail).toBeUndefined();
   });
 
+  it("carries field and libraryId of a library problem", async () => {
+    const overlap = {
+      ...notFound,
+      code: "folder_overlap",
+      field: "folders[1]",
+      libraryId: "lib-1",
+    };
+    const error = await captureApiError(
+      respondWith(() => jsonResponse(overlap, 409, problemMediaType)),
+    );
+
+    expect(error.code).toBe("folder_overlap");
+    expect(error.field).toBe("folders[1]");
+    expect(error.libraryId).toBe("lib-1");
+  });
+
+  it("leaves field and libraryId undefined when the problem has none", async () => {
+    const error = await captureApiError(
+      respondWith(() => jsonResponse(notFound, 404, problemMediaType)),
+    );
+
+    expect(error.field).toBeUndefined();
+    expect(error.libraryId).toBeUndefined();
+  });
+
+  it("reports unexpected_response for a non-string field", async () => {
+    const error = await captureApiError(
+      respondWith(() => jsonResponse({ ...notFound, field: 3 }, 400, problemMediaType)),
+    );
+
+    expect(error.code).toBe("unexpected_response");
+  });
+
   it.each([
     ["a JSON body that is no problem", () => jsonResponse({ message: "boom" }, 500)],
     ["a problem shape without the problem media type", () => jsonResponse(notFound, 500)],

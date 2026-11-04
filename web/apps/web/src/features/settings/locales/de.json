@@ -32,7 +32,6 @@
       "scanningLabel": "{{name}} wird gescannt",
       "edit": "Bearbeiten",
       "editLabel": "{{name}} bearbeiten",
-      "editSoon": "Bearbeiten folgt mit dem Bibliotheksdialog",
       "remove": "Entfernen",
       "removeLabel": "{{name}} entfernen"
     },
@@ -45,6 +44,90 @@
     },
     "errors": {
       "forbidden": "Die Bibliotheksverwaltung ist nur im lokalen Netzwerk möglich, bis es Konten gibt."
+    },
+    "dialog": {
+      "addTitle": "Bibliothek hinzufügen",
+      "editTitle": "Bibliothek bearbeiten",
+      "close": "Schließen",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Speichert…",
+      "loading": "Wird geladen…",
+      "infoFailed": "Die Serverinformationen konnten nicht geladen werden.",
+      "saveFailed": "Die Bibliothek konnte nicht gespeichert werden: {{reason}}",
+      "scanning": "{{name}} wird gescannt…",
+      "tabsLabel": "Bibliothekseinstellungen",
+      "tabs": {
+        "general": "Allgemein",
+        "folders": "Ordner",
+        "advanced": "Erweitert"
+      },
+      "kind": "Art der Bibliothek",
+      "kindHint": "Nur Arten, die dieser Server unterstützt, sind wählbar. Die Art lässt sich später nicht ändern.",
+      "kindLocked": "Die Art kann nach dem Anlegen nicht geändert werden. Lege dafür eine neue Bibliothek an.",
+      "name": "Name",
+      "language": "Sprache der Metadaten",
+      "languageDefault": "Serverstandard",
+      "languageHint": "Wird für Online-Metadaten ab einer späteren Version verwendet.",
+      "expert": "Experteneinstellungen",
+      "options": {
+        "legend": "Scannen und Metadaten",
+        "scanExtras": "Extras suchen (Trailer, Interviews)",
+        "readNfo": "NFO-Dateien lesen",
+        "localArtwork": "Lokale Bilder verwenden"
+      },
+      "importedHint": "Diese Bibliothek wurde aus der Konfiguration übernommen.",
+      "foldersHeading": "Ordner (1 bis {{max}})",
+      "noFolders": "Noch kein Ordner.",
+      "addFolder": "Ordner hinzufügen",
+      "removeFolder": "Ordner {{path}} entfernen",
+      "folderRules": "Der Ordner muss für den Server lesbar sein. Er darf sich nicht mit einem Ordner einer anderen Bibliothek überschneiden und nicht der Datenordner des Servers sein.",
+      "discardTitle": "Änderungen verwerfen?",
+      "discardDescription": "Deine Änderungen an dieser Bibliothek sind nicht gespeichert.",
+      "discard": "Verwerfen",
+      "keepEditing": "Weiter bearbeiten",
+      "problems": {
+        "name_required": "Gib der Bibliothek einen Namen.",
+        "folders_required": "Füge mindestens einen Ordner hinzu.",
+        "name_invalid": "Der Name muss 1 bis 128 Zeichen lang sein.",
+        "conflict": "Eine andere Bibliothek hat bereits diesen Namen.",
+        "language_invalid": "Der Server kennt diese Sprache nicht.",
+        "kind_unsupported": "Dieser Server unterstützt diese Art von Bibliothek nicht.",
+        "too_many_folders": "Eine Bibliothek kann höchstens 16 Ordner haben.",
+        "folder_not_found": "Dieser Ordner existiert nicht (mehr).",
+        "folder_unreadable": "Der Server kann diesen Ordner nicht lesen.",
+        "folder_overlap": "Dieser Ordner überschneidet sich mit einem Ordner einer anderen Bibliothek.",
+        "folder_overlap_named": "Dieser Ordner überschneidet sich mit einem Ordner von „{{name}}“.",
+        "folder_reserved": "Der Server nutzt diesen Ordner selbst, deshalb kann er keine Bibliothek sein.",
+        "folder_outside_roots": "Dieser Ordner liegt außerhalb der Ordner, die der Server erlaubt."
+      }
+    },
+    "browser": {
+      "title": "Ordner auswählen",
+      "hint": "Zeigt Ordner unterhalb der Orte, die der Server erlaubt. Versteckte und System-Ordner werden nie angezeigt.",
+      "root": "Ort",
+      "rootUnavailable": "{{path}} (nicht erreichbar)",
+      "up": "Nach oben",
+      "loading": "Ordner werden geladen…",
+      "loadFailed": "Die Ordner konnten nicht geladen werden: {{reason}}",
+      "empty": "Dieser Ordner hat keine Unterordner.",
+      "noRoots": "Der Server hat keinen lesbaren Ort zum Durchsuchen.",
+      "listLabel": "Unterordner",
+      "truncated": "Es werden nur die ersten 1000 Ordner angezeigt.",
+      "unreadable_one": "{{count}} Ordner hier kann vom Server nicht gelesen werden.",
+      "unreadable_other": "{{count}} Ordner hier können vom Server nicht gelesen werden.",
+      "select": "Diesen Ordner wählen",
+      "reason": {
+        "in_use": "Wird bereits von einer Bibliothek genutzt",
+        "reserved": "Wird vom Server genutzt"
+      }
+    },
+    "help": {
+      "title": "So gibst du dem Server Zugriff",
+      "unknownUser": "das Serverkonto",
+      "synology": "Öffne in DSM Systemsteuerung › Gemeinsamer Ordner, wähle den gemeinsamen Ordner, dann Bearbeiten › Berechtigungen, wähle in der Auswahlliste „Systeminterner Benutzer“, setze bei <code>{{user}}</code> das Häkchen bei <strong>Schreibgeschützt</strong>, speichere und öffne diese Ordnerliste erneut.",
+      "docker": "Binde den Ordner unterhalb von <code>/media</code> in den Container ein (zum Beispiel <code>{{example}}</code>) und starte den Container neu.",
+      "standard": "Gib dem Benutzer <code>{{user}}</code> Lesezugriff auf den Ordner."
     }
   }
 }
