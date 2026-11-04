@@ -26,7 +26,9 @@ public release, so renaming must be cheap.
   5. Docker Hub repository `docker.io/magpeek/mivo-media-server` (published since
      0.1.0-alpha.1 – a rename needs a new repository and a deprecation note on the old one)
   6. Docs that name the product or derived values: `README.md`, `CLAUDE.md`,
-     `docs/development.md`, `packaging/docker/README.md`
+     `docs/development.md`, `packaging/docker/README.md`, `docs/guides/docker.md`,
+     `docs/guides/docker-compose.md` and `packaging/docker/docker-compose.yml` (image
+     name, service and container name `mivo`)
   7. Later: webOS app id, GoReleaser config, installer names, systemd unit
 
 ## Consequences

@@ -1,0 +1,53 @@
+# Minimal Docker Compose file for the media server image (packaging/docker/README.md).
+#
+# Edit the three host paths under "volumes", then start with:
+#
+#   docker compose up -d
+#
+# Guide: docs/guides/docker-compose.md (Synology Container Manager and QNAP Container
+# Station variants, user ids, updates). Single-container alternative: docs/guides/docker.md.
+#
+# There is no authentication yet: no port forwarding, reverse proxy, QuickConnect or tunnel.
+# See docs/guides/docker.md, "Local network only".
+
+name: mivo
+
+services:
+  mivo:
+    # Pin a release tag. "alpha" moves to the newest alpha; there is no "latest" tag.
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
+    container_name: mivo
+    restart: unless-stopped
+
+    # The server bounds its graceful shutdown to 18 s (open requests, playback sessions,
+    # scans, database). Compose's default of 10 s would SIGKILL it in the middle of that.
+    stop_grace_period: 20s
+
+    # The image runs as 1000:1000. On a NAS set the owner of the mounted directories, for
+    # example "1026:100" (Synology) or "1000:100" (QNAP). Never "0:0".
+    # user: "1026:100"
+
+    ports:
+      # IPv4 only on purpose: Compose's default project network has no IPv6, so IPv6 clients
+      # would reach the server from the network's gateway and bypass the LAN-only guard.
+      - "0.0.0.0:8460:8460"
+
+    environment:
+      TZ: Europe/Berlin
+      # Concurrent re-encoding sessions, 1-8 (default 2). Use 1 on a weak NAS.
+      # MIVO_TRANSCODE_MAX_SESSIONS: "1"
+      # Several libraries: mount each folder below /media and list the container paths.
+      # MIVO_LIBRARIES: /media/movies:/media/series
+
+    volumes:
+      # Settings (config.yaml), database and cache. Keep it on local storage, not on a
+      # network share.
+      - /path/to/config:/config
+      # Your videos; the mount is one library named "media". Read-only is enough.
+      - /path/to/videos:/media:ro
+      # Temporary HLS output of remux and transcode sessions; needs free space for the
+      # largest film times the number of concurrent sessions.
+      - /path/to/transcode:/transcode
+
+    # The image's HEALTHCHECK ("mivo healthcheck" against /api/v1/health) is inherited;
+    # "docker compose ps" shows "healthy" a few seconds after the start (about 30 s on Docker Engine older than 25).

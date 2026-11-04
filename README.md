@@ -49,10 +49,13 @@ another layer controls who can reach the port.
 
 ## Run it
 
-- **Docker / NAS**: build and run the image as described in
-  [packaging/docker/README.md](packaging/docker/README.md) (volumes, user IDs, libraries,
-  transcoding, Synology and QNAP examples). Mount your videos at `/media`; the web app is on
-  port 8460.
+- **Docker / NAS**: pull `docker.io/magpeek/mivo-media-server:0.1.0-alpha.2` (linux/amd64
+  and linux/arm64) and follow the step-by-step guide [docs/guides/docker.md](docs/guides/docker.md)
+  (`docker run`) or [docs/guides/docker-compose.md](docs/guides/docker-compose.md) (Docker
+  Compose, Synology Container Manager, QNAP Container Station) with the ready-made
+  [packaging/docker/docker-compose.yml](packaging/docker/docker-compose.yml). Mount your videos
+  at `/media`; the web app is on port 8460. Every setting of the image, and how to build it
+  yourself: [packaging/docker/README.md](packaging/docker/README.md).
 - **Synology (native package)**: on DSM 7.2 or newer, install the SPK for your NAS's
   architecture (x86_64, armv8 or armv7) through Package Center > Manual Install, as described in
   [packaging/synology/README.md](packaging/synology/README.md); the web app is on port 8460.

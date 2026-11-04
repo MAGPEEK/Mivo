@@ -46,7 +46,9 @@ emulated smoke test (SPK-11); a family whose test did not pass is not published.
 
 Package Center refuses an SPK whose `arch` does not match the NAS. If none fits, the model is
 not a DSM 7.2 model of these families. Synology's Container Manager is an alternative on most
-x86_64 and some armv8 models, never on 32-bit ARM; see `../docker/README.md`.
+x86_64 and some armv8 models, never on 32-bit ARM; see
+[docs/guides/docker-compose.md](../../docs/guides/docker-compose.md) (Container Manager
+walkthrough) and [../docker/README.md](../docker/README.md).
 
 ## Install
 

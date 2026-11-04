@@ -487,13 +487,15 @@ docker rm -f -v mivo-smoke
 
 ```
 docker build -f packaging/docker/Dockerfile -t mivo:dev .
-docker run -d --rm --name mivo -p 8460:8460 --stop-timeout 20 mivo:dev
+docker run -d --rm --name mivo -p 127.0.0.1:8460:8460 --stop-timeout 20 mivo:dev
 ```
 
 The build needs Docker Desktop and network access for the base images. It builds the web
 app and the binary inside the image, so no local build is required. Volumes, user IDs,
 libraries, transcoding, the LAN-only guard and NAS notes are in
-`packaging/docker/README.md`. Its multi-line examples use POSIX `\` continuations; in
+`packaging/docker/README.md`; the user guides for the published image are
+`docs/guides/docker.md` and `docs/guides/docker-compose.md` (with
+`packaging/docker/docker-compose.yml`). The README's multi-line examples use POSIX `\` continuations; in
 PowerShell write them on one line or continue with a backtick. To verify an image, run the
 playback smoke test against it (see "Playback smoke test").
 

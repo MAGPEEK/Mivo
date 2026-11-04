@@ -1,7 +1,16 @@
 # Docker image
 
 The container image of the media server (ADR 0014). It holds one static binary with the
-embedded web app (ADR 0020) and Debian's FFmpeg (interim build, ADR 0015).
+embedded web app (ADR 0020) and Debian's FFmpeg (interim build, ADR 0015). This file is the
+reference for every setting of the image; the step-by-step user guides are
+[docs/guides/docker.md](../../docs/guides/docker.md) (`docker run`) and
+[docs/guides/docker-compose.md](../../docs/guides/docker-compose.md) (Compose, Synology
+Container Manager, QNAP Container Station) with the ready-made
+[docker-compose.yml](docker-compose.yml) next to this file.
+
+Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.2` and `alpha`
+(no `latest`), platforms `linux/amd64` and `linux/arm64`. The examples below use the
+published tag; replace it with `mivo:dev` for an image you built yourself.
 
 ## Build
 
@@ -25,9 +34,9 @@ and `web/` (without `node_modules`, build output, coverage and Playwright output
 ## Run
 
 ```
-docker run -d --name mivo -p 8460:8460 --stop-timeout 20 \
+docker run -d --name mivo -p 0.0.0.0:8460:8460 --stop-timeout 20 \
   -v /path/to/config:/config -v /path/to/media:/media:ro -v /path/to/transcode:/transcode \
-  mivo:dev
+  docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
 ```
 
 `--stop-timeout 20` (compose: `stop_grace_period: 20s`) gives the server time for its
@@ -65,7 +74,7 @@ Each one becomes a `movies` library named after its last folder:
 
 ```
 docker run ... -v /volume1/video/movies:/media/movies:ro -v /volume1/video/series:/media/series:ro \
-  -e MIVO_LIBRARIES=/media/movies:/media/series mivo:dev
+  -e MIVO_LIBRARIES=/media/movies:/media/series docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
 ```
 
 Roots must not be nested in each other or lie inside `/config` or `/transcode`, so do not
@@ -89,7 +98,7 @@ variable; the `HEALTHCHECK` keeps the image's value, which is harmless because i
 the port:
 
 ```
-docker run ... --entrypoint /usr/bin/env mivo:dev -u MIVO_LIBRARIES /usr/local/bin/mivo
+docker run ... --entrypoint /usr/bin/env docker.io/magpeek/mivo-media-server:0.1.0-alpha.2 -u MIVO_LIBRARIES /usr/local/bin/mivo
 ```
 
 ```yaml
@@ -198,7 +207,10 @@ port or configuration and report the container as unhealthy.
 The container never runs as root. The default user is `1000:1000`.
 
 Bind mounts keep the owner of the host directory. Run the container as the user that owns
-the mounted directories. Find the IDs with `id <user>` on the NAS:
+the mounted directories. On a NAS this is not optional: folders created in File Station
+belong to your NAS user, so with the default `1000:1000` the server cannot write `/config`
+and stops at once (the log ends with `permission denied`, see below). Find the IDs with
+`id <user>` on the NAS:
 
 - Synology: the first user is typically `1026`, group `users` is `100`.
 - QNAP: a created user is typically `1000`, group `everyone` is `100`, so `1000:100`.
@@ -256,11 +268,18 @@ into a volume only when it creates the empty volume. They work with the default 
 with `--user` / `user:` set to another ID the server cannot write them. Use bind mounts in
 that case, or `chown` the volume to that user once before the first start (a one-off root
 container that only changes ownership, not the server):
-`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown mivo:dev -R 1026:100 /config`.
+`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.2 -R 1026:100 /config`.
+Note that Docker re-initialises a volume from the image while it is still empty, so the
+`chown` only sticks once the volume holds a file; bind mounts avoid the problem.
 
 `/config` and `/transcode` must be writable by that user and `/media` readable. If they are
 not, the server stops at startup with a message that names the directory, for example
 `mivo: load configuration: read /config/config.yaml: open /config/config.yaml: permission denied`.
-The server creates its directories with mode `0750`, so the user's group can read them.
+An unwritable `/transcode` does not stop the start: the log warns `leftover playback session
+directories could not be deleted … open /transcode: permission denied` and remux and
+transcode sessions fail later. An unreadable `/media` ends the scan with
+`library scan finished … state=failed code=root_unavailable`. (All three messages verified
+with the `0.1.0-alpha.2` image.) The server creates its directories with mode `0750`, so the
+user's group can read them.
 
 `PUID`/`PGID` variables with a privilege drop in an entrypoint come in milestone 9.
