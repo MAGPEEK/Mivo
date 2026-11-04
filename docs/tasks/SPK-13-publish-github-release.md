@@ -39,3 +39,18 @@ Synology users can download the media-server SPK for their family, verify it and
 - If OD-SPK-1 A applies (Docker released first), this task runs later against the same release;
   a packaging-only fix uses `PACKAGE_REVISION=1`, whose SPKs are named `<id>-<version>-r1-<family>.spk`; delete the old assets, upload the `-r1` files and note it in the release
   notes.
+
+## Orchestrator note (owner request, 2026-11-04)
+
+- The owner wants the SPKs offered in a **separate section** of the GitHub Release, with
+  guidance on which Synology NAS type and DSM version each file is for. The release notes get a
+  "Synology packages (native, DSM 7.2)" section with:
+  - a table per SPK: file link, `uname -m`, DSM platforms / CPU, example models, minimum DSM
+    version (`os_min_ver` 7.2-64570), test status, SHA-256 (from `SHA256SUMS`);
+  - how to find the own model, platform and DSM version (Control Panel > Info Center, `uname -m`);
+  - short install steps (Package Center > Manual Install, wizard, open port 8460) and a link to
+    `packaging/synology/README.md` at the release tag for the full guide;
+  - the FFmpeg corresponding-source archive link and the GPL note;
+  - when Container Manager (Docker) is the better choice, linking the Docker guide.
+- The same model/version table is the single source in `packaging/synology/README.md`; the
+  release section copies it, it does not invent new facts.
