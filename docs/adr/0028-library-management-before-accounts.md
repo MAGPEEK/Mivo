@@ -43,3 +43,4 @@ expose server directories. The owner now wants libraries managed in the web app
 - Upgrade from alpha.2: `00003` drops the catalog, `00004` seeds an empty ledger, first start
   re-imports configured libraries; users see one rebuild.
 - Docker users add their library in the app after the upgrade.
+- Import skips a configured library whose name another library already uses (warn log) and still records its root, so it is not retried; the user adds it in the app.
