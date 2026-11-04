@@ -62,3 +62,8 @@ recorded in docs/plan.md). `browse.html`, `admin.html`, `detail.html`, `settings
 detail.html, the settings and media questions as listed above). The owner may still object at
 any time; a change request goes to `mivo-ux` and updates the prototype before the affected
 `mivo-frontend` task builds on it. Ids MU-01..12, PH-01..09, AB-01..07 are added to ux-spec 5.4.
+
+## Owner approval (2026-11-04)
+
+The owner approved `detail.html`, `media.html` and `settings.html` explicitly after opening them
+(replaces the approval by delegation above for these three files; defaults as drawn stay).
