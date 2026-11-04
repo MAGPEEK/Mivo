@@ -10,6 +10,7 @@ Pure rules for grouping audio files into books and for chapter values.
 - [ ] `library.KindAudiobooks`, item kind `audiobook`, `PersonRole` gains `author` and `narrator`.
 - [ ] `media.Chapter` (title, start, end, optional file reference) with validation (ordered, non-overlapping, end > start) and a function that builds chapters from ordered part files (one chapter per part, cumulative offsets).
 - [ ] Grouping: one book per folder of audio files; a single M4B/M4A/MP3 in a shared folder is its own book; part order by (disc, track), else natural file-name order; title from `album` tag, else folder or file name; `composer` is narrator only when the tag says so.
+  Reading: only M4B (and any root file) is isolated; M4A/MP3 join the folder book unless the album differs; untagged files follow the first album.
 - [ ] Tests: table-driven, domain coverage >= 90 %.
 - [ ] Gates: lint + layer rules + coverage thresholds pass.
 

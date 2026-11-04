@@ -170,6 +170,9 @@ func TestAudioFileClass(t *testing.T) {
 		{library.KindMusic, "a.wv", library.FileClassAudio, true},
 		{library.KindMusic, "a.dsf", library.FileClassAudio, true},
 		{library.KindMusic, "a.dff", library.FileClassAudio, true},
+		{library.KindAudiobooks, "a.m4b", library.FileClassAudio, true},
+		{library.KindAudiobooks, "a.mkv", "", false},
+		{library.KindAudiobooks, "cover.jpg", library.FileClassImage, true},
 		{library.KindMusic, "cover.jpg", library.FileClassImage, true},
 		{library.KindMusic, "album.nfo", library.FileClassNFO, true},
 		{library.KindMusic, "a.mkv", "", false},
@@ -201,6 +204,10 @@ func TestAudioFileClassValidity(t *testing.T) {
 		want  bool
 	}{
 		{library.FileClassAudio, library.KindMusic, true},
+		{library.FileClassAudio, library.KindAudiobooks, true},
+		{library.FileClassVideo, library.KindMusic, false},
+		{library.FileClassVideo, library.KindAudiobooks, false},
+		{library.FileClassImage, library.KindAudiobooks, true},
 		{library.FileClassAudio, library.KindMovies, false},
 		{library.FileClassAudio, library.KindShows, false},
 		{library.FileClassVideo, library.KindMovies, true},

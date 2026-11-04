@@ -51,6 +51,8 @@ func (kind ItemKind) IsValid() bool {
 	case ItemKindMovie, ItemKindShow, ItemKindSeason, ItemKindEpisode, ItemKindExtra,
 		ItemKindArtist, ItemKindAlbum, ItemKindTrack, ItemKindPhotoAlbum, ItemKindPhoto:
 		return true
+	case ItemKindAudiobook:
+		return true
 	default:
 		return false
 	}
@@ -61,6 +63,8 @@ func (kind ItemKind) IsValid() bool {
 func (kind ItemKind) OwnsFiles() bool {
 	switch kind {
 	case ItemKindMovie, ItemKindEpisode, ItemKindExtra, ItemKindTrack, ItemKindPhoto:
+		return true
+	case ItemKindAudiobook:
 		return true
 	case ItemKindShow, ItemKindSeason, ItemKindArtist, ItemKindAlbum, ItemKindPhotoAlbum:
 		return false
@@ -76,6 +80,8 @@ func (kind ItemKind) OwnsFiles() bool {
 func ValidParent(child, parent ItemKind) bool {
 	switch child {
 	case ItemKindMovie, ItemKindShow:
+		return parent == noParent
+	case ItemKindAudiobook:
 		return parent == noParent
 	case ItemKindSeason:
 		return parent == ItemKindShow
@@ -105,6 +111,8 @@ func ItemKindForLibrary(kind Kind) (ItemKind, error) {
 		return ItemKindTrack, nil
 	case KindPhotos:
 		return ItemKindPhoto, nil
+	case KindAudiobooks:
+		return ItemKindAudiobook, nil
 	default:
 		return "", fmt.Errorf("item kind for library kind %q: unknown kind: %w", kind, domain.ErrInvalid)
 	}

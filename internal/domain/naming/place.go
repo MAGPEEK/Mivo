@@ -45,6 +45,8 @@ func Place(kind library.Kind, file FileContext) (Result, error) {
 		return Result{}, fmt.Errorf("place %q: music files go through PlaceMusic: %w", file.Path, domain.ErrInvalid)
 	case library.KindPhotos:
 		return placeInPhotos(file)
+	case library.KindAudiobooks:
+		return Result{}, fmt.Errorf("place %q: audiobooks are grouped by GroupAudiobooks: %w", file.Path, domain.ErrInvalid)
 	default:
 		return Result{}, fmt.Errorf("place %q: unknown library kind %q: %w", file.Path, kind, domain.ErrInvalid)
 	}

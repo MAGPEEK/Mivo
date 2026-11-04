@@ -39,6 +39,8 @@ func (kind Kind) IsValid() bool {
 	switch kind {
 	case KindMovies, KindShows, KindMusic, KindPhotos:
 		return true
+	case KindAudiobooks:
+		return true
 	default:
 		return false
 	}

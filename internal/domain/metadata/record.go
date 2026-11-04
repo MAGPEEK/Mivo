@@ -75,6 +75,8 @@ func (role Role) IsValid() bool {
 	switch role {
 	case RoleActor, RoleDirector, RoleWriter, RoleProducer, RoleGuestStar:
 		return true
+	case RoleAuthor, RoleNarrator:
+		return true
 	default:
 		return false
 	}

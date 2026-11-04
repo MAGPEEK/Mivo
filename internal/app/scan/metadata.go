@@ -171,7 +171,7 @@ func nfoKindOf(kind library.ItemKind) (NFOKind, bool) {
 	case library.ItemKindEpisode:
 		return NFOKindEpisode, true
 	case library.ItemKindExtra, library.ItemKindArtist, library.ItemKindAlbum, library.ItemKindTrack,
-		library.ItemKindPhotoAlbum, library.ItemKindPhoto:
+		library.ItemKindPhotoAlbum, library.ItemKindPhoto, library.ItemKindAudiobook:
 		return "", false
 	default:
 		return "", false
@@ -294,7 +294,7 @@ func (run *refreshRun) nfoCandidates(item *refreshItem) []fileKey {
 	case library.ItemKindEpisode:
 		return siblingNFOs(item.own)
 	case library.ItemKindExtra, library.ItemKindArtist, library.ItemKindAlbum, library.ItemKindTrack,
-		library.ItemKindPhotoAlbum, library.ItemKindPhoto:
+		library.ItemKindPhotoAlbum, library.ItemKindPhoto, library.ItemKindAudiobook:
 		return nil
 	default:
 		return nil

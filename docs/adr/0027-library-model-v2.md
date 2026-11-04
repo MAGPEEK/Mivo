@@ -329,3 +329,14 @@ Tasks follow the recommendation until the owner answers.
 §5: "the startup sync recreates the libraries" now reads "the first start imports the
 configured libraries" (import seed, ADR 0028). Migration `00004` adds the folder id to the
 catalog tables, `library_folders` and the import ledger `library_imports`.
+
+## Notes (M3-14a)
+
+`media.Chapter` (title, start, end, optional file reference) is a value type for audiobook
+parts and is designed to carry video chapters too (M4, PL-30). Audiobooks add library kind
+`audiobooks`, item kind `audiobook` (top level, owns files) and person roles `author` and
+`narrator`. Grouping rules live in `naming.GroupAudiobooks`.
+
+Grouping reading of AC4: only M4B is isolated as its own book (plus any file in the library root).
+M4A and MP3 files join the folder book unless their album tag differs; untagged files follow the
+first album of their folder.
