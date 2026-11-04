@@ -71,3 +71,28 @@ are checked on a real DSM 7.2.
 - If the classic wizard does not work (step 3), stop and report: the fallback is the Vue wizard
   with `os_min_ver` `7.2-72806` (new task).
 - armv8 and armv7 are not hardware-tested here; their status comes from SPK-11 (OD-SPK-4).
+
+## Orchestrator note (2026-11-04): owner's device, access and findings so far
+
+- **Device**: the owner tests on a **Synology DS925+** (x86_64, AMD; DSM 7.2). Record
+  `uname -m`, `/proc/sys/kernel/syno_platform_name`, the DSM build and the Container Manager
+  engine version (`sudo docker version --format '{{.Server.Version}}'`) in the report.
+- **Access** (offered by the owner): a dedicated non-admin DSM user (e.g. `claude-test`) with an
+  SSH key the owner installs, read access to the test share only. The orchestrator never enters
+  a password, not even for `sudo`; Package Center steps (install, wizard, upgrade, uninstall)
+  and any root command stay with the owner. Over SSH the agent may read logs, paths, modes and
+  versions and run the API/playback smoke against the NAS, then write the protocol.
+- **Docker on the DS925+ (2026-11-04)**, recorded for the Docker guides and this test:
+  - A compose file with `image: mivo-media-server` (without the `magpeek/` namespace) fails with
+    "pull access denied for mivo-media-server, repository does not exist"; the image is
+    `docker.io/magpeek/mivo-media-server:<tag>` (the NAS examples used `mivo:dev`, fixed in
+    b2189bc).
+  - Folders created in File Station belong to the first DSM user (typically `1026:100`), the
+    image runs as `1000:1000` → the server exits at once with
+    "load configuration: read /config/config.yaml: … permission denied" unless `user:` is set
+    (guides 5294c33). Not yet confirmed on the device.
+  - Container Manager on DSM 7.2 may ship Docker Engine 24, which ignores
+    `HEALTHCHECK --start-interval`; *healthy* then appears after about 30 s. To verify.
+- Every finding from the device goes into `docs/reports/SPK-12-owner-test.md`, the
+  "unconfirmed facts" table of `packaging/synology/TESTING.md`, and, where it changes a
+  decision, the ADR 0026 Notes.
