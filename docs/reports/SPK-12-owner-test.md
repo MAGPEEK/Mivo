@@ -59,3 +59,18 @@ Owner's verdict: everything works but is "very rudimentary" so far – expected 
 
 After the run SSH on port 22 was refused, so the agent could not check what the uninstall left
 behind (`/var/packages/<id>`, `@appdata/<id>`, the firewall service file).
+
+## Run 2 (2026-11-04): test build of f1c690f with the DSM main-menu entry
+
+SPK: `mivo-0.1.0-alpha.2-x86_64.spk`, SHA-256
+`4aecc6a7b153f70cbd7dfff188ed7f291f9d16dfc89ee7798eb2741f7d04ed6e` (test build).
+
+| Step | Result |
+|---|---|
+| Install, stop and start in Package Center (incl. the new action lock) | **pass** (owner) |
+| A13 Mivo icon in the DSM main menu | **fail** (owner) – no Mivo entry in the main menu |
+| Uninstall | **pass** (owner) |
+| Main menu as a non-admin DSM user | not run |
+
+The main-menu failure needs a fix before SPK-13 (see the SPK-13 prerequisites); the cause was
+not visible without SSH.
