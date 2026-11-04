@@ -29,6 +29,8 @@
     "loadingMore": "Weitere Videos werden geladen",
     "loadMoreFailed": "Weitere Videos konnten nicht geladen werden.",
     "unavailable": "Nicht verfügbar",
+    "seasons_one": "{{count, number}} Staffel",
+    "seasons_other": "{{count, number}} Staffeln",
     "empty": {
       "title": "Noch keine Videos",
       "hint": "Starte einen Scan, um die Videos im Ordner dieser Bibliothek zu finden."

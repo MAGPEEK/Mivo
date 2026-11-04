@@ -15,6 +15,8 @@ import {
   fakeItem,
   fakeItems,
   fakeLibrary,
+  fakePoster,
+  fakeShow,
   finishedScan,
   itemsRoute,
   librariesRoute,
@@ -158,13 +160,40 @@ describe("LibraryPage grid", () => {
     expect(details?.textContent).toBe("9:56MKV · H.264 · AAC");
   });
 
-  it("shows the title initial on the placeholder poster, hidden from screen readers", async () => {
-    renderLoadedLibrary([fakeItem({ title: "sintel" })]);
+  it("shows the movie poster sized for the grid, hidden from screen readers", async () => {
+    renderLoadedLibrary([fakeItem({ title: "Sintel", year: 2010, poster: fakePoster })]);
+
+    const link = within(await findItemList()).getByRole("link", { name: "Sintel" });
+    const image = screen.getByAltText("Sintel");
+    const details = document.getElementById(link.getAttribute("aria-describedby") ?? "");
+
+    expect(image.getAttribute("src")).toBe(`/api/v1/images/${fakePoster.id}?width=320&tag=tag-1`);
+    expect(image.getAttribute("sizes")).toContain("(min-width: 1280px) 12.5vw");
+    expect(image.closest("[aria-hidden='true']")).not.toBeNull();
+    expect(details?.textContent).toBe("20109:56MKV · H.264 · AAC");
+  });
+
+  it("shows a placeholder for an item without a poster", async () => {
+    renderLoadedLibrary([fakeItem({ title: "Sintel" })]);
 
     const listItem = within(await findItemList()).getByRole("listitem");
-    const poster = within(listItem).getByText("S");
 
-    expect(poster.getAttribute("aria-hidden")).toBe("true");
+    expect(listItem.querySelector("img")).toBeNull();
+    expect(listItem.querySelector("[data-poster-placeholder]")).not.toBeNull();
+  });
+
+  it("shows a show as one card with its year and season count", async () => {
+    renderLoadedLibrary([fakeShow({ childCount: 1 }), fakeShow({ id: "show-2", title: "Two" })]);
+
+    const list = await findItemList();
+    const describedBy = (name: string) =>
+      document.getElementById(
+        within(list).getByRole("link", { name }).getAttribute("aria-describedby") ?? "",
+      )?.textContent;
+
+    expect(describedBy("Big Buck Bunny Show")).toBe("20151 season");
+    expect(describedBy("Two")).toBe("20153 seasons");
+    expect(screen.getAllByAltText(/Big Buck Bunny Show|Two/)).toHaveLength(2);
   });
 
   it("greys out an unavailable item and says so in its description", async () => {
@@ -669,7 +698,11 @@ describe("LibraryPage language and accessibility", () => {
   it.each([
     {
       name: "with items",
-      items: [fakeItem(), fakeItem({ id: "x", title: "Broken", media: { available: false } })],
+      items: [
+        fakeItem({ poster: fakePoster }),
+        fakeItem({ id: "x", title: "Broken", media: { available: false } }),
+        fakeShow(),
+      ],
     },
     { name: "without items", items: [] },
   ])("has no serious or critical axe findings $name", async ({ items }) => {

@@ -91,4 +91,31 @@ describe("useLibraryScan start errors", () => {
 
     expect(server.requests).toHaveLength(0);
   });
+
+  it("sends one request for two starts before the pending state renders", async () => {
+    const { result, server } = renderScan(fakeLibrary());
+    const { start } = result.current;
+
+    act(() => {
+      start();
+      start();
+    });
+
+    await waitFor(() => {
+      expect(result.current.startError).not.toBeNull();
+    });
+    expect(server.requests).toHaveLength(1);
+  });
+
+  it("allows another start once a start request has failed", async () => {
+    const { result, server } = await failedStart(fakeLibrary());
+
+    act(() => {
+      result.current.start();
+    });
+
+    await waitFor(() => {
+      expect(server.requests).toHaveLength(2);
+    });
+  });
 });

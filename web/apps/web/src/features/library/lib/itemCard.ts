@@ -1,4 +1,4 @@
-import type { ItemSummary } from "@mivo/api-client";
+import type { ImageRef, ItemSummary } from "@mivo/api-client";
 
 import { formatDuration } from "./formatDuration";
 import { mediaChipLabel } from "./mediaChip";
@@ -7,27 +7,36 @@ import { mediaChipLabel } from "./mediaChip";
 export interface ItemCardModel {
   readonly id: string;
   readonly title: string;
-  /** First letter of the title, upper case, for the placeholder poster; "" for no title. */
-  readonly initial: string;
+  /** True for a show: its card counts seasons instead of describing a file. */
+  readonly isShow: boolean;
+  /** Release or first-air year such as `2008`; "" when unknown. */
+  readonly year: string;
+  /** The poster; `undefined` shows the placeholder. */
+  readonly poster: ImageRef | undefined;
+  /** Number of seasons of a show; 0 for other kinds or when unknown. */
+  readonly seasonCount: number;
   /** Clock notation such as `1:30:23`; "" when unknown. */
   readonly duration: string;
   /** Technical chip such as `MKV · H.264 · AAC`; "" when nothing is known. */
   readonly chip: string;
-  /** False when the file could not be probed or no media summary exists. */
+  /** False when the file could not be probed or no media summary exists; true for shows. */
   readonly available: boolean;
 }
 
 /** Derives the card content of `item`. */
 export function toItemCardModel(item: ItemSummary): ItemCardModel {
   const { media } = item;
-  // Array.from splits by code point, so an emoji or astral letter is not cut in half.
-  const [firstCharacter = ""] = Array.from(item.title.trim());
+  const isShow = item.kind === "show";
   return {
     id: item.id,
     title: item.title,
-    initial: firstCharacter.toLocaleUpperCase(),
+    isShow,
+    year: item.year === undefined ? "" : String(item.year),
+    poster: item.poster,
+    seasonCount: isShow ? (item.childCount ?? 0) : 0,
     duration: media?.durationSeconds === undefined ? "" : formatDuration(media.durationSeconds),
     chip: mediaChipLabel(media),
-    available: media?.available ?? false,
+    // A show is a container without a file of its own (API contract: `ItemSummary.media`).
+    available: isShow || (media?.available ?? false),
   };
 }

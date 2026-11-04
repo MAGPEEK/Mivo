@@ -6,6 +6,7 @@ export {
   BackIcon,
   CloseIcon,
   ExitFullscreenIcon,
+  FilmIcon,
   FullscreenIcon,
   HomeIcon,
   InfoIcon,
@@ -13,6 +14,7 @@ export {
   MutedIcon,
   PauseIcon,
   PlayIcon,
+  ScreenIcon,
   SearchIcon,
   SidebarIcon,
   VolumeIcon,
@@ -24,5 +26,6 @@ export {
   type SidebarLibraryLink,
   type SidebarProps,
 } from "./Sidebar";
+export { Poster, type PosterAspect, type PosterProps } from "./Poster";
 export { Skeleton, type SkeletonProps } from "./Skeleton";
 export { TopBar, type TopBarProps } from "./TopBar";

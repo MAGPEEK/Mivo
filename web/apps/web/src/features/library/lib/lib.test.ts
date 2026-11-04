@@ -48,25 +48,36 @@ describe("mediaChipLabel", () => {
 });
 
 describe("toItemCardModel", () => {
-  it("derives initial, duration, chip and availability", () => {
-    const item = fakeItem({ title: "big buck bunny" });
+  it("derives year, poster, duration, chip and availability of a movie", () => {
+    const poster = { id: "poster-1", tag: "tag-1" };
+    const item = fakeItem({ title: "big buck bunny", year: 2008, poster });
 
     expect(toItemCardModel(item)).toEqual({
       id: item.id,
       title: "big buck bunny",
-      initial: "B",
+      isShow: false,
+      year: "2008",
+      poster,
+      seasonCount: 0,
       duration: "9:56",
       chip: "MKV · H.264 · AAC",
       available: true,
     });
   });
 
-  it("keeps a whole code point as the initial", () => {
-    expect(toItemCardModel(fakeItem({ title: "  𝒜lpha" })).initial).toBe("𝒜");
-  });
+  it("gives a show its season count and keeps it available without media", () => {
+    const { id, libraryId } = fakeItem();
+    const show = { id, libraryId, kind: "show", title: "Show", childCount: 3 } as const;
 
-  it("has no initial for an empty title", () => {
-    expect(toItemCardModel(fakeItem({ title: " " })).initial).toBe("");
+    expect(toItemCardModel(show)).toMatchObject({
+      isShow: true,
+      year: "",
+      poster: undefined,
+      seasonCount: 3,
+      duration: "",
+      chip: "",
+      available: true,
+    });
   });
 
   it("treats an item without media summary as unavailable", () => {

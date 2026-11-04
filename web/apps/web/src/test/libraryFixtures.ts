@@ -1,4 +1,5 @@
 import type {
+  ImageRef,
   ItemPage,
   ItemSummary,
   Library,
@@ -76,6 +77,24 @@ export function fakeItem(overrides: Partial<ItemSummary> = {}): ItemSummary {
       height: 1080,
       bitDepth: 8,
     },
+    ...overrides,
+  };
+}
+
+/** A poster reference as the server sends it. */
+export const fakePoster: ImageRef = { id: "7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4", tag: "tag-1" };
+
+/** A show of {@link fakeLibrary} with three seasons and a poster. Override fields per test. */
+export function fakeShow(overrides: Partial<ItemSummary> = {}): ItemSummary {
+  return {
+    id: "4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e",
+    libraryId: fakeLibrary().id,
+    kind: "show",
+    title: "Big Buck Bunny Show",
+    year: 2015,
+    childCount: 3,
+    leafCount: 24,
+    poster: { id: "5c6d7e8f-9a0b-4c1d-8e2f-3a4b5c6d7e8f", tag: "tag-2" },
     ...overrides,
   };
 }

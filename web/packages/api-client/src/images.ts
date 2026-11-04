@@ -13,11 +13,14 @@ export const imageWidths = [
 /**
  * Root-relative URL of an artwork image rendered at `width`, for example
  * `/api/v1/images/<id>?width=320&tag=<tag>`. This helper is the only place that builds image
- * URLs (ADR 0027): the tag is opaque and must reach the server unchanged, because only a
+ * URLs (ADR 0027); an empty tag is left out. The tag is opaque and must reach the server unchanged, because only a
  * request with the current tag may be cached for a year.
  */
 export function imageUrl(ref: ImageRef, width: ImageWidth): string {
-  const query = `width=${encodeURIComponent(String(width))}&tag=${encodeURIComponent(ref.tag)}`;
+  const widthParameter = `width=${encodeURIComponent(String(width))}`;
+  // An empty "tag=" would ask for the year-long cache without naming a version.
+  const query =
+    ref.tag === "" ? widthParameter : `${widthParameter}&tag=${encodeURIComponent(ref.tag)}`;
 
   return `${imagesPath}${encodeURIComponent(ref.id)}?${query}`;
 }

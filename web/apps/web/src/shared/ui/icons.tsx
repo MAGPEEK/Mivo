@@ -45,6 +45,26 @@ export function HomeIcon({ className }: IconProps) {
   );
 }
 
+/** Film strip: a movie. */
+export function FilmIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4" />
+    </IconFrame>
+  );
+}
+
+/** Screen on a stand: a show. */
+export function ScreenIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <rect x="3" y="5" width="18" height="12" rx="2" />
+      <path d="M8 21h8M12 17v4" />
+    </IconFrame>
+  );
+}
+
 /** Stacked panels: media libraries. */
 export function LibraryIcon({ className }: IconProps) {
   return (

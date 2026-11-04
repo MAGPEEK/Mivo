@@ -35,7 +35,7 @@ const viewCases: readonly ViewCase[] = [
     item: hdrMovie,
     expected: {
       title: "Big Buck Bunny",
-      initial: "B",
+      poster: undefined,
       facts: ['duration:{"unit":"hours","hours":1,"minutes":30}', "4K"],
       chips: ["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"],
       file: { name: "Big.Buck.Bunny.mkv", size: "276.1 MB" },
@@ -58,7 +58,6 @@ const viewCases: readonly ViewCase[] = [
     name: "an item without files",
     item: item({ title: "  émile" }),
     expected: {
-      initial: "É",
       facts: [],
       chips: [],
       file: undefined,
@@ -77,7 +76,7 @@ const viewCases: readonly ViewCase[] = [
         }),
       ],
     }),
-    expected: { initial: "🎬", facts: ["1080p"], chips: ["H.264"] },
+    expected: { facts: ["1080p"], chips: ["H.264"] },
   },
   {
     name: "video without a height and an empty title",
@@ -85,7 +84,12 @@ const viewCases: readonly ViewCase[] = [
       title: "",
       files: [mediaFile({ durationSeconds: 42, streams: [stream({ kind: "video" })] })],
     }),
-    expected: { initial: "", facts: ['duration:{"unit":"seconds","seconds":42}'] },
+    expected: { facts: ['duration:{"unit":"seconds","seconds":42}'] },
+  },
+  {
+    name: "a movie with a poster",
+    item: item({ artwork: { poster: { id: "poster-1", tag: "tag-1" } } }),
+    expected: { poster: { id: "poster-1", tag: "tag-1" } },
   },
 ];
 

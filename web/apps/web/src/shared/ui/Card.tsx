@@ -12,8 +12,11 @@ export interface CardLinkProps {
 export interface MediaCardProps {
   /** Title of the card and the accessible name of its link. */
   readonly title: string;
-  /** Large text on the placeholder poster (e.g. the title initial) until artwork exists. */
-  readonly posterText: string;
+  /**
+   * The artwork, e.g. a `Poster`. It is hidden from assistive technology: the title link
+   * already names the card.
+   */
+  readonly poster: ReactNode;
   /**
    * Renders the link to the detail page with the given props, e.g. a router `Link`. It
    * stretches over the whole card, so the card is one click target with one tab stop.
@@ -32,21 +35,15 @@ const stretchedLinkClass =
   "after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent";
 
 /** Poster card (2:3) with title and details; hovering lifts it like the rest of the design. */
-export function MediaCard({
-  title,
-  posterText,
-  renderLink,
-  details,
-  muted = false,
-}: MediaCardProps) {
+export function MediaCard({ title, poster, renderLink, details, muted = false }: MediaCardProps) {
   const detailsId = useId();
   return (
     <div className="group relative flex flex-col gap-2">
       <div
         aria-hidden="true"
-        className={`grid aspect-2/3 place-items-center rounded-md bg-surface-raised text-4xl font-semibold text-text-muted shadow-card transition motion-safe:group-hover:-translate-y-1 motion-reduce:transition-none group-hover:shadow-card-hover ${muted ? "opacity-50" : ""}`}
+        className={`overflow-hidden rounded-md shadow-card transition motion-safe:group-hover:-translate-y-1 motion-reduce:transition-none group-hover:shadow-card-hover ${muted ? "opacity-50" : ""}`}
       >
-        {posterText}
+        {poster}
       </div>
       <h2 className={`truncate text-sm font-medium ${muted ? "text-text-muted" : "text-text"}`}>
         {renderLink({

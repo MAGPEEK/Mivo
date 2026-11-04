@@ -2,6 +2,7 @@ import { useId, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { FileView, ItemView } from "../lib/itemView";
+import { Poster } from "../../../shared/ui";
 import { itemNamespace } from "../locales";
 import { PlayAction } from "./PlayAction";
 import { TrackList } from "./TrackList";
@@ -15,11 +16,13 @@ export interface ItemDetailsProps {
 }
 
 const factSeparator = " · ";
+// The poster box is w-40 (10rem) at every breakpoint.
+const posterSizes = "10rem";
 
 /**
  * A loaded item: header with backdrop, poster, title, facts, technical chips and Play, then
- * the track lists and the file. Backdrop and poster are neutral placeholders until artwork
- * arrives (milestone 3), so the layout stays the same then.
+ * the track lists and the file. The poster falls back to a neutral placeholder; the backdrop
+ * stays a neutral gradient until backdrop artwork is shown.
  */
 export function ItemDetails({ headingRef, itemId, item }: ItemDetailsProps) {
   const { t } = useTranslation(itemNamespace);
@@ -31,12 +34,13 @@ export function ItemDetails({ headingRef, itemId, item }: ItemDetailsProps) {
           className="absolute inset-0 -z-10 scale-110 bg-linear-to-br from-surface-raised via-surface to-background blur-2xl"
         />
         <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end">
-          <div
-            aria-hidden="true"
-            className="grid aspect-2/3 w-40 shrink-0 place-items-center rounded-md bg-surface-raised text-5xl font-semibold text-text-muted shadow-card"
-          >
-            {item.initial}
-          </div>
+          <Poster
+            imageRef={item.poster}
+            aspect="poster"
+            alt={item.title}
+            sizes={posterSizes}
+            className="w-40 shrink-0 rounded-md shadow-card"
+          />
           <div className="flex min-w-0 flex-col gap-4">
             <h1
               ref={headingRef}

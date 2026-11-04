@@ -1,4 +1,4 @@
-import type { ItemDetail, MediaFile } from "@mivo/api-client";
+import type { ImageRef, ItemDetail, MediaFile } from "@mivo/api-client";
 import { resolutionLabel } from "@mivo/player-core";
 
 import { durationParts, type DurationParts } from "./duration";
@@ -29,8 +29,8 @@ export type PlayView =
 /** Everything the detail page shows of a loaded item, as display text. */
 export interface ItemView {
   readonly title: string;
-  /** First letter of the title for the poster placeholder; artwork arrives in milestone 3. */
-  readonly initial: string;
+  /** The poster image; `undefined` shows the placeholder. */
+  readonly poster: ImageRef | undefined;
   /** Short facts below the title, e.g. `["1 h 30 min", "1080p"]`. */
   readonly facts: readonly string[];
   /** Technical chips, e.g. `["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"]`. */
@@ -70,7 +70,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
   const [primaryFile] = item.files;
   return {
     title: item.title,
-    initial: titleInitial(item.title),
+    poster: item.artwork?.poster,
     play: playView(item, texts),
     ...(primaryFile === undefined ? noFileParts : fileParts(primaryFile, texts)),
   };
@@ -88,12 +88,6 @@ function fileParts(file: MediaFile, texts: ItemViewTexts): FileParts {
     audioTracks: audioTracks(file).map(toTrackView),
     subtitleTracks: subtitleTracks(file).map(toTrackView),
   };
-}
-
-function titleInitial(title: string): string {
-  // Array.from splits by code point, so a title starting with an emoji keeps it whole.
-  const [first = ""] = Array.from(title.trim());
-  return first.toLocaleUpperCase();
 }
 
 function facts(file: MediaFile, texts: ItemViewTexts): string[] {

@@ -11,6 +11,10 @@ describe("imageUrl", () => {
     );
   });
 
+  it("omits an empty tag, so the URL never claims a cacheable version", () => {
+    expect(imageUrl({ id: "id", tag: "" }, 160)).toBe("/api/v1/images/id?width=160");
+  });
+
   it.each<{ name: string; ref: ImageRef; expected: string }>([
     {
       name: "path characters in the id",
@@ -26,11 +30,6 @@ describe("imageUrl", () => {
       name: "non-ASCII text",
       ref: { id: "bild-ä", tag: "ü" },
       expected: "/api/v1/images/bild-%C3%A4?width=160&tag=%C3%BC",
-    },
-    {
-      name: "an empty tag",
-      ref: { id: "id", tag: "" },
-      expected: "/api/v1/images/id?width=160&tag=",
     },
   ])("URL-encodes $name", ({ ref, expected }) => {
     expect(imageUrl(ref, 160)).toBe(expected);

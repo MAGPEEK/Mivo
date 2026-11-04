@@ -64,10 +64,22 @@ export function useLibraryScan(library: Library): LibraryScan {
   const running = scanRunning || mutation.isPending;
   const { mutate } = mutation;
   const startedAt = library.scan.startedAt;
+  // `isPending` reaches the render a few milliseconds after `mutate` (TanStack notifies on a
+  // timer), so a second click in between would send a second POST without this flag.
+  const starting = useRef(false);
   const start = useCallback(() => {
-    if (!running) {
-      mutate({ startedAtBefore: startedAt });
+    if (running || starting.current) {
+      return;
     }
+    starting.current = true;
+    mutate(
+      { startedAtBefore: startedAt },
+      {
+        onSettled: () => {
+          starting.current = false;
+        },
+      },
+    );
   }, [mutate, running, startedAt]);
   // Compares server timestamps only: the client clock may differ from the server clock.
   const anotherScanSeen =

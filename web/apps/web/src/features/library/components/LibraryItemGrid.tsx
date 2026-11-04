@@ -5,16 +5,13 @@ import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
 import { useNewPageFocus } from "../hooks/useNewPageFocus";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
+import { itemGridClass } from "./gridLayout";
 import { ItemCard } from "./ItemCard";
 
 /** Props of {@link LibraryItemGrid}. */
 export interface LibraryItemGridProps {
   readonly libraryId: string;
 }
-
-// Dense poster rows like the rest of the design: more columns as the window widens.
-const gridClass =
-  "grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8";
 
 /** The items of a library as a poster grid, page by page. */
 export function LibraryItemGrid({ libraryId }: LibraryItemGridProps) {
@@ -64,7 +61,7 @@ function ItemList({ items }: ItemListProps) {
   };
   return (
     <>
-      <ul aria-label={t("items.label")} className={gridClass}>
+      <ul aria-label={t("items.label")} className={itemGridClass}>
         {items.items.map((item) => (
           <li key={item.id}>
             <ItemCard item={item} focusOnMount={item.id === focusItemId} />

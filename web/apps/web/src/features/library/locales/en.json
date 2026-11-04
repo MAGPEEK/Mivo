@@ -29,6 +29,8 @@
     "loadingMore": "Loading more videos",
     "loadMoreFailed": "More videos could not be loaded.",
     "unavailable": "Unavailable",
+    "seasons_one": "{{count, number}} season",
+    "seasons_other": "{{count, number}} seasons",
     "empty": {
       "title": "No videos yet",
       "hint": "Run a scan to find the videos in this library's folder."
