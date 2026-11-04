@@ -38,6 +38,31 @@ export {
   maxClientNameLength,
   type DetectClientProfileOptions,
 } from "./profile/detectClientProfile";
+export {
+  addToQueue,
+  clearUpcoming,
+  currentEntry,
+  emptyQueue,
+  jumpTo,
+  moveItem,
+  next as nextInQueue,
+  playNext,
+  previous as previousInQueue,
+  removeAt as removeFromQueue,
+  restartThresholdSeconds,
+  setQueue,
+  setRepeat,
+  setShuffle,
+} from "./queue/queue";
+export { parseQueue, serializeQueue } from "./queue/serialize";
+export type {
+  NextResult,
+  PreviousResult,
+  QueueEntry,
+  QueueItem,
+  QueueState,
+  RepeatMode,
+} from "./queue/queueTypes";
 export { codecLabel, containerLabel } from "./labels/formatLabels";
 export { bitDepthLabel, channelLabel, hdrLabel, resolutionLabel } from "./labels/streamLabels";
 export type {
