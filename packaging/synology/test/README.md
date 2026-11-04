@@ -128,21 +128,33 @@ characters in the scripts, the templates and this directory.
 
 ## Build script tests (`build/`)
 
-`build/build-scripts.bats` tests the safety paths of `../build.sh` and `../build.ps1` (SPK-07):
-CI hosts default to release builds, `--test` / `-TestBuild` overrides that, release builds refuse
-interim `sources.lock` entries, the default version, a staged interim or non-free FFmpeg and a
-dirty git tree, a `SOURCE.txt` needs exactly one `Status:` and one `Licence:` line, a failed
-toolkit run leaves no `SHA256SUMS`, and the SPK names carry `-r<N>` for package revision N ≥ 1.
-`build/fake-docker.bash` replaces Docker (its header lists the switches), so every case runs in
-well under a second. Each case runs against `build.sh` and, when `pwsh` is installed, against
-`build.ps1` with the same arguments (parity). Each test copies both scripts into its own temp
-tree, so the repository's `dist/` is never touched.
+`build/build-scripts.bats` tests the safety paths of `../build.sh` and `../build.ps1` (SPK-07,
+SPK-16): CI hosts default to release builds, `--test` / `-TestBuild` overrides that, release
+builds refuse interim or malformed `sources.lock` entries, the default version, a staged interim
+or non-free FFmpeg, staged `ffmpeg`/`ffprobe` binaries or a `SOURCE.txt` version that differ
+from the pins of `sources.lock` (a test build packs them with a warning and a line in
+`NOT-FOR-RELEASE.txt`) and a dirty git tree; a `SOURCE.txt` needs exactly one `Status:`,
+`Licence:`, `Version:` and `Source SHA-256:` line; the staged FFmpeg source archive must be the
+one every `SOURCE.txt` names and lands in `dist/` with a `SHA256SUMS` line; the FFmpeg recipe
+image is built before step 1 and passed to it; a failed toolkit run leaves no `SHA256SUMS`; and
+the SPK names carry `-r<N>` for package revision N ≥ 1. `build/fetch.bats` tests
+`../ffmpeg/fetch.sh` (install with modes and manifest, checksum and notice mismatches, missing
+output files, usage errors, a failed recipe build, a licence that differs from the lock) under
+the image's POSIX `sh`. `build/package-gates.bats` runs `../ffmpeg/build/scripts/package.sh`
+against a fake `readelf`/`objdump`: a failing tool stops every gate, and dynamic, foreign or too
+new executables are refused. A licence is always judged on the whole `Licence:` value.
+`build/fake-docker.bash` replaces Docker (its header lists the switches; the pins of the test
+locks are the SHA-256 of its fake binaries), so every case runs in well under a second. Each
+build-script case runs against `build.sh` and, when `pwsh` is installed, against `build.ps1`
+with the same arguments (parity). Each test copies both scripts into its own temp tree, so the
+repository's `dist/` is never touched.
 
 ```powershell
-# build.sh cases only (the script test image has neither pwsh nor git; those cases are skipped)
+# build.sh and fetch.sh cases only (the script test image has neither pwsh nor git; those cases are skipped)
 docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/build
 # all cases, with the build.ps1 parity cases and the dirty-tree case
 docker build -t spk-build-test:dev packaging/synology/test/build
 docker run --rm -v "${PWD}:/code" -w /code spk-build-test:dev packaging/synology/test/build
-docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/fake-docker.bash
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/fetch.bats packaging/synology/test/build/fake-docker.bash
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/ffmpeg/fetch.sh
 ```

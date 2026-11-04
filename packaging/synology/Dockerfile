@@ -3,14 +3,17 @@
 # here-documents of the RUN instructions below need.
 #
 # Step 1 of the Synology package build (ADR 0026 section 2, task SPK-07): prebuilds the server
-# binary and FFmpeg of every architecture family and stages one Package Toolkit project per
-# family with spkstage (SPK-14). Step 2, packing with the toolkit, needs `docker run` with
-# CAP_SYS_ADMIN and is done by build.ps1 / build.sh next to this file. From the repository root:
+# binary of every architecture family, takes FFmpeg from the own static build (SPK-15/SPK-16)
+# and stages one Package Toolkit project per family with spkstage (SPK-14). Step 2, packing
+# with the toolkit, needs `docker run` with CAP_SYS_ADMIN and is done by build.ps1 / build.sh
+# next to this file, which also build the FFmpeg image first (step 0). From the repository root:
 #
+#   docker build -t spk-ffmpeg-static:dev packaging/synology/ffmpeg/build
 #   docker build -f packaging/synology/Dockerfile --build-arg VERSION=0.1.0-alpha.2 --output type=local,dest=packaging/synology/dist/stage .
 #
 # The output holds x86_64/, armv8/ and armv7/ (staged projects, layout in
-# packaging/synology/toolkit/README.md "Staged project") and build-info.txt.
+# packaging/synology/toolkit/README.md "Staged project"), ffmpeg-source/ (the FFmpeg
+# corresponding source archive and its .sha256) and build-info.txt.
 #
 # Build arguments:
 #   VERSION            server version (default 0.0.0-dev), mapped to the DSM version by spkstage
@@ -20,16 +23,22 @@
 #                      local exporter also applies it to the exported files. BuildKit stamps
 #                      the directories WORKDIR creates with a given value, so a new value
 #                      rebuilds the web and Go stages (from their cache mounts); the FFmpeg
-#                      stage has no WORKDIR and its download stays cached.
+#                      image is built outside this file and is not affected.
 #   RELEASE            true refuses an FFmpeg build whose SOURCE.txt is not "Status: selected"
 #                      or whose licence is non-free, any spkstage warning (interim builds,
 #                      dynamically linked FFmpeg) and VERSION 0.0.0-dev; false (default) stages
 #                      interim builds with spkstage's warning, for local test builds only. In
 #                      both modes a SOURCE.txt needs exactly one Status: and one Licence: line.
 #   NODE_IMAGE, GO_IMAGE  same names and defaults as packaging/docker/Dockerfile
-#   FFMPEG_FETCH_IMAGE    image that runs ffmpeg/fetch.sh (default alpine:3)
+#   FFMPEG_IMAGE       the image of the FFmpeg recipe's "all" target (default
+#                      spk-ffmpeg-static:dev): /<family>/ with ffmpeg, ffprobe, the licence
+#                      texts and SOURCE.txt, and /source/ with the corresponding source archive.
+#                      It must exist locally (step 0 of build.sh / build.ps1 builds it); a
+#                      missing tag makes BuildKit look it up in a registry, where no such image
+#                      exists, and the build fails
 # build-info.txt records all of these arguments and the status and licence of each family's
-# FFmpeg build.
+# FFmpeg build. build.sh / build.ps1 compare the staged binaries with the pins of
+# packaging/synology/ffmpeg/sources.lock afterwards.
 #
 # The web and Go stages duplicate packaging/docker/Dockerfile on purpose (ADR 0026
 # consequences): the container image and the packages build the same binary, but neither file
@@ -39,7 +48,7 @@ ARG NODE_IMAGE=node:24-slim
 # Must match the toolchain line of go.mod: the golang image sets GOTOOLCHAIN=local and never
 # downloads a newer toolchain.
 ARG GO_IMAGE=golang:1.27.3
-ARG FFMPEG_FETCH_IMAGE=alpine:3
+ARG FFMPEG_IMAGE=spk-ffmpeg-static:dev
 
 # ---------------------------------------------------------------------------------------------
 # web: builds the browser app into internal/adapters/http/webui/dist (ADR 0020), exactly like
@@ -109,24 +118,13 @@ done
 BUILD
 
 # ---------------------------------------------------------------------------------------------
-# ffmpeg: FFmpeg, ffprobe, licence files and SOURCE.txt per family. This is the one stage that
-# decides where FFmpeg comes from: today the interim pins of sources.lock through fetch.sh
-# (SPK-02); SPK-16 replaces this stage with the own static build (SPK-15) and keeps its output
-# layout, /out/<family>/{ffmpeg,ffprobe,SOURCE.txt,<licence files>}.
-FROM --platform=$BUILDPLATFORM ${FFMPEG_FETCH_IMAGE} AS ffmpeg
-
-# fetch.sh needs sha256sum (busybox), tar, xz and curl: with curl it downloads with
-# --proto '=https', so a redirect can never fall back to plain HTTP (busybox wget has no such
-# option). Versions are not pinned: alpine:3 moves with its point releases (as
-# packaging/docker/Dockerfile does for Debian); the downloads themselves are pinned by SHA-256
-# in sources.lock.
-# hadolint ignore=DL3018
-RUN apk add --no-cache curl xz
-
-COPY packaging/synology/ffmpeg/fetch.sh packaging/synology/ffmpeg/sources.lock /fetch/
-# The layer stays cached until fetch.sh or sources.lock change, so a second build downloads
-# nothing.
-RUN for family in x86_64 armv8 armv7; do sh /fetch/fetch.sh "$family" "/out/$family" || exit 1; done
+# ffmpeg: FFmpeg, ffprobe, licence files and SOURCE.txt per family, plus the corresponding
+# source archive. This is the one stage that decides where FFmpeg comes from: the own static
+# build of packaging/synology/ffmpeg/build (SPK-15), built by build.sh / build.ps1 into the
+# local image FFMPEG_IMAGE first (its "all" target: /<family>/{ffmpeg,ffprobe,SOURCE.txt,
+# <licence files>} and /source/). BuildKit caches that build, so a second run reuses it. Until
+# SPK-16 this stage ran ffmpeg/fetch.sh for the interim prebuilts.
+FROM ${FFMPEG_IMAGE} AS ffmpeg
 
 # ---------------------------------------------------------------------------------------------
 # spkstage: the staging command of SPK-14, built for the build machine.
@@ -145,7 +143,7 @@ FROM spkstage AS stage
 COPY LICENSE ./
 COPY packaging/synology/package/ packaging/synology/package/
 COPY --from=server /out/ /prebuilt/server/
-COPY --from=ffmpeg /out/ /prebuilt/ffmpeg/
+COPY --from=ffmpeg / /prebuilt/ffmpeg/
 
 ARG VERSION=0.0.0-dev
 ARG REVISION=""
@@ -155,7 +153,7 @@ ARG RELEASE=false
 # The global image arguments, recorded in build-info.txt.
 ARG NODE_IMAGE
 ARG GO_IMAGE
-ARG FFMPEG_FETCH_IMAGE
+ARG FFMPEG_IMAGE
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # A release refuses the interim FFmpeg outright (BACKLOG "spk release", ADR 0026 section 4):
@@ -174,8 +172,14 @@ mkdir -p /stage
 	echo "release=$RELEASE"
 	echo "node_image=$NODE_IMAGE"
 	echo "go_image=$GO_IMAGE"
-	echo "ffmpeg_fetch_image=$FFMPEG_FETCH_IMAGE"
+	echo "ffmpeg_image=$FFMPEG_IMAGE"
 } >/stage/build-info.txt
+# The corresponding source archive (one .tar with its .sha256) travels with the staged
+# projects; build.sh / build.ps1 move it next to the SPKs and check it against every SOURCE.txt.
+[ "$(find /prebuilt/ffmpeg/source -maxdepth 1 -name '*-source.tar' | wc -l)" = 1 ] ||
+	die "the FFmpeg image holds no single corresponding source archive in /source"
+mkdir -p /stage/ffmpeg-source
+cp /prebuilt/ffmpeg/source/*-source.tar /prebuilt/ffmpeg/source/*-source.tar.sha256 /stage/ffmpeg-source/
 for family in x86_64 armv8 armv7; do
 	warnings="/tmp/spkstage-$family.log"
 	if ! spkstage -family "$family" -version "$VERSION" -package-revision "$PACKAGE_REVISION" \
@@ -189,8 +193,9 @@ for family in x86_64 armv8 armv7; do
 	# Exactly one of each, so neither value can hide behind a second line.
 	[ "$(grep -c '^Status:' "$notice")" = 1 ] && [ "$(grep -c '^Licence:' "$notice")" = 1 ] ||
 		die "$family: SOURCE.txt needs exactly one Status: and one Licence: line"
-	status="$(sed -n 's/^Status:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$notice")"
-	licence="$(sed -n 's/^Licence:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$notice")"
+	# The whole trimmed value, so a word such as "nonfree" cannot hide behind the first one.
+	status="$(sed -n 's/^Status:[[:space:]]*//p' "$notice" | sed 's/[[:space:]]*$//')"
+	licence="$(sed -n 's/^Licence:[[:space:]]*//p' "$notice" | sed 's/[[:space:]]*$//')"
 	echo "ffmpeg_$family=${status:-unknown} ${licence:-unknown}" >>/stage/build-info.txt
 	if [ "$RELEASE" = true ]; then
 		[ "$status" = selected ] || die "release refused: the FFmpeg build of $family has status '${status:-none}', not 'selected' (interim builds are for local test builds only)"

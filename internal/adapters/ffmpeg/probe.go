@@ -75,6 +75,10 @@ const (
 // .sub file), image2 (see imageSequenceDemuxer); also every device, script (avisynth,
 // vapoursynth) and network demuxer. A file whose content selects one of them is refused,
 // never handed to the next-best demuxer.
+//
+// The static FFmpeg of the Synology package compiles exactly this list plus image2
+// (packaging/synology/ffmpeg/build/scripts/build-ffmpeg.sh, DEMUXERS, with configure's names);
+// the test in packaging/synology/internal/recipecheck fails when the two lists drift apart.
 func allowedDemuxers() []string {
 	return []string{
 		// Video containers.

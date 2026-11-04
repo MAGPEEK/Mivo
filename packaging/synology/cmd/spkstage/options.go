@@ -79,7 +79,7 @@ func parseOptions(args []string, stderr io.Writer, env lookupEnv) (options, erro
 	flags.StringVar(&opts.family, "family", "", "architecture family: x86_64, armv8 or armv7 (required)")
 	flags.StringVar(&opts.version, "version", "", "server version, for example 0.1.0-alpha.2 (required)")
 	flags.StringVar(&opts.binary, "binary", "", "static linux server binary of the family (required)")
-	flags.StringVar(&opts.ffmpegDir, "ffmpeg-dir", "", "directory written by ffmpeg/fetch.sh for the family (required)")
+	flags.StringVar(&opts.ffmpegDir, "ffmpeg-dir", "", "directory with the recipe output of the family (ffmpeg/build or fetch.sh) (required)")
 	flags.StringVar(&opts.out, "out", "", "project directory to write; must be missing or empty unless -force (required)")
 	flags.StringVar(&opts.repo, "repo", ".", "repository root that holds LICENSE and packaging/synology/package")
 	flags.IntVar(&opts.packageRevision, "package-revision", 0, "packaging-only revision of the same server version (0-9)")

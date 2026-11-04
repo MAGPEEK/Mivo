@@ -12,6 +12,8 @@
 #   FFMPEG_ARCH        FFmpeg's --arch;  FFMPEG_CPU  FFmpeg's --cpu (becomes -march)
 #   MESON_CPU_FAMILY, MESON_CPU   host_machine of the meson cross file (dav1d)
 #   OLDEST_KERNEL      oldest DSM 7.2 kernel of the family; an ELF ABI note must not exceed it
+#   ELF_CLASS, ELF_MACHINE        the ELF header values of the family's executables, as
+#                      readelf -h prints them (the same identity SynoBuildConf/build checks)
 
 # shellcheck shell=sh
 
@@ -26,6 +28,8 @@ load_family() {
 		MESON_CPU_FAMILY=x86_64
 		MESON_CPU=x86_64
 		OLDEST_KERNEL=3.10.108
+		ELF_CLASS=ELF64
+		ELF_MACHINE="Advanced Micro Devices X86-64"
 		;;
 	armv8)
 		TRIPLET=aarch64-linux-musl
@@ -36,6 +40,8 @@ load_family() {
 		MESON_CPU_FAMILY=aarch64
 		MESON_CPU=armv8-a
 		OLDEST_KERNEL=4.4.302
+		ELF_CLASS=ELF64
+		ELF_MACHINE=AArch64
 		;;
 	armv7)
 		TRIPLET=arm-linux-musleabihf
@@ -46,6 +52,8 @@ load_family() {
 		MESON_CPU_FAMILY=arm
 		MESON_CPU=armv7
 		OLDEST_KERNEL=3.10.108
+		ELF_CLASS=ELF32
+		ELF_MACHINE=ARM
 		;;
 	*)
 		printf 'unknown family: %s (expected x86_64, armv8 or armv7)\n' "$1" >&2
@@ -53,5 +61,6 @@ load_family() {
 		;;
 	esac
 	FAMILY=$1
-	export FAMILY TRIPLET GCC_TARGET_CONFIG ARCH_CFLAGS FFMPEG_ARCH FFMPEG_CPU MESON_CPU_FAMILY MESON_CPU OLDEST_KERNEL
+	export FAMILY TRIPLET GCC_TARGET_CONFIG ARCH_CFLAGS FFMPEG_ARCH FFMPEG_CPU MESON_CPU_FAMILY MESON_CPU
+	export OLDEST_KERNEL ELF_CLASS ELF_MACHINE
 }

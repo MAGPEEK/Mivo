@@ -129,10 +129,12 @@ expected_formats() {
 
 check_corpus() {
 	expected_formats >"$scratch/expected"
+	# One path per line, read without word splitting (a corpus name may contain blanks).
+	(cd /corpus && find . -type f ! -name manifest.json | sed 's|^\./||' | sort) >"$scratch/corpus-files"
 	count=0
 	probed=0
 	matched=0
-	for path in $(cd /corpus && find . -type f ! -name manifest.json | sed 's|^\./||' | sort); do
+	while IFS= read -r path; do
 		count=$((count + 1))
 		if ffprobe -v error -hide_banner -print_format json -show_format -show_streams \
 			-format_whitelist "$(whitelist_for "/corpus/$path")" -protocol_whitelist file \
@@ -148,7 +150,7 @@ check_corpus() {
 		else
 			printf 'INFO format of %s: %s (manifest: %s)\n' "$path" "$format" "$want"
 		fi
-	done
+	done <"$scratch/corpus-files"
 	if [ "$probed" -eq "$count" ] && [ "$count" -gt 0 ]; then
 		pass "corpus probed with the server's arguments: $probed/$count"
 	else

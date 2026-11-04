@@ -4,7 +4,8 @@
 #   make-source-archive.sh <sources> <recipe> <out> <ffmpeg-version>
 #
 # <sources> holds the verified inputs below <stage>/ (fetch-sources.sh verify), <recipe> this
-# build directory. Writes <out>/ffmpeg-<label>-source.tar and <out>/ffmpeg-<label>-source.tar.sha256.
+# build directory. Writes <out>/ffmpeg-<label>-source.tar and its .sha256, where <label> is
+# the build's version label (recipe.sh), for example 9.0.2-static1.
 # The archive holds every source the binaries are built from (FFmpeg, x264, dav1d, zlib, musl,
 # gcc for libgcc), the tools that build them, and the recipe with musl-cross-make's patches: the
 # "Corresponding Source" of GPL-3.0 section 1, attached to each GitHub Release (section 6).
@@ -29,6 +30,7 @@ script_dir=$(dirname "$0")
 
 name="ffmpeg-$(version_label "$ffmpeg_version")-source"
 stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
 top="$stage/$name"
 mkdir -p "$top/sources" "$top/recipe"
 cp -R "$recipe/." "$top/recipe/"
@@ -61,5 +63,4 @@ mkdir -p "$out"
 tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$ARCHIVE_EPOCH" --format=gnu \
 	-C "$stage" -cf "$out/$name.tar" "$name"
 (cd "$out" && sha256sum "$name.tar" >"$name.tar.sha256")
-rm -rf "$stage"
 printf 'make-source-archive.sh: %s\n' "$(cat "$out/$name.tar.sha256")"

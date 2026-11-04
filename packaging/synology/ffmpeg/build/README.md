@@ -27,18 +27,27 @@ docker build --output type=local,dest=out packaging/synology/ffmpeg/build   # ta
 | Target | Output |
 |---|---|
 | `x86_64`, `armv8`, `armv7` | `ffmpeg`, `ffprobe` (0755), licence texts, `SOURCE.txt` |
-| `source` | `ffmpeg-<version>-source.tar` and its `.sha256` |
+| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static1-source.tar`) |
 | `all` | `x86_64/`, `armv8/`, `armv7/`, `source/` |
 
 Build argument `JOBS` limits the parallel compile jobs per stage (default: all CPUs). Keep build
 output outside the repository or in an ignored directory; never commit the binaries.
 
+The SPK build (`../../build.sh` / `build.ps1`, task SPK-16) runs `docker build -t
+spk-ffmpeg-static:dev` of this directory (target `all`) as its step 0 and copies the families
+and the source archive out of that image; `../sources.lock` pins the SHA-256 of every family's
+`ffmpeg` and `ffprobe`, and `../fetch.sh` builds and verifies one family by hand.
+
 Per family the output holds `ffmpeg`, `ffprobe`, FFmpeg's `COPYING.GPLv3` and `LICENSE.md`,
 `x264-COPYING`, `dav1d-COPYING`, `zlib-LICENSE`, `musl-COPYRIGHT`, `gcc-COPYING.RUNTIME` and
-`gcc-COPYING3` (libgcc), and `SOURCE.txt`. `SOURCE.txt` has the same head as the one
-`../fetch.sh` writes (`Version:`, `Status: selected`, `Licence:`, `ffmpeg SHA-256:`, `ffprobe
-SHA-256:`, `Corresponding source:`, `Source SHA-256:`), followed by the configure line, every
-pinned source (version, linked or tool, SHA-256, URL), the build checks and the build host.
+`gcc-COPYING3` (libgcc), and `SOURCE.txt`. `SOURCE.txt` starts with the fields the SPK build and
+`../fetch.sh` read (`Version:`, `Status: selected`, `Licence:`, `ffmpeg SHA-256:`, `ffprobe
+SHA-256:`, `Corresponding source:`, `Source SHA-256:`), followed by the configure line, the
+CPU-feature values of FFmpeg's `config.h` (`HAVE_X86ASM`, `HAVE_NEON`, `HAVE_NEON_INLINE`,
+`HAVE_NEON_EXTERNAL`, `HAVE_VFP`, `HAVE_VFPV3`, `HAVE_ARMV6T2`, `HAVE_ARMV8`,
+`HAVE_AS_FPU_DIRECTIVE`, `HAVE_AS_ARCH_DIRECTIVE`), every pinned source (version, linked or
+tool, SHA-256, URL), the build checks and the build host with the versions of its Debian
+packages.
 
 ### How it builds
 
@@ -47,7 +56,9 @@ emulation.
 
 1. `download`: `scripts/fetch-sources.sh download` fetches every entry of `sources.list` over
    HTTPS and refuses a file whose SHA-256 differs (exit 3). A BuildKit cache mount keeps the files
-   by checksum, so a changed pin downloads only that file.
+   by checksum, so a changed pin downloads only that file. It is the last stage with network
+   access: every later `RUN` has `--network=none`, so only the verified files can enter the
+   build (the `host` stage's `apt-get` before it needs the network too).
 2. `verified-sources`: whatever the `sources` stage provides is verified again and must match the
    list exactly (no missing, no unlisted file); `versions.env` per stage hands the versions to the
    scripts. Replacing `sources` with an unpacked source archive builds without downloads (below).
@@ -59,8 +70,11 @@ emulation.
 5. `libs-<family>`: static zlib, x264 and dav1d.
 6. `ffmpeg-<family>`: FFmpeg configured as below; the script refuses a configuration with
    `nonfree` or `fdk` or a licence other than "GPL version 3 or later".
-7. `package-<family>`: refuses binaries with a `PT_INTERP`, a `NEEDED` entry, an ELF ABI note
-   above the family's oldest DSM 7.2 kernel or (armv7) any VFPv4 instruction; writes the output.
+7. `package-<family>`: refuses binaries that are not `ET_EXEC` files of the family's ELF class
+   and machine, have a `PT_INTERP` or a `NEEDED` entry, an ELF ABI note above the family's
+   oldest DSM 7.2 kernel or (armv7) any VFPv4 instruction; every gate captures the `readelf` /
+   `objdump` output first and fails when the tool fails (no silent pass through a pipe); writes
+   the output.
 8. `source-archive`: the corresponding source (below).
 
 ### Cache strategy
@@ -85,7 +99,7 @@ notice, `-version` prints the configure line. Reduced to what the server needs
 
 | Component | Enabled | Why |
 |---|---|---|
-| Demuxers | exactly the server's `-format_whitelist` (`allowedDemuxers` in `internal/adapters/ffmpeg/probe.go`) plus `image2`: matroska, mov, mpegts, mpegps ("mpeg"), mpegvideo, avi, flv, live_flv, ogg, asf, mxf, rm, flac, mp3, wav, aiff, wv, ape, dsf, iff, aac, ac3, eac3, dts, gif, image_{png,jpeg,tiff,webp}_pipe, srt, webvtt, ass, sup, image2 | ADR 0022 Notes M2-24b. `concat`, `hls`, `dash`, `imf` and `vobsub` are not built at all, so a hostile list cannot be followed even without the whitelist. **When `allowedDemuxers` changes, change this list** (`verify.sh` reads probe.go and fails on a missing demuxer). |
+| Demuxers | exactly the server's `-format_whitelist` (`allowedDemuxers` in `internal/adapters/ffmpeg/probe.go`) plus `image2`: matroska, mov, mpegts, mpegps ("mpeg"), mpegvideo, avi, flv, live_flv, ogg, asf, mxf, rm, flac, mp3, wav, aiff, wv, ape, dsf, iff, aac, ac3, eac3, dts, gif, image_{png,jpeg,tiff,webp}_pipe, srt, webvtt, ass, sup, image2 | ADR 0022 Notes M2-24b. `concat`, `hls`, `dash`, `imf` and `vobsub` are not built at all, so a hostile list cannot be followed even without the whitelist. **When `allowedDemuxers` changes, change this list**: the Go test `packaging/synology/internal/recipecheck` (`go test ./...`) compares the two lists without a build, and `verify.sh` checks the built binary against probe.go. |
 | Decoders, parsers, bitstream filters | all (no external libraries besides those below) | the server plays any format; transcode needs the decoder of whatever is in a library |
 | Muxers | hls, mp4, null (hls selects mov, mpegts, webvtt) | fMP4 HLS of ADR 0024; `null` for diagnostics |
 | Encoders | libx264, aac | software transcode targets of ADR 0023 |
@@ -136,8 +150,13 @@ armv7 in detail (ADR 0026 Notes: assume no NEON on armada38x):
   informational: the kernel ignores them for static executables, and they say nothing about which
   code runs. What runs is checked by the emulation on a CPU without NEON and D32 (below).
 - **FFmpeg**: configure finds that the compiler does not accept NEON (`neon_inline` and
-  `neon_external` off), so NEON is no core CPU flag; its NEON assembly is still built (with a
-  `.fpu neon` directive) and selected only when `AT_HWCAP` has `neon` (`libavutil/arm/cpu.c`).
+  `neon_external` off), so NEON is no core CPU flag and no C code uses it; its NEON assembly is
+  still built, because on `--target-os=linux` configure keeps `neon` enabled for run-time
+  detection, and assembled with a `.fpu neon` directive; it is selected only when `AT_HWCAP` has
+  `neon` (`libavutil/arm/cpu.c`). `SOURCE.txt` records the evidence from `config.h`:
+  `HAVE_NEON=1`, `HAVE_NEON_INLINE=0`, `HAVE_NEON_EXTERNAL=0`, `HAVE_AS_FPU_DIRECTIVE=1`,
+  `HAVE_VFPV3=1`, `HAVE_ARMV6T2=1` (armv8 for comparison: `HAVE_NEON=1`,
+  `HAVE_NEON_INLINE=1`, `HAVE_NEON_EXTERNAL=1`; x86_64: `HAVE_X86ASM=1`).
 - **x264**: without compiler NEON it builds its NEON assembly and tests for NEON at start with a
   guarded instruction (SIGILL handler, `common/cpu.c`).
 - **dav1d**: NEON assembly selected by `AT_HWCAP` (`src/arm/cpu.c`).
@@ -181,9 +200,10 @@ toolchains) under these conditions, as in SPK-02:
 
 - **old kernel's syscall surface**: `kernelsim` (seccomp, built by `verify/Dockerfile`) makes
   every syscall added after the family's oldest kernel fail with `ENOSYS`
-  (`verify/syscalls-after-3.10.txt`, `syscalls-after-4.4.txt`; whitespace-separated names only,
-  no comments, because every word is looked up as a syscall). `sysprobe` shows the filter is in
-  force (`getrandom=ENOSYS statx=ENOSYS` under the 3.10 list).
+  (`verify/syscalls-after-3.10.txt` with 65 names, `syscalls-after-4.4.txt` with 53;
+  whitespace-separated names only, no comments, because every word is looked up as a syscall,
+  and a name libseccomp does not know is reported on stderr and skipped). `sysprobe` shows the
+  filter is in force (`getrandom=ENOSYS statx=ENOSYS` under the 3.10 list).
 - **uname** reports the DSM kernel (`QEMU_UNAME`, `qemu-x86_64 -r`).
 - **baseline CPU**: x86_64 binaries through a static `qemu-x86_64 -cpu Opteron_G1` (wrappers named
   `ffmpeg`/`ffprobe` on `PATH`), arm binaries through Docker Desktop's binfmt QEMU with
@@ -242,7 +262,7 @@ SHA-256 changes with every recipe change and is recorded in each `SOURCE.txt`).
 
 | Build | Time |
 |---|---|
-| `all`, cold (`--no-cache`, downloads in the cache mount) | 822 s and 620 s (two runs); the three families build in parallel |
+| `all`, cold (`--no-cache`, downloads in the cache mount) | 10–14 min: 822 s and 620 s (two runs); the three families build in parallel |
 | per family inside it: toolchain / libraries / FFmpeg | x86_64 624 / 17 / 46 s; armv8 519 / 16 / 94 s; armv7 508 / 20 / 68 s |
 | `x86_64` alone, cold | 491 s (toolchain 364 s) |
 | downloading all sources (empty cache mount) | about 105 s |
@@ -258,8 +278,14 @@ Two `--no-cache` builds of `all` gave byte-identical `ffmpeg` and `ffprobe` for 
 families (the SHA-256 above). A rebuild from the unpacked source archive with
 `--build-context sources=sources` gave the same x86_64 `ffmpeg`. The source archive built twice
 from the same recipe has the same SHA-256. Inputs that are not pinned: the Debian build tools
-(`apt-get` in the `host` stage; versions recorded in `SOURCE.txt`). They build the toolchains
-and run configure; none of their code is linked, and they did not change the output above.
+(`HOST_PACKAGES` of the `host` stage, installed with `apt-get`; all their versions are recorded
+in `SOURCE.txt`). They build the toolchains and run configure; none of their code is linked,
+and they did not change the output above. SPK-16 rebuilt the toolchains from scratch (the
+toolchain stages were invalidated by a script change) and got the same six hashes, which
+`../sources.lock` now pins. If a Debian update ever changes the output, the pin check of the
+SPK build says so; the optional stricter alternative is an `apt` source on
+`snapshot.debian.org` with a dated snapshot in the `host` stage (not done: the gain is small
+while the output stays reproducible, and the snapshot mirror is slow and rate-limited).
 
 A changed checksum in `sources.list` stops the build (`fetch-sources.sh`, exit 3); an unlisted
 file in a replaced `sources` stage stops it too (exit 4). Both were tried.
@@ -318,4 +344,5 @@ docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -x scripts/*.
 docker run --rm -i hadolint/hadolint:v2.14.0 hadolint - < Dockerfile
 docker run --rm -i hadolint/hadolint:v2.14.0 hadolint - < verify/Dockerfile
 bash verify/verify.sh armv7 out/armv7     # after building the family
+go test ../../internal/recipecheck/       # DEMUXERS of build-ffmpeg.sh against probe.go, no build needed
 ```

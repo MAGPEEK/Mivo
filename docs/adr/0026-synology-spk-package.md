@@ -551,3 +551,25 @@ platform environments DSM 7.2.2 build 72723)**
   packaging-only rebuild with revision N ≥ 1 is named `<id>-<version>-r<N>-<family>.spk`, so an
   old download and a corrected one can be told apart (SPK-13 deletes the old assets and uploads
   the `-rN` files). No `+` in the name (GitHub encodes it in URLs) and no DSM build number.
+
+## Notes (SPK-15, SPK-16)
+
+- **Own static FFmpeg** (owner decision OD-SPK-3, revised 2026-10-31): the SPKs bundle FFmpeg
+  9.0.2-static1 built by `packaging/synology/ffmpeg/build/` against musl 1.2.6 with own cross
+  toolchains: fully static (no PT_INTERP, no NEEDED, no ELF ABI note), GPLv3 + libx264 and the
+  native AAC encoder, no nonfree, no fdk-aac; baselines x86-64 v1, armv8-a, armv7-a VFPv3-D16
+  hard-float with NEON only behind run-time detection (`HAVE_NEON=1`, inline/external 0,
+  recorded in `SOURCE.txt`). Demuxers are exactly the server's `allowedDemuxers` plus `image2`;
+  `packaging/synology/internal/recipecheck` fails on drift in either direction.
+- **Pins**: `ffmpeg/sources.lock` pins the SHA-256 of `ffmpeg` and `ffprobe`, the version and
+  the licence per family, all `selected`; no interim builds remain. The build scripts build the
+  recipe as step 0 (`spk-ffmpeg-static:dev`, cached) and compare the staged binaries and
+  `SOURCE.txt` with the pins; a release build refuses any mismatch.
+- **Corresponding source**: the recipe produces `ffmpeg-<version>-static<revision>-source.tar`
+  (all inputs plus the recipe), which lands in `dist/` with a line in `SHA256SUMS` and is attached
+  to every GitHub Release next to the SPKs. Its SHA-256 is recorded in each `SOURCE.txt` and
+  checked against the archive, but not pinned in `sources.lock`, because any recipe edit changes
+  it while the binaries stay byte-identical.
+- **Verification**: two clean recipe builds give byte-identical binaries; each family runs the
+  check set under emulation with the oldest DSM kernel's syscall surface (SPK-15). Static PIE
+  (ASLR) is deferred until the device test (SPK-12).

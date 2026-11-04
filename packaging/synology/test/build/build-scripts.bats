@@ -1,14 +1,18 @@
 #!/usr/bin/env bats
-# Safety paths of packaging/synology/build.sh and build.ps1 (task SPK-07): release mode, the
-# interim/non-free FFmpeg refusals, failed toolkit runs and the SPK names. Docker is replaced by
-# fake-docker.bash, so each case runs in a fraction of a second. Every case runs against
-# build.sh and, when pwsh is installed, against build.ps1 with the same arguments (parity).
+# Safety paths of packaging/synology/build.sh and build.ps1 (tasks SPK-07, SPK-16): release
+# mode, the interim/non-free FFmpeg refusals, the pins of ffmpeg/sources.lock, the FFmpeg
+# source archive, failed toolkit runs and the SPK names. Docker is replaced by fake-docker.bash,
+# so each case runs in a fraction of a second. Every case runs against build.sh and, when pwsh
+# is installed, against build.ps1 with the same arguments (parity).
 #
 # Each test copies both scripts into $BATS_TEST_TMPDIR/repo/packaging/synology, next to a
-# sources.lock written by the test, so the real dist/ of the repository is never touched.
+# sources.lock written by the test (its pins are the SHA-256 of the fake binaries fake-docker
+# writes), so the real dist/ of the repository is never touched.
 
 SYNOLOGY_DIR="$(cd "$BATS_TEST_DIRNAME/../.." && pwd)"
 readonly FAMILIES=(x86_64 armv8 armv7)
+readonly FAKE_VERSION="1.0-static1"
+readonly SOURCE_ARCHIVE="ffmpeg-$FAKE_VERSION-source.tar"
 
 setup() {
 	tree="$BATS_TEST_TMPDIR/repo"
@@ -18,8 +22,9 @@ setup() {
 	chmod 0755 "$BATS_TEST_TMPDIR/bin/docker"
 	export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 	export FAKE_DOCKER_LOG="$BATS_TEST_TMPDIR/docker.log"
-	unset CI SPK_BUILD_MODE SPK_PRIVILEGE SOURCE_DATE_EPOCH NODE_IMAGE GO_IMAGE FFMPEG_FETCH_IMAGE \
-		FAKE_FFMPEG_STATUS FAKE_FFMPEG_LICENCE FAKE_NOTICE_EXTRA FAKE_TOOLKIT_FAIL
+	unset CI SPK_BUILD_MODE SPK_PRIVILEGE SOURCE_DATE_EPOCH NODE_IMAGE GO_IMAGE SPK_FFMPEG_IMAGE \
+		FAKE_FFMPEG_STATUS FAKE_FFMPEG_LICENCE FAKE_FFMPEG_VERSION FAKE_FFMPEG_CHANGED FAKE_FFMPEG_OMIT \
+		FAKE_SOURCE_MISMATCH FAKE_NOTICE_EXTRA FAKE_TOOLKIT_FAIL
 	export SPK_TOOLKIT_VOLUME=test-volume
 }
 
@@ -27,18 +32,22 @@ setup() {
 make_tree() {
 	script_dir="$1/packaging/synology"
 	dist="$script_dir/dist"
-	mkdir -p "$script_dir/ffmpeg" "$script_dir/toolkit"
+	mkdir -p "$script_dir/ffmpeg/build" "$script_dir/toolkit"
 	cp "$SYNOLOGY_DIR/build.sh" "$SYNOLOGY_DIR/build.ps1" "$script_dir/"
 	write_lock selected
 }
 
-# write_lock <status> writes one sources.lock entry per family with that status.
+# fake_hash <tool> <family> is the SHA-256 of the fake binary fake-docker writes.
+fake_hash() { printf 'fake %s %s\n' "$1" "$2" | sha256sum | cut -d' ' -f1; }
+
+# write_lock <status> [version] writes one sources.lock entry per family with that status and
+# the pins of the fake binaries.
 write_lock() {
 	local family
 	{
 		echo "# test lock"
 		for family in "${FAMILIES[@]}"; do
-			echo "$family $1 1.0 GPL-3.0-or-later https://example.invalid/a.tar.xz $(printf '0%.0s' {1..64}) . https://example.invalid/s.tar.xz $(printf '0%.0s' {1..64}) archive:COPYING"
+			echo "$family $1 ${2:-$FAKE_VERSION} GPL-3.0-or-later $(fake_hash ffmpeg "$family") $(fake_hash ffprobe "$family")"
 		done
 	} >"$script_dir/ffmpeg/sources.lock"
 }
@@ -153,7 +162,7 @@ case_test_overrides_ci() {
 	expect_status 0
 	expect_output "WARNING: TEST BUILD WITH INTERIM FFMPEG"
 	expect_log "RELEASE=false"
-	expect_spks demo-1.0.0-x86_64.spk demo-1.0.0-armv8.spk demo-1.0.0-armv7.spk SHA256SUMS NOT-FOR-RELEASE.txt
+	expect_spks demo-1.0.0-x86_64.spk demo-1.0.0-armv8.spk demo-1.0.0-armv7.spk "$SOURCE_ARCHIVE" SHA256SUMS NOT-FOR-RELEASE.txt
 }
 
 case_release_refuses_interim_lock() {
@@ -190,15 +199,90 @@ case_release_refuses_staged_interim_ffmpeg() {
 	refute_log "run "
 }
 
-case_notice_needs_one_status_and_licence() {
+case_notice_needs_one_line_per_field() {
 	local extra
-	for extra in "Status:               interim" "Licence:              GPL-3.0-or-later+nonfree"; do
+	for extra in "Status:               interim" "Licence:              GPL-3.0-or-later+nonfree" \
+		"Version:              2.0-static1" "Source SHA-256:       $(fake_hash x y)"; do
 		export FAKE_NOTICE_EXTRA="$extra"
 		run_build "$1" --test 1.0.0
 		expect_failure
-		expect_output "needs exactly one Status: and one Licence: line"
+		expect_output "needs exactly one ${extra%%:*}: line"
 		refute_log "run "
 	done
+}
+
+# The staged ffmpeg of one family differs from its pin: a release refuses, a test build packs
+# it with a warning and names it in NOT-FOR-RELEASE.txt.
+case_release_refuses_unpinned_ffmpeg() {
+	export FAKE_FFMPEG_CHANGED=armv8
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "release refused: FFmpeg builds differ from the pins of ffmpeg/sources.lock: armv8 (ffmpeg)"
+	refute_log "run "
+	run_build "$1" --test 1.0.0
+	expect_status 0
+	expect_output "WARNING: FFmpeg builds differ from the pins of ffmpeg/sources.lock"
+	grep -q "differ from the pins of ffmpeg/sources.lock: armv8 (ffmpeg)" "$dist/NOT-FOR-RELEASE.txt"
+}
+
+# The whole Licence: value counts: another licence than the pinned one is refused, and a
+# "nonfree" anywhere on the line makes the build ineligible, not only in the first word.
+case_release_refuses_licence_mismatch() {
+	export FAKE_FFMPEG_LICENCE=GPL-2.0-or-later
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "x86_64 (licence GPL-2.0-or-later (pinned GPL-3.0-or-later))"
+	refute_log "run "
+	export FAKE_FFMPEG_LICENCE="GPL-3.0-or-later with nonfree parts"
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "release refused: FFmpeg builds not release-eligible"
+	expect_output "x86_64 (selected, GPL-3.0-or-later with nonfree parts)"
+	refute_log "run "
+}
+
+case_release_refuses_pin_version_mismatch() {
+	write_lock selected 2.0-static2
+	run_build "$1" --release 1.0.0
+	expect_failure
+	expect_output "x86_64 (version $FAKE_VERSION (pinned 2.0-static2))"
+	refute_log "run "
+}
+
+# The source archive step 1 staged must be the one every SOURCE.txt names, in both modes.
+case_source_archive_mismatch_fails() {
+	export FAKE_SOURCE_MISMATCH=1
+	run_build "$1" --test 1.0.0
+	expect_failure
+	expect_output "is not the one SOURCE.txt of x86_64 names"
+	refute_log "run "
+	[ ! -e "$dist/$SOURCE_ARCHIVE" ]
+}
+
+case_malformed_lock_refused() {
+	echo "x86_64 selected $FAKE_VERSION GPL-3.0-or-later deadbeef" >"$script_dir/ffmpeg/sources.lock"
+	run_build "$1" --test 1.0.0
+	expect_failure
+	expect_output "ffmpeg/sources.lock: the entry of x86_64 has 5 fields, expected 6"
+	expect_no_docker
+	write_lock selected
+	echo "armv8 selected $FAKE_VERSION GPL-3.0-or-later $(fake_hash ffmpeg armv8) $(fake_hash ffprobe armv8)" >>"$script_dir/ffmpeg/sources.lock"
+	run_build "$1" --test 1.0.0
+	expect_failure
+	expect_output "ffmpeg/sources.lock has two entries for armv8"
+	expect_no_docker
+}
+
+# Step 0 builds the FFmpeg recipe image before step 1, which receives its name.
+case_ffmpeg_image_built_before_stage() {
+	export SPK_FFMPEG_IMAGE=test-ffmpeg:dev
+	run_build "$1" --test 1.0.0
+	expect_status 0
+	expect_log "build -t test-ffmpeg:dev"
+	expect_log "FFMPEG_IMAGE=test-ffmpeg:dev"
+	[ "$(grep -n -- '-t test-ffmpeg:dev' "$FAKE_DOCKER_LOG" | cut -d: -f1)" -lt \
+		"$(grep -n -- 'FFMPEG_IMAGE=test-ffmpeg:dev' "$FAKE_DOCKER_LOG" | cut -d: -f1)" ]
+	expect_output "step 0: FFmpeg"
 }
 
 case_failed_toolkit_run_writes_no_sums() {
@@ -219,10 +303,12 @@ case_release_build_names_and_sums() {
 	run_build "$1" --release 1.0.0
 	expect_status 0
 	expect_log "RELEASE=true"
-	expect_spks demo-1.0.0-x86_64.spk demo-1.0.0-armv8.spk demo-1.0.0-armv7.spk SHA256SUMS
+	expect_spks demo-1.0.0-x86_64.spk demo-1.0.0-armv8.spk demo-1.0.0-armv7.spk "$SOURCE_ARCHIVE" SHA256SUMS
 	[ ! -e "$dist/NOT-FOR-RELEASE.txt" ]
+	[ ! -e "$dist/stage/ffmpeg-source/$SOURCE_ARCHIVE" ]
 	(cd "$dist" && sha256sum -c SHA256SUMS)
-	[ "$(cut -d' ' -f3 "$dist/SHA256SUMS" | tr '\n' ' ')" = "demo-1.0.0-armv7.spk demo-1.0.0-armv8.spk demo-1.0.0-x86_64.spk " ]
+	[ "$(cut -d' ' -f3 "$dist/SHA256SUMS" | tr '\n' ' ')" = "demo-1.0.0-armv7.spk demo-1.0.0-armv8.spk demo-1.0.0-x86_64.spk $SOURCE_ARCHIVE " ]
+	expect_output "FFmpeg corresponding source: $SOURCE_ARCHIVE"
 }
 
 case_package_revision_in_name() {
@@ -296,7 +382,9 @@ case_release_refuses_dirty_tree() {
 CASES=(
 	ci_defaults_to_release ci_values test_overrides_ci release_refuses_interim_lock
 	release_refuses_dev_version release_refuses_staged_nonfree_ffmpeg
-	release_refuses_staged_interim_ffmpeg notice_needs_one_status_and_licence
+	release_refuses_staged_interim_ffmpeg notice_needs_one_line_per_field
+	release_refuses_unpinned_ffmpeg release_refuses_licence_mismatch release_refuses_pin_version_mismatch
+	source_archive_mismatch_fails malformed_lock_refused ffmpeg_image_built_before_stage
 	failed_toolkit_run_writes_no_sums release_build_names_and_sums package_revision_in_name
 	privilege_options version_checked_early empty_option_values_refused
 	stage_path_with_comma_and_blank release_refuses_dirty_tree

@@ -340,8 +340,9 @@ func TestStaticPIEIsAccepted(t *testing.T) {
 	}
 }
 
-// TestDynamicInterimFFmpegIsStagedWithAWarning keeps the interim pins of ffmpeg/sources.lock
-// usable until SPK-16: they link glibc dynamically, which a selected build may not.
+// TestDynamicInterimFFmpegIsStagedWithAWarning keeps interim builds usable for development:
+// interim prebuilts such as those pinned before SPK-16 link glibc dynamically, which a selected
+// build may not.
 func TestDynamicInterimFFmpegIsStagedWithAWarning(t *testing.T) {
 	t.Parallel()
 

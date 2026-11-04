@@ -6,8 +6,11 @@
 # shellcheck shell=sh
 
 # RECIPE_REVISION counts changes of the configuration or the recipe for one FFmpeg release; it
-# becomes FFmpeg's --extra-version ("ffmpeg version 9.0.2-static1") and part of the source
-# archive name. Bump it with every change that alters the binaries or the archive.
+# becomes FFmpeg's --extra-version ("ffmpeg version 9.0.2-static1"), part of the source archive
+# name and the version field of packaging/synology/ffmpeg/sources.lock. Bump it with every
+# change that alters the binaries (pins, flags, configuration) and update the lock's checksums.
+# Edits that leave the binaries alone (documentation, checks) change only the source archive,
+# whose SHA-256 every build records in its SOURCE.txt.
 readonly RECIPE_REVISION=1
 # ARCHIVE_EPOCH is the modification time of every member of the source archive (2026-10-31
 # 00:00 UTC), so the archive does not depend on when or where it was built.

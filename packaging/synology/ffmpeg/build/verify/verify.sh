@@ -12,8 +12,9 @@
 #
 # Needs: bash, Docker on an x86_64 host with binfmt QEMU for arm64 and arm/v7 (Docker Desktop),
 # the corpus in testdata/media (go run ./scripts/gen-testmedia). Runs from Git Bash on Windows
-# and from Linux shells. Environment: VERIFY_WORK (work directory, default: a new temporary
-# directory), VERIFY_GO_TESTS=0 skips the Go tests. Exit status 1 if any check failed.
+# and from Linux shells. Environment: VERIFY_WORK (work directory, kept with the logs of every
+# run; the default is a temporary directory removed at exit), VERIFY_GO_TESTS=0 skips the Go
+# tests. Exit status 1 if any check failed.
 set -euo pipefail
 
 # Git Bash must not rewrite container paths such as /tools into Windows paths.
@@ -98,7 +99,12 @@ main() {
 		printf 'verify.sh: testdata/media is missing; run go run ./scripts/gen-testmedia\n' >&2
 		exit 2
 	}
-	work=${VERIFY_WORK:-$(mktemp -d)}
+	if [ -n "${VERIFY_WORK:-}" ]; then
+		work=$VERIFY_WORK
+	else
+		work=$(mktemp -d)
+		trap 'rm -rf "$work"' EXIT
+	fi
 	mkdir -p "$work"
 	whitelist=$(server_whitelist)
 	printf 'verify.sh: work directory %s, server whitelist %s\n' "$work" "$whitelist"

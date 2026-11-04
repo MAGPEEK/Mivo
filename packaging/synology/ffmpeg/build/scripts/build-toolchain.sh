@@ -79,14 +79,15 @@ cp "$work/gcc-$GCC_VERSION/COPYING.RUNTIME" "$LICENSE_DIR/gcc-COPYING.RUNTIME"
 cp "$work/gcc-$GCC_VERSION/COPYING3" "$LICENSE_DIR/gcc-COPYING3"
 cp "$work/musl-$MUSL_VERSION/COPYRIGHT" "$LICENSE_DIR/musl-COPYRIGHT"
 
-# Smoke test: the toolchain links a fully static program for the baseline.
+# Smoke test: the toolchain links a fully static program for the baseline. readelf's output is
+# captured first: a failed readelf must not pass as "no INTERP" (POSIX sh has no pipefail).
 probe=$(mktemp -d)
+trap 'rm -rf "$probe"' EXIT
 printf 'int main(void) { return 0; }\n' >"$probe/probe.c"
 # shellcheck disable=SC2086 # ARCH_CFLAGS is a list of flags
 "$output/bin/$TRIPLET-gcc" $ARCH_CFLAGS -static -o "$probe/probe" "$probe/probe.c"
-if "$output/bin/$TRIPLET-readelf" -lW "$probe/probe" | grep -q INTERP; then
-	fail "the probe program is not static"
-fi
-rm -rf "$probe" "$work"
+segments=$("$output/bin/$TRIPLET-readelf" -lW "$probe/probe") || fail "readelf failed on the probe program"
+case "$segments" in *INTERP*) fail "the probe program is not static" ;; esac
+rm -rf "$work"
 printf 'build-toolchain.sh: %s toolchain (gcc %s, binutils %s, musl %s) in %s\n' \
 	"$TRIPLET" "$GCC_VERSION" "$BINUTILS_VERSION" "$MUSL_VERSION" "$output"

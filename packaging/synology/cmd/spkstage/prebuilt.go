@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// File names of the FFmpeg build (ffmpeg/fetch.sh writes them into its destination).
+// File names of the FFmpeg build (the recipe in ffmpeg/build and ffmpeg/fetch.sh write them).
 const (
 	ffmpegName       = "ffmpeg"
 	ffprobeName      = "ffprobe"
@@ -209,8 +209,9 @@ func licenseEntries(directory string) ([]entry, error) {
 }
 
 // ffmpegBinaries checks ffmpeg and ffprobe. A dynamically linked build is refused unless it is
-// interim: the interim pins of ffmpeg/sources.lock link glibc dynamically and stay usable for
-// development until SPK-16 switches to the own static build.
+// interim: interim prebuilts (such as the glibc-linked jellyfin builds ffmpeg/sources.lock
+// pinned before SPK-16) stay usable for development; the own static build is selected and
+// static.
 func ffmpegBinaries(directory string, want elfIdentity, interim bool, stderr io.Writer) ([]entry, error) {
 	names := []string{ffmpegName, ffprobeName}
 	binaries := make([]entry, 0, len(names))

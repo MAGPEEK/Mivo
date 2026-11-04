@@ -4,8 +4,9 @@
 #   build-ffmpeg.sh <family> <ffmpeg-sources> <prefix> <dest>
 #
 # <ffmpeg-sources> holds the verified FFmpeg tarball and versions.env; <prefix> the libraries of
-# build-libs.sh. Writes <dest>/ffmpeg, <dest>/ffprobe (stripped) and <dest>/configuration.txt
-# (the configure line FFmpeg embeds). The cross toolchain must be on PATH.
+# build-libs.sh. Writes <dest>/ffmpeg, <dest>/ffprobe (stripped), <dest>/configuration.txt (the
+# configure line FFmpeg embeds) and <dest>/config-facts.txt (the CPU-feature values of config.h
+# that package.sh records in SOURCE.txt). The cross toolchain must be on PATH.
 #
 # The configuration is GPL version 3 (--enable-gpl --enable-version3) with libx264 and FFmpeg's
 # native AAC encoder. It never contains --enable-nonfree or libfdk-aac (ADR 0015 Notes, ADR 0026
@@ -43,8 +44,9 @@ work="$BUILD_ROOT/ffmpeg"
 # Input demuxers: exactly the single-file demuxers of the server's -format_whitelist
 # (allowedDemuxers and image2 in internal/adapters/ffmpeg/probe.go, ADR 0022 Notes M2-24b),
 # by configure name: "mpeg" is mpegps, "<x>_pipe" is image_<x>_pipe. Playlist and reference
-# demuxers (concat, hls, dash, imf, vobsub) are not built at all; verify/verify.sh checks the
-# list against probe.go.
+# demuxers (concat, hls, dash, imf, vobsub) are not built at all. Two gates tie the two lists
+# together: the Go test packaging/synology/internal/recipecheck compares this line with
+# probe.go without a build, verify/verify.sh checks the built binary against probe.go.
 readonly DEMUXERS="matroska,mov,mpegts,mpegps,mpegvideo,avi,flv,live_flv,ogg,asf,mxf,rm,\
 flac,mp3,wav,aiff,wv,ape,dsf,iff,aac,ac3,eac3,dts,\
 gif,image_png_pipe,image_jpeg_pipe,image_tiff_pipe,image_webp_pipe,\
@@ -93,6 +95,17 @@ check_configuration() {
 	printf '%s\n' "$configuration" >"$dest/configuration.txt"
 }
 
+# record_config_facts keeps the config.h values that say which CPU-specific code FFmpeg built:
+# x86 assembly, and on ARM whether NEON code exists at all (HAVE_NEON), how configure probed it
+# (inline or external assembler) and whether the assembler takes .fpu directives. The armv7
+# build compiles with -mfpu=vfpv3-d16, so these values show what the binary can select at run
+# time (README.md "Baselines").
+record_config_facts() {
+	grep -E '^#define HAVE_(X86ASM|NEON|NEON_INLINE|NEON_EXTERNAL|VFP|VFPV3|ARMV6T2|ARMV8|AS_FPU_DIRECTIVE|AS_ARCH_DIRECTIVE) [01]$' config.h |
+		sed 's/^#define //; s/ /=/' >"$dest/config-facts.txt"
+	[ -s "$dest/config-facts.txt" ] || fail "config.h has none of the expected HAVE_ values"
+}
+
 fail() {
 	printf 'build-ffmpeg.sh: %s\n' "$*" >&2
 	exit 1
@@ -106,6 +119,7 @@ if ! configure_ffmpeg >configure.out 2>&1; then
 	fail "configure failed"
 fi
 check_configuration
+record_config_facts
 make -j"$jobs" ffmpeg ffprobe >make.out 2>&1 || {
 	tail -n 60 make.out >&2
 	fail "make failed"

@@ -23,20 +23,23 @@ ARG BUILDER_IMAGE=debian:bookworm-slim@sha256:99c0b25c46d0214d5a2091092e7908907d
 # their code ends up in the binaries. Versions are recorded in SOURCE.txt.
 FROM --platform=$BUILDPLATFORM ${BUILDER_IMAGE} AS host
 ARG DEBIAN_FRONTEND=noninteractive
-# Debian package versions move with point releases; pinning them would break the build once a
-# version leaves the archive. The toolchains and every linked source are pinned instead.
-# hadolint ignore=DL3008
+# The one list of host packages: installed here, recorded with their versions in SOURCE.txt by
+# package.sh. Debian package versions move with point releases; pinning them would break the
+# build once a version leaves the archive (README.md "Reproducibility" names the alternative).
+# The toolchains and every linked source are pinned instead.
+ENV HOST_PACKAGES="bzip2 ca-certificates curl file gawk gcc g++ libc6-dev m4 make meson ninja-build patch pkgconf python3 xz-utils"
+# hadolint ignore=DL3008,SC2086
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-        bzip2 ca-certificates curl file gawk gcc g++ libc6-dev m4 make meson ninja-build \
-        patch pkgconf python3 xz-utils \
+ && apt-get install -y --no-install-recommends $HOST_PACKAGES \
  && rm -rf /var/lib/apt/lists/*
 SHELL ["/bin/sh", "-eu", "-c"]
 WORKDIR /recipe
 
 # ---------------------------------------------------------------------------------------------
 # download: every pinned source, checked against sources.list. The cache mount keeps downloads
-# (named by SHA-256) across builds, so a changed pin fetches only the changed file.
+# (named by SHA-256) across builds, so a changed pin fetches only the changed file. It is the
+# last stage with network access: every RUN below runs with --network=none, so nothing but the
+# verified files can enter the build.
 FROM host AS download
 COPY sources.list scripts/fetch-sources.sh ./
 RUN --mount=type=cache,id=ffmpeg-static-downloads,target=/cache \
@@ -52,7 +55,7 @@ COPY --from=download /sources/ /
 FROM host AS verified-sources
 COPY sources.list scripts/fetch-sources.sh ./
 COPY --from=sources / /sources/
-RUN sh fetch-sources.sh verify sources.list /sources
+RUN --network=none sh fetch-sources.sh verify sources.list /sources
 
 # ---------------------------------------------------------------------------------------------
 # tools: NASM from source for the x86 assembly of FFmpeg, x264 and dav1d, so the assembler
@@ -61,7 +64,7 @@ FROM host AS tools
 ARG JOBS
 COPY --from=verified-sources /sources/host/ /sources/host/
 WORKDIR /build/nasm
-RUN . /sources/host/versions.env \
+RUN --network=none . /sources/host/versions.env \
  && tar -xJf "/sources/host/$NASM_FILE" --strip-components=1 \
  && ./configure --prefix=/usr/local >/dev/null \
  && make -j"${JOBS:-$(nproc)}" >/dev/null \
@@ -78,15 +81,15 @@ COPY scripts/families.sh scripts/layout.sh scripts/build-toolchain.sh /recipe/sc
 
 FROM toolchain-common AS toolchain-x86_64
 ARG JOBS
-RUN JOBS="${JOBS:-}" sh scripts/build-toolchain.sh x86_64 /sources/toolchain /opt/cross
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-toolchain.sh x86_64 /sources/toolchain /opt/cross
 
 FROM toolchain-common AS toolchain-armv8
 ARG JOBS
-RUN JOBS="${JOBS:-}" sh scripts/build-toolchain.sh armv8 /sources/toolchain /opt/cross
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-toolchain.sh armv8 /sources/toolchain /opt/cross
 
 FROM toolchain-common AS toolchain-armv7
 ARG JOBS
-RUN JOBS="${JOBS:-}" sh scripts/build-toolchain.sh armv7 /sources/toolchain /opt/cross
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-toolchain.sh armv7 /sources/toolchain /opt/cross
 
 # ---------------------------------------------------------------------------------------------
 # libs-<family>: zlib, x264 and dav1d as static libraries in /build/prefix.
@@ -95,21 +98,21 @@ ENV PATH=/opt/cross/bin:$PATH
 ARG JOBS
 COPY --from=verified-sources /sources/libs/ /sources/libs/
 COPY scripts/compile-flags.sh scripts/build-libs.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-libs.sh x86_64 /sources/libs /build/prefix
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-libs.sh x86_64 /sources/libs /build/prefix
 
 FROM toolchain-armv8 AS libs-armv8
 ENV PATH=/opt/cross/bin:$PATH
 ARG JOBS
 COPY --from=verified-sources /sources/libs/ /sources/libs/
 COPY scripts/compile-flags.sh scripts/build-libs.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-libs.sh armv8 /sources/libs /build/prefix
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-libs.sh armv8 /sources/libs /build/prefix
 
 FROM toolchain-armv7 AS libs-armv7
 ENV PATH=/opt/cross/bin:$PATH
 ARG JOBS
 COPY --from=verified-sources /sources/libs/ /sources/libs/
 COPY scripts/compile-flags.sh scripts/build-libs.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-libs.sh armv7 /sources/libs /build/prefix
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-libs.sh armv7 /sources/libs /build/prefix
 
 # ---------------------------------------------------------------------------------------------
 # ffmpeg-<family>: the configured, stripped ffmpeg and ffprobe in /build/out.
@@ -117,19 +120,19 @@ FROM libs-x86_64 AS ffmpeg-x86_64
 ARG JOBS
 COPY --from=verified-sources /sources/ffmpeg/ /sources/ffmpeg/
 COPY scripts/recipe.sh scripts/build-ffmpeg.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh x86_64 /sources/ffmpeg /build/prefix /build/out
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh x86_64 /sources/ffmpeg /build/prefix /build/out
 
 FROM libs-armv8 AS ffmpeg-armv8
 ARG JOBS
 COPY --from=verified-sources /sources/ffmpeg/ /sources/ffmpeg/
 COPY scripts/recipe.sh scripts/build-ffmpeg.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh armv8 /sources/ffmpeg /build/prefix /build/out
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh armv8 /sources/ffmpeg /build/prefix /build/out
 
 FROM libs-armv7 AS ffmpeg-armv7
 ARG JOBS
 COPY --from=verified-sources /sources/ffmpeg/ /sources/ffmpeg/
 COPY scripts/recipe.sh scripts/build-ffmpeg.sh /recipe/scripts/
-RUN JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh armv7 /sources/ffmpeg /build/prefix /build/out
+RUN --network=none JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh armv7 /sources/ffmpeg /build/prefix /build/out
 
 # ---------------------------------------------------------------------------------------------
 # source-archive: every verified source plus this recipe, the corresponding source (GPL-3.0
@@ -137,28 +140,28 @@ RUN JOBS="${JOBS:-}" sh scripts/build-ffmpeg.sh armv7 /sources/ffmpeg /build/pre
 FROM host AS source-archive
 COPY --from=verified-sources /sources/ /sources/
 COPY . /recipe-files/
-RUN . /sources/ffmpeg/versions.env \
+RUN --network=none . /sources/ffmpeg/versions.env \
  && sh /recipe-files/scripts/make-source-archive.sh /sources /recipe-files /out/source "$FFMPEG_VERSION"
 
 # ---------------------------------------------------------------------------------------------
-# package-<family>: checks (static, ABI note, no VFPv4 on armv7) and SOURCE.txt.
+# package-<family>: checks (ELF identity, static, ABI note, no VFPv4 on armv7) and SOURCE.txt.
 FROM ffmpeg-x86_64 AS package-x86_64
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
 COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh x86_64 /build/out scripts/sources.list /build/archive /out/x86_64
+RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh x86_64 /build/out scripts/sources.list /build/archive /out/x86_64
 
 FROM ffmpeg-armv8 AS package-armv8
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
 COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv8 /build/out scripts/sources.list /build/archive /out/armv8
+RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv8 /build/out scripts/sources.list /build/archive /out/armv8
 
 FROM ffmpeg-armv7 AS package-armv7
 ARG BUILDER_IMAGE
 COPY sources.list scripts/package.sh /recipe/scripts/
 COPY --from=source-archive /out/source/*.sha256 /build/archive/
-RUN BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv7 /build/out scripts/sources.list /build/archive /out/armv7
+RUN --network=none BUILDER_IMAGE="$BUILDER_IMAGE" sh scripts/package.sh armv7 /build/out scripts/sources.list /build/archive /out/armv7
 
 # ---------------------------------------------------------------------------------------------
 # Output targets for --output type=local.

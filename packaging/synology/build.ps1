@@ -7,25 +7,32 @@ Builds the server SPKs of all three architecture families (x86_64, armv8, armv7)
 PowerShell twin of build.sh (ADR 0026 section 2, task SPK-07): same steps, options and output.
 Nothing but Docker and PowerShell 7.2 or newer is needed on the host.
 
+Step 0 (docker build of packaging/synology/ffmpeg/build, unprivileged): the own static FFmpeg
+of every family and its corresponding source archive -> the local image SPK_FFMPEG_IMAGE
+(cached by BuildKit; the first build takes 10-14 minutes, ffmpeg/build/README.md).
 Step 1 (docker build of packaging/synology/Dockerfile, unprivileged): web app, server binaries,
-FFmpeg and the staged projects -> packaging/synology/dist/stage/<family>/.
+FFmpeg from that image and the staged projects -> packaging/synology/dist/stage/<family>/, the
+source archive -> dist/. The staged ffmpeg and ffprobe must match the pins of
+ffmpeg/sources.lock, the archive the Source SHA-256 of every SOURCE.txt.
 Step 2 (docker run of the toolkit image with CAP_SYS_ADMIN, one family after the other because
 the toolkit volume serialises runs): packs each project -> dist/<id>-<version>-<family>.spk
-(package revision N >= 1: <id>-<version>-r<N>-<family>.spk), then dist/SHA256SUMS. The first
-error stops the build.
+(package revision N >= 1: <id>-<version>-r<N>-<family>.spk), then dist/SHA256SUMS over the SPKs
+and the source archive. The first error stops the build.
 
-A test build (the default outside CI) packs an interim FFmpeg with a loud warning and writes
-dist/NOT-FOR-RELEASE.txt. A release build (-Release; the default on CI hosts) refuses interim
-or non-free FFmpeg builds, spkstage warnings, the default version 0.0.0-dev and, when git is
-present, a dirty working tree.
+A test build (the default outside CI) packs an interim or unpinned FFmpeg with a loud warning
+and writes dist/NOT-FOR-RELEASE.txt. A release build (-Release; the default on CI hosts)
+refuses interim or non-free FFmpeg builds, FFmpeg binaries that differ from the pins of
+ffmpeg/sources.lock, spkstage warnings, the default version 0.0.0-dev and, when git is present,
+a dirty working tree.
 
 Empty values: a parameter given with an empty value is refused; an empty environment variable
 counts as unset. A host counts as CI when CI is set to anything but empty, "false" or "0".
 
 Environment: SPK_BUILD_MODE (release or test), SPK_PRIVILEGE (see -Privilege),
 SOURCE_DATE_EPOCH, SPK_TOOLKIT_VOLUME (default spk-toolkit), SPK_TOOLKIT_IMAGE (default
-spk-toolkit:dev); NODE_IMAGE, GO_IMAGE and FFMPEG_FETCH_IMAGE are passed to the Dockerfile when
-set; BUILDKIT_PROGRESS=plain shows every log line of step 1.
+spk-toolkit:dev), SPK_FFMPEG_IMAGE (default spk-ffmpeg-static:dev, the local image of the FFmpeg
+recipe); NODE_IMAGE and GO_IMAGE are passed to the Dockerfile when set; BUILDKIT_PROGRESS=plain
+shows every log line of steps 0 and 1.
 
 .PARAMETER Version
 Server version, e.g. 0.1.0-alpha.2 (default 0.0.0-dev); checked against the version scheme of
@@ -84,6 +91,11 @@ $Families = @('x86_64', 'armv8', 'armv7')
 $SumsName = 'SHA256SUMS'
 $MarkerName = 'NOT-FOR-RELEASE.txt'
 $NoticePath = 'prebuilt/share/licenses/ffmpeg/SOURCE.txt'
+$FfmpegBinPath = 'prebuilt/bin'
+$SourceStageName = 'ffmpeg-source'
+$SourceArchiveSuffix = '-source.tar'
+$LockFieldCount = 6
+$Sha256Pattern = '^[0-9a-f]{64}$'
 $PackageNamePattern = '^[A-Za-z0-9][A-Za-z0-9._-]*$'
 # The server versions spkmeta maps (internal/spkmeta/version.go): SemVer core without leading
 # zeros, optionally -alpha.N, -beta.N or -rc.N (N 0-99), or the development version.
@@ -100,8 +112,10 @@ $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Dist = Join-Path $PSScriptRoot 'dist'
 $Stage = Join-Path $Dist 'stage'
 $SourcesLock = Join-Path $PSScriptRoot 'ffmpeg/sources.lock'
+$FfmpegRecipe = Join-Path $PSScriptRoot 'ffmpeg/build'
 $Volume = if ($env:SPK_TOOLKIT_VOLUME) { $env:SPK_TOOLKIT_VOLUME } else { 'spk-toolkit' }
 $Image = if ($env:SPK_TOOLKIT_IMAGE) { $env:SPK_TOOLKIT_IMAGE } else { 'spk-toolkit:dev' }
+$FfmpegImage = if ($env:SPK_FFMPEG_IMAGE) { $env:SPK_FFMPEG_IMAGE } else { 'spk-ffmpeg-static:dev' }
 
 function Write-BuildLog([string] $Message) {
     [Console]::Error.WriteLine("[spk-build] $Message")
@@ -165,15 +179,34 @@ function Resolve-BuildInput {
     $script:DockerPrivilege = $PrivilegeOptions[$privilegeName]
 }
 
-# Families whose sources.lock entry is interim (same test as SPK-16's acceptance check).
-function Get-InterimFamily {
+# Reads the one sources.lock entry of every family (format in the lock's header) into a table
+# family -> entry; a malformed lock stops the build before anything runs.
+function Read-Lock {
     if (-not (Test-Path -LiteralPath $SourcesLock -PathType Leaf)) { Exit-Build "$SourcesLock not found" }
-    $families = foreach ($line in Get-Content -LiteralPath $SourcesLock) {
-        if ($line -match '^\s*#') { continue }
+    $lock = @{}
+    foreach ($line in Get-Content -LiteralPath $SourcesLock) {
+        if ($line -match '^\s*(#|$)') { continue }
         $fields = -split $line
-        if ($fields.Count -gt 1 -and $fields[1] -ceq 'interim') { $fields[0] }
+        $family = $fields[0]
+        if ($fields.Count -ne $LockFieldCount) {
+            Exit-Build "ffmpeg/sources.lock: the entry of $family has $($fields.Count) fields, expected $LockFieldCount"
+        }
+        if ($lock.ContainsKey($family)) { Exit-Build "ffmpeg/sources.lock has two entries for $family" }
+        if ($fields[1] -cnotin @('selected', 'interim')) { Exit-Build "ffmpeg/sources.lock: unknown status '$($fields[1])' for $family" }
+        if ($fields[4] -cnotmatch $Sha256Pattern -or $fields[5] -cnotmatch $Sha256Pattern) {
+            Exit-Build "ffmpeg/sources.lock: the entry of $family has no lowercase SHA-256 for ffmpeg and ffprobe"
+        }
+        $lock[$family] = @{ Status = $fields[1]; Version = $fields[2]; Licence = $fields[3]; Ffmpeg = $fields[4]; Ffprobe = $fields[5] }
     }
-    return @($families) -join ' '
+    foreach ($family in $Families) {
+        if (-not $lock.ContainsKey($family)) { Exit-Build "ffmpeg/sources.lock has no entry for $family" }
+    }
+    return $lock
+}
+
+# Families whose sources.lock entry is interim (same test as SPK-16's acceptance check).
+function Get-InterimFamily([hashtable] $Lock) {
+    return @($Families | Where-Object { $Lock[$_].Status -ceq 'interim' }) -join ' '
 }
 
 function Write-InterimBanner([string] $InterimFamilies) {
@@ -183,7 +216,7 @@ function Write-InterimBanner([string] $InterimFamilies) {
         'WARNING: TEST BUILD WITH INTERIM FFMPEG - NOT FOR RELEASE OR DISTRIBUTION'
         "  ffmpeg/sources.lock has interim entries for: $InterimFamilies"
         '  Interim builds miss criteria of ADR 0026 section 4 (static, licence, kernel); the'
-        '  release build (-Release) refuses them until SPK-16 switches to the own FFmpeg build.'
+        '  release build (-Release) refuses them.'
         $rule
     ) | ForEach-Object { [Console]::Error.WriteLine($_) }
 }
@@ -217,8 +250,17 @@ function Initialize-Dist {
     if (Test-Path -LiteralPath $Stage) { Remove-Item -LiteralPath $Stage -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $Dist | Out-Null
     Get-ChildItem -LiteralPath $Dist -File |
-        Where-Object { $_.Name -like '*.spk' -or $_.Name -in @($SumsName, $MarkerName) } |
+        Where-Object { $_.Name -like '*.spk' -or $_.Name -like "*$SourceArchiveSuffix" -or $_.Name -in @($SumsName, $MarkerName) } |
         Remove-Item -Force
+}
+
+# Step 0: the FFmpeg recipe's "all" target as a local image, which step 1 copies from. BuildKit
+# keys every stage by its inputs, so an unchanged recipe is loaded from the cache in seconds.
+function Invoke-FfmpegStep {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    Write-BuildLog "step 0: FFmpeg (own static build of ffmpeg/build, cached by BuildKit) -> $FfmpegImage"
+    Invoke-Docker 'step 0 (FFmpeg recipe build)' @('build', '-t', $FfmpegImage, $FfmpegRecipe)
+    Write-BuildLog "step 0 finished in $([int]$watch.Elapsed.TotalSeconds)s"
 }
 
 function Get-BuildArgument {
@@ -226,9 +268,10 @@ function Get-BuildArgument {
     $arguments = @(
         '--build-arg', "VERSION=$Version", '--build-arg', "REVISION=$script:BuildRevision",
         '--build-arg', "PACKAGE_REVISION=$PackageRevision",
-        '--build-arg', "SOURCE_DATE_EPOCH=$script:Epoch", '--build-arg', "RELEASE=$releaseFlag"
+        '--build-arg', "SOURCE_DATE_EPOCH=$script:Epoch", '--build-arg', "RELEASE=$releaseFlag",
+        '--build-arg', "FFMPEG_IMAGE=$FfmpegImage"
     )
-    foreach ($name in @('NODE_IMAGE', 'GO_IMAGE', 'FFMPEG_FETCH_IMAGE')) {
+    foreach ($name in @('NODE_IMAGE', 'GO_IMAGE')) {
         $value = [Environment]::GetEnvironmentVariable($name)
         if ($value) { $arguments += @('--build-arg', "$name=$value") }
     }
@@ -260,29 +303,69 @@ function Get-BuildEnvValue([string] $Project, [string] $Name) {
     return ''
 }
 
-# Returns status and licence of a staged FFmpeg SOURCE.txt; a notice with no or several Status
-# or Licence lines is refused, since either value could hide behind the other.
+# Returns the single value of a "Field:" line of a staged FFmpeg SOURCE.txt: everything after
+# the colon, trimmed, so a word such as "nonfree" cannot hide behind the first one. A notice
+# with no or several such lines is refused, since a second line could hide behind the first.
+function Get-NoticeValue([string[]] $Lines, [string] $Notice, [string] $Field) {
+    $matching = @($Lines | Where-Object { $_.StartsWith("${Field}:", [StringComparison]::Ordinal) })
+    if ($matching.Count -ne 1) { Exit-Build "$Notice needs exactly one ${Field}: line (has $($matching.Count))" }
+    $value = $matching[0].Substring($Field.Length + 1).Trim()
+    if (-not $value) { Exit-Build "$Notice has an empty ${Field}: value" }
+    return $value
+}
+
+# Returns status, licence, version and source SHA-256 of a staged FFmpeg SOURCE.txt.
 function Get-FfmpegNotice([string] $Project) {
     $notice = Join-Path $Project $NoticePath
     if (-not (Test-Path -LiteralPath $notice -PathType Leaf)) { Exit-Build "$notice missing in the staged project" }
     $lines = @(Get-Content -LiteralPath $notice)
-    $status = @($lines | Where-Object { $_ -cmatch '^Status:' })
-    $licence = @($lines | Where-Object { $_ -cmatch '^Licence:' })
-    if ($status.Count -ne 1 -or $licence.Count -ne 1) {
-        Exit-Build "$notice needs exactly one Status: and one Licence: line (has $($status.Count) and $($licence.Count))"
+    return @{
+        Status       = Get-NoticeValue $lines $notice 'Status'
+        Licence      = Get-NoticeValue $lines $notice 'Licence'
+        Version      = Get-NoticeValue $lines $notice 'Version'
+        SourceSha256 = Get-NoticeValue $lines $notice 'Source SHA-256'
     }
-    $result = @{
-        Status  = if ($status[0] -cmatch '^Status:\s*(\S+)') { $Matches[1] } else { '' }
-        Licence = if ($licence[0] -cmatch '^Licence:\s*(\S+)') { $Matches[1] } else { '' }
+}
+
+function Get-Sha256([string] $Path) {
+    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
+}
+
+# Returns the differences between a family's staged FFmpeg and its sources.lock entry: the
+# SHA-256 of the staged ffmpeg and ffprobe and the version and licence of SOURCE.txt must be
+# the pinned ones, so an SPK carries exactly the binaries that were verified under emulation.
+function Get-PinDifference([string] $Family, [hashtable] $Entry, [hashtable] $Notice) {
+    $differences = @()
+    foreach ($tool in @('ffmpeg', 'ffprobe')) {
+        $path = Join-Path (Join-Path $Stage $Family) "$FfmpegBinPath/$tool"
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { Exit-Build "$path missing in the staged project" }
+        $expected = if ($tool -eq 'ffmpeg') { $Entry.Ffmpeg } else { $Entry.Ffprobe }
+        if ((Get-Sha256 $path) -cne $expected) { $differences += $tool }
     }
-    if (-not $result.Status -or -not $result.Licence) { Exit-Build "$notice has an empty Status: or Licence: value" }
-    return $result
+    if ($Notice.Version -cne $Entry.Version) { $differences += "version $($Notice.Version) (pinned $($Entry.Version))" }
+    if ($Notice.Licence -cne $Entry.Licence) { $differences += "licence $($Notice.Licence) (pinned $($Entry.Licence))" }
+    return $differences -join ' '
+}
+
+# Returns the one corresponding source archive step 1 staged, with its SHA-256; every
+# SOURCE.txt must name it (Source SHA-256), so the archive next to the SPKs is the source of
+# exactly their binaries.
+function Get-SourceArchive {
+    $directory = Join-Path $Stage $SourceStageName
+    $archives = @()
+    if (Test-Path -LiteralPath $directory -PathType Container) {
+        $archives = @(Get-ChildItem -LiteralPath $directory -File -Filter "*$SourceArchiveSuffix")
+    }
+    if ($archives.Count -ne 1) { Exit-Build "step 1 staged $($archives.Count) FFmpeg source archives in $directory, expected 1" }
+    return @{ Name = $archives[0].Name; Path = $archives[0].FullName; Sha256 = Get-Sha256 $archives[0].FullName }
 }
 
 # Reads what was staged, not what sources.lock says: the release check holds for any stage
 # that supplies FFmpeg. Test builds list the families in NOT-FOR-RELEASE.txt.
-function Assert-StagedProject {
+function Assert-StagedProject([hashtable] $Lock) {
     $notEligible = @()
+    $unpinned = @()
+    $archive = Get-SourceArchive
     foreach ($family in $Families) {
         $project = Join-Path $Stage $family
         if (-not (Test-Path -LiteralPath (Join-Path $project 'build.env') -PathType Leaf)) {
@@ -292,17 +375,35 @@ function Assert-StagedProject {
         if ($notice.Status -cne 'selected' -or $notice.Licence -like '*nonfree*') {
             $notEligible += "$family ($($notice.Status), $($notice.Licence))"
         }
+        $differences = Get-PinDifference $family $Lock[$family] $notice
+        if ($differences) { $unpinned += "$family ($differences)" }
+        if ($archive.Sha256 -cne $notice.SourceSha256) {
+            Exit-Build "the staged source archive $($archive.Name) ($($archive.Sha256)) is not the one SOURCE.txt of $family names ($($notice.SourceSha256))"
+        }
     }
     if ($script:Mode -eq 'release') {
         if ($notEligible) { Exit-Build "release refused: FFmpeg builds not release-eligible: $($notEligible -join ' ')" }
-        return
+        if ($unpinned) { Exit-Build "release refused: FFmpeg builds differ from the pins of ffmpeg/sources.lock: $($unpinned -join ' ')" }
+        return $archive
+    }
+    if ($unpinned) {
+        Write-BuildLog "WARNING: FFmpeg builds differ from the pins of ffmpeg/sources.lock (recipe changed? update the pins on purpose): $($unpinned -join ' ')"
     }
     $lines = @(
         'These SPKs come from a TEST BUILD (build.sh/build.ps1 without --release / -Release).'
         'Do not publish, upload or hand them out; build again with --release for that.'
     )
     if ($notEligible) { $lines += "FFmpeg builds that are not release-eligible (status, licence): $($notEligible -join ' ')" }
+    if ($unpinned) { $lines += "FFmpeg builds that differ from the pins of ffmpeg/sources.lock: $($unpinned -join ' ')" }
     Write-LfFile (Join-Path $Dist $MarkerName) $lines
+    return $archive
+}
+
+# Moves the corresponding source archive next to the SPKs (its .sha256 sidecar stays in
+# stage/; SHA256SUMS covers the archive).
+function Move-SourceArchive([hashtable] $Archive) {
+    Move-Item -LiteralPath $Archive.Path -Destination (Join-Path $Dist $Archive.Name) -Force
+    Write-BuildLog "FFmpeg corresponding source: $($Archive.Name)"
 }
 
 function Write-LfFile([string] $Path, [string[]] $Lines) {
@@ -346,14 +447,15 @@ function Invoke-PackFamily([string] $Family) {
     Write-BuildLog "wrote $($name.Target) in $([int]$watch.Elapsed.TotalSeconds)s"
 }
 
-# SHA256SUMS in the format of `sha256sum` (hash, two blanks, name), sorted by name, LF endings.
+# SHA256SUMS in the format of `sha256sum` (hash, two blanks, name) over the SPKs and the FFmpeg
+# source archive, sorted by name, LF endings.
 function Write-Sha256Sum {
-    [string[]] $names = @(Get-ChildItem -LiteralPath $Dist -File -Filter '*.spk' | ForEach-Object Name)
-    if ($names.Count -ne $Families.Count) { Exit-Build "expected $($Families.Count) SPKs in $Dist, found $($names.Count)" }
+    [string[]] $spks = @(Get-ChildItem -LiteralPath $Dist -File -Filter '*.spk' | ForEach-Object Name)
+    if ($spks.Count -ne $Families.Count) { Exit-Build "expected $($Families.Count) SPKs in $Dist, found $($spks.Count)" }
+    [string[]] $names = $spks + @(Get-ChildItem -LiteralPath $Dist -File -Filter "*$SourceArchiveSuffix" | ForEach-Object Name)
     [Array]::Sort($names, [StringComparer]::Ordinal)
     $lines = foreach ($name in $names) {
-        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Dist $name)).Hash.ToLowerInvariant()
-        "$hash  $name"
+        "$(Get-Sha256 (Join-Path $Dist $name))  $name"
     }
     Write-LfFile (Join-Path $Dist $SumsName) $lines
     $lines | ForEach-Object { [Console]::Error.WriteLine($_) }
@@ -362,14 +464,17 @@ function Write-Sha256Sum {
 $watch = [Diagnostics.Stopwatch]::StartNew()
 $script:RevisionGiven = $PSBoundParameters.ContainsKey('Revision')
 Resolve-BuildInput
-$interimFamilies = Get-InterimFamily
+$lock = Read-Lock
+$interimFamilies = Get-InterimFamily $lock
 Assert-ReleaseInput $interimFamilies
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Exit-Build 'docker not found' }
 Initialize-Dist
 Write-BuildLog "building the toolkit image $Image"
 Invoke-Docker 'toolkit image build' @('build', '-q', '-t', $Image, (Join-Path $PSScriptRoot 'toolkit')) -Quiet
+Invoke-FfmpegStep
 Invoke-StageStep
-Assert-StagedProject
+$sourceArchive = Assert-StagedProject $lock
+Move-SourceArchive $sourceArchive
 foreach ($family in $Families) { Invoke-PackFamily $family }
 Write-Sha256Sum
 Write-BuildLog "done in $([int]$watch.Elapsed.TotalSeconds)s ($script:Mode build): $Dist"

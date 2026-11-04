@@ -62,8 +62,9 @@ $work = Join-Path $env:TEMP 'spk-real'
 $env:GOOS='linux'; $env:GOARCH='amd64'; $env:CGO_ENABLED='0'
 go build -trimpath -buildvcs=false -ldflags "-s -w -X github.com/magpeek/mivo/internal/platform/buildinfo.version=0.1.0-alpha.2" -o "$work/bin/server" ./cmd/mivo
 Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
-# FFmpeg of the family (curl/wget, sha256sum, tar and xz; alpine has them after adding xz)
-docker run --rm -v "${PWD}:/src:ro" -v "${work}:/work" alpine:3 sh -c 'apk add --no-cache xz >/dev/null && sh /src/packaging/synology/ffmpeg/fetch.sh x86_64 /work/ffmpeg-x86_64'
+# FFmpeg of the family: the own static build, made by the recipe with Docker (cached) and
+# verified against ffmpeg/sources.lock (Git Bash on Windows, or Linux)
+sh packaging/synology/ffmpeg/fetch.sh x86_64 "$work/ffmpeg-x86_64"
 # Stage and pack
 go run ./packaging/synology/cmd/spkstage -family x86_64 -version 0.1.0-alpha.2 -binary "$work/bin/server" -ffmpeg-dir "$work/ffmpeg-x86_64" -out "$work/project-x86_64"
 docker run --rm --cap-add SYS_ADMIN -v spk-toolkit:/toolkit -v "${work}/project-x86_64:/project:ro" -v "${work}/out:/output" spk-toolkit:dev x86_64
@@ -93,9 +94,10 @@ dynamically linked executable (`PT_INTERP`; a static-pie is `ET_DYN` without it)
 text file, a non-ASCII byte in `INFO.sh` or `SynoBuildConf/*`, a JSON template that no longer
 parses, an INFO-unsafe package value (`spkmeta`), and a non-empty project directory without
 `-force`. A `SOURCE.txt` with `Status: interim` is staged with a warning on stderr; only such an
-interim build may have dynamically linked `ffmpeg`/`ffprobe` (the jellyfin pins of
-`sources.lock` link glibc), again with a warning, until SPK-16 switches to the own static
-build. The package scripts may contain UTF-8 (German messages), so only CRs are refused there.
+interim build may have dynamically linked `ffmpeg`/`ffprobe` (the jellyfin pins `sources.lock`
+held until SPK-16 linked glibc), again with a warning; the own static build of SPK-15 is
+`selected` and static. The package scripts may contain UTF-8 (German messages), so only CRs are
+refused there.
 
 **Where spkstage writes.** `-out` is resolved with all symbolic links followed. It is refused
 when it is a file system root or when it is, contains or lies inside an input (the template

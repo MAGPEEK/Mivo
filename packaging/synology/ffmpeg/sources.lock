@@ -1,32 +1,31 @@
-# FFmpeg builds bundled in the Synology packages, one entry per DSM architecture family.
-# Read by fetch.sh; the choice and the measurements behind it are in README.md.
+# FFmpeg builds bundled in the Synology packages, one entry per DSM architecture family: the
+# pins of the own static build made by the recipe in build/ (task SPK-15; the measurements
+# behind the choice are in README.md). build.sh / build.ps1 compare what the recipe produced
+# with these pins before packing (SPK-16), fetch.sh when it installs a build by hand.
 #
 # Format: one entry per line, fields separated by blanks (no field contains a blank),
 # lines starting with "#" and empty lines are ignored. Exactly one entry per family.
 #
-#   1  family          DSM "arch" family: x86_64, armv8 or armv7
+#   1  family          DSM "arch" family: x86_64, armv8 or armv7 (also the recipe's target)
 #   2  status          selected = meets every criterion of ADR 0026 section 4;
 #                      interim  = misses at least one criterion (README.md lists which); usable
 #                                 for pipeline development and emulated tests, NOT for a release
-#   3  version         provider's release label of the build (ffmpeg -version prints the
-#                      FFmpeg version it is based on)
-#   4  licence         SPDX identifier of the build's licence; the suffix "+nonfree" marks a
-#                      build that links code FFmpeg classifies as non-free (the jellyfin GPL
-#                      builds link libfdk-aac): under FFmpeg's own rules such a build is NOT
-#                      redistributable, and fetch.sh says so in SOURCE.txt
-#   5  archive_url     https URL of the binary archive (.tar.xz or .tar.gz), versioned so that
-#                      it names exactly one build (the SHA-256 pins the content in any case)
-#   6  archive_sha256  lowercase SHA-256 of that archive
-#   7  archive_dir     directory inside the archive that holds ffmpeg and ffprobe ("." = root)
-#   8  source_url      https URL of the corresponding source archive: FFmpeg source plus the
-#                      provider's patches and build scripts, as far as the provider publishes
-#                      them (README.md "Corresponding source")
-#   9  source_sha256   lowercase SHA-256 of that archive
-#  10  licence_files   comma-separated licence files installed next to the binaries, each
-#                      "archive:<path>" (in the binary archive) or "source:<path>" (in the
-#                      source archive), path relative to the archive root
+#   3  version         the build's version label, FFmpeg release plus the recipe revision
+#                      (build/scripts/recipe.sh), as SOURCE.txt "Version:" and
+#                      "ffmpeg -version" print it
+#   4  licence         SPDX identifier of the build's licence; a suffix "+nonfree" would mark
+#                      a build that links code FFmpeg classifies as non-free (such a build is
+#                      NOT redistributable under FFmpeg's own rules; the recipe refuses one)
+#   5  ffmpeg_sha256   lowercase SHA-256 of the ffmpeg executable the recipe produces
+#   6  ffprobe_sha256  lowercase SHA-256 of the ffprobe executable
 #
-# family status  version  licence           archive_url archive_sha256 archive_dir source_url source_sha256 licence_files
-x86_64 interim 8.1.3-1 GPL-3.0-or-later+nonfree https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_linux64-gpl.tar.xz b86dc023c64a5a9a410e6e3a938a970460214fae78f31c1553c9f88f1c289b6a . https://github.com/jellyfin/jellyfin-ffmpeg/archive/refs/tags/v8.1.3-1.tar.gz 87bedcefc860cd234cdeddbebdcd3ce45aeedc81d0fbb258ed839ff778be3140 source:jellyfin-ffmpeg-8.1.3-1/COPYING.GPLv3,source:jellyfin-ffmpeg-8.1.3-1/LICENSE.md
-armv8 interim 8.1.3-1 GPL-3.0-or-later+nonfree https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v8.1.3-1/jellyfin-ffmpeg_8.1.3-1_portable_linuxarm64-gpl.tar.xz 7bc8e8d0986f7f4693f63e9728570f671f07b6e21c05d5465dd7ce461d1631dc . https://github.com/jellyfin/jellyfin-ffmpeg/archive/refs/tags/v8.1.3-1.tar.gz 87bedcefc860cd234cdeddbebdcd3ce45aeedc81d0fbb258ed839ff778be3140 source:jellyfin-ffmpeg-8.1.3-1/COPYING.GPLv3,source:jellyfin-ffmpeg-8.1.3-1/LICENSE.md
-armv7 interim 7.0.2 GPL-3.0-or-later https://johnvansickle.com/ffmpeg/releases/ffmpeg-7.0.2-armhf-static.tar.xz 7d41f558cb1f3395b313f8ceabed78b3731c79a0962abf405ebb5cd393e93991 ffmpeg-7.0.2-armhf-static https://ffmpeg.org/releases/ffmpeg-7.0.2.tar.xz 8646515b638a3ad303e23af6a3587734447cb8fc0a0c064ecdb8e95c4fd8b389 archive:ffmpeg-7.0.2-armhf-static/GPLv3.txt,archive:ffmpeg-7.0.2-armhf-static/readme.txt
+# The binaries are reproducible (build/README.md "Reproducibility"): a checksum that differs
+# means the recipe or its inputs changed, so update the pins on purpose (README.md "Updating a
+# pin"). The corresponding source archive (ffmpeg-<version>-source.tar) comes out of the same
+# recipe build; its SHA-256 changes with every edit of the recipe directory and is recorded in
+# each build's SOURCE.txt, not here.
+#
+# family status  version        licence          ffmpeg_sha256 ffprobe_sha256
+x86_64 selected 9.0.2-static1 GPL-3.0-or-later 3574d33703c321a3e01e8569773246abfebfd7fc18da329597bfacb828eca768 db96c3fe12234e8cc5953fed02876100a3b01a1aa54440a3008cd72b487307b7
+armv8 selected 9.0.2-static1 GPL-3.0-or-later bb4b8a6c0917e6d9cb7975f40cd0423a5434742f736260129b2fcba460cacf2f a7603e1dbc282370f9687095df2f7d7c3650913c33f1726e083391c7c9c47e67
+armv7 selected 9.0.2-static1 GPL-3.0-or-later 0dc27fb17ad0532566c32cd9fda81167b12e10af414653a59a96587f2881a0a0 42ab97069e03a8b949fc83ff4de0507939c1a71bd5f11d4290da2cc49f286286
