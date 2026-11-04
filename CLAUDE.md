@@ -148,6 +148,8 @@ screen; the owner approves them first.
   itself), runs tester and reviewer in parallel, resumes an agent with `SendMessage` instead of
   starting a new one for rework, and stops a running gate when a review already requires changes.
 - Small deviations go to `docs/tasks/BACKLOG.md` instead of an extra review round.
+- Hard limit per task: at most **3 `mivo-tester` runs and 3 `mivo-reviewer` runs** (aborted runs
+  count). If the task is still not PASS + APPROVE after that, stop and ask the owner.
 
 Every agent ends its answer with a `REPORT` block:
 
