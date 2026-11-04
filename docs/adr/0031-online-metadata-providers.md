@@ -1,4 +1,4 @@
-# 0030 Online metadata providers: TMDB, MusicBrainz, Cover Art Archive (milestone 6)
+# 0031 Online metadata providers: TMDB, MusicBrainz, Cover Art Archive (milestone 6)
 
 - Status: Accepted (orchestrator decision 2026-11-04, owner delegated; online metadata default on with one-switch opt-out)
 - Date: 2026-11-04
