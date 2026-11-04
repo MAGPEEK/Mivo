@@ -12,6 +12,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
+	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/system"
 )
 
@@ -119,14 +120,36 @@ func (api *API) systemInfoResponse(ctx context.Context, info system.Info) (apige
 		return apigen.SystemInfo{}, fmt.Errorf("convert server id %q: %w", info.ServerID, err)
 	}
 
+	kinds, err := libraryKindsResponse(api.kinds)
+	if err != nil {
+		return apigen.SystemInfo{}, err
+	}
+
 	return apigen.SystemInfo{
-		ProductName: info.ProductName,
-		Version:     info.Version,
-		Commit:      optionalString(info.Commit),
-		BuildTime:   api.buildTime(ctx, info.BuildTime),
-		ServerID:    serverID,
-		APIVersion:  info.APIVersion,
+		ProductName:  info.ProductName,
+		Version:      info.Version,
+		Commit:       optionalString(info.Commit),
+		BuildTime:    api.buildTime(ctx, info.BuildTime),
+		ServerID:     serverID,
+		APIVersion:   info.APIVersion,
+		LibraryKinds: kinds,
 	}, nil
+}
+
+// libraryKindsResponse never returns nil: clients iterate the array.
+func libraryKindsResponse(kinds []library.Kind) ([]apigen.LibraryKind, error) {
+	responses := make([]apigen.LibraryKind, 0, len(kinds))
+
+	for _, kind := range kinds {
+		response, err := libraryKindResponse(kind)
+		if err != nil {
+			return nil, fmt.Errorf("convert library kinds: %w", err)
+		}
+
+		responses = append(responses, response)
+	}
+
+	return responses, nil
 }
 
 // buildTime omits a malformed build time instead of failing the request: the field is

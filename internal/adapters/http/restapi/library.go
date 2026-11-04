@@ -19,15 +19,16 @@ const (
 	operationGetItem          = "getItem"
 )
 
-// LibraryCatalog is the port of the library endpoints, the library part of
-// app/library.Service. Handlers must go through the service rather than a repository: it
-// turns unreadable stored rows into server faults, which a repository reports as
-// domain.ErrInvalid.
+// LibraryCatalog is the port that reads libraries for the responses, implemented by
+// app/library.ManagedCatalog. The handlers treat every failure but an unknown ID as a server
+// fault (see operationFailure), so unreadable stored rows never become a "bad request".
 type LibraryCatalog interface {
 	// ListLibraries returns every library ordered by name with its availability.
-	ListLibraries(ctx context.Context) ([]applibrary.Overview, error)
+	ListLibraries(ctx context.Context) ([]applibrary.ManagedOverview, error)
 	// GetLibrary returns one library; an unknown ID wraps domain.ErrNotFound.
-	GetLibrary(ctx context.Context, id string) (applibrary.Overview, error)
+	GetLibrary(ctx context.Context, id string) (applibrary.ManagedOverview, error)
+	// Describe adds availability and the item count to a library just created or changed.
+	Describe(ctx context.Context, managed library.ManagedLibrary) (applibrary.ManagedOverview, error)
 }
 
 // ItemCatalog is the port of the item endpoints, the item part of app/library.Service.

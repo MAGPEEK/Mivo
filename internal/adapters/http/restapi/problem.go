@@ -57,6 +57,30 @@ const (
 	CodeStreamNotReady = "stream_not_ready"
 )
 
+// Problem codes of library management (api/openapi.yaml, Problem.code). The folder codes
+// come with Problem.field "folders[i]".
+const (
+	// CodeFolderNotFound reports a chosen folder that does not exist (400).
+	CodeFolderNotFound = "folder_not_found"
+	// CodeFolderUnreadable reports a chosen folder the server cannot read (400).
+	CodeFolderUnreadable = "folder_unreadable"
+	// CodeFolderOverlap reports a folder that equals, contains or lies inside a folder of
+	// another library or of the same one (409; Problem.libraryId names the other library).
+	CodeFolderOverlap = "folder_overlap"
+	// CodeFolderReserved reports a folder that holds a server directory (400).
+	CodeFolderReserved = "folder_reserved"
+	// CodeFolderOutsideRoots reports a folder that is no clean path inside a folder root (400).
+	CodeFolderOutsideRoots = "folder_outside_roots"
+	// CodeKindUnsupported reports a library kind this install cannot create (400).
+	CodeKindUnsupported = "kind_unsupported"
+	// CodeNameInvalid reports a library name that breaks the name rules (400).
+	CodeNameInvalid = "name_invalid"
+	// CodeLanguageInvalid reports a metadata language that is no valid tag (400).
+	CodeLanguageInvalid = "language_invalid"
+	// CodeTooManyFolders reports a folder list outside 1 to 16 entries (400).
+	CodeTooManyFolders = "too_many_folders"
+)
+
 // errorMapping maps one domain sentinel error to its HTTP status and problem code.
 type errorMapping struct {
 	target error
@@ -104,6 +128,10 @@ func InternalProblem() apigen.Problem {
 // ErrUnavailable 503 and anything else 500. Only this adapter maps domain errors to HTTP
 // (ADR 0017). A session_limit_reached answer also needs Retry-After, which the caller sets.
 func ProblemForError(err error) apigen.Problem {
+	if problem, ok := libraryProblem(err); ok {
+		return problem
+	}
+
 	for _, mapping := range domainErrorMappings() {
 		if errors.Is(err, mapping.target) {
 			return NewProblem(mapping.status, mapping.code)

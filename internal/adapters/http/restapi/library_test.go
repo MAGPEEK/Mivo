@@ -21,6 +21,8 @@ import (
 const (
 	testLibraryID       = "3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c"
 	testSecondLibraryID = "4a7d2e3b-0c9f-4a81-9b2d-3e4f5a6b7c8d"
+	testFolderID        = "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d"
+	testSecondFolderID  = "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e"
 	testItemID          = "8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d"
 	unknownID           = "00000000-0000-4000-8000-000000000000"
 
@@ -28,7 +30,8 @@ const (
 	libraryPath   = librariesPath + "/" + testLibraryID
 	scanPath      = libraryPath + "/scan"
 
-	// testRoot is the absolute library root; it must never reach a response body.
+	// testRoot is an absolute library folder; it is part of a library response, but it must
+	// never reach an error body.
 	testRoot = `D:\Media\Movies`
 )
 
@@ -53,19 +56,25 @@ func mustUUID(t *testing.T, text string) uuid.UUID {
 	return id
 }
 
-func testOverviews() []applibrary.Overview {
-	return []applibrary.Overview{
+func testOverviews() []applibrary.ManagedOverview {
+	movies := library.ManagedLibrary{
+		ID: testLibraryID, Name: "Movies", Kind: library.KindMovies, MetadataLanguage: "de",
+		Folders: []library.Folder{{ID: testFolderID, Path: testRoot}},
+		Options: library.Options{ScanExtras: true, ReadNFO: true},
+	}
+	shows := library.ManagedLibrary{
+		ID: testSecondLibraryID, Name: "Shows", Kind: library.KindShows, ImportedFromConfig: true,
+		Folders: []library.Folder{{ID: testSecondFolderID, Path: `\\nas\shows`}},
+	}
+
+	return []applibrary.ManagedOverview{
 		{
-			Summary: library.Summary{
-				Library:   library.Library{ID: testLibraryID, Name: "Movies", Root: testRoot, Kind: library.KindMovies},
-				ItemCount: 42,
-			},
-			Available: true,
+			Library: movies, ItemCount: 42, Available: true,
+			Folders: []applibrary.FolderOverview{{Folder: movies.Folders[0], Available: true}},
 		},
 		{
-			Summary: library.Summary{
-				Library: library.Library{ID: testSecondLibraryID, Name: "Shows", Root: `\\nas\shows`, Kind: library.KindShows},
-			},
+			Library: shows,
+			Folders: []applibrary.FolderOverview{{Folder: shows.Folders[0]}},
 		},
 	}
 }
@@ -122,7 +131,14 @@ func TestListLibraries(t *testing.T) {
 	// Timestamps are RFC 3339 UTC with millisecond precision; a never scanned library has
 	// no times; the absolute root never leaves the server.
 	assertBodyContains(t, got.body, `"startedAt":"2026-10-30T18:04:05.123Z"`, `"available":false`, `"itemCount":0`)
-	assertBodyLacks(t, got.body, "finishedAt", "errorCode", "Media", "nas")
+	assertBodyLacks(t, got.body, "finishedAt", "errorCode")
+
+	// Folders, language, options and the import flag come with every library; no array is null.
+	assertBodyContains(t, got.body,
+		`"folders":[{"available":true,"id":"`+testFolderID+`","path":"D:\\Media\\Movies"}]`,
+		`"metadataLanguage":"de"`, `"options":{"localArtwork":false,"readNfo":true,"scanExtras":true}`,
+		`"importedFromConfig":true`, `"importedFromConfig":false`)
+	assertBodyLacks(t, got.body, "null")
 }
 
 func TestListLibrariesWithoutLibrariesAnswersAnEmptyArray(t *testing.T) {
@@ -238,12 +254,12 @@ func TestCorruptStoredLibrariesAreInternal(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		mutate func(*applibrary.Overview)
+		mutate func(*applibrary.ManagedOverview)
 		status appscan.Status
 	}{
-		{name: "unknown kind", mutate: func(overview *applibrary.Overview) { overview.Library.Kind = "music" }},
-		{name: "malformed id", mutate: func(overview *applibrary.Overview) { overview.Library.ID = "not-a-uuid" }},
-		{name: "unknown scan state", mutate: func(*applibrary.Overview) {}, status: appscan.Status{State: "paused"}},
+		{name: "unknown kind", mutate: func(overview *applibrary.ManagedOverview) { overview.Library.Kind = "music" }},
+		{name: "malformed id", mutate: func(overview *applibrary.ManagedOverview) { overview.Library.ID = "not-a-uuid" }},
+		{name: "unknown scan state", mutate: func(*applibrary.ManagedOverview) {}, status: appscan.Status{State: "paused"}},
 	}
 
 	for _, test := range tests {

@@ -858,9 +858,11 @@ func TestLibraryManagementContract(t *testing.T) {
 		t.Errorf("LibraryUpdate.minProperties = %d, want at least 1", minProps)
 	}
 
-	folders := propertySchema(spec, "LibraryCreate.folders").Value
-	if folders.MinItems != 1 || folders.MaxItems == nil || *folders.MaxItems != 16 {
-		t.Errorf("LibraryCreate.folders bounds = %d..%v, want 1..16", folders.MinItems, folders.MaxItems)
+	for _, location := range []string{"LibraryCreate.folders", "LibraryUpdate.folders"} {
+		folders := propertySchema(spec, location).Value
+		if folders.MinItems != 1 || folders.MaxItems == nil || *folders.MaxItems != 16 {
+			t.Errorf("%s bounds = %d..%v, want 1..16", location, folders.MinItems, folders.MaxItems)
+		}
 	}
 }
 

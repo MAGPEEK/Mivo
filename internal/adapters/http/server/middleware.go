@@ -70,12 +70,15 @@ func newChainSettings(options Options) (chainSettings, error) {
 // withMiddleware wraps next in the chain, outermost first: the request ID exists before
 // anything logs, the body read deadline is set before any handler can answer (or leave the
 // body unread), security headers are set even on panics, the access log sees the status the
-// recover middleware writes. The LAN guard is innermost, so a refusal carries the request
-// ID and security headers and appears in the access log like any other answer.
+// recover middleware writes. The guards are innermost, so a refusal carries the request ID
+// and security headers and appears in the access log like any other answer. The management
+// guard stays on when the LAN guard is off: server.lan_only never opens the administration.
 func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
-	handler := next
+	lan := newLANGuard(settings)
+	handler := newManageGuard(settings, lan).wrap(next)
+
 	if !settings.allowPublicClients {
-		handler = newLANGuard(settings).wrap(handler)
+		handler = lan.wrap(handler)
 	}
 
 	handler = recoverPanics(handler, settings.logger)

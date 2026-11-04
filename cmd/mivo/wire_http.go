@@ -17,6 +17,7 @@ import (
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
+	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 // listenNetwork is the network of the HTTP listener.
@@ -26,7 +27,9 @@ const listenNetwork = "tcp"
 type catalogServices struct {
 	system    *appsystem.Service
 	libraries *applibrary.Service
-	scans     *appscan.Service
+	// managed reads the libraries for the library endpoints; libraries serves the items.
+	managed *applibrary.ManagedCatalog
+	scans   *appscan.Service
 	// images serves artwork; trigger keeps the libraries current after the startup scan.
 	images  imageServices
 	trigger runner
@@ -105,12 +108,15 @@ func (app application) serverOptions(listener net.Listener, handlers httpHandler
 func (app application) newHTTPHandlers(ctx context.Context, services wiredServices) (httpHandlers, error) {
 	apiHandler, err := restapi.NewHandler(restapi.Options{
 		System:    services.system,
-		Libraries: services.libraries,
+		Libraries: services.managed,
 		Items:     services.libraries,
 		Scan:      services.scans,
 		Playback:  services.playback,
-		Logger:    app.logger,
-		Mounts:    services.mounts(),
+		// The manager and the folder browser follow with M3-19l; until then the
+		// management operations answer 503 and only the kinds below are advertised.
+		LibraryKinds: []library.Kind{library.KindMovies, library.KindShows},
+		Logger:       app.logger,
+		Mounts:       services.mounts(),
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

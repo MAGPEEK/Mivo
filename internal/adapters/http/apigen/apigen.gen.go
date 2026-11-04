@@ -533,7 +533,7 @@ type FolderRef struct {
 	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
 	FolderID *uuid.UUID `json:"folderId,omitempty"`
 
-	// Path Folder relative to the root, separated by "/"; empty means the root itself.
+	// Path Folder relative to the root, separated by "/", up to 4096 characters; empty means the root itself.
 	//
 	// Example: Movies/Animation
 	Path *string `json:"path,omitempty"`
@@ -910,7 +910,7 @@ type Library struct {
 	// Folders The folders of the library in their stored order; at least one.
 	Folders []LibraryFolder `json:"folders"`
 
-	// ID Stable ID of the library while its folder stays configured.
+	// ID Stable ID of the library; it stays the same when the library is edited.
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	ID uuid.UUID `json:"id"`
@@ -935,7 +935,7 @@ type Library struct {
 	// Example: de
 	MetadataLanguage string `json:"metadataLanguage"`
 
-	// Name Display name from the configuration.
+	// Name Display name of the library.
 	//
 	// Example: Movies
 	Name string `json:"name"`
@@ -1615,7 +1615,7 @@ type SessionID = uuid.UUID
 
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
-	// Path Folder to list, relative to the root and separated by "/". Empty or omitted lists the root itself.
+	// Path Folder to list, relative to the root and separated by "/", up to 4096 characters. Empty or omitted lists the root itself.
 	Path *string `form:"path,omitempty" json:"path,omitempty"`
 }
 

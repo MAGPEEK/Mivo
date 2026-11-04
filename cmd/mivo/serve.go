@@ -209,7 +209,7 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 		return fmt.Errorf("create library file system: %w", err)
 	}
 
-	libraries, err := app.newLibraryService(ctx, db, files)
+	libraries, managed, err := app.newLibraryServices(ctx, db, files)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,9 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 	}
 
 	stopPurge := app.purgeImageCacheInBackground(ctx, images.service)
-	catalog := catalogServices{system: system, libraries: libraries, scans: scans, images: images, trigger: trigger}
+	catalog := catalogServices{
+		system: system, libraries: libraries, managed: managed, scans: scans, images: images, trigger: trigger,
+	}
 	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
 	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scans))
 

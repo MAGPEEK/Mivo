@@ -136,7 +136,7 @@ func TestBrowseFoldersUnknownRoot(t *testing.T) {
 	fixture := newManagerFixture(t)
 
 	_, err := fixture.manager.BrowseFolders(context.Background(), "nope", "")
-	if !errors.Is(err, domain.ErrInvalid) {
-		t.Fatalf("err = %v, want ErrInvalid", err)
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound (the API answers 404 for an unknown root)", err)
 	}
 }

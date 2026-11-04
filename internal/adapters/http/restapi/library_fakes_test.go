@@ -16,9 +16,11 @@ import (
 
 // The use cases cmd/mivo wires in must keep satisfying the ports the handlers declare.
 var (
-	_ restapi.LibraryCatalog = (*applibrary.Service)(nil)
+	_ restapi.LibraryCatalog = (*applibrary.ManagedCatalog)(nil)
 	_ restapi.ItemCatalog    = (*applibrary.Service)(nil)
 	_ restapi.ScanService    = (*appscan.Service)(nil)
+	_ restapi.LibraryManager = (*applibrary.Manager)(nil)
+	_ restapi.FolderBrowsing = (*applibrary.Manager)(nil)
 )
 
 // fakeLibraryService is an in-memory LibraryCatalog and ItemCatalog that records the
@@ -26,15 +28,17 @@ var (
 type fakeLibraryService struct {
 	mutex sync.Mutex
 
-	overviews []applibrary.Overview
+	overviews []applibrary.ManagedOverview
 	// found, when set, is what GetLibrary returns for every ID.
-	found   *applibrary.Overview
+	found   *applibrary.ManagedOverview
 	listErr error
 	getErr  error
-	page    applibrary.ItemPage
-	pageErr error
-	detail  applibrary.ItemDetail
-	itemErr error
+	// describeErr fails Describe.
+	describeErr error
+	page        applibrary.ItemPage
+	pageErr     error
+	detail      applibrary.ItemDetail
+	itemErr     error
 	// children and childrenErr answer ListChildren.
 	children    applibrary.ItemPage
 	childrenErr error
@@ -45,15 +49,15 @@ type fakeLibraryService struct {
 	requestedChildren  []applibrary.ChildPageRequest
 }
 
-func (service *fakeLibraryService) ListLibraries(context.Context) ([]applibrary.Overview, error) {
+func (service *fakeLibraryService) ListLibraries(context.Context) ([]applibrary.ManagedOverview, error) {
 	return service.overviews, service.listErr
 }
 
-func (service *fakeLibraryService) GetLibrary(_ context.Context, id string) (applibrary.Overview, error) {
+func (service *fakeLibraryService) GetLibrary(_ context.Context, id string) (applibrary.ManagedOverview, error) {
 	service.record(&service.requestedLibraries, id)
 
 	if service.getErr != nil {
-		return applibrary.Overview{}, service.getErr
+		return applibrary.ManagedOverview{}, service.getErr
 	}
 
 	if service.found != nil {
@@ -66,7 +70,21 @@ func (service *fakeLibraryService) GetLibrary(_ context.Context, id string) (app
 		}
 	}
 
-	return applibrary.Overview{}, errLibraryNotFound(id)
+	return applibrary.ManagedOverview{}, errLibraryNotFound(id)
+}
+
+// Describe reports every folder reachable and no items, like a fresh library.
+func (service *fakeLibraryService) Describe(_ context.Context, managed library.ManagedLibrary) (applibrary.ManagedOverview, error) {
+	if service.describeErr != nil {
+		return applibrary.ManagedOverview{}, service.describeErr
+	}
+
+	overview := applibrary.ManagedOverview{Library: managed, Available: true}
+	for _, folder := range managed.Folders {
+		overview.Folders = append(overview.Folders, applibrary.FolderOverview{Folder: folder, Available: true})
+	}
+
+	return overview, nil
 }
 
 func (service *fakeLibraryService) ListItems(_ context.Context, libraryID string, page library.PageRequest) (applibrary.ItemPage, error) {

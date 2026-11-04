@@ -12,6 +12,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
+	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/system"
 )
 
@@ -30,6 +31,10 @@ type API struct {
 	items     ItemCatalog
 	scan      ScanService
 	playback  PlaybackService
+	manager   LibraryManager
+	folders   FolderBrowsing
+	install   InstallInfo
+	kinds     []library.Kind
 	logger    *slog.Logger
 	mounts    []Mount
 }
@@ -51,6 +56,10 @@ func NewAPI(options Options) (*API, error) {
 		items:     options.Items,
 		scan:      options.Scan,
 		playback:  options.Playback,
+		manager:   options.Manager,
+		folders:   options.Folders,
+		install:   options.Install,
+		kinds:     options.LibraryKinds,
 		logger:    options.Logger,
 		mounts:    options.Mounts,
 	}, nil
@@ -88,7 +97,7 @@ func (api *API) Handler() (http.Handler, error) {
 		}
 	}
 
-	return limitRequestBodies(routeProblems{mux: mux}), nil
+	return limitRequestBodies(api.checkLibraryBodies(routeProblems{mux: mux})), nil
 }
 
 func (api *API) strictOptions() apigen.StrictHTTPServerOptions {

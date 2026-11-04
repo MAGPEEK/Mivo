@@ -420,6 +420,30 @@ func (store *ManagedLibraryStore) RecordImported(ctx context.Context, roots []st
 	return nil
 }
 
+// TopLevelItemCounts returns, per library ID, the number of top-level items (movies and
+// shows, the items listLibraryItems returns). A library without items has no entry.
+func (store *ManagedLibraryStore) TopLevelItemCounts(ctx context.Context) (map[string]int64, error) {
+	counts := map[string]int64{}
+
+	err := inReadTransaction(ctx, store.reader, func(queries *sqlcgen.Queries) error {
+		rows, err := queries.CountTopLevelItems(ctx)
+		if err != nil {
+			return fmt.Errorf("count items: %w", err)
+		}
+
+		for _, row := range rows {
+			counts[row.LibraryID] = row.ItemCount
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("count top-level items: %w", err)
+	}
+
+	return counts, nil
+}
+
 func boolToInt(value bool) int64 {
 	if value {
 		return 1

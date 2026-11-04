@@ -10,32 +10,66 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// libraryResponse combines a library with the status of its scan. The root path is left
-// out on purpose: the API never exposes file system paths (ADR 0022).
-func libraryResponse(overview applibrary.Overview, status appscan.Status) (apigen.Library, error) {
-	id, err := parseStoredID("library", overview.Library.ID)
+// libraryResponse combines a library with the status of its scan. The folder paths are the
+// admin's own input; absolute paths become admin-only when accounts arrive (M7), while the
+// folder browser keeps its paths root-relative.
+func libraryResponse(overview applibrary.ManagedOverview, status appscan.Status) (apigen.Library, error) {
+	managed := overview.Library
+
+	id, err := parseStoredID("library", managed.ID)
 	if err != nil {
 		return apigen.Library{}, err
 	}
 
-	kind, err := libraryKindResponse(overview.Library.Kind)
+	kind, err := libraryKindResponse(managed.Kind)
 	if err != nil {
-		return apigen.Library{}, fmt.Errorf("library %s: %w", overview.Library.ID, err)
+		return apigen.Library{}, fmt.Errorf("library %s: %w", managed.ID, err)
 	}
 
 	scan, err := scanStatusResponse(status)
 	if err != nil {
-		return apigen.Library{}, fmt.Errorf("library %s: %w", overview.Library.ID, err)
+		return apigen.Library{}, fmt.Errorf("library %s: %w", managed.ID, err)
+	}
+
+	folders, err := folderResponses(overview.Folders)
+	if err != nil {
+		return apigen.Library{}, fmt.Errorf("library %s: %w", managed.ID, err)
 	}
 
 	return apigen.Library{
-		ID:        id,
-		Name:      overview.Library.Name,
-		Kind:      kind,
-		Available: overview.Available,
-		ItemCount: overview.ItemCount,
-		Scan:      scan,
+		ID:                 id,
+		Name:               managed.Name,
+		Kind:               kind,
+		Available:          overview.Available,
+		ItemCount:          overview.ItemCount,
+		Scan:               scan,
+		Folders:            folders,
+		MetadataLanguage:   managed.MetadataLanguage,
+		Options:            optionsResponse(managed.Options),
+		ImportedFromConfig: managed.ImportedFromConfig,
 	}, nil
+}
+
+// folderResponses never returns nil: clients iterate the array.
+func folderResponses(folders []applibrary.FolderOverview) ([]apigen.LibraryFolder, error) {
+	responses := make([]apigen.LibraryFolder, 0, len(folders))
+
+	for _, folder := range folders {
+		id, err := parseStoredID("folder", folder.Folder.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		responses = append(responses, apigen.LibraryFolder{ID: id, Path: folder.Folder.Path, Available: folder.Available})
+	}
+
+	return responses, nil
+}
+
+func optionsResponse(options library.Options) apigen.LibraryOptions {
+	return apigen.LibraryOptions{
+		ScanExtras: options.ScanExtras, ReadNfo: options.ReadNFO, LocalArtwork: options.LocalArtwork,
+	}
 }
 
 // libraryKindResponse rejects kinds the contract does not list rather than sending them.

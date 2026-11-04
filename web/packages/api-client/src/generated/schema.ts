@@ -137,7 +137,7 @@ export interface paths {
         };
         /**
          * List the sub-folders of a folder
-         * @description Returns the directories directly below path of a folder root; files are never listed. At most 1000 entries are returned (truncated says more exist). A bad path answers 400 "invalid"; an unknown root or a missing folder answers 404 "not_found"; a root that does not answer in time answers 503 "unavailable".
+         * @description Returns the directories directly below path of a folder root; files are never listed. At most 1000 entries are returned (truncated says more exist). A bad path answers 400 "invalid"; a folder the server cannot read answers 400 "folder_unreadable"; an unknown root or a missing folder answers 404 "not_found"; a root that does not answer in time answers 503 "unavailable".
          */
         get: operations["listFolders"];
         put?: never;
@@ -479,12 +479,12 @@ export interface components {
             importedFromConfig: boolean;
             /**
              * Format: uuid
-             * @description Stable ID of the library while its folder stays configured.
+             * @description Stable ID of the library; it stays the same when the library is edited.
              * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
              */
             id: string;
             /**
-             * @description Display name from the configuration.
+             * @description Display name of the library.
              * @example Movies
              */
             name: string;
@@ -554,7 +554,7 @@ export interface components {
              */
             rootId?: string;
             /**
-             * @description Folder relative to the root, separated by "/"; empty means the root itself.
+             * @description Folder relative to the root, separated by "/", up to 4096 characters; empty means the root itself.
              * @example Movies/Animation
              */
             path?: string;
@@ -1881,7 +1881,7 @@ export interface operations {
     listFolders: {
         parameters: {
             query?: {
-                /** @description Folder to list, relative to the root and separated by "/". Empty or omitted lists the root itself. */
+                /** @description Folder to list, relative to the root and separated by "/", up to 4096 characters. Empty or omitted lists the root itself. */
                 path?: string;
             };
             header?: never;

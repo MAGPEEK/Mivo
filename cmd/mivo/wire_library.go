@@ -89,6 +89,37 @@ func (app application) newLibraryService(ctx context.Context, db *sqlite.DB, fil
 	return service, nil
 }
 
+// newLibraryServices builds the item use cases and the library reader of the API responses.
+// The full management wiring (manager, folder browser) follows with M3-19l.
+func (app application) newLibraryServices(ctx context.Context, db *sqlite.DB, files *libraryfs.FileSystem,
+) (*applibrary.Service, *applibrary.ManagedCatalog, error) {
+	service, err := app.newLibraryService(ctx, db, files)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	managed, err := newManagedCatalog(db, files)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return service, managed, nil
+}
+
+// newManagedCatalog reads the libraries with folders, options and item counts.
+func newManagedCatalog(db *sqlite.DB, files *libraryfs.FileSystem) (*applibrary.ManagedCatalog, error) {
+	store := sqlite.NewManagedLibraryStore(db, time.Now, uuidgen.New().NewID)
+
+	catalog, err := applibrary.NewManagedCatalog(applibrary.ManagedCatalogDependencies{
+		Libraries: store, Counts: store, Roots: files,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create managed library catalog: %w", err)
+	}
+
+	return catalog, nil
+}
+
 // scanAdapters are the adapters the scan service shares with the rest of the server.
 type scanAdapters struct {
 	files  *libraryfs.FileSystem

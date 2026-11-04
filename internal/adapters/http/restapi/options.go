@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 // Options are the dependencies of the REST API. Every service and the logger are required:
@@ -23,6 +24,15 @@ type Options struct {
 	Scan ScanService
 	// Playback creates, reads and stops playback sessions.
 	Playback PlaybackService
+	// Manager creates, changes and removes libraries. Optional until M3-19l wires it; the
+	// create, update and delete operations answer 503 "unavailable" without it.
+	Manager LibraryManager
+	// Folders serves the folder browser. Optional like Manager.
+	Folders FolderBrowsing
+	// Install describes the installation for the folder roots answer.
+	Install InstallInfo
+	// LibraryKinds are the kinds createLibrary accepts (SystemInfo.libraryKinds).
+	LibraryKinds []library.Kind
 	// Logger records failures; request details are logged, never sent to clients.
 	Logger *slog.Logger
 	// Mounts are extra routes on the API mux for handlers the generated strict server

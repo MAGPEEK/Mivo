@@ -9,6 +9,44 @@ import (
 	"context"
 )
 
+const countTopLevelItems = `-- name: CountTopLevelItems :many
+SELECT library_id, COUNT(*) AS item_count
+FROM items
+WHERE parent_id IS NULL AND kind <> 'extra'
+GROUP BY library_id
+`
+
+type CountTopLevelItemsRow struct {
+	LibraryID string
+	ItemCount int64
+}
+
+// CountTopLevelItems counts what listLibraryItems returns per library (movies and shows, no
+// seasons, episodes or extras); it matches the items_top_level partial index. Libraries
+// without items have no row.
+func (q *Queries) CountTopLevelItems(ctx context.Context) ([]CountTopLevelItemsRow, error) {
+	rows, err := q.db.QueryContext(ctx, countTopLevelItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountTopLevelItemsRow{}
+	for rows.Next() {
+		var i CountTopLevelItemsRow
+		if err := rows.Scan(&i.LibraryID, &i.ItemCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteManagedFolder = `-- name: DeleteManagedFolder :exec
 DELETE FROM library_roots
 WHERE id = ? AND library_id = ?

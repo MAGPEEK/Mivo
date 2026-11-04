@@ -59,3 +59,12 @@ WHERE library_id = sqlc.arg(library_id);
 UPDATE library_roots
 SET position = ?
 WHERE id = ? AND library_id = ?;
+
+-- CountTopLevelItems counts what listLibraryItems returns per library (movies and shows, no
+-- seasons, episodes or extras); it matches the items_top_level partial index. Libraries
+-- without items have no row.
+-- name: CountTopLevelItems :many
+SELECT library_id, COUNT(*) AS item_count
+FROM items
+WHERE parent_id IS NULL AND kind <> 'extra'
+GROUP BY library_id;

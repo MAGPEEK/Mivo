@@ -45,8 +45,9 @@ func (manager *Manager) BrowseRoots(ctx context.Context) ([]BrowseRoot, error) {
 }
 
 // BrowseFolders lists the sub-directories of path inside the root and marks those that
-// cannot be chosen. Errors of the browser pass on (domain.ErrInvalid for a bad path or an
-// unknown root, domain.ErrNotFound, domain.ErrUnavailable).
+// cannot be chosen. An unknown root wraps domain.ErrNotFound; errors of the browser pass on
+// (domain.ErrInvalid for a bad path, domain.ErrNotFound for a missing folder,
+// domain.ErrForbidden for an unreadable one, domain.ErrUnavailable).
 func (manager *Manager) BrowseFolders(ctx context.Context, rootID, path string) (FolderPage, error) {
 	rootPath, err := manager.rootPath(ctx, rootID)
 	if err != nil {
@@ -89,7 +90,7 @@ func (manager *Manager) rootPath(ctx context.Context, rootID string) (string, er
 		}
 	}
 
-	return "", fmt.Errorf("browse folders: unknown root %q: %w", rootID, domain.ErrInvalid)
+	return "", fmt.Errorf("browse folders: unknown root %q: %w", rootID, domain.ErrNotFound)
 }
 
 // markFolder applies the domain folder rules to a one-folder probe: reserved wins over in
