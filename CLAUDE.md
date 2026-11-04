@@ -130,6 +130,25 @@ The main session orchestrates; subagents cannot start other subagents.
 6. `mivo-release` – publishes artifacts (Docker image `docker.io/magpeek/mivo-media-server`) only
    after PASS + APPROVE and with the user's explicit approval for each push.
 
+`mivo-ux` builds clickable prototypes in `docs/design/prototypes/` before `mivo-frontend` builds a
+screen; the owner approves them first.
+
+### Token efficiency (owner rule, applies to every agent)
+
+- Read only what the task needs: the task file, the files it names and the code you change. Use
+  Grep/Glob and `offset`/`limit` instead of reading whole large files; never dump generated code,
+  lock files, logs or test media into the context.
+- Run the narrowest gate first (the changed package or test file), the full suite once at the end.
+  Pipe long command output through `tail`/`grep`; report only failures and the summary line.
+- Do not re-run a passing gate unless code changed since. Reviewers do not run gates (the tester
+  does); testers do not review code style.
+- Reports: the `REPORT` block plus at most a short summary – no restating of the task, no full
+  file lists of unchanged files, no pasted diffs. Findings as one line each.
+- The orchestrator passes short briefs (task id, files, the few facts the agent cannot find
+  itself), runs tester and reviewer in parallel, resumes an agent with `SendMessage` instead of
+  starting a new one for rework, and stops a running gate when a review already requires changes.
+- Small deviations go to `docs/tasks/BACKLOG.md` instead of an extra review round.
+
 Every agent ends its answer with a `REPORT` block:
 
 ```

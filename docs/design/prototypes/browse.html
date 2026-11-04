@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mivo – Prototype: Shell, Home, Library, Search</title>
+<style>
+:root{
+  --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#9aa0a6;
+  --accent:#ff6b57;--accent-hover:#ff8572;--on-accent:#3a0e07;--dp:#3dd68c;--ds:#4c9aff;--tc:#f5b544;
+  --r-sm:6px;--r-md:8px;--r-lg:10px;
+  --shadow-card:0 1px 2px rgb(0 0 0/.3),0 1px 3px rgb(0 0 0/.2);--shadow-hover:0 8px 24px rgb(0 0 0/.45);--shadow-overlay:0 16px 48px rgb(0 0 0/.55);
+  --font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --topbar:56px;--sidebar:232px;--card:160px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--font)}
+a{color:inherit}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.btn{background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);padding:6px 12px;display:inline-flex;align-items:center;gap:6px;min-height:34px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--raised)}
+.icon-btn{background:transparent;border:0;border-radius:var(--r-md);width:38px;height:38px;display:inline-grid;place-items:center;position:relative}
+.icon-btn:hover{background:var(--raised)}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* legend */
+.legend{background:#1d1414;border-bottom:1px solid #4a2a25;font-size:13px}
+.legend summary{padding:8px 16px;cursor:pointer;color:var(--accent-hover)}
+.legend .body{padding:0 16px 12px;display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.legend h3{margin:4px 0;font-size:13px}
+.legend ul{margin:0;padding-left:18px}
+.legend code{color:var(--accent-hover)}
+
+/* top bar */
+.topbar{position:sticky;top:0;z-index:30;height:var(--topbar);display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--divider)}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:18px;text-decoration:none;margin-right:8px}
+.logo .mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent),#c2410c);display:grid;place-items:center;color:var(--on-accent);font-size:14px}
+.search{position:relative;flex:1;max-width:520px}
+.search input{width:100%;background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-md);padding:8px 64px 8px 36px;height:38px}
+.search input:focus{border-color:var(--accent);outline:none}
+.search .glass{position:absolute;left:10px;top:9px;color:var(--muted)}
+.search kbd{position:absolute;right:8px;top:8px;font-size:11px;color:var(--muted);border:1px solid var(--divider);border-radius:4px;padding:1px 5px}
+.spacer{flex:1}
+.badge-dot{position:absolute;top:4px;right:4px;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:var(--on-accent);font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 4px}
+.avatar{width:30px;height:30px;border-radius:50%;background:#7c5cff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.lang-toggle{font-size:12px;padding:4px 8px;min-height:28px}
+
+/* popovers / menus */
+.pop{position:absolute;z-index:50;background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow-overlay);padding:6px;min-width:220px}
+.pop[hidden]{display:none}
+.menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:transparent;border:0;border-radius:var(--r-sm);padding:7px 10px}
+.menu-item:hover,.menu-item:focus-visible,.menu-item.active{background:var(--surface)}
+.menu-item .count{margin-left:auto;color:var(--muted);font-size:12px}
+.menu-item .check{width:16px;color:var(--accent)}
+.menu-sep{height:1px;background:var(--divider);margin:6px 0}
+.menu-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 10px 2px}
+.search-drop{left:0;right:0;top:44px;max-height:70vh;overflow:auto}
+.sres{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--r-sm)}
+.sres.active,.sres:hover{background:var(--surface)}
+.sres .thumb{width:32px;height:48px;border-radius:4px;flex:none}
+.sres .thumb.wide{width:64px;height:36px}
+.sres .meta{flex:1;min-width:0}
+.sres .meta b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.sres .meta span{color:var(--muted);font-size:12px}
+.sres-foot{padding:8px 10px;color:var(--muted);font-size:12px;border-top:1px solid var(--divider);margin-top:4px}
+.activity{right:60px;top:50px;width:340px}
+.act{padding:8px 10px;border-radius:var(--r-sm)}
+.act .row1{display:flex;justify-content:space-between;gap:8px}
+.act a{font-size:12px;color:var(--accent-hover)}
+.bar{height:4px;background:var(--divider);border-radius:2px;overflow:hidden;margin:6px 0 2px}
+.bar>i{display:block;height:100%;background:var(--accent)}
+
+/* layout */
+.layout{display:flex;min-height:calc(100vh - var(--topbar))}
+.sidebar{width:var(--sidebar);flex:none;border-right:1px solid var(--divider);padding:10px 8px;position:sticky;top:var(--topbar);height:calc(100vh - var(--topbar));overflow:auto;display:flex;flex-direction:column;gap:2px}
+.side-item{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:var(--r-md);text-decoration:none;color:var(--muted);border:0;background:transparent;width:100%;text-align:left}
+.side-item:hover{background:var(--surface);color:var(--text)}
+.side-item[aria-current=page]{background:var(--raised);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.side-item .lbl{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-item .warn{color:var(--tc);font-size:11px}
+.side-sep{height:1px;background:var(--divider);margin:8px 6px}
+.side-head{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.lib-row{display:flex;align-items:center;gap:4px}
+.lib-row .side-item{flex:1}
+.mini{width:28px;height:28px;border-radius:6px;border:0;background:transparent;color:var(--muted);display:grid;place-items:center}
+.mini:hover{background:var(--raised);color:var(--text)}
+.mini[aria-pressed=true]{color:var(--accent)}
+.mini:disabled{opacity:.3;cursor:default}
+.lib-row.dragging{opacity:.4}
+.lib-row.drop-target{box-shadow:0 -2px 0 var(--accent)}
+.side-bottom{margin-top:auto}
+body.collapsed .sidebar{width:64px}
+body.collapsed .side-item .lbl,body.collapsed .side-item .warn,body.collapsed .side-head,body.collapsed .lib-row .mini{display:none}
+body.collapsed .side-item{justify-content:center}
+main{flex:1;min-width:0;padding:20px 28px 80px}
+.bottom-nav{display:none}
+
+/* hero */
+.hero{position:relative;border-radius:var(--r-lg);overflow:hidden;min-height:340px;display:flex;align-items:flex-end;margin-bottom:28px}
+.hero .art{position:absolute;inset:0}
+.hero .shade{position:absolute;inset:0;background:linear-gradient(90deg,rgb(14 16 20/.95) 0%,rgb(14 16 20/.6) 45%,transparent 75%),linear-gradient(0deg,rgb(14 16 20/.9),transparent 50%)}
+.hero .content{position:relative;padding:32px;max-width:560px}
+.hero h2{font-size:40px;line-height:1.1;margin:0 0 8px;letter-spacing:-.02em}
+.hero p{color:#c9ccd1;margin:0 0 16px}
+.hero .meta{color:var(--muted);font-size:13px;margin-bottom:8px}
+.hero .dots{position:absolute;right:20px;bottom:20px;display:flex;gap:6px}
+.hero .dots button{width:10px;height:10px;border-radius:50%;border:0;background:#ffffff55;padding:0}
+.hero .dots button[aria-current=true]{background:var(--accent)}
+
+/* rows */
+.row{margin-bottom:28px;position:relative}
+.row-head{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+.row-head h2{font-size:18px;margin:0}
+.row-head a{font-size:13px;color:var(--muted);text-decoration:none}
+.row-head a:hover{color:var(--accent-hover)}
+.row-track{display:flex;gap:14px;overflow-x:auto;scroll-behavior:smooth;padding:4px 2px 8px;scrollbar-width:none;list-style:none;margin:0}
+.row-track::-webkit-scrollbar{display:none}
+.row-track>li{flex:none;width:var(--card)}
+.row-track>li.wide{width:calc(var(--card)*1.6)}
+.row-arrow{position:absolute;top:calc(50% + 4px);transform:translateY(-50%);z-index:5;width:36px;height:64px;border-radius:var(--r-md);border:1px solid var(--divider);background:rgb(24 27 33/.92);opacity:0;transition:opacity .15s;display:grid;place-items:center}
+.row:hover .row-arrow,.row-arrow:focus-visible,.row:focus-within .row-arrow{opacity:1}
+.row-arrow.prev{left:-12px}.row-arrow.next{right:-12px}
+
+/* cards */
+.card{position:relative;display:block;text-decoration:none}
+.poster{position:relative;aspect-ratio:2/3;border-radius:var(--r-md);overflow:hidden;box-shadow:var(--shadow-card);transition:transform .15s,box-shadow .15s}
+.card.wide .poster{aspect-ratio:16/9}
+.card:hover .poster,.card:focus-within .poster{box-shadow:var(--shadow-hover);transform:translateY(-2px)}
+.art{background:var(--raised)}
+.art-title{position:absolute;inset:auto 8px 10px 8px;font-weight:800;font-size:15px;line-height:1.15;text-shadow:0 1px 3px rgb(0 0 0/.6);letter-spacing:-.01em}
+.card-title{margin-top:6px;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.overlay{position:absolute;inset:0;background:rgb(14 16 20/.55);opacity:0;transition:opacity .15s;display:grid;place-items:center}
+.card:hover .overlay,.card:focus-within .overlay{opacity:1}
+.play-circle{width:48px;height:48px;border-radius:50%;background:var(--accent);color:var(--on-accent);border:0;display:grid;place-items:center}
+.play-circle svg{fill:currentColor;stroke:none}
+.ov-tl,.ov-tr,.ov-bl,.ov-br{position:absolute}
+.ov-tr{top:6px;right:6px}.ov-tl{top:6px;left:6px}.ov-bl{bottom:6px;left:6px}.ov-br{bottom:6px;right:6px}
+.ov-btn{width:30px;height:30px;border-radius:50%;border:0;background:rgb(14 16 20/.8);display:grid;place-items:center}
+.ov-btn:hover{background:var(--raised)}
+.ov-btn svg{width:16px;height:16px}
+.count-badge{position:absolute;top:6px;right:6px;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:11px;min-width:22px;height:22px;border-radius:11px;display:grid;place-items:center;padding:0 6px;box-shadow:var(--shadow-card)}
+.card:hover .count-badge,.card:focus-within .count-badge{opacity:0}
+.watched-badge{position:absolute;top:0;right:0;width:0;height:0;border-style:solid;border-width:0 28px 28px 0;border-color:transparent var(--dp) transparent transparent}
+.watched-badge+svg{position:absolute;top:2px;right:1px;width:12px;height:12px;color:#06301b;stroke-width:3}
+.unavail{position:absolute;top:6px;left:6px;background:rgb(14 16 20/.85);color:var(--tc);font-size:11px;border-radius:4px;padding:1px 6px}
+.ver-badge{position:absolute;bottom:6px;left:6px;background:rgb(14 16 20/.85);font-size:11px;border-radius:4px;padding:1px 6px}
+.progress{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgb(0 0 0/.5)}
+.progress>i{display:block;height:100%;background:var(--accent)}
+.sel-box{position:absolute;top:6px;left:6px;width:22px;height:22px;accent-color:var(--accent);opacity:0}
+.selecting .sel-box,.card:hover .sel-box,.sel-box:focus-visible,.sel-box:checked{opacity:1}
+.card.selected .poster{outline:3px solid var(--accent);outline-offset:-3px}
+
+/* library */
+.lib-head{display:flex;align-items:center;gap:16px;margin-bottom:6px;flex-wrap:wrap}
+.lib-head h1{font-size:26px;margin:0}
+.pivots{display:flex;gap:4px;border-bottom:1px solid var(--divider);margin-bottom:16px}
+.pivot{background:transparent;border:0;padding:10px 14px;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.pivot[aria-selected=true]{color:var(--text);border-color:var(--accent)}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;position:relative}
+.toolbar .sep{width:1px;height:24px;background:var(--divider);margin:0 4px}
+.toolbar .count{color:var(--muted);margin-right:auto;padding-left:6px}
+.seg{display:inline-flex;border:1px solid var(--divider);border-radius:var(--r-md);overflow:hidden}
+.seg button{background:transparent;border:0;width:36px;height:32px;display:grid;place-items:center;color:var(--muted)}
+.seg button[aria-pressed=true]{background:var(--raised);color:var(--text)}
+.slider{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.slider input{accent-color:var(--accent);width:90px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--raised);border:1px solid var(--divider);border-radius:999px;padding:2px 4px 2px 10px;font-size:12px}
+.chip button{background:transparent;border:0;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+.chip button:hover{background:var(--surface);color:var(--text)}
+.tech{font-size:11px;border:1px solid var(--divider);border-radius:4px;padding:0 5px;color:var(--muted);white-space:nowrap}
+.tech.hdr{color:var(--tc);border-color:#5a4520}
+.browse-wrap{display:flex;gap:8px}
+.grid{flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--card),1fr));gap:20px 16px;list-style:none;margin:0;padding:0}
+.grid.wide{grid-template-columns:repeat(auto-fill,minmax(calc(var(--card)*1.6),1fr))}
+.letter-anchor{scroll-margin-top:calc(var(--topbar) + 60px)}
+.az{position:sticky;top:calc(var(--topbar) + 12px);align-self:flex-start;display:flex;flex-direction:column;font-size:11px;gap:1px}
+.az button{background:transparent;border:0;width:22px;height:18px;padding:0;color:var(--text);border-radius:4px;font-weight:600}
+.az button:hover{background:var(--raised);color:var(--accent)}
+.az button:disabled{color:#4b5059;cursor:default;background:transparent}
+.list{flex:1;list-style:none;margin:0;padding:0}
+.list-row{display:grid;grid-template-columns:24px 1fr 60px 80px 70px 28px;gap:12px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--divider);border-radius:var(--r-sm)}
+.list-row:hover,.list-row:focus-within{background:var(--surface)}
+.list-row a{text-decoration:none;font-weight:600}
+.list-row .muted{color:var(--muted)}
+.list-head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--divider)}
+.list-head:hover{background:transparent}
+.det-row{display:grid;grid-template-columns:72px 1fr auto;gap:16px;padding:10px;border-bottom:1px solid var(--divider);align-items:start;border-radius:var(--r-sm)}
+.det-row:hover,.det-row:focus-within{background:var(--surface)}
+.det-row .poster{aspect-ratio:2/3;width:72px}
+.det-row h3{margin:0 0 2px;font-size:15px}
+.det-row h3 a{text-decoration:none}
+.det-row p{margin:4px 0 6px;color:#c3c6cb;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.det-row .chiprow{display:flex;gap:4px;flex-wrap:wrap}
+.crumbs{display:flex;gap:6px;align-items:center;color:var(--muted);margin-bottom:12px;flex-wrap:wrap}
+.crumbs button{background:transparent;border:0;color:var(--accent-hover);padding:2px 4px}
+.folder-list{list-style:none;margin:0;padding:0}
+.folder-list li button,.folder-list li a{display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:0;border-bottom:1px solid var(--divider);background:transparent;text-align:left;text-decoration:none}
+.folder-list li :hover{background:var(--surface)}
+.folder-list .muted{color:var(--muted);margin-left:auto;font-size:12px}
+.hint{background:var(--surface);border:1px dashed var(--divider);border-radius:var(--r-lg);padding:20px;color:var(--muted)}
+.selbar{position:sticky;bottom:12px;margin-top:16px;background:var(--raised);border:1px solid var(--accent);border-radius:var(--r-lg);padding:8px 12px;display:flex;gap:8px;align-items:center;box-shadow:var(--shadow-overlay);z-index:10;flex-wrap:wrap}
+.selbar .grow{flex:1}
+.later{font-size:10px;color:var(--muted);border:1px solid var(--divider);border-radius:4px;padding:0 4px;margin-left:6px}
+
+/* search page */
+.search-head h1{font-size:24px;margin:0 0 12px}
+.empty{color:var(--muted);padding:24px 0}
+
+/* sheet (phone) */
+.sheet-back{position:fixed;inset:0;background:rgb(0 0 0/.55);z-index:60}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;background:var(--surface);border-radius:16px 16px 0 0;padding:8px 16px 24px;max-height:80vh;overflow:auto;box-shadow:var(--shadow-overlay)}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--divider);margin:4px auto 12px}
+.sheet h2{font-size:16px;margin:0 0 8px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);padding:8px 14px;box-shadow:var(--shadow-overlay);z-index:90}
+
+/* responsive */
+@media (max-width:1100px){
+  main{padding:16px 18px 80px}
+  .hero{min-height:280px}.hero h2{font-size:32px}
+}
+@media (max-width:1024px){ .sidebar{width:64px} .side-item .lbl,.side-item .warn,.side-head,.lib-row .mini{display:none} .side-item{justify-content:center} body.expanded .sidebar{width:var(--sidebar);position:fixed;left:0;z-index:40;background:var(--bg);box-shadow:var(--shadow-overlay)} body.expanded .side-item .lbl,body.expanded .side-head,body.expanded .lib-row .mini{display:revert} body.expanded .side-item{justify-content:flex-start}}
+@media (max-width:700px){
+  .sidebar,#sidebarToggle,.topbar .desk-only{display:none}
+  .topbar{gap:4px;padding:0 8px}
+  .logo span.name{display:none}
+  main{padding:12px 16px 96px}
+  .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;background:var(--surface);border-top:1px solid var(--divider);height:64px}
+  .bottom-nav button{flex:1;background:transparent;border:0;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px}
+  .bottom-nav button[aria-current=page]{color:var(--accent)}
+  .hero{min-height:240px}.hero .content{padding:18px}.hero h2{font-size:26px}.hero p{display:none}
+  .row-arrow{display:none}
+  .toolbar .desk-tools,.toolbar>.seg,.toolbar>.sep{display:none}
+  .toolbar .phone-tools{display:inline-flex}
+  .list-row{grid-template-columns:24px 1fr 60px 28px}.list-row .hide-s{display:none}
+  .activity{right:8px;left:8px;width:auto}
+}
+.phone-tools{display:none}
+.desk-tools{display:inline-flex;gap:8px;flex-wrap:wrap;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<details class="legend" id="legend">
+  <summary>Prototyp-Legende / prototype legend – browse.html (Entwurf / draft)</summary>
+  <div class="body">
+    <div><h3>ux-spec element ids</h3><ul>
+      <li>Shell: SH-01, SH-02, SH-03, SH-04, SH-05, SH-07 (static), SH-10…SH-18</li>
+      <li>Home: HO-01, HO-02, HO-03, HO-05, HO-07 (rows come from the server), HO-09 (toggle below)</li>
+      <li>Library Overview: LB-01…LB-04, LB-06, LB-09</li>
+      <li>Library Browse: LB-20…LB-24, LB-26, LB-27, LB-28, LB-29, LB-30 (not virtualised here), LB-40…LB-43</li>
+      <li>Search: SR-01, SR-02</li>
+    </ul></div>
+    <div><h3>Target milestone</h3><ul>
+      <li>M5 (Web UI complete); watch-state badges, progress, "Continue watching" are M7 (M5 if OD-UX-3 B) – marked "M7"</li>
+      <li>Pivot names follow ux-spec section 14: Plex "Recommended / Library" = Mivo <b>Übersicht / Durchsuchen</b></li>
+      <li>Detail pages and player: <code>detail.html</code> (separate prototype)</li>
+    </ul></div>
+    <div><h3>Open questions for the owner</h3><ul>
+      <li>Q1 Hero on Home: on by default, or off (rows first, like Plex)?</li>
+      <li>Q2 Card hover: watched toggle bottom-left and overflow bottom-right – or both in one menu?</li>
+      <li>Q3 Phone bottom nav: is "Profile" right as 4th tab, or "Settings"?</li>
+      <li>Q4 Unwatched badge: coral count bubble (shown) or neutral grey?</li>
+      <li>Q5 A–Z bar: right edge always visible in title sort, or only on hover/scroll?</li>
+      <li>Q6 Default view for a new library: Overview or Browse?</li>
+    </ul>
+    <label style="display:block;margin-top:6px"><input type="checkbox" id="emptyToggle"> Simulate "no libraries yet" (HO-09)</label>
+    <label style="display:block"><input type="checkbox" id="adminToggle" checked> Signed in as admin (SH-04 transcodes, SH-05 target)</label>
+    </div>
+  </div>
+</details>
+
+<header class="topbar">
+  <button class="icon-btn" id="sidebarToggle" aria-label="" data-i18n-label="toggleSidebar" aria-expanded="true" title="SH-01"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  <a class="logo" href="#/" title="SH-02"><span class="mark" aria-hidden="true">M</span><span class="name" id="brandName">Mivo</span></a>
+  <div class="search" title="SH-03">
+    <svg class="i glass" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <label for="q" class="sr-only" data-i18n="search">Suche</label>
+    <input id="q" type="search" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="searchDrop" aria-autocomplete="list">
+    <kbd class="desk-only">Ctrl K</kbd>
+    <div class="pop search-drop" id="searchDrop" role="listbox" hidden></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn ghost lang-toggle" id="langToggle" aria-label="Sprache / language">DE | en</button>
+  <button class="icon-btn" id="activityBtn" aria-haspopup="dialog" aria-expanded="false" title="SH-04"><svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="badge-dot" id="actBadge">3</span></button>
+  <button class="icon-btn desk-only" id="settingsBtn" title="SH-05"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  <button class="icon-btn desk-only" aria-label="Profil" title="SH-07 (M7)"><span class="avatar">S</span></button>
+  <div class="pop activity" id="activityPop" role="dialog" aria-labelledby="actTitle" hidden></div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Navigation"></nav>
+  <main id="main" tabindex="-1"></main>
+</div>
+
+<nav class="bottom-nav" id="bottomNav" aria-label="Navigation (SH-17)"></nav>
+<div id="layer"></div>
+
+<script>
+"use strict";
+/* ---------- i18n ---------- */
+const STR={
+ de:{toggleSidebar:"Seitenleiste ein-/ausklappen",search:"Suche",searchPh:"Filme, Serien, Personen suchen",home:"Startseite",allLibs:"Alle Mediatheken",pinned:"Mediatheken",playlists:"Playlists",settings:"Einstellungen",resetLayout:"Layout zurücksetzen",done:"Fertig",pin:"Anheften",up:"Nach oben",down:"Nach unten",unavailable:"nicht verfügbar",
+ overview:"Übersicht",browse:"Durchsuchen",seeAll:"Alle anzeigen",cw:"Weiterschauen",upNext:"Als Nächstes",recentlyIn:"Kürzlich hinzugefügt in",recently:"Kürzlich hinzugefügt",newReleases:"Neuerscheinungen",more:"Mehr",startShow:"Noch nicht angefangen",recentEps:"Neu erschienene Folgen",
+ play:"Abspielen",resume:"Fortsetzen",moreInfo:"Mehr Infos",filter:"Filter",sort:"Sortieren",asc:"Aufsteigend",desc:"Absteigend",playAll:"Alle abspielen",shuffle:"Zufällig",select:"Auswählen",grid:"Raster",list:"Liste",details:"Details",size:"Größe",
+ movies:"Filme",shows:"Serien",seasons:"Staffeln",episodes:"Folgen",folders:"Ordner",people:"Personen",top:"Top-Ergebnisse",all:"Alle",
+ nMovies:n=>`${n} Filme`,nShows:n=>`${n} Serien`,nSeasons:n=>`${n} Staffeln`,nEpisodes:n=>`${n} Folgen`,nFolders:n=>`${n} Einträge`,
+ quick:"Schnellfilter",fields:"Feldfilter",genre:"Genre",decade:"Jahrzehnt",resolution:"Auflösung",audioLang:"Audiosprache",
+ title:"Titel",year:"Jahr",added:"Hinzugefügt am",duration:"Dauer",fileSize:"Dateigröße",random:"Zufällig",rating:"Bewertung",bitrate:"Bitrate",
+ recent:"Letzte Suchen",resultsFor:q=>`Ergebnisse für „${q}“`,openAll:"Enter: alle Ergebnisse öffnen",noResults:"Keine Treffer.",
+ activity:"Aktivität",scan:"Scan",openAdmin:"Im Adminbereich öffnen",updateAvail:"Update verfügbar: 0.9.0",
+ selected:n=>`${n} ausgewählt`,markWatched:"Als gesehen markieren",addTo:"Hinzufügen zu …",reanalyze:"Neu analysieren",refreshMeta:"Metadaten aktualisieren",cancel:"Abbrechen",
+ playNext:"Als Nächstes abspielen",addQueue:"Zur Warteschlange",mediaInfo:"Medieninfo",editDetails:"Details bearbeiten",removeCw:"Aus Weiterschauen entfernen",
+ noLibs:"Noch keine Mediatheken",noLibsText:"Füge einen Medienordner hinzu, damit Mivo deine Filme und Serien findet.",addLib:"Mediathek hinzufügen",
+ overviewHint:"Für Reihen fehlen noch Daten (z. B. Metadaten). Unter „Durchsuchen“ ist alles da.",
+ profile:"Profil",libraries:"Mediatheken",watched:"Gesehen",clearFilters:"Filter zurücksetzen",newEps:n=>`${n} neue Folgen`,season:"Staffel",ep:"Folge",
+ toastDetail:"Detailseite: siehe detail.html (in Arbeit)",toastPlay:"Player: siehe detail.html (in Arbeit)",toastAdmin:"Adminbereich: nicht Teil dieses Prototyps"},
+ en:{toggleSidebar:"Toggle sidebar",search:"Search",searchPh:"Search movies, shows, people",home:"Home",allLibs:"All libraries",pinned:"Libraries",playlists:"Playlists",settings:"Settings",resetLayout:"Reset layout",done:"Done",pin:"Pin",up:"Move up",down:"Move down",unavailable:"unavailable",
+ overview:"Overview",browse:"Browse",seeAll:"See all",cw:"Continue watching",upNext:"Up next",recentlyIn:"Recently added in",recently:"Recently added",newReleases:"New releases",more:"More",startShow:"Start a show",recentEps:"Recently released episodes",
+ play:"Play",resume:"Resume",moreInfo:"More info",filter:"Filter",sort:"Sort",asc:"Ascending",desc:"Descending",playAll:"Play all",shuffle:"Shuffle",select:"Select",grid:"Grid",list:"List",details:"Details",size:"Size",
+ movies:"Movies",shows:"Shows",seasons:"Seasons",episodes:"Episodes",folders:"Folders",people:"People",top:"Top results",all:"All",
+ nMovies:n=>`${n} movies`,nShows:n=>`${n} shows`,nSeasons:n=>`${n} seasons`,nEpisodes:n=>`${n} episodes`,nFolders:n=>`${n} entries`,
+ quick:"Quick filters",fields:"Field filters",genre:"Genre",decade:"Decade",resolution:"Resolution",audioLang:"Audio language",
+ title:"Title",year:"Year",added:"Date added",duration:"Duration",fileSize:"File size",random:"Random",rating:"Rating",bitrate:"Bitrate",
+ recent:"Recent searches",resultsFor:q=>`Results for “${q}”`,openAll:"Enter: open all results",noResults:"No results.",
+ activity:"Activity",scan:"Scan",openAdmin:"Open in admin",updateAvail:"Update available: 0.9.0",
+ selected:n=>`${n} selected`,markWatched:"Mark as watched",addTo:"Add to …",reanalyze:"Re-analyze",refreshMeta:"Refresh metadata",cancel:"Cancel",
+ playNext:"Play next",addQueue:"Add to queue",mediaInfo:"Media info",editDetails:"Edit details",removeCw:"Remove from continue watching",
+ noLibs:"No libraries yet",noLibsText:"Add a media folder so Mivo can find your movies and shows.",addLib:"Add library",
+ overviewHint:"Not enough data for rows yet (for example no metadata). Everything is under “Browse”.",
+ profile:"Profile",libraries:"Libraries",watched:"Watched",clearFilters:"Clear filters",newEps:n=>`${n} new episodes`,season:"Season",ep:"Episode",
+ toastDetail:"Detail page: see detail.html (in progress)",toastPlay:"Player: see detail.html (in progress)",toastAdmin:"Admin area: not part of this prototype"}
+};
+let lang="de";const t=(k,...a)=>{const v=STR[lang][k];return typeof v==="function"?v(...a):(v??k)};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- icons ---------- */
+const I={
+ home:'<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ movies:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+ shows:'<rect x="3" y="6" width="18" height="12" rx="2"/><path d="m8 2 4 4 4-4"/>',
+ music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+ photos:'<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+ audiobooks:'<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
+ grid:'<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+ listv:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+ details:'<rect x="3" y="4" width="5" height="7" rx="1"/><rect x="3" y="13" width="5" height="7" rx="1"/><path d="M11 6h10M11 9h7M11 15h10M11 18h7"/>',
+ playlist:'<path d="M3 6h12M3 12h12M3 18h8"/><path d="m16 15 5 3-5 3z"/>',
+ settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+ libs:'<path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16 5 4 1-3 14-4-1z"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+ user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+ play:'<path d="M7 4v16l13-8z"/>',
+ dots:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+ check:'<path d="m5 12 5 5 9-10"/>',
+ pin:'<path d="M9 4h6l-1 6 4 3H6l4-3z"/><path d="M12 13v8"/>',
+ up:'<path d="m6 15 6-6 6 6"/>',down:'<path d="m6 9 6 6 6-6"/>',
+ left:'<path d="m15 6-6 6 6 6"/>',right:'<path d="m9 6 6 6-6 6"/>',
+ filter:'<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',sortI:'<path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/>',
+ shuffle:'<path d="M3 6h4l10 12h4M3 18h4l3-4M14 10l3-4h4M18 3l3 3-3 3M18 15l3 3-3 3"/>',
+ select:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/>',
+ folder:'<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
+ file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+ x:'<path d="M6 6l12 12M18 6 6 18"/>',
+ eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+ pencil:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+ warn:'<path d="M12 3 2 21h20z"/><path d="M12 10v5M12 18h.01"/>',
+ update:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>'
+};
+const ic=(n,extra="")=>`<svg class="i" viewBox="0 0 24 24" aria-hidden="true" ${extra}>${I[n]}</svg>`;
+
+/* ---------- invented sample data ---------- */
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;const pick=a=>a[Math.floor(rnd()*a.length)];
+const GENRES=["Drama","Komödie","Thriller","Sci-Fi","Abenteuer","Krimi","Animation","Doku","Fantasy","Horror"];
+const W1=["Der","Die","Das","Ein","Zwei","Nacht","Letzte","Stille","Kalte","Goldene","Verlorene","Neue","Eiserne","Blaue","Rote","Wilde"];
+const W2=["Horizont","Küste","Station","Sommer","Brücke","Spur","Echo","Grenze","Insel","Signal","Uhr","Stadt","Fahrt","Welle","Kammer","Linie","Ebene","Leuchtturm","Archiv","Orbit","Wald","Tal","Komet","Schatten"];
+const extraTitles=["Atlas","Zebra Protokoll","Quarz","Yellowknife","Ulme","Xenon","Ikarus 9","Juni","Omega","Paprika","Vektor","Mondlicht","Hafen 7","Kiesel","7 Tage","Nordlicht"];
+const hue=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))%360;return h};
+function artStyle(title){const h=hue(title),h2=(h+50+Math.floor(h/7))%360;return `background:linear-gradient(160deg,hsl(${h} 55% 32%),hsl(${h2} 60% 14%) 70%),hsl(${h} 40% 20%)`}
+function makeMovies(){const out=[],seen=new Set();for(let i=0;out.length<64;i++){let title=i<extraTitles.length?extraTitles[i]:`${pick(W1)} ${pick(W2)}`;if(seen.has(title))continue;seen.add(title);
+ const year=1968+Math.floor(rnd()*57);const res=pick(["4K","4K","1080p","1080p","1080p","720p","SD"]);
+ out.push({id:"m"+out.length,kind:"movie",title,year,genre:pick(GENRES),dur:80+Math.floor(rnd()*80),res,hdr:res==="4K"?pick(["HDR10","Dolby Vision","HDR10+",null]):null,atmos:rnd()<.15,
+  audio:pick(["Deutsch","Deutsch","Englisch","Französisch","Japanisch"]),size:(res==="4K"?40:res==="1080p"?10:3)+Math.floor(rnd()*20),added:Math.floor(rnd()*400),watched:rnd()<.3,progress:rnd()<.12?Math.floor(10+rnd()*80):0,
+  versions:rnd()<.07?2:1,unavailable:rnd()<.04,summary:"Eine erfundene Geschichte über Entscheidungen, Umwege und einen Abend, der alles verändert.",folder:pick(["Filme/Klassiker","Filme/Neu","Filme/4K","Filme"])})}return out}
+const SHOWN=["Nordwind","Die Kanzlei","Pixelstadt","Tiefsee Labor","Hinterhof","Die Ermittlerin","Sternenfracht","Kochschule Berg","Zeitsprung","Brückenbauer","Ostwärts","Atelier 9","Ruhepol","Funkstille","Die Gärtnerei","Kometenjagd","Lichtspiel","Grenzgänger","Inselarzt","Quellcode","Abendrot","Wellenreiter","Kopfsache","Bahnhof Süd"];
+function makeShows(){return SHOWN.map((title,i)=>{const seasons=1+Math.floor(rnd()*6);const eps=seasons*(6+Math.floor(rnd()*7));const watchedEps=rnd()<.4?0:Math.floor(rnd()*eps);
+ return {id:"s"+i,kind:"show",title,year:1998+Math.floor(rnd()*27),genre:pick(GENRES),seasons,eps,unwatched:eps-watchedEps,started:watchedEps>0,added:Math.floor(rnd()*300),newEps:rnd()<.3?1+Math.floor(rnd()*5):0,
+ res:pick(["4K","1080p","1080p","720p"]),hdr:null,atmos:false,audio:pick(["Deutsch","Englisch"]),dur:45,size:seasons*30,watched:watchedEps===eps,progress:0,versions:1,unavailable:false,summary:"Eine erfundene Serie über Menschen, die einander mehr brauchen, als sie zugeben.",folder:"Serien/"+title}})}
+const DATA={movies:makeMovies(),shows:makeShows()};
+const LIB_DEFS=[
+ {id:"movies",name:"Filme",kind:"movies",items:()=>DATA.movies},
+ {id:"shows",name:"Serien",kind:"shows",items:()=>DATA.shows},
+ {id:"kids",name:"Kinderfilme",kind:"movies",items:()=>DATA.movies.filter(m=>m.genre==="Animation")},
+ {id:"music",name:"Musik",kind:"music",items:()=>[]},
+ {id:"photos",name:"Fotos",kind:"photos",items:()=>[],unavailable:true},
+ {id:"books",name:"Hörbücher",kind:"audiobooks",items:()=>[]}
+];
+
+/* ---------- preferences (per device, not URL state) ---------- */
+const DEFAULT_LAYOUT={order:["movies","shows","kids","music","photos","books"],pinned:{movies:true,shows:true,kids:true,music:true,photos:false,books:false}};
+const store={get(k,d){try{const v=localStorage.getItem("mivo.proto."+k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem("mivo.proto."+k,JSON.stringify(v))}catch{}}};
+let layout=store.get("layout",structuredClone(DEFAULT_LAYOUT));
+let cardStep=store.get("cardStep",3);
+let sidebarMode="pinned";
+let collapsed=store.get("collapsed",false);
+let selection=new Set();let selecting=false;
+let heroIndex=0,heroTimer=null;
+const CARD_SIZES=[120,140,160,190,230];
+const isAdmin=()=>document.getElementById("adminToggle").checked;
+const noLibs=()=>document.getElementById("emptyToggle").checked;
+
+/* ---------- routing: every view state is in the hash (principle 6) ---------- */
+function parseRoute(){const h=location.hash.slice(1)||"/";const [path,qs]=h.split("?");return {parts:path.split("/").filter(Boolean),q:new URLSearchParams(qs||"")}}
+function go(path,params){const qs=params?new URLSearchParams(Object.entries(params).filter(([,v])=>v!==""&&v!=null)).toString():"";location.hash=path+(qs?"?"+qs:"")}
+function setParam(k,v){const r=parseRoute();if(v===""||v==null)r.q.delete(k);else r.q.set(k,v);location.hash="/"+r.parts.join("/")+(r.q.toString()?"?"+r.q:"")}
+
+/* ---------- helpers ---------- */
+function toast(msg){const el=document.createElement("div");el.className="toast";el.role="status";el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),2200)}
+const sub=it=>it.kind==="show"?`${it.year} · ${it.seasons} ${t("seasons")}`:it.kind==="episode"?`S${it.s} · E${it.e}`:it.year;
+const fmtDur=m=>`${Math.floor(m/60)} h ${m%60} min`;
+
+function card(it,opts={}){
+ const wide=opts.wide;const sel=selection.has(it.id);
+ const badges=[];
+ if(it.kind==="show"&&!it.watched&&opts.showUnwatched!==false){const n=opts.newEps?it.newEps:it.unwatched;if(n)badges.push(`<span class="count-badge" title="${opts.newEps?t("newEps",n):"unwatched (M7)"}" aria-label="${n}">${n}</span>`)}
+ if(it.watched&&it.kind!=="show")badges.push(`<span class="watched-badge" title="${t("watched")} (M7)"></span><svg viewBox="0 0 24 24" class="i" aria-hidden="true">${I.check}</svg>`);
+ if(it.unavailable)badges.push(`<span class="unavail">${t("unavailable")}</span>`);
+ if(it.versions>1)badges.push(`<span class="ver-badge">${it.versions} Versionen</span>`);
+ const prog=(opts.progress??it.progress)?`<div class="progress" aria-label="${opts.progress??it.progress}%"><i style="width:${opts.progress??it.progress}%"></i></div>`:"";
+ const label=opts.label||it.title;
+ return `<div class="card ${wide?"wide":""} ${sel?"selected":""}" data-id="${it.id}">
+  <div class="poster"><div class="art" style="position:absolute;inset:0;${artStyle(it.title)}"></div><span class="art-title" aria-hidden="true">${esc(it.title)}</span>
+   ${badges.join("")}${prog}
+   <div class="overlay">
+    <button class="play-circle" data-act="play" aria-label="${t("play")}: ${esc(label)}">${ic("play")}</button>
+    ${opts.selectable?`<input type="checkbox" class="sel-box" data-act="sel" aria-label="${t("select")}: ${esc(label)}" ${sel?"checked":""}>`:""}
+    <span class="ov-bl">${it.kind!=="show"?`<button class="ov-btn" data-act="watched" aria-label="${t("markWatched")} (M7)" title="${t("markWatched")} (M7)">${ic("eye")}</button>`:""}</span>
+    <span class="ov-br" style="display:flex;gap:4px">${isAdmin()?`<button class="ov-btn" data-act="edit" aria-label="${t("editDetails")} (M6)" title="${t("editDetails")} (M6)">${ic("pencil")}</button>`:""}<button class="ov-btn" data-act="menu" aria-haspopup="menu" aria-label="${t("more")}: ${esc(label)}">${ic("dots")}</button></span>
+   </div>
+  </div>
+  <a class="card-title" href="detail.html" data-act="detail">${esc(opts.title||it.title)}</a>
+  <div class="card-sub">${esc(opts.sub||sub(it))}</div>
+ </div>`}
+
+/* ---------- sidebar ---------- */
+function libById(id){return LIB_DEFS.find(l=>l.id===id)}
+function renderSidebar(){
+ const sb=document.getElementById("sidebar");const r=parseRoute();const cur=r.parts[0]==="lib"?r.parts[1]:r.parts[0]||"home";
+ const libsInOrder=layout.order.map(libById);
+ let h=`<a class="side-item" href="#/" ${cur==="home"?'aria-current="page"':""} title="SH-10">${ic("home")}<span class="lbl">${t("home")}</span></a><div class="side-sep"></div>`;
+ if(noLibs()){h+=`<div class="side-head">${t("pinned")}</div><button class="side-item" data-act="addlib" title="HO-09">${ic("folder")}<span class="lbl">${t("addLib")}</span></button>`}
+ else if(sidebarMode==="pinned"){
+  h+=`<div class="side-head">${t("pinned")}</div><ul style="list-style:none;margin:0;padding:0" id="pinList">`;
+  libsInOrder.filter(l=>layout.pinned[l.id]).forEach(l=>{h+=`<li class="lib-row" draggable="true" data-lib="${l.id}" title="SH-11 / SH-13: drag to reorder"><a class="side-item" href="#/lib/${l.id}" ${cur===l.id?'aria-current="page"':""}>${ic(l.kind)}<span class="lbl">${esc(l.name)}</span>${l.unavailable?`<span class="warn" title="${t("unavailable")}">●</span>`:""}</a></li>`});
+  h+=`</ul><button class="side-item" data-act="allLibs" title="SH-12">${ic("libs")}<span class="lbl">${t("allLibs")} …</span></button>`;
+ }else{
+  h+=`<div class="side-head"><span>${t("allLibs")}</span><button class="btn ghost" style="min-height:24px;padding:2px 8px;font-size:12px;text-transform:none" data-act="doneLibs">${t("done")}</button></div><ul style="list-style:none;margin:0;padding:0">`;
+  libsInOrder.forEach((l,i)=>{const p=!!layout.pinned[l.id];h+=`<li class="lib-row" data-lib="${l.id}"><a class="side-item" href="#/lib/${l.id}">${ic(l.kind)}<span class="lbl">${esc(l.name)}</span></a>
+   <button class="mini" data-act="move" data-dir="-1" data-lib="${l.id}" aria-label="${t("up")}: ${esc(l.name)}" ${i===0?"disabled":""}>${ic("up")}</button>
+   <button class="mini" data-act="move" data-dir="1" data-lib="${l.id}" aria-label="${t("down")}: ${esc(l.name)}" ${i===libsInOrder.length-1?"disabled":""}>${ic("down")}</button>
+   <button class="mini" data-act="pin" data-lib="${l.id}" aria-pressed="${p}" aria-label="${t("pin")}: ${esc(l.name)}" title="${t("pin")}">${ic("pin")}</button></li>`});
+  h+=`</ul><button class="side-item" data-act="resetLayout" title="SH-14">${ic("x")}<span class="lbl">${t("resetLayout")}</span></button>`;
+ }
+ h+=`<div class="side-sep"></div><a class="side-item" href="#/playlists" title="SH-15 (M7)">${ic("playlist")}<span class="lbl">${t("playlists")} <span class="later">M7</span></span></a>
+  <div class="side-bottom"><div class="side-sep"></div><button class="side-item" data-act="settings" title="SH-18">${ic("settings")}<span class="lbl">${t("settings")}</span></button></div>`;
+ sb.innerHTML=h;
+ initDrag();
+}
+function initDrag(){
+ let dragId=null;document.querySelectorAll("#pinList .lib-row").forEach(row=>{
+  row.addEventListener("dragstart",e=>{dragId=row.dataset.lib;row.classList.add("dragging");e.dataTransfer.effectAllowed="move"});
+  row.addEventListener("dragend",()=>row.classList.remove("dragging"));
+  row.addEventListener("dragover",e=>{e.preventDefault();row.classList.add("drop-target")});
+  row.addEventListener("dragleave",()=>row.classList.remove("drop-target"));
+  row.addEventListener("drop",e=>{e.preventDefault();row.classList.remove("drop-target");const to=row.dataset.lib;if(!dragId||dragId===to)return;const o=layout.order.filter(x=>x!==dragId);o.splice(o.indexOf(to),0,dragId);layout.order=o;store.set("layout",layout);renderSidebar();renderBottomNav()});
+ })}
+
+function renderBottomNav(){const r=parseRoute();const c=r.parts[0]||"home";
+ document.getElementById("bottomNav").innerHTML=[["home",ic("home"),t("home"),c==="home"],["libs",ic("libs"),t("libraries"),c==="lib"],["search",ic("search"),t("search"),c==="search"],["profile",ic("user"),t("profile"),false]]
+ .map(([k,i,l,a])=>`<button data-nav="${k}" ${a?'aria-current="page"':""}>${i}<span>${l}</span></button>`).join("")}
+
+/* ---------- home ---------- */
+function rowHtml(id,title,items,opts={}){
+ const seeAll=opts.seeAll?`<a href="${opts.seeAll}">${t("seeAll")} ›</a>`:"";
+ return `<section class="row" aria-labelledby="h-${id}"><div class="row-head"><h2 id="h-${id}">${title}${opts.tag?`<span class="later">${opts.tag}</span>`:""}</h2>${seeAll}</div>
+ <button class="row-arrow prev" data-act="scroll" data-dir="-1" aria-label="${t("left")||"Zurück"}">${ic("left")}</button>
+ <ul class="row-track" data-row="${id}">${items.map(x=>`<li class="${opts.wide?"wide":""}">${typeof x==="string"?x:card(x,opts.card||{})}</li>`).join("")}</ul>
+ <button class="row-arrow next" data-act="scroll" data-dir="1" aria-label="${t("right")||"Weiter"}">${ic("right")}</button></section>`}
+function heroItems(){return [...DATA.movies.filter(m=>m.progress),...DATA.movies.slice().sort((a,b)=>a.added-b.added)].slice(0,5)}
+function renderHero(){const items=heroItems();const it=items[heroIndex%items.length];
+ return `<section class="hero" aria-roledescription="carousel" aria-label="Hero (HO-01)" id="hero"><div class="art" style="${artStyle(it.title)}"></div><div class="shade"></div>
+ <div class="content"><div class="meta">${it.year} · ${fmtDur(it.dur)} · ${esc(it.genre)} · <span class="tech">${it.res}</span></div><h2>${esc(it.title)}</h2><p>${esc(it.summary)}</p>
+ <div style="display:flex;gap:8px"><button class="btn primary" data-act="play">${ic("play","style='fill:currentColor;stroke:none'")}${it.progress?t("resume"):t("play")}</button><a class="btn" href="detail.html">${t("moreInfo")}</a></div></div>
+ <div class="dots">${items.map((x,i)=>`<button aria-label="${esc(x.title)}" data-act="hero" data-i="${i}" ${i===heroIndex%items.length?'aria-current="true"':""}></button>`).join("")}</div></section>`}
+function startHero(){clearInterval(heroTimer);if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;heroTimer=setInterval(()=>{const h=document.getElementById("hero");if(!h||h.matches(":hover,:focus-within"))return;heroIndex++;h.outerHTML=renderHero()},8000)}
+function renderHome(main){
+ if(noLibs()){main.innerHTML=`<div class="hint" style="text-align:center;padding:48px" title="HO-09">${ic("folder","style='width:40px;height:40px'")}<h1 style="font-size:22px;color:var(--text)">${t("noLibs")}</h1><p>${t("noLibsText")}</p><button class="btn primary" data-act="addlib">${t("addLib")}</button></div>`;return}
+ const cw=[...DATA.movies.filter(m=>m.progress).slice(0,4),...DATA.shows.filter(s=>s.started&&!s.watched).slice(0,4).map(s=>({...s,_ep:{s:Math.min(s.seasons,2),e:3+s.title.length%6}}))];
+ const cwCards=cw.map(x=>x._ep?card(x,{sub:`S${x._ep.s} · E${x._ep.e} · Folgentitel`,progress:35,showUnwatched:false}):card(x,{sub:`${x.year} · noch ${Math.round(x.dur*(100-x.progress)/100)} min`}));
+ const pinnedLibs=layout.order.map(libById).filter(l=>layout.pinned[l.id]&&l.items().length);
+ let h=renderHero();
+ h+=rowHtml("cw",t("cw"),cwCards,{tag:"M7"});
+ h+=rowHtml("upnext",t("upNext"),DATA.shows.filter(s=>s.started&&!s.watched).slice(2,10).map(s=>card(s,{sub:`S1 · E${2+s.title.length%5}`,showUnwatched:false})),{tag:"M7"});
+ pinnedLibs.forEach(l=>{const items=l.items().slice().sort((a,b)=>a.added-b.added).slice(0,14);
+  h+=rowHtml("ra-"+l.id,`${t("recentlyIn")} ${esc(l.name)}`,items.map(x=>card(x,x.kind==="show"?{newEps:true,sub:x.newEps?t("newEps",x.newEps):sub(x)}:{})),{seeAll:`#/lib/${l.id}?view=browse&sort=added&dir=desc`})});
+ main.innerHTML=h;startHero();
+}
+
+/* ---------- library ---------- */
+const MOVIE_SORTS=["title","year","added","duration","rating","resolution","bitrate","fileSize","random"];
+const QUICK=[["all","Alle"],["hdr","HDR"],["dv","Dolby Vision"],["hdr10p","HDR10+"],["atmos","Dolby Atmos"],["4k","4K"],["unavailable","Nicht verfügbar"],["dupes","Duplikate"],["unwatched","Ungesehen","M7"],["inprogress","Begonnen","M7"],["unmatched","Nicht zugeordnet","M6"]];
+const QUICK_EN={all:"All",unavailable:"Unavailable",dupes:"Duplicates",unwatched:"Unwatched",inprogress:"In progress",unmatched:"Unmatched"};
+const qLabel=([k,de])=>lang==="en"&&QUICK_EN[k]?QUICK_EN[k]:de;
+const quickTest={all:()=>true,hdr:i=>!!i.hdr,dv:i=>i.hdr==="Dolby Vision",hdr10p:i=>i.hdr==="HDR10+",atmos:i=>i.atmos,"4k":i=>i.res==="4K",unavailable:i=>i.unavailable,dupes:i=>i.versions>1,unwatched:i=>!i.watched,inprogress:i=>i.progress>0||i.started&&!i.watched,unmatched:()=>false};
+const FIELDS={genre:i=>i.genre,decade:i=>Math.floor(i.year/10)*10+"er",resolution:i=>i.res,audioLang:i=>i.audio};
+function filtered(lib,q){let items=lib.items().slice();const quick=q.get("quick")||"all";items=items.filter(quickTest[quick]||(()=>true));
+ for(const f of Object.keys(FIELDS)){const v=q.get(f);if(v)items=items.filter(i=>FIELDS[f](i)===v)}
+ const s=q.get("sort")||"title",dir=q.get("dir")==="desc"?-1:1;
+ const key={title:i=>i.title.replace(/^(Der|Die|Das|Ein) /,"").toLowerCase(),year:i=>i.year,added:i=>-i.added,duration:i=>i.dur,rating:i=>hue(i.title),resolution:i=>({"SD":0,"720p":1,"1080p":2,"4K":3}[i.res]),bitrate:i=>i.size/i.dur,fileSize:i=>i.size,random:i=>hue(i.id+i.title)}[s]||(i=>i.title);
+ items.sort((a,b)=>{const x=key(a),y=key(b);return (x<y?-1:x>y?1:0)*dir});return items}
+const sortTitle=i=>i.title.replace(/^(Der|Die|Das|Ein) /,"");
+function letterOf(i){const c=sortTitle(i)[0].toUpperCase();return /[A-Z]/.test(c)?c:"#"}
+
+function renderLibrary(main,id,q){
+ const lib=libById(id);if(!lib){main.innerHTML=`<p class="empty">404</p>`;return}
+ const view=q.get("view")||store.get("pivot."+id,"browse");store.set("pivot."+id,view);
+ let h=`<div class="lib-head"><h1>${ic(lib.kind,"style='width:26px;height:26px;vertical-align:-4px;margin-right:6px'")}${esc(lib.name)}</h1></div>
+ <div class="pivots" role="tablist"><button class="pivot" role="tab" aria-selected="${view==="overview"}" data-act="pivot" data-v="overview">${t("overview")}</button><button class="pivot" role="tab" aria-selected="${view==="browse"}" data-act="pivot" data-v="browse">${t("browse")}</button></div>`;
+ if(!lib.items().length){main.innerHTML=h+`<div class="hint">${t("overviewHint")}</div>`;return}
+ if(view==="overview"){main.innerHTML=h+renderOverview(lib);return}
+ main.innerHTML=h+renderBrowse(lib,q);
+}
+function renderOverview(lib){const items=lib.items();const isShow=lib.kind==="shows";const base=`#/lib/${lib.id}?view=browse`;let h="";
+ if(isShow){
+  h+=rowHtml("o-cw",t("cw"),items.filter(s=>s.started&&!s.watched).slice(0,8).map(s=>card(s,{sub:`S2 · E${s.title.length%9+1}`,progress:40,showUnwatched:false})),{tag:"M7"});
+  h+=rowHtml("o-eps",t("recentEps"),items.filter(s=>s.newEps).map(s=>card(s,{wide:true,title:`${s.title}`,sub:`S${s.seasons} · E${s.newEps+3} · ${lang==="de"?"vor 2 Tagen":"2 days ago"}`,showUnwatched:false})),{wide:true});
+  h+=rowHtml("o-ra",t("recently"),items.slice().sort((a,b)=>a.added-b.added).map(s=>card(s,{newEps:true})),{seeAll:base+"&sort=added&dir=desc"});
+  h+=rowHtml("o-start",t("startShow"),items.filter(s=>!s.started).map(s=>card(s,{sub:`${s.eps} ${t("episodes")}`})),{tag:"M7",seeAll:base+"&quick=unwatched"});
+ }else{
+  h+=rowHtml("o-cw",t("cw"),items.filter(m=>m.progress).map(m=>card(m)),{tag:"M7"});
+  h+=rowHtml("o-ra",t("recently"),items.slice().sort((a,b)=>a.added-b.added).slice(0,15).map(m=>card(m)),{seeAll:base+"&sort=added&dir=desc"});
+  h+=rowHtml("o-new",t("newReleases"),items.slice().sort((a,b)=>b.year-a.year).slice(0,15).map(m=>card(m)),{seeAll:base+"&sort=year&dir=desc"});
+ }
+ const counts={};items.forEach(i=>counts[i.genre]=(counts[i.genre]||0)+1);
+ Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,2).forEach(([g])=>{h+=rowHtml("o-g-"+g,`${t("more")}: ${g}`,items.filter(i=>i.genre===g).map(i=>card(i)),{seeAll:base+"&genre="+encodeURIComponent(g)})});
+ return h}
+
+function renderBrowse(lib,q){
+ const isShow=lib.kind==="shows";const type=q.get("type")||(isShow?"shows":"movies");
+ const style=q.get("style")||"grid";const sort=q.get("sort")||"title";const dir=q.get("dir")||"asc";
+ const types=isShow?["shows","seasons","episodes","folders"]:["movies","folders"];
+ let h=`<div class="toolbar" role="toolbar" aria-label="${t("browse")}">
+  <span class="desk-tools">
+  <button class="btn" data-act="menuFilter" aria-haspopup="menu" title="LB-20">${ic("filter")}${t("filter")}${q.get("quick")&&q.get("quick")!=="all"?": "+esc(qLabel(QUICK.find(x=>x[0]===q.get("quick")))):""}</button>
+  <button class="btn" data-act="menuType" aria-haspopup="menu" title="LB-21">${t(type)} ▾</button>
+  ${type!=="folders"?`<button class="btn" data-act="menuSort" aria-haspopup="menu" title="LB-22">${ic("sortI")}${t(sort)} ${dir==="desc"?"↓":"↑"}</button>`:""}
+  </span>
+  <button class="btn phone-tools" data-act="sheetTools">${ic("filter")}${t("filter")} · ${t("sort")}</button>
+  <span class="count" title="LB-23" aria-live="polite"></span>
+  ${type!=="folders"?`<button class="btn ghost" data-act="playAll" title="LB-24">${ic("play")}<span class="desk-only">${t("playAll")}</span></button>
+  <button class="btn ghost" data-act="shuffleAll" title="LB-24">${ic("shuffle")}<span class="desk-only">${t("shuffle")}</span></button>
+  <button class="btn ghost" data-act="selectMode" aria-pressed="${selecting}" title="LB-26">${ic("select")}<span class="desk-only">${t("select")}</span></button>
+  <span class="sep desk-only"></span>
+  <span class="seg" role="group" aria-label="View style (LB-27)"><button aria-pressed="${style==="grid"}" data-act="style" data-v="grid" aria-label="${t("grid")}" title="${t("grid")}">${ic("grid")}</button><button aria-pressed="${style==="list"}" data-act="style" data-v="list" aria-label="${t("list")}" title="${t("list")}">${ic("listv")}</button><button aria-pressed="${style==="details"}" data-act="style" data-v="details" aria-label="${t("details")}" title="${t("details")}">${ic("details")}</button></span>
+  ${style==="grid"?`<label class="slider desk-only" title="LB-28">${ic("grid","style='width:14px;height:14px'")}<span class="sr-only">${t("size")}</span><input type="range" min="0" max="4" step="1" value="${cardStep}" id="sizeSlider">${ic("grid")}</label>`:""}`:""}
+ </div>`;
+ // chips for field filters
+ const chips=Object.keys(FIELDS).filter(f=>q.get(f)).map(f=>`<span class="chip">${t(f)}: ${esc(q.get(f))}<button data-act="rmchip" data-f="${f}" aria-label="${t("cancel")}: ${esc(q.get(f))}">${ic("x","style='width:12px;height:12px'")}</button></span>`);
+ if(chips.length)h+=`<div class="chips">${chips.join("")}<button class="btn ghost" style="min-height:24px;font-size:12px" data-act="clearChips">${t("clearFilters")}</button></div>`;
+ if(type==="folders")return h+renderFolders(lib,q);
+ let items=filtered(lib,q);
+ if(type==="seasons")items=items.flatMap(s=>Array.from({length:s.seasons},(_,k)=>({...s,id:s.id+"-"+(k+1),kind:"season",_s:k+1})));
+ if(type==="episodes")items=items.slice(0,8).flatMap(s=>Array.from({length:6},(_,k)=>({...s,id:s.id+"-e"+k,kind:"episode",s:1,e:k+1})));
+ const countTxt=type==="movies"?t("nMovies",items.length):type==="shows"?t("nShows",items.length):type==="seasons"?t("nSeasons",items.length):t("nEpisodes",items.length);
+ h=h.replace('<span class="count" title="LB-23" aria-live="polite"></span>',`<span class="count" title="LB-23" aria-live="polite">${countTxt}</span>`);
+ const showAz=sort==="title"&&type!=="episodes";
+ const letters=new Set(items.map(letterOf));
+ let body;const seenL=new Set();const anchor=i=>{const l=letterOf(i);if(!showAz||seenL.has(l))return "";seenL.add(l);return `id="az-${l==="#"?"num":l}" class="letter-anchor"`};
+ const optsFor=i=>i.kind==="season"?{sub:`${t("season")} ${i._s}`,title:i.title,selectable:true}:i.kind==="episode"?{wide:true,sub:`S${i.s} · E${i.e}`,title:`${i.title}`,selectable:true}:{selectable:true};
+ if(style==="grid"){body=`<ul class="grid ${type==="episodes"?"wide":""} ${selecting?"selecting":""}" aria-label="${countTxt}">${items.map(i=>`<li ${anchor(i)}>${card(i,optsFor(i))}</li>`).join("")}</ul>`}
+ else if(style==="list"){body=`<ul class="list ${selecting?"selecting":""}" aria-label="${countTxt}"><li class="list-row list-head" aria-hidden="true"><span></span><span>${t("title")}</span><span>${t("year")}</span><span class="hide-s">${t("duration")}</span><span class="hide-s">${t("resolution")}</span><span></span></li>
+  ${items.map(i=>`<li class="list-row" ${anchor(i)} data-id="${i.id}"><input type="checkbox" class="sel-box" style="position:static;opacity:1" data-act="sel" aria-label="${t("select")}: ${esc(i.title)}" ${selection.has(i.id)?"checked":""}><a href="detail.html" data-act="detail">${esc(i.title)}${i.kind==="episode"?` · S${i.s} · E${i.e}`:i.kind==="season"?` · ${t("season")} ${i._s}`:""}</a><span class="muted">${i.year}</span><span class="muted hide-s">${i.kind==="show"?i.eps+" "+t("episodes"):fmtDur(i.dur)}</span><span class="hide-s"><span class="tech ${i.hdr?"hdr":""}">${i.res}${i.hdr?" "+i.hdr:""}</span></span><span title="${t("watched")} (M7)">${i.watched?`<svg class="i" viewBox="0 0 24 24" style="color:var(--dp)">${I.check}</svg>`:i.kind==="show"?`<span class="count-badge" style="position:static">${i.unwatched}</span>`:""}</span></li>`).join("")}</ul>`}
+ else{body=`<ul class="list ${selecting?"selecting":""}" aria-label="${countTxt}">${items.map(i=>`<li class="det-row" ${anchor(i)} data-id="${i.id}"><div class="card" data-id="${i.id}"><div class="poster"><div class="art" style="position:absolute;inset:0;${artStyle(i.title)}"></div>${i.watched?`<span class="watched-badge"></span><svg viewBox="0 0 24 24" class="i" aria-hidden="true">${I.check}</svg>`:""}</div></div>
+  <div><h3><a href="detail.html" data-act="detail">${esc(i.title)}</a></h3><div class="card-sub">${i.year} · ${i.kind==="show"?i.seasons+" "+t("seasons"):fmtDur(i.dur)} · ${esc(i.genre)}</div><p>${esc(i.summary)}</p>
+  <div class="chiprow"><span class="tech">MKV</span><span class="tech ${i.hdr?"hdr":""}">${i.res==="4K"?"HEVC 10-bit":"H.264"}${i.hdr?" "+i.hdr:""}</span><span class="tech">${i.atmos?"TrueHD Atmos 7.1":"AAC 5.1"}</span><span class="tech">${esc(i.audio)}</span></div></div>
+  <div style="display:flex;gap:4px"><button class="icon-btn" data-act="play" aria-label="${t("play")}: ${esc(i.title)}">${ic("play")}</button><button class="icon-btn" data-act="menu" aria-label="${t("more")}: ${esc(i.title)}">${ic("dots")}</button></div></li>`).join("")}</ul>`}
+ const az=showAz?`<nav class="az" aria-label="A–Z (LB-29)">${["#",..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map(l=>`<button data-act="az" data-l="${l==="#"?"num":l}" ${letters.has(l)?"":"disabled"} aria-label="${l}">${l}</button>`).join("")}</nav>`:"";
+ h+=`<div class="browse-wrap">${body}${az}</div>`;
+ if(selecting&&selection.size)h+=`<div class="selbar" role="region" aria-label="LB-26"><b>${t("selected",selection.size)}</b><span class="grow"></span><button class="btn" data-act="toast">${t("markWatched")} <span class="later">M7</span></button><button class="btn" data-act="toast">${t("addTo")} <span class="later">M7</span></button>${isAdmin()?`<button class="btn" data-act="toast">${t("refreshMeta")} <span class="later">M6</span></button><button class="btn" data-act="toast">${t("reanalyze")}</button>`:""}<button class="btn ghost" data-act="clearSel">${t("cancel")}</button></div>`;
+ return h}
+
+function renderFolders(lib,q){const path=(q.get("path")||"").split("/").filter(Boolean);const items=lib.items();
+ const prefix=path.join("/");const children=new Map();const files=[];
+ items.forEach(i=>{const parts=i.folder.split("/");if(parts.slice(0,path.length).join("/")!==prefix)return;if(parts.length>path.length){const c=parts[path.length];children.set(c,(children.get(c)||0)+1)}else files.push(i)});
+ const crumbs=[`<button data-act="folder" data-p="">${esc(lib.name)}</button>`,...path.map((p,k)=>`/ <button data-act="folder" data-p="${esc(path.slice(0,k+1).join("/"))}">${esc(p)}</button>`)];
+ let h=`<nav class="crumbs" aria-label="Breadcrumb (LB-21)">${crumbs.join(" ")}</nav><p class="card-sub" style="margin:-6px 0 10px">${lang==="de"?"Nur bibliotheksrelative Pfade, nie absolute.":"Library-relative paths only, never absolute."}</p><ul class="folder-list">`;
+ [...children].sort().forEach(([c,n])=>{h+=`<li><button data-act="folder" data-p="${esc([...path,c].join("/"))}">${ic("folder")}<span>${esc(c)}</span><span class="muted">${n}</span></button></li>`});
+ files.forEach(i=>{h+=`<li><a href="detail.html" data-act="detail">${ic("file")}<span>${esc(i.title)} (${i.year}).mkv</span><span class="muted">${i.size} GB</span></a></li>`});
+ return h+"</ul>"}
+
+/* ---------- search ---------- */
+function searchAll(qs){const n=qs.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");if(n.length<2)return [];
+ const m=i=>i.title.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").split(/\s+/).some(w=>w.startsWith(n))||i.title.toLowerCase().includes(n)||i.genre.toLowerCase().startsWith(n);
+ const movies=DATA.movies.filter(m).map(x=>({...x,_lib:"Filme",_type:t("movies")}));const shows=DATA.shows.filter(m).map(x=>({...x,_lib:"Serien",_type:t("shows")}));
+ const eps=DATA.shows.filter(m).slice(0,3).map((s,k)=>({...s,id:s.id+"-se",kind:"episode",s:1,e:k+2,_lib:"Serien",_type:t("episodes")}));
+ const people=["Nora Lindqvist","Nils Okafor","Nadia Brenner"].filter(p=>p.toLowerCase().split(" ").some(w=>w.startsWith(n))).map((p,k)=>({id:"p"+k,kind:"person",title:p,year:"",genre:"",_lib:"",_type:t("people")}));
+ return {movies,shows,eps,people}}
+let dropIndex=-1;
+function renderDrop(){const inp=document.getElementById("q"),drop=document.getElementById("searchDrop");const v=inp.value.trim();
+ if(v.length<2){const rec=store.get("recent",["Nordwind","Horizont"]);drop.innerHTML=`<div class="menu-label">${t("recent")}</div>${rec.map((r,k)=>`<div class="sres" role="option" id="opt-${k}" data-q="${esc(r)}">${ic("search")}<div class="meta"><b>${esc(r)}</b></div></div>`).join("")}`;}
+ else{const r=searchAll(v);const top=[...r.movies,...r.shows,...r.eps,...r.people].slice(0,8);
+  drop.innerHTML=top.length?top.map((x,k)=>`<div class="sres" role="option" id="opt-${k}" data-open="${x.kind}"><div class="thumb ${x.kind==="episode"?"wide":""}" style="${x.kind==="person"?"border-radius:50%;width:40px;height:40px;":""}${artStyle(x.title)}"></div><div class="meta"><b>${esc(x.title)}${x.kind==="episode"?` · S${x.s} · E${x.e}`:""}</b><span>${[x.year,x._type,x._lib].filter(Boolean).join(" · ")}</span></div>${x.kind!=="person"?`<button class="icon-btn" data-act="play" aria-label="${t("play")}" tabindex="-1">${ic("play")}</button><button class="icon-btn" data-act="menu" aria-label="${t("more")}" tabindex="-1">${ic("dots")}</button>`:""}</div>`).join("")+`<div class="sres-foot">${t("openAll")}</div>`:`<div class="empty" style="padding:12px">${t("noResults")}</div>`}
+ drop.hidden=false;inp.setAttribute("aria-expanded","true");dropIndex=-1}
+function closeDrop(){document.getElementById("searchDrop").hidden=true;document.getElementById("q").setAttribute("aria-expanded","false")}
+function renderSearch(main,q){const qs=q.get("q")||"";const type=q.get("type")||"top";const r=searchAll(qs);
+ const pivots=[["top",t("top")],["movies",t("movies")],["shows",t("shows")],["episodes",t("episodes")],["people",t("people")+" ·M6"],["music","Musik"],["photos","Fotos"],["audiobooks","Hörbücher"],["collections","Sammlungen ·M7"]];
+ let h=`<div class="search-head"><h1>${t("resultsFor",esc(qs))}</h1></div><div class="pivots" role="tablist" title="SR-02">${pivots.map(([k,l])=>`<button class="pivot" role="tab" aria-selected="${type===k}" data-act="spivot" data-v="${k}">${l}</button>`).join("")}</div>`;
+ const list=r.movies?{top:[...r.movies,...r.shows].slice(0,12),movies:r.movies,shows:r.shows,episodes:r.eps,people:r.people}[type]||[]:[];
+ if(!list.length){main.innerHTML=h+`<p class="empty">${t("noResults")}</p>`;return}
+ main.innerHTML=h+`<ul class="grid ${type==="episodes"?"wide":""}">${list.map(i=>`<li>${i.kind==="person"?`<div class="card"><div class="poster" style="aspect-ratio:1;border-radius:50%"><div class="art" style="position:absolute;inset:0;${artStyle(i.title)}"></div></div><div class="card-title" style="text-align:center">${esc(i.title)}</div></div>`:card(i,i.kind==="episode"?{wide:true,sub:`S${i.s} · E${i.e}`}:{})}</li>`).join("")}</ul>`}
+
+/* ---------- menus ---------- */
+function openMenu(anchor,html,label){closeMenus();const r=anchor.getBoundingClientRect();const m=document.createElement("div");m.className="pop";m.id="menu";m.setAttribute("role","menu");m.setAttribute("aria-label",label||"");m.innerHTML=html;document.body.appendChild(m);
+ const w=m.offsetWidth;m.style.left=Math.max(8,Math.min(r.left+scrollX,innerWidth-w-8))+"px";m.style.top=(r.bottom+scrollY+4)+"px";m.querySelector("button")?.focus();anchor.setAttribute("aria-expanded","true");m._anchor=anchor}
+function closeMenus(){const m=document.getElementById("menu");if(m){m._anchor?.setAttribute("aria-expanded","false");m.remove()}}
+function itemMenu(btn){const admin=isAdmin();openMenu(btn,[
+ [t("play")],[t("playNext")],[t("addQueue")],"-",[t("markWatched"),"M7"],[t("addTo"),"M7"],btn.closest('[data-row="cw"]')?[t("removeCw"),"M7"]:null,"-",[t("mediaInfo")],
+ ...(admin?["-",[t("editDetails"),"M6"],[t("refreshMeta"),"M6"],[t("reanalyze")]]:[])].filter(Boolean).map(x=>x==="-"?'<div class="menu-sep"></div>':`<button class="menu-item" role="menuitem" data-act="toast">${x[0]}${x[1]?`<span class="later">${x[1]}</span>`:""}</button>`).join(""),"LB-43")}
+function filterMenu(btn){const q=parseRoute().q;const lib=libById(parseRoute().parts[1]);const items=lib.items();const cur=q.get("quick")||"all";
+ let h=`<div class="menu-label">${t("quick")}</div>`+QUICK.map(x=>{const n=items.filter(quickTest[x[0]]).length;return `<button class="menu-item" role="menuitemradio" aria-checked="${cur===x[0]}" data-act="quick" data-v="${x[0]}"><span class="check">${cur===x[0]?"✓":""}</span>${qLabel(x)}${x[2]?`<span class="later">${x[2]}</span>`:""}<span class="count">${x[2]?"":n}</span></button>`}).join("");
+ h+=`<div class="menu-sep"></div><div class="menu-label">${t("fields")}</div>`+Object.keys(FIELDS).map(f=>`<button class="menu-item" role="menuitem" data-act="fieldMenu" data-f="${f}">${t(f)} <span class="count">›</span></button>`).join("")+`<div class="menu-label" style="text-transform:none">+ ${lang==="de"?"Jahr, Altersfreigabe, Regie, Darsteller, Land, Studio, Codecs, Container, Untertitelsprache …":"year, content rating, director, actor, country, studio, codecs, container, subtitle language …"}</div>`;
+ openMenu(btn,h,"LB-20")}
+function fieldMenu(btn,f){const lib=libById(parseRoute().parts[1]);const counts={};lib.items().forEach(i=>{const v=FIELDS[f](i);counts[v]=(counts[v]||0)+1});
+ openMenu(btn,`<div class="menu-label">${t(f)}</div>`+Object.entries(counts).sort().map(([v,n])=>`<button class="menu-item" role="menuitem" data-act="field" data-f="${f}" data-v="${esc(v)}">${esc(v)}<span class="count">${n}</span></button>`).join(""),t(f))}
+function sortMenu(btn){const q=parseRoute().q;const cur=q.get("sort")||"title";const dir=q.get("dir")||"asc";
+ openMenu(btn,MOVIE_SORTS.map(s=>`<button class="menu-item" role="menuitemradio" aria-checked="${cur===s}" data-act="sort" data-v="${s}"><span class="check">${cur===s?"✓":""}</span>${t(s)}${s==="rating"?'<span class="later">M6</span>':""}</button>`).join("")+`<div class="menu-sep"></div><div class="menu-label">${lang==="de"?"Ab M7: Fortschritt, Wiedergaben, Zuletzt gesehen":"From M7: progress, plays, date watched"}</div>`+["asc","desc"].map(d=>`<button class="menu-item" role="menuitemradio" aria-checked="${dir===d}" data-act="dir" data-v="${d}"><span class="check">${dir===d?"✓":""}</span>${t(d)}</button>`).join(""),"LB-22")}
+function typeMenu(btn){const lib=libById(parseRoute().parts[1]);const cur=parseRoute().q.get("type")||(lib.kind==="shows"?"shows":"movies");
+ const types=lib.kind==="shows"?["shows","seasons","episodes","folders"]:["movies","folders"];
+ openMenu(btn,types.map(x=>`${x==="folders"?'<div class="menu-sep"></div>':""}<button class="menu-item" role="menuitemradio" aria-checked="${cur===x}" data-act="type" data-v="${x}"><span class="check">${cur===x?"✓":""}</span>${ic(x==="folders"?"folder":x==="movies"?"movies":"shows")}${t(x)}</button>`).join(""),"LB-21")}
+function activityPop(){const p=document.getElementById("activityPop");const admin=isAdmin();
+ p.innerHTML=`<h2 id="actTitle" style="font-size:14px;margin:4px 10px 6px">${t("activity")}</h2>
+ <div class="act"><div class="row1"><span>${t("scan")}: Filme</span><span class="card-sub">412 / 980</span></div><div class="bar"><i style="width:42%"></i></div>${admin?`<a href="#" data-act="admin">${t("openAdmin")}</a>`:""}</div>
+ <div class="act"><div class="row1"><span>${lang==="de"?"Metadaten aktualisieren":"Metadata refresh"}: Serien <span class="later">M6</span></span><span class="card-sub">18 / 24</span></div><div class="bar"><i style="width:75%"></i></div></div>
+ ${admin?`<div class="act"><div class="row1"><span>${lang==="de"?"Transcodierung":"Transcode"}: Nordwind S2 · E4</span><span class="card-sub" style="color:var(--tc)">● 2.3×</span></div><div class="card-sub">Wohnzimmer-TV · 1080p → 720p</div><a href="#" data-act="admin">${t("openAdmin")}</a></div>
+ <div class="menu-sep"></div><div class="act" style="display:flex;gap:8px;align-items:center">${ic("update")}<span>${t("updateAvail")} <span class="later">M7</span></span></div>`:""}`;
+ p.hidden=!p.hidden;document.getElementById("activityBtn").setAttribute("aria-expanded",String(!p.hidden));document.getElementById("actBadge").textContent=admin?"3":"2"}
+
+/* ---------- sheets (phone) ---------- */
+function openSheet(title,html){const l=document.getElementById("layer");l.innerHTML=`<div class="sheet-back" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="grab"></div><h2>${esc(title)}</h2>${html}</div>`;l.querySelector(".sheet button,.sheet a")?.focus()}
+function closeSheet(){document.getElementById("layer").innerHTML=""}
+
+/* ---------- render ---------- */
+function render(){
+ document.documentElement.lang=lang;document.getElementById("q").placeholder=t("searchPh");
+ document.getElementById("sidebarToggle").setAttribute("aria-label",t("toggleSidebar"));
+ document.getElementById("settingsBtn").setAttribute("aria-label",t("settings"));
+ document.getElementById("activityBtn").setAttribute("aria-label",t("activity"));
+ document.getElementById("langToggle").textContent=lang==="de"?"DE | en":"de | EN";
+ document.body.classList.toggle("collapsed",collapsed);
+ document.documentElement.style.setProperty("--card",CARD_SIZES[cardStep]+"px");
+ const r=parseRoute(),main=document.getElementById("main");clearInterval(heroTimer);
+ if(r.parts[0]==="lib")renderLibrary(main,r.parts[1],r.q);
+ else if(r.parts[0]==="search"){renderSearch(main,r.q);document.getElementById("q").value=r.q.get("q")||""}
+ else if(r.parts[0]==="playlists")main.innerHTML=`<h1>${t("playlists")}</h1><div class="hint">M7 – ux-spec 5.6</div>`;
+ else renderHome(main);
+ renderSidebar();renderBottomNav();
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+ const el=e.target.closest("[data-act],[data-nav],[data-q],[data-open]");
+ if(!e.target.closest("#menu")&&!e.target.closest("[aria-haspopup=menu]"))closeMenus();
+ if(!e.target.closest(".search"))closeDrop();
+ if(!e.target.closest("#activityPop,#activityBtn")){document.getElementById("activityPop").hidden=true}
+ if(!el)return;
+ if(el.dataset.nav){const n=el.dataset.nav;
+  if(n==="home")go("/");
+  if(n==="search"){document.getElementById("q").focus();renderDrop()}
+  if(n==="libs")openSheet(t("libraries"),`<div>${layout.order.map(libById).filter(l=>layout.pinned[l.id]).map(l=>`<a class="side-item" href="#/lib/${l.id}" data-act="closeSheet">${ic(l.kind)}<span class="lbl">${esc(l.name)}</span></a>`).join("")}</div>`);
+  if(n==="profile")openSheet(t("profile"),`<p class="card-sub">SH-07 (M7)</p><button class="side-item" data-act="settings">${ic("settings")}<span class="lbl">${t("settings")}</span></button>`);
+  return}
+ if(el.dataset.q){go("/search",{q:el.dataset.q});closeDrop();return}
+ if(el.dataset.open&&!e.target.closest("[data-act]")){closeDrop();toast(t("toastDetail"));return}
+ const a=el.dataset.act;const r=parseRoute();
+ switch(a){
+  case "allLibs":sidebarMode="all";renderSidebar();break;
+  case "doneLibs":sidebarMode="pinned";renderSidebar();break;
+  case "pin":layout.pinned[el.dataset.lib]=!layout.pinned[el.dataset.lib];store.set("layout",layout);renderSidebar();break;
+  case "move":{const id=el.dataset.lib,o=layout.order,i=o.indexOf(id),j=i+Number(el.dataset.dir);[o[i],o[j]]=[o[j],o[i]];store.set("layout",layout);renderSidebar();document.querySelector(`[data-act=move][data-lib="${id}"][data-dir="${el.dataset.dir}"]`)?.focus();break}
+  case "resetLayout":layout=structuredClone(DEFAULT_LAYOUT);store.set("layout",layout);renderSidebar();toast(t("resetLayout")+" ✓");break;
+  case "settings":case "admin":case "addlib":e.preventDefault();closeSheet();toast(a==="addlib"?"→ "+t("settings")+" › "+t("libraries")+" (M3-19)":isAdmin()?"→ /admin – "+t("toastAdmin"):"→ /settings/app");break;
+  case "pivot":setParam("view",el.dataset.v);break;
+  case "spivot":setParam("type",el.dataset.v);break;
+  case "style":setParam("style",el.dataset.v);break;
+  case "menuFilter":filterMenu(el);break;
+  case "menuSort":sortMenu(el);break;
+  case "menuType":typeMenu(el);break;
+  case "fieldMenu":fieldMenu(document.querySelector("[data-act=menuFilter]")||el,el.dataset.f);break;
+  case "quick":closeMenus();setParam("quick",el.dataset.v==="all"?"":el.dataset.v);break;
+  case "field":closeMenus();setParam(el.dataset.f,el.dataset.v);break;
+  case "rmchip":setParam(el.dataset.f,"");break;
+  case "clearChips":{const q=r.q;Object.keys(FIELDS).forEach(f=>q.delete(f));q.delete("quick");location.hash="/"+r.parts.join("/")+"?"+q;break}
+  case "sort":closeMenus();setParam("sort",el.dataset.v);break;
+  case "dir":closeMenus();setParam("dir",el.dataset.v);break;
+  case "type":closeMenus();{const q=r.q;q.set("type",el.dataset.v);q.delete("path");location.hash="/"+r.parts.join("/")+"?"+q}break;
+  case "folder":setParam("path",el.dataset.p);break;
+  case "az":document.getElementById("az-"+el.dataset.l)?.scrollIntoView({behavior:"smooth",block:"start"});document.querySelector("#az-"+el.dataset.l+" a, #az-"+el.dataset.l+" button")?.focus({preventScroll:true});break;
+  case "scroll":{const tr=el.parentElement.querySelector(".row-track");tr.scrollBy({left:Number(el.dataset.dir)*tr.clientWidth*.85});break}
+  case "hero":heroIndex=Number(el.dataset.i);document.getElementById("hero").outerHTML=renderHero();break;
+  case "play":e.preventDefault();toast(t("toastPlay"));break;
+  case "detail":e.preventDefault();toast(t("toastDetail"));break;
+  case "edit":case "watched":case "toast":closeMenus();toast(el.textContent.trim()||el.getAttribute("aria-label"));break;
+  case "menu":e.preventDefault();itemMenu(el);break;
+  case "playAll":case "shuffleAll":toast((a==="playAll"?t("playAll"):t("shuffle"))+" → "+t("toastPlay"));break;
+  case "selectMode":selecting=!selecting;if(!selecting)selection.clear();render();break;
+  case "sel":{const id=el.closest("[data-id]").dataset.id;el.checked?selection.add(id):selection.delete(id);selecting=true;render();break}
+  case "clearSel":selection.clear();selecting=false;render();break;
+  case "sheetTools":{openSheet(t("filter")+" · "+t("sort"),`<div style="display:grid;gap:8px"><button class="btn" data-act="menuFilter">${ic("filter")}${t("filter")}</button><button class="btn" data-act="menuType">${t("type")||"Typ"}</button><button class="btn" data-act="menuSort">${ic("sortI")}${t("sort")}</button><div class="seg" style="width:max-content">${["grid","list","details"].map(s=>`<button data-act="style" data-v="${s}" aria-label="${t(s)}" aria-pressed="${(r.q.get("style")||"grid")===s}">${ic(s==="list"?"listv":s)}</button>`).join("")}</div><label class="slider">${t("size")} <input type="range" min="0" max="4" value="${cardStep}" id="sizeSlider2"></label></div>`);break}
+  case "closeSheet":closeSheet();break;
+ }
+});
+document.addEventListener("input",e=>{if(e.target.id==="sizeSlider"||e.target.id==="sizeSlider2"){cardStep=Number(e.target.value);store.set("cardStep",cardStep);document.documentElement.style.setProperty("--card",CARD_SIZES[cardStep]+"px")}});
+const q=document.getElementById("q");let deb;
+q.addEventListener("input",()=>{clearTimeout(deb);deb=setTimeout(renderDrop,200)});
+q.addEventListener("focus",renderDrop);
+q.addEventListener("keydown",e=>{const opts=[...document.querySelectorAll("#searchDrop .sres")];
+ if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();dropIndex=(dropIndex+(e.key==="ArrowDown"?1:-1)+opts.length)%opts.length;opts.forEach((o,i)=>o.classList.toggle("active",i===dropIndex));q.setAttribute("aria-activedescendant",opts[dropIndex]?.id||"")}
+ if(e.key==="Enter"){const o=opts[dropIndex];if(o&&o.dataset.q){go("/search",{q:o.dataset.q})}else if(o){toast(t("toastDetail"))}else if(q.value.trim()){const rec=[q.value.trim(),...store.get("recent",[]).filter(x=>x!==q.value.trim())].slice(0,5);store.set("recent",rec);go("/search",{q:q.value.trim()})}closeDrop();q.blur()}
+ if(e.key==="Escape"){closeDrop()}});
+document.addEventListener("keydown",e=>{
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){e.preventDefault();q.focus();q.select()}
+ if(e.key==="Escape"){closeMenus();closeSheet();document.getElementById("activityPop").hidden=true}
+ // HO-02: arrow keys move focus within a row
+ const tr=e.target.closest?.(".row-track");if(tr&&(e.key==="ArrowRight"||e.key==="ArrowLeft")){const cards=[...tr.querySelectorAll(".card-title")];const cur=e.target.closest("li");const i=[...tr.children].indexOf(cur);const n=cards[i+(e.key==="ArrowRight"?1:-1)];if(n){e.preventDefault();n.focus();n.scrollIntoView({block:"nearest",inline:"nearest"})}}
+ // menus: arrow navigation
+ const m=document.getElementById("menu");if(m&&m.contains(document.activeElement)&&(e.key==="ArrowDown"||e.key==="ArrowUp")){e.preventDefault();const b=[...m.querySelectorAll("button")];const i=b.indexOf(document.activeElement);b[(i+(e.key==="ArrowDown"?1:-1)+b.length)%b.length].focus()}
+});
+document.getElementById("sidebarToggle").addEventListener("click",()=>{if(matchMedia("(max-width:1024px)").matches){document.body.classList.toggle("expanded")}else{collapsed=!collapsed;store.set("collapsed",collapsed)}document.body.classList.toggle("collapsed",collapsed);document.getElementById("sidebarToggle").setAttribute("aria-expanded",String(!collapsed))});
+document.getElementById("langToggle").addEventListener("click",()=>{lang=lang==="de"?"en":"de";render()});
+document.getElementById("activityBtn").addEventListener("click",e=>{e.stopPropagation();activityPop()});
+document.getElementById("settingsBtn").addEventListener("click",()=>toast(isAdmin()?"→ /admin – "+t("toastAdmin"):"→ /settings/app"));
+document.getElementById("emptyToggle").addEventListener("change",render);
+document.getElementById("adminToggle").addEventListener("change",render);
+addEventListener("hashchange",()=>{document.body.classList.remove("expanded");render();scrollTo(0,0)});
+render();
+</script>
+</body>
+</html>
