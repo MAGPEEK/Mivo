@@ -127,8 +127,13 @@ The main session orchestrates; subagents cannot start other subagents.
 3. `mivo-tester` – runs all gates; FAIL → back to step 2 with the report
 4. `mivo-reviewer` – read-only review; REVISE → back to step 2 with findings
 5. PASS + APPROVE → commit. After 3 failed rounds stop and ask the user.
-6. `mivo-release` – publishes artifacts (Docker image `docker.io/magpeek/mivo-media-server`) only
-   after PASS + APPROVE and with the user's explicit approval for each push.
+6. `mivo-release` – publishes artifacts only after PASS + APPROVE. Owner decision 2026-11-04:
+   the orchestrator cuts releases itself and reports afterwards (SemVer tag, GitHub pre-release,
+   Docker image `docker.io/magpeek/mivo-media-server`, SPKs as release assets). Never `docker login`,
+   never force-push, never release from a dirty tree.
+   Distribution channels are fixed: **Docker Hub** for images and **GitHub Releases** for SPKs and
+   binaries. Mivo publishes **no GitHub Packages** (no ghcr.io); do not widen the `gh` token scope.
+   Every change that ships gets a new version number; a published version is never changed.
 
 `mivo-ux` builds clickable prototypes in `docs/design/prototypes/` before `mivo-frontend` builds a
 screen; the owner approves them first.
