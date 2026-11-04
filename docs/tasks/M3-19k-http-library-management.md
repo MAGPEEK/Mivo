@@ -50,3 +50,12 @@ accounts exist. UX: AD-40, LS-01 … LS-03 (M3 subset).
   or the guard must accept the configured dev origin. Prefer documenting
   `MIVO_DEV_API_TARGET` + a Vite proxy header rewrite in `web/apps/web/vite.config.ts` – that
   file belongs to M3-19m; list the requirement in the REPORT so M3-19m picks it up.
+
+## Orchestrator notes from the M3-19a review (2026-11-04)
+
+Acceptance additions for this task:
+- Mappers fill `folders` (non-nil, ≥ 1), `libraryKinds`, `metadataLanguage`, `options`, `unavailableFolderCount`; no `null` arrays.
+- `PATCH /libraries/{id}` rejects a body containing `kind` with 400 (`DisallowUnknownFields` or explicit check) – the generated decoder does not enforce `additionalProperties: false`; `LibraryUpdate.options` needs all three booleans.
+- Add constants and a pin test in `restapi/problem.go` for the nine new problem codes (`folder_*`, `kind_unsupported`, `name_invalid`, `language_invalid`, `too_many_folders`) mapped from the M3-19b domain errors (`ReasonPath`, `reserved`, `duplicate`, `nested`, `overlap`); `folder_overlap` is 409 with `libraryId`.
+- Absolute `LibraryFolder.path`/`FolderRoot.path` become admin-only when accounts arrive (M7); keep `FolderEntry`/`FolderListing`/`FolderRef` paths root-relative.
+- Spec nits: reword stale `Library.id`/`name` descriptions ("from the configuration"); assert the 1..16 folders bound on `LibraryUpdate.folders` too; "4096 characters" instead of bytes.
