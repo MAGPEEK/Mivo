@@ -52,5 +52,11 @@ language is. UX: LS-01, LS-02, LS-03 (M3 subset).
   `#…` at volume level never hides a share.
 - `Definition` (milestone-2 config definition) stays for the import seed; add a helper that
   turns a `Definition` into a one-folder `Library` candidate.
+- As built (M3-19a/19c use these names): the v2 type is `ManagedLibrary` (the v1 `Library`
+  with a single `Root` still exists for the scan); the validator is
+  `ValidateLibrary(candidate, allowedKinds, rules)`. Errors: `*FieldError{Field name|kind|
+  language|folders}` and `*FolderError{Index, Reason duplicate|nested|overlap|reserved|path,
+  OtherLibraryID}`; `path` = blank, NUL, relative or containing `.`/`..` elements. `\` is a
+  separator only in `CaseInsensitive` (Windows) mode.
 - The second wave (M3-13 … M3-15) adds kinds to the allowed set passed in by `cmd`; the domain
   constant list of kinds is extended by those tasks, not here.
