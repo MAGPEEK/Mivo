@@ -116,8 +116,8 @@ Shows (M3-03b):
   `S01E01-E02`, `S01E01E02`, `S01E01-02`, `1x02`, `1x02-1x03`, `E02`/`Ep02`/`Episode 2` (season
   from the folder, else 1).
 - **Absolute numbering (UX DT-24, regression of the Plex walkthrough):** a bare number after the
-  show title (`Show - 001`, `Show 130`, `[Group] Show - 130 [1080p] [ABCD1234]`, `Show E130`) is
-  an **episode number**, stored also as the absolute number. It is placed in season 1, or in the
+  show title (`Show - 001`, `Show 130`, `[Group] Show - 130 [1080p] [ABCD1234]`) is
+  an **episode number**, stored also as the absolute number (an explicit marker such as `E130` is a plain episode number and sets no absolute number). It is placed in season 1, or in the
   season of its season folder. A three- or four-digit number is **never** split into season and
   episode (`105` is episode 105, not S1E05). Resolutions, codec and audio tags, CRC checksums in
   brackets, release groups, `v2` revision suffixes and the show year are never episode or
