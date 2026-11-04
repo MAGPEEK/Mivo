@@ -1,0 +1,50 @@
+{
+  "libraries": {
+    "heading": "Libraries",
+    "breadcrumb": {
+      "label": "Breadcrumb",
+      "settings": "Settings"
+    },
+    "add": "Add library",
+    "loading": "Loading libraries",
+    "loadFailed": "The libraries could not be loaded.",
+    "retry": "Try again",
+    "listLabel": "Libraries",
+    "empty": {
+      "title": "No libraries yet",
+      "hint": "Add a folder with your movies or shows and they appear in the app."
+    },
+    "kind": {
+      "movies": "Movies",
+      "shows": "Shows"
+    },
+    "foldersLabel": "Folders",
+    "folderUnavailable": "Unavailable",
+    "itemCount_one": "{{count, number}} item",
+    "itemCount_other": "{{count, number}} items",
+    "neverScanned": "Not scanned yet",
+    "lastScan": "Last scan",
+    "imported": "Imported from the configuration",
+    "actions": {
+      "scan": "Scan",
+      "scanning": "Scanning…",
+      "scanLabel": "Scan {{name}}",
+      "scanningLabel": "Scanning {{name}}",
+      "edit": "Edit",
+      "editLabel": "Edit {{name}}",
+      "editSoon": "Editing arrives with the library dialog",
+      "remove": "Remove",
+      "removeLabel": "Remove {{name}}"
+    },
+    "remove": {
+      "title": "Remove library",
+      "description": "Remove “{{name}}” from {{productName}}? Its catalog is removed. Your media files are not touched.",
+      "confirm": "Remove library",
+      "cancel": "Cancel",
+      "failed": "The library could not be removed: {{reason}}"
+    },
+    "errors": {
+      "forbidden": "Library management is only available from the local network until accounts exist."
+    }
+  }
+}

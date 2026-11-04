@@ -34,6 +34,8 @@ function brandTitle(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, appDirectory, apiTargetVariable);
+  const apiTarget = resolveApiTarget(env[apiTargetVariable]);
+  const apiOrigin = new URL(apiTarget).origin;
   return {
     plugins: [react(), tailwindcss(), brandTitle()],
     build: {
@@ -44,7 +46,18 @@ export default defineConfig(({ mode }) => {
       port: devServerPort,
       strictPort: true,
       proxy: {
-        "/api": { target: resolveApiTarget(env[apiTargetVariable]) },
+        "/api": {
+          target: apiTarget,
+          // The server's management guard accepts only requests whose Origin is its own. The
+          // browser sends the dev server's origin (:5173), so the proxy presents the target's.
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyRequest) => {
+              if (proxyRequest.getHeader("origin") !== undefined) {
+                proxyRequest.setHeader("origin", apiOrigin);
+              }
+            });
+          },
+        },
       },
     },
   };

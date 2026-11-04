@@ -3,6 +3,7 @@ import type { i18n as I18n } from "i18next";
 import { itemLocales, itemNamespace } from "../features/item";
 import { libraryLocales, libraryNamespace } from "../features/library";
 import { playerLocales, playerNamespace } from "../features/player";
+import { settingsLocales, settingsNamespace } from "../features/settings";
 import { createI18n } from "../shared/i18n";
 
 // The single registry of feature namespaces. It lives in the app layer because `shared` must
@@ -13,6 +14,7 @@ export const featureNamespaces = {
   [libraryNamespace]: libraryLocales,
   [itemNamespace]: itemLocales,
   [playerNamespace]: playerLocales,
+  [settingsNamespace]: settingsLocales,
 } as const;
 
 /** Type of {@link featureNamespaces}; `i18next.d.ts` types `t()` keys with it. */

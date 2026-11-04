@@ -6,9 +6,11 @@
     "label": "Hauptnavigation",
     "toggle": "Seitenleiste umschalten",
     "home": "Startseite",
+    "settings": "Einstellungen",
     "libraries": {
       "heading": "Bibliotheken",
-      "empty": "Noch keine Bibliotheken"
+      "empty": "Noch keine Bibliotheken",
+      "add": "Bibliothek hinzufügen"
     }
   },
   "search": {
@@ -17,9 +19,14 @@
   },
   "home": {
     "heading": "Startseite",
+    "noLibraries": {
+      "title": "Noch keine Bibliotheken",
+      "hint": "Füge einen Ordner mit deinen Filmen oder Serien hinzu, dann erscheinen sie hier.",
+      "add": "Bibliothek hinzufügen"
+    },
     "empty": {
-      "title": "Deine Bibliothek ist leer",
-      "hint": "Trage Ordner unter libraries in der config.yaml ein und starte den Server neu. Dann erscheinen hier deine Filme und Serien."
+      "title": "Noch nichts zu sehen",
+      "hint": "Wähle in der Seitenleiste eine Bibliothek, um ihre Filme und Serien zu durchsuchen."
     }
   },
   "system": {

@@ -1,5 +1,5 @@
 import type { LibraryKind, Problem } from "@mivo/api-client";
-import { productId, productName } from "@mivo/ui-tokens";
+import { productName } from "@mivo/ui-tokens";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -98,18 +98,15 @@ describe("Sidebar navigation", () => {
     expect(homeLink.hasAttribute("aria-current")).toBe(false);
   });
 
-  it("shows the empty libraries section with the configuration hint", async () => {
+  it("shows the empty libraries section with a link to add one", async () => {
     renderApp("/");
 
     const sidebar = await findSidebar();
 
     expect(within(sidebar).getByRole("heading", { level: 2, name: "Libraries" })).toBeTruthy();
     expect(await within(sidebar).findByText("No libraries yet")).toBeTruthy();
-    expect(
-      within(sidebar).getByText(
-        `Add folders under libraries in config.yaml or set ${productId.toUpperCase()}_LIBRARIES, then restart ${productName}.`,
-      ),
-    ).toBeTruthy();
+    const addLink = within(sidebar).getByRole("link", { name: "Add library" });
+    expect(addLink.getAttribute("href")).toContain("/admin/manage/libraries");
   });
 
   it("links every configured library with the icon of its kind", async () => {

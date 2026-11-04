@@ -10,8 +10,7 @@
   "sidebar": {
     "loading": "Loading libraries",
     "loadFailed": "Libraries could not be loaded",
-    "unavailable": "Unavailable",
-    "emptyHint": "Add folders under libraries in config.yaml or set {{variable}}, then restart {{productName}}."
+    "unavailable": "Unavailable"
   },
   "scan": {
     "start": "Scan library",

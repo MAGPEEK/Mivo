@@ -18,7 +18,6 @@ import { Sidebar, type SidebarLibraries, type SidebarProps } from "./Sidebar";
 const emptyLibraries: SidebarLibraries = {
   state: "loaded",
   links: [],
-  emptyHint: "Add a library to the configuration.",
 };
 
 const twoLibraries: SidebarLibraries = {
@@ -27,7 +26,6 @@ const twoLibraries: SidebarLibraries = {
     { id: "lib-1", name: "Movies", icon: <svg data-testid="icon-lib-1" /> },
     { id: "lib-2", name: "Archive", icon: <svg data-testid="icon-lib-2" />, note: "Unavailable" },
   ],
-  emptyHint: "unused",
 };
 
 interface RenderOptions {
@@ -98,10 +96,13 @@ describe("Sidebar footer slot", () => {
     expect(isVisuallyHidden(within(sidebar).getByText("No libraries yet"))).toBe(true);
   });
 
-  it("ends with the libraries section when no footer is given", async () => {
+  it("ends with the settings entry when no footer is given", async () => {
     const sidebar = await renderSidebar();
 
-    expect(sidebar.textContent.endsWith(emptyLibraries.emptyHint)).toBe(true);
+    const settings = within(sidebar).getByRole("link", { name: "Settings" });
+
+    expect(settings.getAttribute("href")).toBe("/admin/manage/libraries");
+    expect(sidebar.textContent.endsWith("Settings")).toBe(true);
   });
 
   it("passes the navigation id to the footer, for aria-controls", async () => {
@@ -123,7 +124,7 @@ describe("Sidebar libraries section", () => {
     const section = librariesSection(await renderSidebar());
 
     expect(within(section).getByText("No libraries yet")).toBeTruthy();
-    expect(within(section).getByText(emptyLibraries.emptyHint)).toBeTruthy();
+    expect(within(section).getByRole("link", { name: "Add library" })).toBeTruthy();
     expect(within(section).queryByRole("list")).toBeNull();
   });
 

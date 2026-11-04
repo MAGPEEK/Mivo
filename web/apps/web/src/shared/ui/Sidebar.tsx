@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useId, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AlertIcon, HomeIcon, SidebarIcon } from "./icons";
+import { AlertIcon, HomeIcon, SettingsIcon, SidebarIcon } from "./icons";
 
 /** One library link of the sidebar. */
 export interface SidebarLibraryLink {
@@ -22,8 +22,6 @@ export type SidebarLibraries =
   | {
       readonly state: "loaded";
       readonly links: readonly SidebarLibraryLink[];
-      /** Explains how to add libraries; shown when `links` is empty. */
-      readonly emptyHint: string;
     };
 
 /** Props of {@link Sidebar}. */
@@ -97,6 +95,7 @@ export function Sidebar({
         </div>
         <SidebarLinks collapsed={collapsed} />
         <LibrariesSection collapsed={collapsed} libraries={libraries} />
+        <SettingsLink collapsed={collapsed} />
         {footer !== undefined && (
           <div className={`mt-auto border-t border-divider py-3 ${collapsed ? "px-2" : "px-4"}`}>
             {footer(navigationId)}
@@ -123,6 +122,25 @@ function SidebarLinks({ collapsed }: CollapsibleProps) {
         >
           <HomeIcon className="size-5 shrink-0 group-aria-[current=page]:text-accent" />
           <span className={labelClass(collapsed, "truncate")}>{t("sidebar.home")}</span>
+        </Link>
+      </li>
+    </ul>
+  );
+}
+
+// Last entry of the navigation (SH-18). Until the admin area exists (milestone 5/7) it opens
+// the library management, the only settings page.
+function SettingsLink({ collapsed }: CollapsibleProps) {
+  const { t } = useTranslation();
+  return (
+    <ul className="px-3 pb-2">
+      <li>
+        <Link
+          to="/admin/manage/libraries"
+          className={`${linkClass} ${collapsed ? "justify-center" : ""}`}
+        >
+          <SettingsIcon className="size-5 shrink-0 group-aria-[current=page]:text-accent" />
+          <span className={labelClass(collapsed, "truncate")}>{t("sidebar.settings")}</span>
         </Link>
       </li>
     </ul>
@@ -163,9 +181,16 @@ function LibrariesContent({ collapsed, libraries }: LibrariesSectionProps) {
     return (
       <>
         <p className={messageClass}>{t("sidebar.libraries.empty")}</p>
-        <p className={labelClass(collapsed, "mt-1 px-2.5 text-xs text-text-muted")}>
-          {libraries.emptyHint}
-        </p>
+        <Link
+          to="/admin/manage/libraries"
+          search={{ add: true }}
+          className={labelClass(
+            collapsed,
+            "mt-1 block rounded-md px-2.5 py-1 text-sm font-medium text-accent hover:text-accent-hover",
+          )}
+        >
+          {t("sidebar.libraries.add")}
+        </Link>
       </>
     );
   }

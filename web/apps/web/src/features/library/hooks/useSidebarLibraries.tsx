@@ -1,14 +1,9 @@
-import { productId, productName } from "@mivo/ui-tokens";
 import { useTranslation } from "react-i18next";
 
 import type { SidebarLibraries } from "../../../shared/ui";
 import { LibraryKindIcon } from "../components/LibraryKindIcon";
 import { libraryNamespace } from "../locales";
 import { useLibraries } from "./useLibraries";
-
-// The environment variable that lists library folders (ADR 0022). Derived from the brand id
-// like every other variable name, so a rename follows (ADR 0002).
-const librariesVariable = `${productId.toUpperCase()}_LIBRARIES`;
 
 /**
  * The libraries section of the sidebar: one link per library with its kind icon and a note
@@ -31,6 +26,5 @@ export function useSidebarLibraries(): SidebarLibraries {
       icon: <LibraryKindIcon kind={library.kind} className="size-5 shrink-0" />,
       note: library.available ? undefined : t("sidebar.unavailable"),
     })),
-    emptyHint: t("sidebar.emptyHint", { variable: librariesVariable, productName }),
   };
 }

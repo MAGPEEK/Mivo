@@ -1,5 +1,7 @@
 export { Badge, type BadgeProps } from "./Badge";
 export { MediaCard, stretchedLinkClass, type CardLinkProps, type MediaCardProps } from "./Card";
+export { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
+export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export {
   AlertIcon,
@@ -16,6 +18,7 @@ export {
   PlayIcon,
   ScreenIcon,
   SearchIcon,
+  SettingsIcon,
   SidebarIcon,
   VolumeIcon,
   type IconProps,

@@ -8,15 +8,18 @@ export interface EmptyStateProps {
   readonly description: string;
   /** Optional decorative icon above the title. */
   readonly icon?: ReactNode;
+  /** Optional call to action below the description, e.g. a link button. */
+  readonly action?: ReactNode;
 }
 
 /** Placeholder for an area that has no content yet. */
-export function EmptyState({ title, description, icon }: EmptyStateProps) {
+export function EmptyState({ title, description, icon, action }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center rounded-lg border border-dashed border-divider bg-surface px-6 py-12 text-center">
       {icon !== undefined && <div className="mb-4 text-accent">{icon}</div>}
       <h2 className="text-lg font-semibold text-text">{title}</h2>
       <p className="mt-2 max-w-md text-sm text-text-muted">{description}</p>
+      {action !== undefined && <div className="mt-6">{action}</div>}
     </div>
   );
 }

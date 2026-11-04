@@ -6,9 +6,11 @@
     "label": "Main navigation",
     "toggle": "Toggle sidebar",
     "home": "Home",
+    "settings": "Settings",
     "libraries": {
       "heading": "Libraries",
-      "empty": "No libraries yet"
+      "empty": "No libraries yet",
+      "add": "Add library"
     }
   },
   "search": {
@@ -17,9 +19,14 @@
   },
   "home": {
     "heading": "Home",
+    "noLibraries": {
+      "title": "No libraries yet",
+      "hint": "Add a folder with your movies or shows and they appear here.",
+      "add": "Add library"
+    },
     "empty": {
-      "title": "Your library is empty",
-      "hint": "Add folders under libraries in config.yaml, then restart the server. Your movies and shows appear here."
+      "title": "Nothing to show yet",
+      "hint": "Pick a library in the sidebar to browse its movies and shows."
     }
   },
   "system": {

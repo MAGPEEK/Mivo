@@ -15,7 +15,7 @@ test("renders the shell with navigation, search, home heading and empty state", 
   await expect(sidebar).toBeVisible();
   await expect(searchBox).toBeVisible();
   await expect(heading).toHaveText("Home");
-  await expect(page.getByRole("main").getByText("Your library is empty")).toBeVisible();
+  await expect(page.getByRole("main").getByText("Nothing to show yet")).toBeVisible();
 });
 
 test("shows the version the system info API reports in the sidebar footer", async ({
@@ -84,6 +84,8 @@ test("keeps an unreachable server visible and reachable in the collapsed sidebar
   // The shared server has one library (task M2-34); its link comes before the footer.
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: e2eLibraryName, exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Settings" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(indicator).toBeFocused();
   await expect(tooltip).toHaveCSS("opacity", "1");

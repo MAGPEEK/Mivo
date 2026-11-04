@@ -10,8 +10,7 @@
   "sidebar": {
     "loading": "Bibliotheken werden geladen",
     "loadFailed": "Bibliotheken konnten nicht geladen werden",
-    "unavailable": "Nicht erreichbar",
-    "emptyHint": "Trage Ordner unter libraries in der config.yaml ein oder setze {{variable}} und starte {{productName}} neu."
+    "unavailable": "Nicht erreichbar"
   },
   "scan": {
     "start": "Bibliothek scannen",

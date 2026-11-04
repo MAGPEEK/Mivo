@@ -1,0 +1,50 @@
+{
+  "libraries": {
+    "heading": "Bibliotheken",
+    "breadcrumb": {
+      "label": "Brotkrümelnavigation",
+      "settings": "Einstellungen"
+    },
+    "add": "Bibliothek hinzufügen",
+    "loading": "Bibliotheken werden geladen",
+    "loadFailed": "Die Bibliotheken konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "listLabel": "Bibliotheken",
+    "empty": {
+      "title": "Noch keine Bibliotheken",
+      "hint": "Füge einen Ordner mit deinen Filmen oder Serien hinzu, dann erscheinen sie in der App."
+    },
+    "kind": {
+      "movies": "Filme",
+      "shows": "Serien"
+    },
+    "foldersLabel": "Ordner",
+    "folderUnavailable": "Nicht erreichbar",
+    "itemCount_one": "{{count, number}} Eintrag",
+    "itemCount_other": "{{count, number}} Einträge",
+    "neverScanned": "Noch nicht gescannt",
+    "lastScan": "Letzter Scan",
+    "imported": "Aus der Konfiguration übernommen",
+    "actions": {
+      "scan": "Scannen",
+      "scanning": "Scannt…",
+      "scanLabel": "{{name}} scannen",
+      "scanningLabel": "{{name}} wird gescannt",
+      "edit": "Bearbeiten",
+      "editLabel": "{{name}} bearbeiten",
+      "editSoon": "Bearbeiten folgt mit dem Bibliotheksdialog",
+      "remove": "Entfernen",
+      "removeLabel": "{{name}} entfernen"
+    },
+    "remove": {
+      "title": "Bibliothek entfernen",
+      "description": "„{{name}}“ aus {{productName}} entfernen? Ihr Katalog wird entfernt. Deine Mediendateien bleiben unberührt.",
+      "confirm": "Bibliothek entfernen",
+      "cancel": "Abbrechen",
+      "failed": "Die Bibliothek konnte nicht entfernt werden: {{reason}}"
+    },
+    "errors": {
+      "forbidden": "Die Bibliotheksverwaltung ist nur im lokalen Netzwerk möglich, bis es Konten gibt."
+    }
+  }
+}

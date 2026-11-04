@@ -129,8 +129,9 @@ test.describe("on a 320 px phone", () => {
     await fakeLibraryApi(page);
     const { sidebar, sidebarToggle, searchBox } = await openApp(page);
     await openOverlay(sidebarToggle);
-    const libraryLink = sidebar.getByRole("link", { name: library.name });
-    await libraryLink.focus();
+    // The Settings entry is the last stop of the sidebar, before the page.
+    const lastLink = sidebar.getByRole("link", { name: "Settings" });
+    await lastLink.focus();
 
     await page.keyboard.press("Tab");
 

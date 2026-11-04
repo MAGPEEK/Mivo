@@ -12,6 +12,7 @@ import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import { LibraryPage } from "../features/library";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
+import { LibrariesSettingsPage, validateSettingsSearch } from "../features/settings";
 import { NotFoundPage } from "./NotFoundPage";
 import { AppLayout } from "./layout/AppLayout";
 import { FullScreenLayout } from "./layout/FullScreenLayout";
@@ -68,6 +69,12 @@ function createRouteTree() {
       getParentRoute: () => shellRoute,
       path: "/libraries/$libraryId",
       component: LibraryRoute,
+    }),
+    createRoute({
+      getParentRoute: () => shellRoute,
+      path: "/admin/manage/libraries",
+      validateSearch: validateSettingsSearch,
+      component: LibrariesSettingsPage,
     }),
     createRoute({
       getParentRoute: () => shellRoute,
