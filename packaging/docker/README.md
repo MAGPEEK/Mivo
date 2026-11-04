@@ -214,7 +214,7 @@ Synology (Container Manager project), one library from the `video` share:
 ```yaml
 services:
   mivo:
-    image: mivo:dev
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
     user: "1026:100"
     stop_grace_period: 20s
     ports:
@@ -233,7 +233,7 @@ QNAP (Container Station application), two libraries from the `Multimedia` share:
 ```yaml
 services:
   mivo:
-    image: mivo:dev
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
     user: "1000:100"
     stop_grace_period: 20s
     ports:
