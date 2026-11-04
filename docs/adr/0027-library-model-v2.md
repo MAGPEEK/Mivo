@@ -196,7 +196,8 @@ without time are `TEXT` `YYYY-MM-DD` with a `GLOB` check.
 
 - Files: `<video base name>.nfo` and `movie.nfo` (folder movie only) for movies,
   `tvshow.nfo` in the show folder, `season.nfo` in a season folder, `<video base name>.nfo`
-  for episodes (a file with several `<episodedetails>` roots describes a multi-episode file).
+  for episodes (a file with several `<episodedetails>` roots describes a multi-episode file; records carry no episode number yet, so the item takes the
+  first record).
 - Read through the library's `os.Root` with a size limit of 1 MiB; UTF-8 (BOM allowed) and
   ISO-8859-1 declarations are accepted, anything else is logged and the file ignored. Text is
   NFC-normalised and trimmed; unknown elements are ignored; a malformed file never fails a

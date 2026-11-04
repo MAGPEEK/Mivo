@@ -52,6 +52,9 @@ type Counts struct {
 	Failed int64
 	// Skipped counts files with a video extension but without a video stream.
 	Skipped int64
+	// MetadataWarnings counts NFO files that were unreadable, malformed or produced parser
+	// warnings during the metadata step. In-memory only; not part of the API contract yet.
+	MetadataWarnings int64
 }
 
 // Status is the progress and result of the current or last scan of a library.

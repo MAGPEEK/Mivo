@@ -31,10 +31,12 @@ type harness struct {
 	// is the optional Finished callback.
 	catalogV2 *memoryCatalogV2
 	refresher *recordingRefresher
-	finished  func(ctx context.Context, libraryID string)
-	ids       *counterIDs
-	clock     *tickingClock
-	logs      *syncBuffer
+	// metadataRefresher, when set, replaces the recording refresher with the real one.
+	metadataRefresher *scan.MetadataRefresher
+	finished          func(ctx context.Context, libraryID string)
+	ids               *counterIDs
+	clock             *tickingClock
+	logs              *syncBuffer
 	// wrapHandler, when set, wraps the text handler that writes to logs.
 	wrapHandler func(slog.Handler) slog.Handler
 	service     *scan.Service
@@ -90,6 +92,10 @@ func (h *harness) dependencies() scan.Dependencies {
 
 	if h.refresher != nil {
 		dependencies.Refresher = h.refresher
+	}
+
+	if h.metadataRefresher != nil {
+		dependencies.Refresher = h.metadataRefresher
 	}
 
 	return dependencies

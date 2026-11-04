@@ -6,9 +6,43 @@ import (
 	"slices"
 
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 )
 
-// noRefresh is the refresher used until M3-10b provides one.
+// refreshFiles describes every placed file that has an item chain, for the refresher.
+func (scanRun *runV2) refreshFiles() []RefreshFile {
+	files := make([]RefreshFile, 0, len(scanRun.wanted))
+
+	for _, video := range scanRun.wanted {
+		chain, placed := scanRun.chains[video.state.RelativePath]
+		if !placed || len(chain) != len(video.placement.Levels) {
+			continue
+		}
+
+		pictures, known := scanRun.pictures[video.state.RelativePath]
+		files = append(files, RefreshFile{
+			State: video.state, Placement: video.placement, ItemIDs: chain,
+			EmbeddedPictures: pictures, PicturesKnown: known,
+		})
+	}
+
+	return files
+}
+
+// attachedPictures lists the stream indexes of the attached pictures (cover art).
+func attachedPictures(description media.Description) []int {
+	var indexes []int
+
+	for _, stream := range description.Streams {
+		if stream.AttachedPicture {
+			indexes = append(indexes, stream.Index)
+		}
+	}
+
+	return indexes
+}
+
+// noRefresh is the refresher used when none is wired.
 type noRefresh struct{}
 
 func (noRefresh) RefreshItems(context.Context, RefreshRequest) error { return nil }

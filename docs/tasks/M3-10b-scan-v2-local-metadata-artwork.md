@@ -42,3 +42,5 @@ ED-02 (locks respected); ADR 0027 §6–§8.
 - Do not write any file and do not fetch any URL (ADR 0010, ADR 0022).
 - Image dimensions stay 0 until the first render; the scan never decodes images.
 - Duty (M3-10 review): the refresher also refreshes requested items that have no stored metadata (`ItemMetadataState`), because a scan that ended early may have saved items whose refresh failed; and it always receives the full walked sidecar set in `RefreshRequest.Sidecars`, also from an early-ended scan.
+
+- Known limitations (review 1): `metadata.Record` carries no episode number, so a multi-episode NFO (several records) gives the item its first record instead of the one matching its number. Unselected embedded covers of unchanged files are dropped on refresh. An NFO that is forbidden, malformed or oversized keeps the stored record; one that is unavailable or vanished fails the refresh so it is retried.

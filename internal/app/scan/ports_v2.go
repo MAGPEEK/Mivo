@@ -158,6 +158,24 @@ type RefreshRequest struct {
 	Library  library.Library
 	ItemIDs  []string
 	Sidecars []library.FileState
+	// Files lists every placed media file of the scan with its placement and item chain; the
+	// refresher derives each item's kind, files and folders from it. After an early-ended
+	// scan it holds the files placed before the end.
+	Files []RefreshFile
+	// CountMetadataWarnings, when set, receives the number of NFO problems met (unreadable,
+	// malformed, parser warnings); they never fail the refresh.
+	CountMetadataWarnings func(count int)
+}
+
+// RefreshFile is a placed media file as the refresher needs it. ItemIDs has one ID per level
+// of Placement. EmbeddedPictures are the stream indexes of attached pictures; they are only
+// known (PicturesKnown) for files probed by this scan.
+type RefreshFile struct {
+	State            library.FileState
+	Placement        library.Placement
+	ItemIDs          []string
+	EmbeddedPictures []int
+	PicturesKnown    bool
 }
 
 // ItemRefresher is the extension point M3-10b fills: it reads the NFO and image sidecars,

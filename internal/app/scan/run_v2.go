@@ -30,6 +30,10 @@ type runV2 struct {
 	refreshed bool
 	// sidecars are the sidecar files of the completed walk.
 	sidecars []library.FileState
+	// wanted are the placed videos of the walk; pictures holds the attached-picture stream
+	// indexes of the files probed by this scan.
+	wanted   []placedVideo
+	pictures map[string][]int
 }
 
 // refreshGrace bounds the refresh of an early-ended scan, which runs after cancellation.
@@ -39,6 +43,7 @@ func (service *Service) newRunV2(scanned library.Library, scanTracker *tracker) 
 	return &runV2{
 		base: service.newRun(scanned, scanTracker), catalog: service.catalogV2,
 		refresh: newRefreshSet(), chains: map[string][]string{},
+		pictures: map[string][]int{},
 	}
 }
 
@@ -117,6 +122,7 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 	})
 	scanRun.withoutVideo = plan.withoutVideo
 	scanRun.chains = plan.chains
+	scanRun.wanted = wanted
 
 	base.tracker.count(func(counts *Counts) {
 		counts.Unchanged += plan.unchanged
@@ -188,7 +194,12 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 func (scanRun *runV2) refreshTouched(ctx context.Context, sidecars []library.FileState) error {
 	scanRun.refreshed = true
 	base := scanRun.base
-	request := RefreshRequest{Library: base.library, ItemIDs: scanRun.refresh.sorted(), Sidecars: sidecars}
+	request := RefreshRequest{
+		Library: base.library, ItemIDs: scanRun.refresh.sorted(), Sidecars: sidecars, Files: scanRun.refreshFiles(),
+		CountMetadataWarnings: func(count int) {
+			base.tracker.count(func(counts *Counts) { counts.MetadataWarnings += int64(count) })
+		},
+	}
 
 	if err := base.service.refresher.RefreshItems(ctx, request); err != nil {
 		return fail(ErrorCodeFailed, "refresh items", fmt.Errorf("refresh items of library %s: %w", base.library.ID, err))
@@ -309,6 +320,7 @@ func (scanRun *runV2) recordProbed(ctx context.Context, result probeResult) erro
 // save writes one probed file with its placement. A changed file keeps its file ID.
 func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.Description, probeError media.ProbeError) error {
 	base := scanRun.base
+	scanRun.pictures[job.state.RelativePath] = attachedPictures(description)
 
 	fileID, err := scanRun.fileID(job)
 	if err != nil {

@@ -36,6 +36,7 @@ type memoryCatalogV2 struct {
 	items    map[string]*v2Item
 	files    map[string]*v2File
 	sidecars map[string]library.FileState
+	records  map[string]metadata.Record
 	saves    int
 	moves    int
 	// removeErr, when set, fails RemovePlacedFiles.
@@ -47,6 +48,7 @@ type memoryCatalogV2 struct {
 func newMemoryCatalogV2() *memoryCatalogV2 {
 	return &memoryCatalogV2{
 		items: map[string]*v2Item{}, files: map[string]*v2File{}, sidecars: map[string]library.FileState{},
+		records: map[string]metadata.Record{},
 	}
 }
 
@@ -255,18 +257,44 @@ func (catalog *memoryCatalogV2) SaveSidecarStates(_ context.Context, _ string,
 	return nil
 }
 
-func (catalog *memoryCatalogV2) ItemMetadataState(context.Context, string) (scan.MetadataState, error) {
-	return scan.MetadataState{}, domain.ErrNotFound
+func (catalog *memoryCatalogV2) ItemMetadataState(_ context.Context, itemID string) (scan.MetadataState, error) {
+	catalog.mutex.Lock()
+	defer catalog.mutex.Unlock()
+
+	if _, found := catalog.items[itemID]; !found {
+		return scan.MetadataState{}, domain.ErrNotFound
+	}
+
+	return scan.MetadataState{Record: catalog.records[itemID]}, nil
 }
 
-func (catalog *memoryCatalogV2) SaveMetadata(context.Context, string, metadata.Record) error {
-	return domain.ErrNotFound
+func (catalog *memoryCatalogV2) SaveMetadata(_ context.Context, itemID string, record metadata.Record) error {
+	catalog.mutex.Lock()
+	defer catalog.mutex.Unlock()
+
+	if _, found := catalog.items[itemID]; !found {
+		return domain.ErrNotFound
+	}
+
+	catalog.records[itemID] = record
+
+	return nil
 }
 
 func (catalog *memoryCatalogV2) SaveArtwork(context.Context, string, []artwork.Candidate,
 	map[artwork.Kind]artwork.Candidate,
 ) error {
-	return domain.ErrNotFound
+	return nil
+}
+
+// titleOf returns the stored title of the item of the file at path.
+func (catalog *memoryCatalogV2) titleOf(path string) string {
+	itemID := catalog.itemOf(path)
+
+	catalog.mutex.Lock()
+	defer catalog.mutex.Unlock()
+
+	return catalog.records[itemID].Title
 }
 
 // count returns the number of items of kind.
