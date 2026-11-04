@@ -43,14 +43,45 @@ func itemFromRow(row sqlcgen.Item) (library.Item, error) {
 		return library.Item{}, undecodable(fmt.Sprintf("item %q: stored kind", row.ID), err)
 	}
 
-	return library.Item{
-		ID:        row.ID,
-		LibraryID: row.LibraryID,
-		Kind:      kind,
-		Title:     row.Title,
-		SortTitle: row.SortTitle,
-		CreatedAt: time.UnixMilli(row.CreatedAt).UTC(),
-	}, nil
+	var extraType library.ExtraType
+
+	if row.ExtraType.Valid {
+		extraType, err = library.ParseExtraType(row.ExtraType.String)
+		if err != nil {
+			return library.Item{}, undecodable(fmt.Sprintf("item %q: stored extra type", row.ID), err)
+		}
+	}
+
+	item := library.Item{
+		ID:             row.ID,
+		LibraryID:      row.LibraryID,
+		ParentID:       row.ParentID.String,
+		Kind:           kind,
+		MatchKey:       row.MatchKey,
+		Title:          row.Title,
+		SortTitle:      row.SortTitle,
+		Number:         optionalNumber(row.Number),
+		NumberEnd:      optionalNumber(row.NumberEnd),
+		AbsoluteNumber: optionalNumber(row.AbsoluteNumber),
+		ExtraType:      extraType,
+		CreatedAt:      time.UnixMilli(row.CreatedAt).UTC(),
+	}
+
+	// The year 0 of the schema means "unknown".
+	if row.Year > 0 {
+		item.Year = library.NumberOf(int(row.Year))
+	}
+
+	return item, nil
+}
+
+// optionalNumber maps a nullable stored number to the domain's optional number.
+func optionalNumber(stored sql.NullInt64) library.OptionalNumber {
+	if !stored.Valid {
+		return library.OptionalNumber{}
+	}
+
+	return library.NumberOf(int(stored.Int64))
 }
 
 // fileFromRow builds a media.File from its row and its streams in stream order and validates

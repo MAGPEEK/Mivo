@@ -14,9 +14,30 @@ import (
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
+	"github.com/magpeek/mivo/internal/domain/metadata"
 )
+
+// storedMovieDetail is the detail of a stored item that owns the given files and nothing else:
+// no metadata beyond its titles, no artwork, children or extras. It plays itself.
+func storedMovieDetail(item library.Item, files ...media.File) applibrary.ItemDetail {
+	detail := applibrary.ItemDetail{
+		Item:       item,
+		Files:      files,
+		Metadata:   metadata.Record{Title: item.Title, SortTitle: item.SortTitle},
+		PlayItemID: item.ID,
+		Artwork:    map[artwork.Kind]artwork.Ref{},
+		Extras:     []applibrary.ItemSummary{},
+	}
+
+	for _, file := range files {
+		detail.ItemFiles = append(detail.ItemFiles, applibrary.ItemFile{File: file})
+	}
+
+	return detail
+}
 
 // Libraries every catalog fixture starts with. The catalog tests insert them directly, so
 // they do not depend on the library sync.
@@ -91,7 +112,7 @@ func probedRecord(libraryID, itemID, fileID, relativePath string) scan.ProbedFil
 
 	return scan.ProbedFile{
 		Item: library.Item{
-			ID: itemID, LibraryID: libraryID, Kind: testItemKind(libraryID),
+			ID: itemID, LibraryID: libraryID, Kind: testItemKind(libraryID), MatchKey: relativePath,
 			Title: title, SortTitle: library.SortTitle(title), CreatedAt: scanned,
 		},
 		File: media.File{

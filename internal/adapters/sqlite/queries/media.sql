@@ -74,28 +74,6 @@ WHERE items.id IN (sqlc.slice(item_ids))
 -- name: LibraryExists :one
 SELECT EXISTS (SELECT 1 FROM libraries WHERE id = ?) AS found;
 
--- ListItemPage returns the top-level items after the key (after_sort_title, after_id) in
--- keyset order with each item's primary file: the first of its files by (part number,
--- relative path). A key of two empty strings lies before every item, because IDs are never
--- empty. The conditions on parent_id and kind repeat the WHERE clause of the partial index
--- items_top_level, so SQLite can use it; the two conditions on sort_title let it scan that
--- index as a range instead of filtering the whole library.
--- name: ListItemPage :many
-SELECT sqlc.embed(items), sqlc.embed(media_files)
-FROM items
-JOIN media_files ON media_files.id = (
-    SELECT candidates.id
-    FROM media_files AS candidates
-    WHERE candidates.item_id = items.id
-    ORDER BY candidates.part_number, candidates.relative_path, candidates.id
-    LIMIT 1)
-WHERE items.library_id = sqlc.arg(library_id)
-  AND items.parent_id IS NULL
-  AND items.kind <> 'extra'
-  AND items.sort_title >= sqlc.arg(after_sort_title)
-  AND (items.sort_title > sqlc.arg(after_sort_title) OR items.id > sqlc.arg(after_id))
-ORDER BY items.sort_title, items.id
-LIMIT sqlc.arg(row_limit);
 
 -- name: ListStreamsOfFiles :many
 SELECT *

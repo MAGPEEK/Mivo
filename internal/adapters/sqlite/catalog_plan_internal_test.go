@@ -6,8 +6,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-
-	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 )
 
 // errQueryRecorded stops a generated query after queryRecorder captured it.
@@ -41,45 +39,6 @@ func (*queryRecorder) QueryRowContext(context.Context, string, ...any) *sql.Row 
 type planStep struct {
 	parent int
 	detail string
-}
-
-// The keyset page must be a range search on items_top_level in index order: a
-// sort of the library's items in a temporary B-tree would read the whole library for every
-// page. The only sort allowed is the one inside the correlated subquery that picks an
-// item's primary file among its (in milestone 2: one) files.
-func TestListItemPageSearchesTheSortTitleIndexWithoutSortingItems(t *testing.T) {
-	t.Parallel()
-
-	db, _ := openInternalTestDB(t)
-	if err := db.Migrate(t.Context()); err != nil {
-		t.Fatalf("Migrate error = %v", err)
-	}
-
-	recorder := &queryRecorder{}
-
-	_, err := sqlcgen.New(recorder).ListItemPage(t.Context(), sqlcgen.ListItemPageParams{
-		LibraryID: "library", AfterSortTitle: "title", AfterID: "item", RowLimit: 101,
-	})
-	if !errors.Is(err, errQueryRecorded) {
-		t.Fatalf("ListItemPage error = %v, want the recorded query", err)
-	}
-
-	steps := queryPlan(t, db.reader, recorder.query, recorder.args)
-
-	usesIndex := false
-
-	for id, step := range steps {
-		usesIndex = usesIndex || (strings.HasPrefix(step.detail, "SEARCH items USING ") &&
-			strings.Contains(step.detail, "INDEX items_top_level (library_id=? AND sort_title>"))
-
-		if strings.Contains(step.detail, "USE TEMP B-TREE FOR ORDER BY") && !insideSubquery(steps, id) {
-			t.Errorf("plan step %q sorts outside the primary-file subquery; plan: %+v", step.detail, steps)
-		}
-	}
-
-	if !usesIndex {
-		t.Errorf("plan does not search items_top_level; plan: %+v", steps)
-	}
 }
 
 // insideSubquery reports whether a step of the plan tree lies below a subquery step.

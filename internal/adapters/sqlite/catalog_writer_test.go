@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
-	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -24,10 +23,7 @@ func TestSaveProbedFileStoresANewFileWithItsItemAndStreams(t *testing.T) {
 	mustSave(t, fixture.writer, record)
 
 	detail := mustGetItem(t, fixture.reader, record.Item.ID)
-	assertDeepEqual(t, "GetItem", detail, applibrary.ItemDetail{
-		Item:  record.Item,
-		Files: []media.File{record.File},
-	})
+	assertDeepEqual(t, "GetItem", detail, storedMovieDetail(record.Item, record.File))
 
 	if got := streamRowCount(t, fixture.inspection, record.File.ID); got != len(record.File.Description.Streams) {
 		t.Errorf("stored streams = %d, want %d", got, len(record.File.Description.Streams))
@@ -59,10 +55,7 @@ func TestSaveProbedFileOfAStoredFileKeepsItsItemAndReplacesItsStreams(t *testing
 	mustSave(t, fixture.writer, changed)
 
 	detail := mustGetItem(t, fixture.reader, first.Item.ID)
-	assertDeepEqual(t, "GetItem after the re-save", detail, applibrary.ItemDetail{
-		Item:  first.Item,
-		Files: []media.File{changed.File},
-	})
+	assertDeepEqual(t, "GetItem after the re-save", detail, storedMovieDetail(first.Item, changed.File))
 
 	assertFileTimes(t, fixture.inspection, first.File.ID, scannedMilli+time.Hour.Milliseconds())
 
@@ -190,9 +183,8 @@ func TestSaveProbedFileRejectsInvalidRecordsAndChangesNothing(t *testing.T) {
 			}
 
 			assertDeepEqual(t, "row counts", catalogRowCounts(t, fixture.inspection), before)
-			assertDeepEqual(t, "stored item", mustGetItem(t, fixture.reader, stored.Item.ID), applibrary.ItemDetail{
-				Item: stored.Item, Files: []media.File{stored.File},
-			})
+			assertDeepEqual(t, "stored item", mustGetItem(t, fixture.reader, stored.Item.ID),
+				storedMovieDetail(stored.Item, stored.File))
 		})
 	}
 }
