@@ -60,6 +60,8 @@ type CatalogFile struct {
 //   - ProbedAt is not zero and File passes media.File.Validate,
 //   - Item.LibraryID equals File.LibraryID (for changed files too) and Item.ID equals
 //     File.ItemID,
+//   - File.ID and File.ItemID are not empty and File.RelativePath is canonical
+//     (library.ParseRelativePath),
 //   - for a new item: CreatedAt is not zero, Title is not blank and Kind equals
 //     library.ItemKindForLibrary of the library's kind.
 type ProbedFile struct {

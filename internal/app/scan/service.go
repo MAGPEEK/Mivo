@@ -23,8 +23,15 @@ type Dependencies struct {
 	Resolver PathResolver
 	// Prober describes media files.
 	Prober Prober
-	// Catalog persists the scan results.
+	// Catalog persists the scan results of the milestone-2 pipeline. Required unless
+	// CatalogV2 is set (M3-11b removes it).
 	Catalog CatalogWriter
+	// CatalogV2 optionally selects the v2 pipeline (placement, versions, extras, sidecars).
+	CatalogV2 CatalogV2
+	// Refresher optionally recomputes metadata of the items a v2 scan touched; nil does nothing.
+	Refresher ItemRefresher
+	// Finished, when set, is called after every scan ended, whatever its outcome.
+	Finished func(ctx context.Context, libraryID string)
 	// IDs creates item and file IDs.
 	IDs IDGenerator
 	// Clock returns the current time; injected so tests are deterministic.
@@ -42,6 +49,9 @@ type Service struct {
 	resolver  PathResolver
 	prober    Prober
 	catalog   CatalogWriter
+	catalogV2 CatalogV2
+	refresher ItemRefresher
+	finished  func(ctx context.Context, libraryID string)
 	ids       IDGenerator
 	clock     func() time.Time
 	logger    *slog.Logger
@@ -75,7 +85,15 @@ func NewService(dependencies Dependencies) (*Service, error) {
 
 	scanContext, cancelScans := context.WithCancel(context.Background())
 
+	refresher := dependencies.Refresher
+	if refresher == nil {
+		refresher = noRefresh{}
+	}
+
 	return &Service{
+		catalogV2:    dependencies.CatalogV2,
+		refresher:    refresher,
+		finished:     dependencies.Finished,
 		libraries:    dependencies.Libraries,
 		walker:       dependencies.Walker,
 		resolver:     dependencies.Resolver,
@@ -102,7 +120,7 @@ func (dependencies Dependencies) validate() error {
 		{name: "walker", set: dependencies.Walker != nil},
 		{name: "resolver", set: dependencies.Resolver != nil},
 		{name: "prober", set: dependencies.Prober != nil},
-		{name: "catalog", set: dependencies.Catalog != nil},
+		{name: "catalog", set: dependencies.Catalog != nil || dependencies.CatalogV2 != nil},
 		{name: "id generator", set: dependencies.IDs != nil},
 		{name: "clock", set: dependencies.Clock != nil},
 		{name: "logger", set: dependencies.Logger != nil},
@@ -240,12 +258,27 @@ func (service *Service) launch(scanned library.Library) (Status, error) {
 // publish closes done the scan counts as running, so neither a new Start nor Close can miss
 // this goroutine.
 func (service *Service) runScan(scanned library.Library, scanTracker *tracker) {
-	err := service.newRun(scanned, scanTracker).execute(service.scanContext)
+	err := service.execute(scanned, scanTracker)
 	code, cause := describeEnd(err, service.scanContext.Err() != nil)
 	status := scanTracker.final(code, service.clock())
 
 	service.logFinished(scanned, status, cause)
+
+	if service.finished != nil {
+		service.finished(service.logContext, scanned.ID)
+	}
+
 	scanTracker.publish(status)
+}
+
+// execute runs the v2 pipeline when a v2 catalog is wired and the milestone-2 pipeline
+// otherwise (until M3-11b).
+func (service *Service) execute(scanned library.Library, scanTracker *tracker) error {
+	if service.catalogV2 != nil {
+		return service.newRunV2(scanned, scanTracker).execute(service.scanContext)
+	}
+
+	return service.newRun(scanned, scanTracker).execute(service.scanContext)
 }
 
 // logFinished writes the one line per scan. A failure is logged with its code and a cause

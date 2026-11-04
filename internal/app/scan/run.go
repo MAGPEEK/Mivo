@@ -31,9 +31,9 @@ func (service *Service) newRun(scanned library.Library, scanTracker *tracker) *r
 // new and changed ones. Nothing is removed unless the walk completed: a lost root or a
 // cancelled walk must never empty the catalog.
 func (scanRun *run) execute(ctx context.Context) error {
-	itemKind, err := library.ItemKindForLibrary(scanRun.library.Kind)
+	itemKind, err := libraryItemKind(scanRun.library)
 	if err != nil {
-		return fail(ErrorCodeFailed, err.Error(), fmt.Errorf("scan library %s: %w", scanRun.library.ID, err))
+		return err
 	}
 
 	scanRun.itemKind = itemKind
@@ -68,15 +68,15 @@ func (scanRun *run) execute(ctx context.Context) error {
 		return err
 	}
 
-	return scanRun.probeAll(ctx, plan.probes)
+	return scanRun.probeAll(ctx, plan.probes, scanRun.record)
 }
 
 func (scanRun *run) walk(ctx context.Context) ([]library.FileState, []string, error) {
 	var seen []library.FileState
 
 	skipped, err := scanRun.service.walker.Walk(ctx, scanRun.library.Root, func(state library.FileState) error {
-		// The milestone-2 scan places videos only; sidecars wait for the scan v2 (M3-10).
-		// TODO(M3-10): use NFO and image sidecars.
+		// The milestone-2 pipeline places videos only; run_v2.go handles sidecars and
+		// M3-11b deletes this pipeline.
 		if state.Class != library.FileClassVideo {
 			return nil
 		}
@@ -86,15 +86,20 @@ func (scanRun *run) walk(ctx context.Context) ([]library.FileState, []string, er
 		return nil
 	})
 	if err != nil {
-		err = fmt.Errorf("walk library %s: %w", scanRun.library.ID, err)
-		if errors.Is(err, domain.ErrUnavailable) {
-			return nil, nil, fail(ErrorCodeRootUnavailable, causeRootUnavailable, err)
-		}
-
-		return nil, nil, fail(ErrorCodeFailed, causeWalkFailed, err)
+		return nil, nil, scanRun.walkError(err)
 	}
 
 	return seen, skipped, nil
+}
+
+// walkError maps a failed walk to the scan failure: a lost root is its own code.
+func (scanRun *run) walkError(err error) error {
+	err = fmt.Errorf("walk library %s: %w", scanRun.library.ID, err)
+	if errors.Is(err, domain.ErrUnavailable) {
+		return fail(ErrorCodeRootUnavailable, causeRootUnavailable, err)
+	}
+
+	return fail(ErrorCodeFailed, causeWalkFailed, err)
 }
 
 func (scanRun *run) remove(ctx context.Context, fileIDs []string) error {

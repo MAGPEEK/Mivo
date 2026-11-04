@@ -62,3 +62,4 @@ in parallel afterwards. UX: DT-20 … DT-22, **DT-24**, DT-09, LB-42 data; ADR 0
   both if needed; M3-05b/M3-05d still use a new type.
 - Keep functions small: placement, diff, probe and save are separate steps (files).
 - Per-file logs stay at debug with relative paths only (ADR 0022).
+- Deviation (review 1): `PlacementCatalog` is split into `PlacedFileCatalog` (PlacedFiles, SavePlacedFile, MoveFile, RemovePlacedFiles) and `SidecarCatalog` (SidecarStates, SaveSidecarStates); `CatalogV2` = `PlacedFileCatalog` + `SidecarCatalog` + `MetadataCatalog`. `MoveFile(ctx, MoveRequest{LibraryID, FileID, Placement, NewID})` takes a struct (4-parameter rule).

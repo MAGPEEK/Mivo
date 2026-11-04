@@ -41,3 +41,4 @@ ED-02 (locks respected); ADR 0027 §6–§8.
   NFOs sequentially (NAS disks) – a concurrency limit is not needed in M3.
 - Do not write any file and do not fetch any URL (ADR 0010, ADR 0022).
 - Image dimensions stay 0 until the first render; the scan never decodes images.
+- Duty (M3-10 review): the refresher also refreshes requested items that have no stored metadata (`ItemMetadataState`), because a scan that ended early may have saved items whose refresh failed; and it always receives the full walked sidecar set in `RefreshRequest.Sidecars`, also from an early-ended scan.

@@ -45,7 +45,7 @@ type probeResult struct {
 // probeAll probes the jobs with at most MaxConcurrentProbes workers and records the results
 // on this goroutine, so the catalog is written by one writer per scan. The first error that
 // ends the scan cancels the workers; the remaining results are drained, not recorded.
-func (scanRun *run) probeAll(ctx context.Context, jobs []probeJob) error {
+func (scanRun *run) probeAll(ctx context.Context, jobs []probeJob, record func(context.Context, probeResult) error) error {
 	workContext, cancelWork := context.WithCancel(ctx)
 	defer cancelWork()
 
@@ -56,7 +56,7 @@ func (scanRun *run) probeAll(ctx context.Context, jobs []probeJob) error {
 			continue
 		}
 
-		if err := scanRun.record(ctx, result); err != nil {
+		if err := record(ctx, result); err != nil {
 			firstErr = err
 
 			cancelWork()

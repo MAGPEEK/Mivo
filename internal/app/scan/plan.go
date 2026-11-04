@@ -14,6 +14,10 @@ const relativePathSeparator = "/"
 type probeJob struct {
 	state  library.FileState
 	stored *CatalogFile
+	// placement and placed are used by the v2 pipeline only: the computed placement and the
+	// stored file of a changed one.
+	placement library.Placement
+	placed    *PlacedFileState
 }
 
 // changeInput is what planChanges compares.

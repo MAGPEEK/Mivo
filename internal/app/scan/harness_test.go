@@ -27,6 +27,11 @@ type harness struct {
 	resolver  prefixResolver
 	prober    *recordingProber
 	catalog   *memoryCatalog
+	// catalogV2 and refresher select the v2 pipeline when set (see newHarnessV2); finished
+	// is the optional Finished callback.
+	catalogV2 *memoryCatalogV2
+	refresher *recordingRefresher
+	finished  func(ctx context.Context, libraryID string)
 	ids       *counterIDs
 	clock     *tickingClock
 	logs      *syncBuffer
@@ -63,16 +68,43 @@ func (h *harness) dependencies() scan.Dependencies {
 		handler = h.wrapHandler(handler)
 	}
 
-	return scan.Dependencies{
+	dependencies := scan.Dependencies{
 		Libraries: h.libraries,
 		Walker:    h.walker,
 		Resolver:  h.resolver,
 		Prober:    h.prober,
-		Catalog:   h.catalog,
 		IDs:       h.ids,
 		Clock:     h.clock.Now,
 		Logger:    slog.New(handler),
+		Finished:  h.finished,
 	}
+
+	// A nil pointer in an interface field would count as set.
+	if h.catalog != nil {
+		dependencies.Catalog = h.catalog
+	}
+
+	if h.catalogV2 != nil {
+		dependencies.CatalogV2 = h.catalogV2
+	}
+
+	if h.refresher != nil {
+		dependencies.Refresher = h.refresher
+	}
+
+	return dependencies
+}
+
+// newHarnessV2 wires the v2 pipeline: the milestone-2 catalog is not set.
+func newHarnessV2(t *testing.T) *harness {
+	t.Helper()
+
+	h := newHarness(t)
+	h.catalog = nil
+	h.catalogV2 = newMemoryCatalogV2()
+	h.refresher = &recordingRefresher{}
+
+	return h
 }
 
 // start creates the service; Close runs at cleanup.
@@ -88,6 +120,10 @@ func (h *harness) start(t *testing.T) *scan.Service {
 
 	// Registered first, so it runs after Close: no scan may still write then.
 	t.Cleanup(func() {
+		if h.catalog == nil {
+			return
+		}
+
 		if violations := h.catalog.violationList(); len(violations) > 0 {
 			t.Errorf("the scan broke catalog rules: %q", violations)
 		}
