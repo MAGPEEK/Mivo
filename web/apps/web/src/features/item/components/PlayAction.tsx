@@ -7,7 +7,6 @@ import { itemNamespace } from "../locales";
 
 /** Props of {@link PlayAction}. */
 export interface PlayActionProps {
-  readonly itemId: string;
   readonly play: PlayView;
 }
 
@@ -20,14 +19,14 @@ const playButtonClass =
  * The disabled button uses `aria-disabled` instead of `disabled`: it stays focusable, so
  * keyboard and screen reader users reach it and hear why it does nothing.
  */
-export function PlayAction({ itemId, play }: PlayActionProps) {
+export function PlayAction({ play }: PlayActionProps) {
   const { t } = useTranslation(itemNamespace);
   const explanationId = useId();
   if (play.kind === "playable") {
     return (
       <Link
         to="/items/$itemId/play"
-        params={{ itemId }}
+        params={{ itemId: play.itemId }}
         search={{ fileId: play.fileId }}
         className={`${playButtonClass} bg-accent text-on-accent hover:bg-accent-hover`}
       >

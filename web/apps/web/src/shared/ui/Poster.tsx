@@ -11,7 +11,10 @@ export interface PosterProps {
   /** The image; without one, or when it fails to load, the placeholder shows. */
   readonly imageRef?: ImageRef | undefined;
   readonly aspect: PosterAspect;
-  /** Accessible name of the image and of the placeholder, usually the item title. */
+  /**
+   * Accessible name of the image and of the placeholder, usually the item title. An empty
+   * string makes the artwork decorative, e.g. next to a heading that already names the item.
+   */
   readonly alt: string;
   /** `sizes` attribute: how wide the box is displayed, so the browser picks a width. */
   readonly sizes: string;
@@ -32,14 +35,21 @@ const aspectClasses: Readonly<Record<PosterAspect, string>> = {
   still: "aspect-video",
 };
 
+function isSameImage(left: ImageRef, right: ImageRef | undefined): boolean {
+  return left.id === right?.id && left.tag === right.tag;
+}
+
 /**
  * Artwork in a fixed aspect box, so nothing shifts while it loads. Shows a neutral
  * placeholder with an icon when there is no image or it cannot be loaded.
  */
 export function Poster({ imageRef, aspect, alt, sizes, icon, className = "" }: PosterProps) {
-  // The failed image is remembered by reference, so a new image is tried again.
+  // The failed image is remembered by id and tag: callers may rebuild equal references on every
+  // render, and a new tag of the same id is a new image that deserves another try.
   const [failedRef, setFailedRef] = useState<ImageRef | undefined>(undefined);
-  const showImage = imageRef !== undefined && imageRef !== failedRef;
+  const showImage = imageRef !== undefined && !isSameImage(imageRef, failedRef);
+  const placeholderAccess =
+    alt === "" ? { "aria-hidden": true } : { role: "img", "aria-label": alt };
   return (
     <div
       className={`${aspectClasses[aspect]} relative overflow-hidden bg-surface-raised ${className}`}
@@ -59,8 +69,7 @@ export function Poster({ imageRef, aspect, alt, sizes, icon, className = "" }: P
         />
       ) : (
         <div
-          role="img"
-          aria-label={alt}
+          {...placeholderAccess}
           data-poster-placeholder=""
           className="grid size-full place-items-center text-text-muted"
         >

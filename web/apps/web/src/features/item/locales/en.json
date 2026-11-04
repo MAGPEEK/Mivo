@@ -24,7 +24,8 @@
       "noFile": "This item has no file to play.",
       "probeFailed": "This file cannot be played because the server could not read it.",
       "probeTimedOut": "This file cannot be played because reading it took too long.",
-      "generic": "This file cannot be played."
+      "generic": "This file cannot be played.",
+      "noEpisodes": "There is no episode to play yet."
     }
   },
   "file": {
@@ -45,5 +46,62 @@
     "unknownLanguage": "Unknown language",
     "default": "Default",
     "forced": "Forced"
-  }
+  },
+  "seasons_one": "{{count, number}} season",
+  "seasons_other": "{{count, number}} seasons",
+  "episodes_one": "{{count, number}} episode",
+  "episodes_other": "{{count, number}} episodes",
+  "season": {
+    "name": "Season {{number}}",
+    "specials": "Specials",
+    "caption": "{{name}} · {{episodes}}",
+    "list": "Seasons"
+  },
+  "episode": {
+    "number": "Episode {{number}}",
+    "numbers": "Episodes {{first}}–{{last}}",
+    "code": "S{{season}} · E{{number}}",
+    "codeRange": "S{{season}} · E{{first}}–E{{last}}",
+    "list": "Episodes",
+    "airDate": "Aired {{date}}"
+  },
+  "breadcrumb": "Where this item belongs",
+  "sibling": {
+    "previous": {
+      "season": {
+        "titled": "Previous season: {{title}}",
+        "untitled": "Previous season"
+      },
+      "episode": {
+        "titled": "Previous episode: {{title}}",
+        "untitled": "Previous episode"
+      }
+    },
+    "next": {
+      "season": {
+        "titled": "Next season: {{title}}",
+        "untitled": "Next season"
+      },
+      "episode": {
+        "titled": "Next episode: {{title}}",
+        "untitled": "Next episode"
+      }
+    }
+  },
+  "siblings": "Neighbouring items",
+  "order": {
+    "toDescending": "Show last first",
+    "toAscending": "Show first first"
+  },
+  "children": {
+    "loading": "Loading",
+    "loadFailed": "The list could not be loaded.",
+    "retry": "Try again",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more",
+    "loadMoreFailed": "More could not be loaded.",
+    "empty": "Nothing here yet."
+  },
+  "summary": "Summary",
+  "genres": "Genres"
 }

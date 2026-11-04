@@ -31,7 +31,8 @@ export interface MediaCardProps {
 // The link covers the card with its ::after box (the "stretched link" card pattern): the
 // title stays the link's whole name instead of every text in the card, and the focus ring
 // is drawn on that box, around the card.
-const stretchedLinkClass =
+/** Classes that stretch a link over its positioned parent, so the whole card is one click target. */
+export const stretchedLinkClass =
   "after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent";
 
 /** Poster card (2:3) with title and details; hovering lifts it like the rest of the design. */

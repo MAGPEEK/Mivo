@@ -8,6 +8,7 @@ import {
   Outlet,
   RouterProvider,
   useParams,
+  useSearch,
   type AnyRouter,
 } from "@tanstack/react-router";
 import { render } from "@testing-library/react";
@@ -16,6 +17,7 @@ import { I18nextProvider } from "react-i18next";
 import { ApiClientProvider } from "../../../shared/api";
 import { createI18n } from "../../../shared/i18n";
 import { ItemPage } from "../components/ItemPage";
+import { validateItemSearch } from "../lib/itemSearch";
 import { itemLocales, itemNamespace } from "../locales";
 import type { ItemServerFetch } from "./fakeItemServer";
 
@@ -33,7 +35,8 @@ export interface RenderItemPageOptions {
 // The route component reads the param loosely: the typed route ids belong to the app router.
 function ItemRouteForTest() {
   const { itemId = "" } = useParams({ strict: false });
-  return <ItemPage itemId={itemId} />;
+  const search = useSearch({ strict: false });
+  return <ItemPage itemId={itemId} search={search} />;
 }
 
 function PlayerRouteForTest() {
@@ -59,6 +62,7 @@ function createItemTestRouter(path: string): AnyRouter {
     createRoute({
       getParentRoute: () => rootRoute,
       path: "/items/$itemId",
+      validateSearch: validateItemSearch,
       component: ItemRouteForTest,
     }),
     createRoute({

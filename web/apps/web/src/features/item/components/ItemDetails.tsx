@@ -1,62 +1,41 @@
-import { useId, type Ref } from "react";
+import { useId, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { FileView, ItemView } from "../lib/itemView";
-import { Poster } from "../../../shared/ui";
 import { itemNamespace } from "../locales";
-import { PlayAction } from "./PlayAction";
+import { ItemHeader } from "./ItemHeader";
 import { TrackList } from "./TrackList";
 
 /** Props of {@link ItemDetails}. */
 export interface ItemDetailsProps {
   /** Receives the title heading, so focus can move to it after a retry. */
   readonly headingRef: Ref<HTMLHeadingElement>;
-  readonly itemId: string;
   readonly item: ItemView;
+  /** Shown above the title, e.g. the links of an episode to its show and season. */
+  readonly above?: ReactNode;
+  /** Facts before the item's own, e.g. the `S1 · E3` label of an episode. */
+  readonly leadFacts?: readonly string[];
 }
 
-const factSeparator = " · ";
-// The poster box is w-40 (10rem) at every breakpoint.
-const posterSizes = "10rem";
-
 /**
- * A loaded item: header with backdrop, poster, title, facts, technical chips and Play, then
- * the track lists and the file. The poster falls back to a neutral placeholder; the backdrop
- * stays a neutral gradient until backdrop artwork is shown.
+ * A playable item (movie, episode or extra): header, technical chips and Play, then the track
+ * lists and the file. Episodes and extras show a 16:9 still, a movie a poster; either falls
+ * back to a neutral placeholder.
  */
-export function ItemDetails({ headingRef, itemId, item }: ItemDetailsProps) {
+export function ItemDetails({ headingRef, item, above, leadFacts }: ItemDetailsProps) {
   const { t } = useTranslation(itemNamespace);
+  const aspect = item.kind === "movie" ? "poster" : "still";
   return (
     <article>
-      <div className="relative isolate overflow-hidden rounded-lg border border-divider bg-surface">
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 -z-10 scale-110 bg-linear-to-br from-surface-raised via-surface to-background blur-2xl"
-        />
-        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end">
-          <Poster
-            imageRef={item.poster}
-            aspect="poster"
-            alt={item.title}
-            sizes={posterSizes}
-            className="w-40 shrink-0 rounded-md shadow-card"
-          />
-          <div className="flex min-w-0 flex-col gap-4">
-            <h1
-              ref={headingRef}
-              tabIndex={-1}
-              className="text-4xl font-semibold break-words focus-visible:outline-none"
-            >
-              {item.title}
-            </h1>
-            {item.facts.length > 0 && (
-              <p className="text-text-muted">{item.facts.join(factSeparator)}</p>
-            )}
-            {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
-            <PlayAction itemId={itemId} play={item.play} />
-          </div>
-        </div>
-      </div>
+      <ItemHeader
+        headingRef={headingRef}
+        item={item}
+        aspect={aspect}
+        {...(above === undefined ? {} : { above })}
+        {...(leadFacts === undefined ? {} : { leadFacts })}
+      >
+        {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
+      </ItemHeader>
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <TrackList
           heading={t("tracks.audio.heading")}

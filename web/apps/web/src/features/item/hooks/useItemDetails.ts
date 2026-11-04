@@ -2,10 +2,14 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { isItemNotFound, isNetworkFailure } from "../api/itemQuery";
-import type { DurationParts } from "../lib/duration";
-import { toItemView, type ItemView, type ItemViewTexts } from "../lib/itemView";
-import type { UnavailableReason } from "../lib/playTarget";
+import {
+  toItemView,
+  type ItemView,
+  type ItemViewTexts,
+  type PlayUnavailableReason,
+} from "../lib/itemView";
 import { itemNamespace } from "../locales";
+import { durationText } from "./durationText";
 import { useItem } from "./useItem";
 
 type ItemTranslate = TFunction<typeof itemNamespace>;
@@ -62,21 +66,12 @@ function viewTexts(t: ItemTranslate, language: string): ItemViewTexts {
     duration: (parts) => durationText(parts, t),
     unknownLanguage: t("tracks.unknownLanguage"),
     unavailable: (reason) => unavailableExplanation(reason, t),
+    seasons: (count) => t("seasons", { count }),
+    episodes: (count) => t("episodes", { count }),
   };
 }
 
-function durationText(parts: DurationParts, t: ItemTranslate): string {
-  switch (parts.unit) {
-    case "hours":
-      return t("duration.hoursMinutes", { hours: parts.hours, minutes: parts.minutes });
-    case "minutes":
-      return t("duration.minutes", { minutes: parts.minutes });
-    case "seconds":
-      return t("duration.seconds", { seconds: parts.seconds });
-  }
-}
-
-function unavailableExplanation(reason: UnavailableReason, t: ItemTranslate): string {
+function unavailableExplanation(reason: PlayUnavailableReason, t: ItemTranslate): string {
   switch (reason) {
     case "noFile":
       return t("play.unavailable.noFile");
@@ -84,6 +79,8 @@ function unavailableExplanation(reason: UnavailableReason, t: ItemTranslate): st
       return t("play.unavailable.probeFailed");
     case "probeTimedOut":
       return t("play.unavailable.probeTimedOut");
+    case "noEpisodes":
+      return t("play.unavailable.noEpisodes");
     case "unknown":
       return t("play.unavailable.generic");
   }

@@ -24,7 +24,8 @@
       "noFile": "Zu diesem Eintrag gibt es keine Datei zum Abspielen.",
       "probeFailed": "Diese Datei kann nicht abgespielt werden, weil der Server sie nicht lesen konnte.",
       "probeTimedOut": "Diese Datei kann nicht abgespielt werden, weil das Lesen zu lange gedauert hat.",
-      "generic": "Diese Datei kann nicht abgespielt werden."
+      "generic": "Diese Datei kann nicht abgespielt werden.",
+      "noEpisodes": "Es gibt noch keine Folge zum Abspielen."
     }
   },
   "file": {
@@ -45,5 +46,62 @@
     "unknownLanguage": "Unbekannte Sprache",
     "default": "Standard",
     "forced": "Erzwungen"
-  }
+  },
+  "seasons_one": "{{count, number}} Staffel",
+  "seasons_other": "{{count, number}} Staffeln",
+  "episodes_one": "{{count, number}} Folge",
+  "episodes_other": "{{count, number}} Folgen",
+  "season": {
+    "name": "Staffel {{number}}",
+    "specials": "Specials",
+    "caption": "{{name}} · {{episodes}}",
+    "list": "Staffeln"
+  },
+  "episode": {
+    "number": "Folge {{number}}",
+    "numbers": "Folgen {{first}}–{{last}}",
+    "code": "S{{season}} · E{{number}}",
+    "codeRange": "S{{season}} · E{{first}}–E{{last}}",
+    "list": "Folgen",
+    "airDate": "Ausgestrahlt am {{date}}"
+  },
+  "breadcrumb": "Wo dieser Eintrag liegt",
+  "sibling": {
+    "previous": {
+      "season": {
+        "titled": "Vorherige Staffel: {{title}}",
+        "untitled": "Vorherige Staffel"
+      },
+      "episode": {
+        "titled": "Vorherige Folge: {{title}}",
+        "untitled": "Vorherige Folge"
+      }
+    },
+    "next": {
+      "season": {
+        "titled": "Nächste Staffel: {{title}}",
+        "untitled": "Nächste Staffel"
+      },
+      "episode": {
+        "titled": "Nächste Folge: {{title}}",
+        "untitled": "Nächste Folge"
+      }
+    }
+  },
+  "siblings": "Benachbarte Einträge",
+  "order": {
+    "toDescending": "Letzte zuerst zeigen",
+    "toAscending": "Erste zuerst zeigen"
+  },
+  "children": {
+    "loading": "Wird geladen",
+    "loadFailed": "Die Liste konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Mehr wird geladen",
+    "loadMoreFailed": "Weitere Einträge konnten nicht geladen werden.",
+    "empty": "Hier ist noch nichts."
+  },
+  "summary": "Handlung",
+  "genres": "Genres"
 }

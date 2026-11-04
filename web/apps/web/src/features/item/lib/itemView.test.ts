@@ -10,6 +10,8 @@ const texts: ItemViewTexts = {
   duration: (parts) => `duration:${JSON.stringify(parts)}`,
   unknownLanguage: "unknown",
   unavailable: (reason) => `unavailable:${reason}`,
+  seasons: (count) => `${String(count)} seasons`,
+  episodes: (count) => `${String(count)} episodes`,
 };
 
 interface ViewCase {
@@ -39,7 +41,7 @@ const viewCases: readonly ViewCase[] = [
       facts: ['duration:{"unit":"hours","hours":1,"minutes":30}', "4K"],
       chips: ["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"],
       file: { name: "Big.Buck.Bunny.mkv", size: "276.1 MB" },
-      play: { kind: "playable", fileId: "file-1" },
+      play: { kind: "playable", itemId: "item-1", fileId: "file-1" },
     },
   },
   {
@@ -90,6 +92,62 @@ const viewCases: readonly ViewCase[] = [
     name: "a movie with a poster",
     item: item({ artwork: { poster: { id: "poster-1", tag: "tag-1" } } }),
     expected: { poster: { id: "poster-1", tag: "tag-1" } },
+  },
+  {
+    name: "an episode with a still",
+    item: item({ kind: "episode", artwork: { thumb: { id: "still-1", tag: "tag-1" } } }),
+    expected: { still: { id: "still-1", tag: "tag-1" } },
+  },
+  {
+    name: "a movie with year, summary and genres",
+    item: item({ year: 2008, summary: "A rabbit.", genres: ["Animation", "Comedy"] }),
+    expected: {
+      kind: "movie",
+      facts: ["2008"],
+      summary: "A rabbit.",
+      genres: ["Animation", "Comedy"],
+    },
+  },
+  {
+    name: "a show counts seasons and episodes and plays its play item",
+    item: item({
+      kind: "show",
+      year: 2011,
+      childCount: 2,
+      leafCount: 18,
+      playItemId: "episode-1",
+    }),
+    expected: {
+      facts: ["2011", "2 seasons", "18 episodes"],
+      play: { kind: "playable", itemId: "episode-1" },
+    },
+  },
+  {
+    name: "a show without a play item",
+    item: item({ kind: "show" }),
+    expected: { play: { kind: "unavailable", explanation: "unavailable:noEpisodes" } },
+  },
+  {
+    name: "a season counts episodes and links its siblings and ancestors",
+    item: item({
+      kind: "season",
+      childCount: 9,
+      previousId: "season-0",
+      nextId: "season-2",
+      playItemId: "episode-1",
+      ancestors: [{ id: "show-1", kind: "show", title: "The Show" }],
+    }),
+    expected: {
+      facts: ["9 episodes"],
+      previousId: "season-0",
+      nextId: "season-2",
+      ancestors: [{ id: "show-1", kind: "show", title: "The Show" }],
+    },
+  },
+  {
+    name: "an episode with an air date",
+    item: item({ kind: "episode", releaseDate: "2008-05-20" }),
+    expected: { airDate: "May 20, 2008" },
   },
 ];
 

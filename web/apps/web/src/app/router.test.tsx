@@ -79,4 +79,16 @@ describe("player route search", () => {
 
     expect(location.href).toBe("/items/item-1/play?fileId=file-1");
   });
+
+  it.each([
+    { search: "?order=desc", order: "desc" },
+    { search: "?order=sideways", order: undefined },
+    { search: "", order: undefined },
+  ])("validates the item search $search", async ({ search, order }) => {
+    const { router } = renderApp(`/items/item-1${search}`);
+
+    await screen.findByRole("main");
+
+    expect(router.state.matches.at(-1)?.search).toMatchObject({ order });
+  });
 });

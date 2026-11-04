@@ -1,5 +1,5 @@
 export { Badge, type BadgeProps } from "./Badge";
-export { MediaCard, type CardLinkProps, type MediaCardProps } from "./Card";
+export { MediaCard, stretchedLinkClass, type CardLinkProps, type MediaCardProps } from "./Card";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export {
   AlertIcon,

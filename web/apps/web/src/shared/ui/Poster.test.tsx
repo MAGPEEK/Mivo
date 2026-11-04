@@ -81,4 +81,43 @@ describe("Poster", () => {
 
     expect(container.querySelector("img")?.getAttribute("src")).toContain("poster-2");
   });
+
+  it("tries a replaced image with the same id but a new tag again", () => {
+    const { container, rerender } = render(
+      <Poster imageRef={poster} aspect="poster" alt="Clip" sizes={sizes} />,
+    );
+    fireEvent.error(screen.getByRole("img", { name: "Clip" }));
+
+    rerender(
+      <Poster imageRef={{ ...poster, tag: "tag-new" }} aspect="poster" alt="Clip" sizes={sizes} />,
+    );
+
+    expect(container.querySelector("img")?.getAttribute("src")).toContain("tag=tag-new");
+  });
+
+  it("stays on the placeholder for an equal reference that already failed", () => {
+    const { container, rerender } = render(
+      <Poster imageRef={poster} aspect="poster" alt="Clip" sizes={sizes} />,
+    );
+    fireEvent.error(screen.getByRole("img", { name: "Clip" }));
+
+    rerender(<Poster imageRef={{ ...poster }} aspect="poster" alt="Clip" sizes={sizes} />);
+
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("is decorative with an empty alt: empty image alt, hidden placeholder", async () => {
+    const { container, rerender } = render(
+      <Poster imageRef={poster} aspect="poster" alt="" sizes={sizes} />,
+    );
+
+    expect(container.querySelector("img")?.getAttribute("alt")).toBe("");
+    expect(screen.queryByRole("img")).toBeNull();
+
+    rerender(<Poster aspect="poster" alt="" sizes={sizes} />);
+
+    expect(placeholder(container)?.getAttribute("aria-hidden")).toBe("true");
+    expect(placeholder(container)?.hasAttribute("role")).toBe(false);
+    expect(await blockingAxeViolations(container)).toEqual([]);
+  });
 });

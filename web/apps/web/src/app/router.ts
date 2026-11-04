@@ -9,7 +9,7 @@ import {
 import { createElement } from "react";
 
 import { HomePage } from "../features/home";
-import { ItemPage } from "../features/item";
+import { ItemPage, validateItemSearch } from "../features/item";
 import { LibraryPage } from "../features/library";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
 import { NotFoundPage } from "./NotFoundPage";
@@ -36,7 +36,8 @@ function LibraryRoute() {
 
 function ItemRoute() {
   const { itemId } = useParams({ from: "/shell/items/$itemId" });
-  return createElement(ItemPage, { itemId });
+  const search = useSearch({ from: "/shell/items/$itemId" });
+  return createElement(ItemPage, { itemId, search });
 }
 
 // The whole validated search goes to the player, so new player search params need no edit here.
@@ -68,7 +69,12 @@ function createRouteTree() {
       path: "/libraries/$libraryId",
       component: LibraryRoute,
     }),
-    createRoute({ getParentRoute: () => shellRoute, path: "/items/$itemId", component: ItemRoute }),
+    createRoute({
+      getParentRoute: () => shellRoute,
+      path: "/items/$itemId",
+      validateSearch: validateItemSearch,
+      component: ItemRoute,
+    }),
   ] as const;
   const playerRoute = createRoute({
     getParentRoute: () => fullScreenRoute,

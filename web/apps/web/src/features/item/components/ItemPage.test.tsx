@@ -67,21 +67,24 @@ describe("ItemPage with a playable item", () => {
     expect(within(file).getByText("276.1 MB")).toBeTruthy();
   });
 
-  it("shows the movie poster named by the title", async () => {
+  it("shows the movie poster as decoration next to the title", async () => {
     const poster = { id: "poster-1", tag: "tag-1" };
     const main = await renderItem({ ...hdrMovie, artwork: { poster } });
 
-    const image = within(main).getByRole("img", { name: "Big Buck Bunny" });
-    expect(image.getAttribute("src")).toBe("/api/v1/images/poster-1?width=320&tag=tag-1");
-    expect(image.getAttribute("sizes")).toBe("10rem");
+    const image = main.querySelector("img");
+    expect(image?.getAttribute("alt")).toBe("");
+    expect(image?.getAttribute("src")).toBe("/api/v1/images/poster-1?width=320&tag=tag-1");
+    expect(image?.getAttribute("sizes")).toBe("10rem");
     expect(await blockingAxeViolations(main)).toEqual([]);
   });
 
   it("shows a placeholder poster without artwork", async () => {
     const main = await renderItem(hdrMovie);
 
-    const placeholder = within(main).getByRole("img", { name: "Big Buck Bunny" });
-    expect(placeholder.tagName).not.toBe("IMG");
+    expect(main.querySelector("img")).toBeNull();
+    expect(main.querySelector("[data-poster-placeholder]")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
     expect(await blockingAxeViolations(main)).toEqual([]);
   });
 
