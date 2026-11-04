@@ -1,0 +1,21 @@
+# M4-15 Composition root and integration test: streaming extension
+Owner: mivo-backend
+Depends on: M4-05a, M4-06a, M4-06b, M4-07a, M4-08b, M4-09b, M4-10, M4-11, M4-13a – M4-13e, M4-14a, M4-14b
+Files/areas: `cmd/mivo/**`, integration test under `cmd/mivo` or `internal/adapters/corpustest`
+
+## Goal
+Everything of M4's P0 slice runs in the real binary: checkpoint of the milestone (walking skeleton for subtitles, tracks, throttling, hardware status).
+
+## Acceptance criteria
+- [ ] Wiring: config → producer options (preset, resolved threads, priority), transcoder service (startup detection in background), subtitle
+      and trickplay services, throttle controller, sessions list; no logic in `main`.
+- [ ] Integration test over `testdata/media` and `testdata/library/subs`: (a) SRT session = direct play + working `.vtt`; (b) PGS sample → transcode with
+      `subtitle_burn_in`; (c) second audio track via `audioStreamIndex`; (d) 4 Mbit/s cap produces transcode; (e) `GET /system/transcoder` returns an
+      empty or consistent device list; (f) throttle: on Linux/Docker a transcode pauses when the client stops requesting segments.
+- [ ] Shutdown budget test still passes (paused FFmpeg is killed within the 5 s bound).
+- [ ] `docker build` smoke and `scripts/playback-smoke` extended with one subtitle and one 2-Mbit/s case (profile `firefox-desktop`).
+- [ ] Release notes snippet collected: preset/threads/priority defaults, `max_sessions` 1 on ≤ 4 CPUs.
+- [ ] Gates: lint + layer rules + `go test -race -tags webui ./cmd/...` + coverage thresholds.
+
+## Notes
+- Checkpoint for DS925+ behaviour: see M4-18.
