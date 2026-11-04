@@ -47,5 +47,15 @@ test. UX: DT-20 … DT-22 (data), **DT-24**, ADR 0027 §4 "Shows".
   a `- <label>` suffix exists; keep it simple and document it).
 - Reuse the tokenizer of M3-03; extend its tag tables there only if a show case needs it, and
   keep the movie tests green.
+- Decisions (implemented): keys are show `NormalizeKey(dir)` / `name:<title>`, season `<n>`,
+  episode `<n>` / `<n>-<end>`, unnumbered episode `title:<normalised stem>`. Version label =
+  words after the second ` - ` of `<marker> - <Title> - <Label>` (a release tag such as `4K`
+  ends the name, so it cannot be a label). Absolute numbering: bare 1–4 digit numbers only;
+  `AbsoluteNumber` is set for bare numbers, not for `E02`/`Episode 2`. Choice among several
+  bare numbers: years never; bare resolution heights (480 … 4320) only as a last resort;
+  prefer a number set off by dashes (`Show - 3 Days - 05` → 5). Season folders ignore a
+  trailing bracket group (`Season 2 [1080p]`). Names without any letter or digit (folder
+  `!!!`, root file `.mkv`) give `ErrInvalid`; a `.mkv` inside a show folder becomes an
+  episode titled `Episode`.
 - Provider episode ordering (absolute/DVD) is milestone 6; do not try to derive seasons from
   absolute numbers.

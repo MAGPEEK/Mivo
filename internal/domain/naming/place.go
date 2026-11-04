@@ -33,14 +33,14 @@ type Result struct {
 }
 
 // Place decides where a video file belongs in a library of the given kind. Shows libraries
-// return an error wrapping domain.ErrUnsupported until their parser exists (M3-03b); an
-// unknown kind or an invalid path wraps domain.ErrInvalid.
+// return show, season and episode placements (or show and extra); an unknown kind or an
+// invalid path wraps domain.ErrInvalid.
 func Place(kind library.Kind, file FileContext) (Result, error) {
 	switch kind {
 	case library.KindMovies:
 		return placeInMovies(file)
 	case library.KindShows:
-		return Result{}, fmt.Errorf("place %q: shows libraries: %w", file.Path, domain.ErrUnsupported)
+		return placeInShows(file)
 	default:
 		return Result{}, fmt.Errorf("place %q: unknown library kind %q: %w", file.Path, kind, domain.ErrInvalid)
 	}
