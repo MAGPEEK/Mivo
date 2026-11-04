@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.1.2"
+  version: "1.2.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -30,7 +30,9 @@ tags:
       Media libraries defined in the server configuration (ADR 0022) and their scans.
       Libraries are read-only through the API until accounts exist.
   - name: items
-    description: Playable items of a library with their files and technical streams.
+    description: >-
+      Items of a library (movies, shows with their seasons and episodes, extras) with their
+      local metadata, artwork references, files and technical streams (ADR 0027).
   - name: playback
     description: >-
       Playback sessions: the server decides between direct play, remux and transcode for a
@@ -39,6 +41,10 @@ tags:
     description: >-
       Media delivery of a playback session. Clients never build these URLs; they use the
       streamUrl of the session and the relative URIs inside HLS playlists.
+  - name: images
+    description: >-
+      Artwork (posters, backdrops, thumbnails, logos, banners) rendered in a fixed set of
+      widths (ADR 0027). Clients build image URLs only through the api-client helper.
 paths:
   /api/v1/health:
     get:
@@ -153,9 +159,11 @@ paths:
       operationId: listLibraryItems
       summary: Page through the items of a library
       description: >-
-        Returns one page of the library's items ordered by sort title. Follow nextCursor
-        until it is absent. A limit outside 1–500 or a cursor this server did not issue
-        answers 400 with the problem code "invalid"; an unknown library answers 404
+        Returns one page of the library's top-level items (movies and shows) ordered by
+        sort title. Seasons and episodes are reached through listItemChildren; extras are
+        never listed on their own, they belong to their parent's ItemDetail. Follow
+        nextCursor until it is absent. A limit outside 1–500 or a cursor this server did not
+        issue answers 400 with the problem code "invalid"; an unknown library answers 404
         "not_found".
       tags:
         - items
@@ -193,9 +201,10 @@ paths:
       - $ref: "#/components/parameters/ItemId"
     get:
       operationId: getItem
-      summary: Describe one item with its files and streams
+      summary: Describe one item with its metadata, files and streams
       description: >-
-        Returns the item with every media file and the technical streams of each file. An
+        Returns the item with its local metadata, artwork references, place in the
+        hierarchy, extras, every media file and the technical streams of each file. An
         unknown ID answers 404 with the problem code "not_found".
       tags:
         - items
@@ -206,6 +215,122 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemDetail"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/children:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    get:
+      operationId: listItemChildren
+      summary: Page through the children of an item
+      description: >-
+        Returns one page of the item's children: the seasons of a show or the episodes of a
+        season. Seasons ascend by number with the specials (season 0) last; episodes ascend
+        by number, episodes without a number last by sort title. Extras are never children;
+        they belong to their parent's ItemDetail. order "desc" reverses the whole order.
+        Follow nextCursor until it is absent. A leaf item (movie, episode, extra) answers an
+        empty page. A limit outside 1–500 or a cursor this server did not issue answers 400
+        "invalid"; an unknown item answers 404 "not_found".
+      tags:
+        - items
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of children in the page.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 500
+            default: 100
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            Opaque position from nextCursor of the previous page. Omit it for the first
+            page. Clients must not parse or build it.
+          schema:
+            type: string
+            maxLength: 2048
+        - name: order
+          in: query
+          required: false
+          description: Sort direction of the children; omitted means ascending.
+          schema:
+            $ref: "#/components/schemas/SortOrder"
+      responses:
+        "200":
+          description: One page of children.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPage"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/images/{imageId}:
+    parameters:
+      - $ref: "#/components/parameters/ImageId"
+    get:
+      operationId: getImage
+      summary: Download an artwork image in a fixed width
+      description: >-
+        Serves the artwork image of an ImageRef rendered to the requested width, never
+        upscaled: a narrower source is served at its own width. Logos are PNG to keep
+        transparency, every other kind is JPEG. The endpoint is unauthenticated for now
+        (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL
+        only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and
+        never take values out of it. Caching: a request whose tag equals the current tag of
+        the image is answered with Cache-Control "private, max-age=31536000, immutable",
+        any other request (no tag or an outdated one) with "private, no-cache". Both carry
+        ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes:
+        "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an
+        unknown image or a source file deleted from disk), "unsupported" (422, the source
+        cannot be decoded) and "unavailable" (503, for example the library folder is
+        unreachable or too many images are rendered at once).
+      tags:
+        - images
+      security: []
+      parameters:
+        - name: width
+          in: query
+          required: true
+          description: Width of the rendered image in pixels, one of the fixed set ImageWidth.
+          schema:
+            $ref: "#/components/schemas/ImageWidth"
+        - name: tag
+          in: query
+          required: false
+          description: >-
+            Opaque version tag of the image (ImageRef.tag). With the current tag the
+            response may be cached for a year; the api-client helper always sends it.
+          schema:
+            type: string
+            maxLength: 64
+            pattern: "^[0-9a-f]+$"
+          example: 9f86d081884c7d65
+      responses:
+        "200":
+          description: The rendered image.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ImageETag"
+            Cache-Control:
+              $ref: "#/components/headers/ImageCacheControl"
+          content:
+            image/jpeg:
+              schema:
+                $ref: "#/components/schemas/ImageBytes"
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ImageBytes"
+        "304":
+          description: The client's copy (If-None-Match) is current; no body is sent.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ImageETag"
+            Cache-Control:
+              $ref: "#/components/headers/ImageCacheControl"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/playback/sessions:
@@ -472,6 +597,15 @@ components:
         type: string
         format: uuid
       example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+    ImageId:
+      name: imageId
+      in: path
+      required: true
+      description: ID of the artwork image (ImageRef.id).
+      schema:
+        type: string
+        format: uuid
+      example: 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
     Range:
       name: Range
       in: header
@@ -487,6 +621,20 @@ components:
         format: int32
         minimum: 1
       example: 5
+    ImageETag:
+      description: >-
+        Validator of the rendered image, "<tag>-<width>" in quotes; send it back as
+        If-None-Match.
+      schema:
+        type: string
+      example: '"9f86d081884c7d65-320"'
+    ImageCacheControl:
+      description: >-
+        "private, max-age=31536000, immutable" when the request carried the current tag,
+        else "private, no-cache".
+      schema:
+        type: string
+      example: private, max-age=31536000, immutable
   responses:
     Problem:
       description: The request failed; the body explains why.
@@ -575,8 +723,8 @@ components:
     LibraryKind:
       type: string
       description: >-
-        What a library contains. Milestone 2 lists the items of every kind flat. Clients must
-        tolerate values added in later versions.
+        What a library contains: "movies" (movie items) or "shows" (show items with seasons
+        and episodes). Clients must tolerate values added in later versions.
       enum:
         - movies
         - shows
@@ -624,7 +772,9 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Number of items in the library.
+          description: >-
+            Number of top-level items in the library (movies and shows), the items
+            listLibraryItems returns; seasons, episodes and extras are not counted.
           example: 42
         scan:
           $ref: "#/components/schemas/ScanStatus"
@@ -784,12 +934,197 @@ components:
           example: 8
         hdr:
           $ref: "#/components/schemas/HdrFormat"
+    ItemKind:
+      type: string
+      description: >-
+        Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season"
+        belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to
+        a movie or a show. Movies, episodes and extras own media files; shows and seasons
+        are containers without files. Clients must tolerate values added in later versions
+        (for example music, audiobook and photo kinds).
+      enum:
+        - movie
+        - show
+        - season
+        - episode
+        - extra
+      example: movie
+    ExtraType:
+      type: string
+      description: >-
+        What an extra contains, from its folder or file name suffix (ADR 0027). Clients
+        must tolerate values added in later versions.
+      enum:
+        - trailer
+        - featurette
+        - behind_the_scenes
+        - deleted_scene
+        - interview
+        - scene
+        - short
+        - other
+      example: trailer
+    ArtworkKind:
+      type: string
+      description: >-
+        Kind of an artwork image: "poster" (portrait), "backdrop" (wide background),
+        "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo) or
+        "banner". Clients must tolerate values added in later versions (for example a
+        square cover for music).
+      enum:
+        - poster
+        - backdrop
+        - thumb
+        - logo
+        - banner
+      example: poster
+    PersonRole:
+      type: string
+      description: >-
+        Role of a person in an item. Clients must tolerate values added in later versions
+        (for example author and narrator for audiobooks).
+      enum:
+        - actor
+        - director
+        - writer
+        - producer
+        - guest_star
+      example: actor
+    SortOrder:
+      type: string
+      description: >-
+        Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate
+        values added in later versions.
+      enum:
+        - asc
+        - desc
+      default: asc
+      example: asc
+    ImageWidth:
+      type: integer
+      format: int32
+      description: >-
+        Width in pixels an image is rendered to; any other width is rejected. Pick the
+        smallest width at least as wide as the displayed size times the device pixel ratio.
+        Clients must tolerate values added in later versions.
+      enum:
+        - 160
+        - 320
+        - 480
+        - 640
+        - 960
+        - 1280
+        - 1920
+      example: 320
+    ImageRef:
+      type: object
+      description: >-
+        Reference to an artwork image. Clients pass it to the api-client helper imageUrl,
+        which builds the getImage URL; they never build that URL themselves.
+      required:
+        - id
+        - tag
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the image (getImage imageId).
+          example: 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+        tag:
+          type: string
+          maxLength: 64
+          description: >-
+            Opaque version tag; it changes when the image changes. Clients must not parse
+            or compare it, only pass it on through the helper.
+          example: 9f86d081884c7d65
+    Artwork:
+      type: object
+      description: >-
+        The selected artwork of an item, one image per ArtworkKind; a kind without an image
+        is omitted. A season without its own poster carries its show's poster.
+      properties:
+        poster:
+          $ref: "#/components/schemas/ImageRef"
+        backdrop:
+          $ref: "#/components/schemas/ImageRef"
+        thumb:
+          $ref: "#/components/schemas/ImageRef"
+        logo:
+          $ref: "#/components/schemas/ImageRef"
+        banner:
+          $ref: "#/components/schemas/ImageRef"
+    ProviderIds:
+      type: object
+      description: >-
+        IDs of the item at external metadata providers, read from local NFO files. No
+        connection to a provider is made (ADR 0010). Absent IDs are omitted.
+      properties:
+        tmdb:
+          type: string
+          description: The Movie Database ID (digits).
+          example: "10378"
+        imdb:
+          type: string
+          description: IMDb ID ("tt" followed by digits).
+          example: tt1254207
+        tvdb:
+          type: string
+          description: TheTVDB ID (digits).
+          example: "81189"
+    ItemPerson:
+      type: object
+      description: A person credited on an item.
+      required:
+        - name
+        - role
+      properties:
+        name:
+          type: string
+          description: Name of the person as stored in the metadata.
+          example: Sacha Goedegebure
+        role:
+          $ref: "#/components/schemas/PersonRole"
+        character:
+          type: string
+          description: Character an actor or guest star plays; omitted when unknown.
+          example: Bunny
+    ItemAncestor:
+      type: object
+      description: An item above another one in the hierarchy, for breadcrumbs.
+      required:
+        - id
+        - kind
+        - title
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the ancestor item.
+          example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+        kind:
+          $ref: "#/components/schemas/ItemKind"
+        title:
+          type: string
+          description: Display title of the ancestor.
+          example: Breaking Bad
+        number:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Season number of a season ancestor (0 for specials); omitted otherwise.
+          example: 1
     ItemSummary:
       type: object
-      description: An item in a library listing.
+      description: >-
+        An item in a library listing or in a list of children. Fields that do not apply to
+        the item's kind, or that are unknown, are omitted. poster is the poster of a movie,
+        show or season (a season without its own carries its show's poster); thumb is the
+        still of an episode or extra (without one the client shows a placeholder). media
+        summarises the primary file and is omitted for containers (show, season).
       required:
         - id
         - libraryId
+        - kind
         - title
       properties:
         id:
@@ -802,21 +1137,73 @@ components:
           format: uuid
           description: ID of the library that contains the item.
           example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        kind:
+          $ref: "#/components/schemas/ItemKind"
         title:
           type: string
-          description: Display title; in milestone 2 derived from the file name.
+          description: Display title from local metadata (NFO) or else the file or folder name.
           example: Big Buck Bunny
+        year:
+          type: integer
+          format: int32
+          description: Release year of a movie or first-air year of a show.
+          example: 2008
+        parentId:
+          type: string
+          format: uuid
+          description: >-
+            ID of the parent item: the show of a season, the season of an episode, the movie
+            or show of an extra; omitted for top-level items.
+          example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+        number:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Season number of a season (0 for specials) or episode number of an episode.
+          example: 1
+        numberEnd:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Last episode number of a file that holds several episodes (S01E01-E02).
+          example: 2
+        absoluteNumber:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Absolute episode number of an episode named by a bare number (Show - 130).
+          example: 130
+        extraType:
+          $ref: "#/components/schemas/ExtraType"
+        childCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of seasons of a show or of episodes of a season.
+          example: 5
+        leafCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of episodes of a show across all its seasons.
+          example: 62
+        poster:
+          $ref: "#/components/schemas/ImageRef"
+        thumb:
+          $ref: "#/components/schemas/ImageRef"
         media:
           $ref: "#/components/schemas/MediaSummary"
     ItemPage:
       type: object
-      description: One page of a library's items.
+      description: One page of items.
       required:
         - items
       properties:
         items:
           type: array
-          description: The items of this page, ordered by sort title.
+          description: >-
+            The items of this page, in the order of the operation (sort title for library
+            listings, number for children).
           items:
             $ref: "#/components/schemas/ItemSummary"
         nextCursor:
@@ -828,10 +1215,15 @@ components:
           example: eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
     ItemDetail:
       type: object
-      description: An item with its media files and their technical streams.
+      description: >-
+        An item with its local metadata, artwork, place in the hierarchy, extras, media
+        files and their technical streams. Fields that do not apply to the item's kind, or
+        that are unknown, are omitted. artwork holds one image per kind; a season without
+        its own poster carries its show's poster.
       required:
         - id
         - libraryId
+        - kind
         - title
         - files
       properties:
@@ -845,15 +1237,124 @@ components:
           format: uuid
           description: ID of the library that contains the item.
           example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        kind:
+          $ref: "#/components/schemas/ItemKind"
         title:
           type: string
-          description: Display title; in milestone 2 derived from the file name.
+          description: Display title from local metadata (NFO) or else the file or folder name.
           example: Big Buck Bunny
+        originalTitle:
+          type: string
+          description: Title in the original language when it differs from the title.
+          example: Big Buck Bunny
+        year:
+          type: integer
+          format: int32
+          description: Release year of a movie or first-air year of a show.
+          example: 2008
+        releaseDate:
+          type: string
+          format: date
+          description: Release date of a movie or air date of an episode (YYYY-MM-DD).
+          example: "2008-05-20"
+        summary:
+          type: string
+          description: Plot summary as plain text.
+          example: A giant rabbit takes revenge on three bullying rodents.
+        tagline:
+          type: string
+          description: Tagline of a movie or show.
+          example: The story of a giant bunny.
+        contentRating:
+          type: string
+          description: >-
+            Age rating as stored in the metadata, for example "FSK 12" or "PG-13"; not
+            normalised by country.
+          example: FSK 6
+        genres:
+          type: array
+          description: Genres in metadata order.
+          items:
+            type: string
+            description: Name of a genre.
+          example: [Animation, Comedy]
+        studios:
+          type: array
+          description: Studios or networks in metadata order.
+          items:
+            type: string
+            description: Name of a studio or network.
+          example: [Blender Foundation]
+        countries:
+          type: array
+          description: Production countries in metadata order.
+          items:
+            type: string
+            description: Name of a country as stored in the metadata.
+          example: [Netherlands]
+        people:
+          type: array
+          description: Credited people in metadata order (cast first by billing order).
+          items:
+            $ref: "#/components/schemas/ItemPerson"
+        providerIds:
+          $ref: "#/components/schemas/ProviderIds"
+        artwork:
+          $ref: "#/components/schemas/Artwork"
+        ancestors:
+          type: array
+          description: >-
+            The items above this one, root first (the show of a season; the show and the
+            season of an episode; the movie or show of an extra); empty or omitted for
+            top-level items.
+          items:
+            $ref: "#/components/schemas/ItemAncestor"
+        previousId:
+          type: string
+          format: uuid
+          description: >-
+            ID of the previous sibling of a season or episode in ascending order; omitted
+            for the first one and for other kinds.
+          example: 6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a
+        nextId:
+          type: string
+          format: uuid
+          description: >-
+            ID of the next sibling of a season or episode in ascending order; omitted for
+            the last one and for other kinds.
+          example: 9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d
+        playItemId:
+          type: string
+          format: uuid
+          description: >-
+            ID of the item Play starts: the item itself for a movie, episode or extra; the
+            first episode of the first regular season for a show; the first episode for a
+            season. Omitted when there is nothing to play.
+          example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+        extras:
+          type: array
+          description: Extras of a movie or show, ordered by type and title.
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ItemSummary"
+        childCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of seasons of a show or of episodes of a season.
+          example: 5
+        leafCount:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of episodes of a show across all its seasons.
+          example: 62
         files:
           type: array
           description: >-
-            Media files of the item; the first one is the primary file. Milestone 2 has
-            exactly one file per item.
+            Media files of the item; the first one is the primary file. Several files are
+            alternative versions (versionLabel) or parts of one version (partNumber); shows
+            and seasons have none.
           items:
             $ref: "#/components/schemas/MediaFile"
     MediaFile:
@@ -915,6 +1416,20 @@ components:
           minimum: 0
           description: Overall bit rate in bits per second; omitted when unknown.
           example: 4073000
+        versionLabel:
+          type: string
+          description: >-
+            Label of the version this file belongs to, from the file name (for example "4K"
+            or "Director's Cut"); omitted for the only or unlabelled version.
+          example: Director's Cut
+        partNumber:
+          type: integer
+          format: int32
+          minimum: 1
+          description: >-
+            Number of the part (cd1, part2, …) when a version is split into several files;
+            omitted for a file that is a whole version.
+          example: 1
         streams:
           type: array
           description: Streams in container order; empty when probing failed.
@@ -1414,6 +1929,10 @@ components:
           description: Degradations of the result, for example a downscaled video.
           items:
             $ref: "#/components/schemas/PlaybackReason"
+    ImageBytes:
+      type: string
+      format: binary
+      description: Raw bytes of a rendered image.
     MediaBytes:
       type: string
       format: binary

@@ -38,6 +38,7 @@ export function playerItem(overrides: Partial<ItemDetail> = {}): ItemDetail {
   return {
     id: playerItemId,
     libraryId: "library-1",
+    kind: "movie",
     title: "Big Buck Bunny",
     files: [
       {

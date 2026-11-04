@@ -24,10 +24,17 @@ const items: ItemPage = {
     {
       id: "item-1",
       libraryId: library.id,
+      kind: "movie",
       title: "Big Buck Bunny",
       media: { available: true, container: "mkv", videoCodec: "h264", audioCodec: "aac" },
     },
-    { id: "item-2", libraryId: library.id, title: "Sintel", media: { available: false } },
+    {
+      id: "item-2",
+      libraryId: library.id,
+      kind: "movie",
+      title: "Sintel",
+      media: { available: false },
+    },
   ],
 };
 

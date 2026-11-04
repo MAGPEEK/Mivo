@@ -42,6 +42,7 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 	return apigen.ItemSummary{
 		ID:        id,
 		LibraryID: libraryID,
+		Kind:      apigen.ItemKind(summary.Item.Kind),
 		Title:     summary.Item.Title,
 		Media:     mediaSummaryResponse(summary.PrimaryFile),
 	}, nil
@@ -94,7 +95,7 @@ func itemDetailResponse(detail applibrary.ItemDetail) (apigen.ItemDetail, error)
 		files = append(files, response)
 	}
 
-	return apigen.ItemDetail{ID: id, LibraryID: libraryID, Title: detail.Item.Title, Files: files}, nil
+	return apigen.ItemDetail{ID: id, LibraryID: libraryID, Kind: apigen.ItemKind(detail.Item.Kind), Title: detail.Item.Title, Files: files}, nil
 }
 
 // mediaFileResponse sends the file name only, never the relative path (ADR 0022).

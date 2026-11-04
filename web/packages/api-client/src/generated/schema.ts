@@ -131,7 +131,7 @@ export interface paths {
         };
         /**
          * Page through the items of a library
-         * @description Returns one page of the library's items ordered by sort title. Follow nextCursor until it is absent. A limit outside 1–500 or a cursor this server did not issue answers 400 with the problem code "invalid"; an unknown library answers 404 "not_found".
+         * @description Returns one page of the library's top-level items (movies and shows) ordered by sort title. Seasons and episodes are reached through listItemChildren; extras are never listed on their own, they belong to their parent's ItemDetail. Follow nextCursor until it is absent. A limit outside 1–500 or a cursor this server did not issue answers 400 with the problem code "invalid"; an unknown library answers 404 "not_found".
          */
         get: operations["listLibraryItems"];
         put?: never;
@@ -156,10 +156,62 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Describe one item with its files and streams
-         * @description Returns the item with every media file and the technical streams of each file. An unknown ID answers 404 with the problem code "not_found".
+         * Describe one item with its metadata, files and streams
+         * @description Returns the item with its local metadata, artwork references, place in the hierarchy, extras, every media file and the technical streams of each file. An unknown ID answers 404 with the problem code "not_found".
          */
         get: operations["getItem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Page through the children of an item
+         * @description Returns one page of the item's children: the seasons of a show or the episodes of a season. Seasons ascend by number with the specials (season 0) last; episodes ascend by number, episodes without a number last by sort title. Extras are never children; they belong to their parent's ItemDetail. order "desc" reverses the whole order. Follow nextCursor until it is absent. A leaf item (movie, episode, extra) answers an empty page. A limit outside 1–500 or a cursor this server did not issue answers 400 "invalid"; an unknown item answers 404 "not_found".
+         */
+        get: operations["listItemChildren"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the artwork image (ImageRef.id).
+                 * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+                 */
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Download an artwork image in a fixed width
+         * @description Serves the artwork image of an ImageRef rendered to the requested width, never upscaled: a narrower source is served at its own width. Logos are PNG to keep transparency, every other kind is JPEG. The endpoint is unauthenticated for now (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and never take values out of it. Caching: a request whose tag equals the current tag of the image is answered with Cache-Control "private, max-age=31536000, immutable", any other request (no tag or an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a source file deleted from disk), "unsupported" (422, the source cannot be decoded) and "unavailable" (503, for example the library folder is unreachable or too many images are rendered at once).
+         */
+        get: operations["getImage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -340,7 +392,7 @@ export interface components {
             apiVersion: string;
         };
         /**
-         * @description What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+         * @description What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
          * @example movies
          * @enum {string}
          */
@@ -371,7 +423,7 @@ export interface components {
             available: boolean;
             /**
              * Format: int64
-             * @description Number of items in the library.
+             * @description Number of top-level items in the library (movies and shows), the items listLibraryItems returns; seasons, episodes and extras are not counted.
              * @example 42
              */
             itemCount: number;
@@ -498,7 +550,120 @@ export interface components {
             bitDepth?: number;
             hdr?: components["schemas"]["HdrFormat"];
         };
-        /** @description An item in a library listing. */
+        /**
+         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+         * @example movie
+         * @enum {string}
+         */
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra";
+        /**
+         * @description What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
+         * @example trailer
+         * @enum {string}
+         */
+        ExtraType: "trailer" | "featurette" | "behind_the_scenes" | "deleted_scene" | "interview" | "scene" | "short" | "other";
+        /**
+         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo) or "banner". Clients must tolerate values added in later versions (for example a square cover for music).
+         * @example poster
+         * @enum {string}
+         */
+        ArtworkKind: "poster" | "backdrop" | "thumb" | "logo" | "banner";
+        /**
+         * @description Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+         * @example actor
+         * @enum {string}
+         */
+        PersonRole: "actor" | "director" | "writer" | "producer" | "guest_star";
+        /**
+         * @description Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
+         * @default asc
+         * @example asc
+         * @enum {string}
+         */
+        SortOrder: "asc" | "desc";
+        /**
+         * Format: int32
+         * @description Width in pixels an image is rendered to; any other width is rejected. Pick the smallest width at least as wide as the displayed size times the device pixel ratio. Clients must tolerate values added in later versions.
+         * @example 320
+         * @enum {integer}
+         */
+        ImageWidth: 160 | 320 | 480 | 640 | 960 | 1280 | 1920;
+        /** @description Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves. */
+        ImageRef: {
+            /**
+             * Format: uuid
+             * @description ID of the image (getImage imageId).
+             * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+             */
+            id: string;
+            /**
+             * @description Opaque version tag; it changes when the image changes. Clients must not parse or compare it, only pass it on through the helper.
+             * @example 9f86d081884c7d65
+             */
+            tag: string;
+        };
+        /** @description The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster. */
+        Artwork: {
+            poster?: components["schemas"]["ImageRef"];
+            backdrop?: components["schemas"]["ImageRef"];
+            thumb?: components["schemas"]["ImageRef"];
+            logo?: components["schemas"]["ImageRef"];
+            banner?: components["schemas"]["ImageRef"];
+        };
+        /** @description IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted. */
+        ProviderIds: {
+            /**
+             * @description The Movie Database ID (digits).
+             * @example 10378
+             */
+            tmdb?: string;
+            /**
+             * @description IMDb ID ("tt" followed by digits).
+             * @example tt1254207
+             */
+            imdb?: string;
+            /**
+             * @description TheTVDB ID (digits).
+             * @example 81189
+             */
+            tvdb?: string;
+        };
+        /** @description A person credited on an item. */
+        ItemPerson: {
+            /**
+             * @description Name of the person as stored in the metadata.
+             * @example Sacha Goedegebure
+             */
+            name: string;
+            role: components["schemas"]["PersonRole"];
+            /**
+             * @description Character an actor or guest star plays; omitted when unknown.
+             * @example Bunny
+             */
+            character?: string;
+        };
+        /** @description An item above another one in the hierarchy, for breadcrumbs. */
+        ItemAncestor: {
+            /**
+             * Format: uuid
+             * @description ID of the ancestor item.
+             * @example 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+             */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            /**
+             * @description Display title of the ancestor.
+             * @example Breaking Bad
+             */
+            title: string;
+            /**
+             * Format: int32
+             * @description Season number of a season ancestor (0 for specials); omitted otherwise.
+             * @example 1
+             */
+            number?: number;
+        };
+        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season). */
         ItemSummary: {
             /**
              * Format: uuid
@@ -512,16 +677,62 @@ export interface components {
              * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
              */
             libraryId: string;
+            kind: components["schemas"]["ItemKind"];
             /**
-             * @description Display title; in milestone 2 derived from the file name.
+             * @description Display title from local metadata (NFO) or else the file or folder name.
              * @example Big Buck Bunny
              */
             title: string;
+            /**
+             * Format: int32
+             * @description Release year of a movie or first-air year of a show.
+             * @example 2008
+             */
+            year?: number;
+            /**
+             * Format: uuid
+             * @description ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra; omitted for top-level items.
+             * @example 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+             */
+            parentId?: string;
+            /**
+             * Format: int32
+             * @description Season number of a season (0 for specials) or episode number of an episode.
+             * @example 1
+             */
+            number?: number;
+            /**
+             * Format: int32
+             * @description Last episode number of a file that holds several episodes (S01E01-E02).
+             * @example 2
+             */
+            numberEnd?: number;
+            /**
+             * Format: int32
+             * @description Absolute episode number of an episode named by a bare number (Show - 130).
+             * @example 130
+             */
+            absoluteNumber?: number;
+            extraType?: components["schemas"]["ExtraType"];
+            /**
+             * Format: int32
+             * @description Number of seasons of a show or of episodes of a season.
+             * @example 5
+             */
+            childCount?: number;
+            /**
+             * Format: int32
+             * @description Number of episodes of a show across all its seasons.
+             * @example 62
+             */
+            leafCount?: number;
+            poster?: components["schemas"]["ImageRef"];
+            thumb?: components["schemas"]["ImageRef"];
             media?: components["schemas"]["MediaSummary"];
         };
-        /** @description One page of a library's items. */
+        /** @description One page of items. */
         ItemPage: {
-            /** @description The items of this page, ordered by sort title. */
+            /** @description The items of this page, in the order of the operation (sort title for library listings, number for children). */
             items: components["schemas"]["ItemSummary"][];
             /**
              * @description Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
@@ -529,7 +740,7 @@ export interface components {
              */
             nextCursor?: string;
         };
-        /** @description An item with its media files and their technical streams. */
+        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster. */
         ItemDetail: {
             /**
              * Format: uuid
@@ -543,12 +754,105 @@ export interface components {
              * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
              */
             libraryId: string;
+            kind: components["schemas"]["ItemKind"];
             /**
-             * @description Display title; in milestone 2 derived from the file name.
+             * @description Display title from local metadata (NFO) or else the file or folder name.
              * @example Big Buck Bunny
              */
             title: string;
-            /** @description Media files of the item; the first one is the primary file. Milestone 2 has exactly one file per item. */
+            /**
+             * @description Title in the original language when it differs from the title.
+             * @example Big Buck Bunny
+             */
+            originalTitle?: string;
+            /**
+             * Format: int32
+             * @description Release year of a movie or first-air year of a show.
+             * @example 2008
+             */
+            year?: number;
+            /**
+             * Format: date
+             * @description Release date of a movie or air date of an episode (YYYY-MM-DD).
+             * @example 2008-05-20
+             */
+            releaseDate?: string;
+            /**
+             * @description Plot summary as plain text.
+             * @example A giant rabbit takes revenge on three bullying rodents.
+             */
+            summary?: string;
+            /**
+             * @description Tagline of a movie or show.
+             * @example The story of a giant bunny.
+             */
+            tagline?: string;
+            /**
+             * @description Age rating as stored in the metadata, for example "FSK 12" or "PG-13"; not normalised by country.
+             * @example FSK 6
+             */
+            contentRating?: string;
+            /**
+             * @description Genres in metadata order.
+             * @example [
+             *       "Animation",
+             *       "Comedy"
+             *     ]
+             */
+            genres?: string[];
+            /**
+             * @description Studios or networks in metadata order.
+             * @example [
+             *       "Blender Foundation"
+             *     ]
+             */
+            studios?: string[];
+            /**
+             * @description Production countries in metadata order.
+             * @example [
+             *       "Netherlands"
+             *     ]
+             */
+            countries?: string[];
+            /** @description Credited people in metadata order (cast first by billing order). */
+            people?: components["schemas"]["ItemPerson"][];
+            providerIds?: components["schemas"]["ProviderIds"];
+            artwork?: components["schemas"]["Artwork"];
+            /** @description The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra); empty or omitted for top-level items. */
+            ancestors?: components["schemas"]["ItemAncestor"][];
+            /**
+             * Format: uuid
+             * @description ID of the previous sibling of a season or episode in ascending order; omitted for the first one and for other kinds.
+             * @example 6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a
+             */
+            previousId?: string;
+            /**
+             * Format: uuid
+             * @description ID of the next sibling of a season or episode in ascending order; omitted for the last one and for other kinds.
+             * @example 9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d
+             */
+            nextId?: string;
+            /**
+             * Format: uuid
+             * @description ID of the item Play starts: the item itself for a movie, episode or extra; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
+             * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+             */
+            playItemId?: string;
+            /** @description Extras of a movie or show, ordered by type and title. */
+            extras?: components["schemas"]["ItemSummary"][];
+            /**
+             * Format: int32
+             * @description Number of seasons of a show or of episodes of a season.
+             * @example 5
+             */
+            childCount?: number;
+            /**
+             * Format: int32
+             * @description Number of episodes of a show across all its seasons.
+             * @example 62
+             */
+            leafCount?: number;
+            /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows and seasons have none. */
             files: components["schemas"]["MediaFile"][];
         };
         /** @description One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only. */
@@ -603,6 +907,17 @@ export interface components {
              * @example 4073000
              */
             bitRate?: number;
+            /**
+             * @description Label of the version this file belongs to, from the file name (for example "4K" or "Director's Cut"); omitted for the only or unlabelled version.
+             * @example Director's Cut
+             */
+            versionLabel?: string;
+            /**
+             * Format: int32
+             * @description Number of the part (cd1, part2, …) when a version is split into several files; omitted for a file that is a whole version.
+             * @example 1
+             */
+            partNumber?: number;
             /** @description Streams in container order; empty when probing failed. */
             streams: components["schemas"]["MediaStream"][];
         };
@@ -977,6 +1292,11 @@ export interface components {
         };
         /**
          * Format: binary
+         * @description Raw bytes of a rendered image.
+         */
+        ImageBytes: string;
+        /**
+         * Format: binary
          * @description Raw bytes of a media file or segment.
          */
         MediaBytes: string;
@@ -1035,6 +1355,11 @@ export interface components {
          * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
          */
         SessionId: string;
+        /**
+         * @description ID of the artwork image (ImageRef.id).
+         * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+         */
+        ImageId: string;
         /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
         Range: string;
     };
@@ -1045,6 +1370,16 @@ export interface components {
          * @example 5
          */
         RetryAfter: number;
+        /**
+         * @description Validator of the rendered image, "<tag>-<width>" in quotes; send it back as If-None-Match.
+         * @example "9f86d081884c7d65-320"
+         */
+        ImageETag: string;
+        /**
+         * @description "private, max-age=31536000, immutable" when the request carried the current tag, else "private, no-cache".
+         * @example private, max-age=31536000, immutable
+         */
+        ImageCacheControl: string;
     };
     pathItems: never;
 }
@@ -1231,6 +1566,87 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ItemDetail"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listItemChildren: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of children in the page. */
+                limit?: number;
+                /** @description Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it. */
+                cursor?: string;
+                /** @description Sort direction of the children; omitted means ascending. */
+                order?: components["schemas"]["SortOrder"];
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of children. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getImage: {
+        parameters: {
+            query: {
+                /** @description Width of the rendered image in pixels, one of the fixed set ImageWidth. */
+                width: components["schemas"]["ImageWidth"];
+                /**
+                 * @description Opaque version tag of the image (ImageRef.tag). With the current tag the response may be cached for a year; the api-client helper always sends it.
+                 * @example 9f86d081884c7d65
+                 */
+                tag?: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the artwork image (ImageRef.id).
+                 * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+                 */
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rendered image. */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ImageETag"];
+                    "Cache-Control": components["headers"]["ImageCacheControl"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": components["schemas"]["ImageBytes"];
+                    "image/png": components["schemas"]["ImageBytes"];
+                };
+            };
+            /** @description The client's copy (If-None-Match) is current; no body is sent. */
+            304: {
+                headers: {
+                    ETag: components["headers"]["ImageETag"];
+                    "Cache-Control": components["headers"]["ImageCacheControl"];
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

@@ -5,7 +5,7 @@ import { mediaFile } from "../test/fakeItemServer";
 import { playTarget, type PlayTarget } from "./playTarget";
 
 function itemWith(files: MediaFile[]): ItemDetail {
-  return { id: "item-1", libraryId: "library-1", title: "Title", files };
+  return { id: "item-1", libraryId: "library-1", kind: "movie", title: "Title", files };
 }
 
 describe("playTarget", () => {

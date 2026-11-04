@@ -70,8 +70,8 @@ describe("toItemCardModel", () => {
   });
 
   it("treats an item without media summary as unavailable", () => {
-    const { id, libraryId, title } = fakeItem();
-    const withoutMedia = { id, libraryId, title };
+    const { id, libraryId, kind, title } = fakeItem();
+    const withoutMedia = { id, libraryId, kind, title };
 
     expect(toItemCardModel(withoutMedia)).toMatchObject({
       duration: "",

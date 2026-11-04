@@ -64,6 +64,7 @@ export function fakeItem(overrides: Partial<ItemSummary> = {}): ItemSummary {
   return {
     id: "8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d",
     libraryId: fakeLibrary().id,
+    kind: "movie",
     title: "Big Buck Bunny",
     media: {
       available: true,

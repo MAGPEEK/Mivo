@@ -16,7 +16,44 @@ import (
 	"uuid"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Defines values for ExtraType.
+const (
+	ExtraTypeBehindTheScenes ExtraType = "behind_the_scenes"
+	ExtraTypeDeletedScene    ExtraType = "deleted_scene"
+	ExtraTypeFeaturette      ExtraType = "featurette"
+	ExtraTypeInterview       ExtraType = "interview"
+	ExtraTypeOther           ExtraType = "other"
+	ExtraTypeScene           ExtraType = "scene"
+	ExtraTypeShort           ExtraType = "short"
+	ExtraTypeTrailer         ExtraType = "trailer"
+)
+
+// Valid indicates whether the value is a known member of the ExtraType enum.
+func (e ExtraType) Valid() bool {
+	switch e {
+	case ExtraTypeBehindTheScenes:
+		return true
+	case ExtraTypeDeletedScene:
+		return true
+	case ExtraTypeFeaturette:
+		return true
+	case ExtraTypeInterview:
+		return true
+	case ExtraTypeOther:
+		return true
+	case ExtraTypeScene:
+		return true
+	case ExtraTypeShort:
+		return true
+	case ExtraTypeTrailer:
+		return true
+	default:
+		return false
+	}
+}
 
 // Defines values for HdrFormat.
 const (
@@ -75,6 +112,33 @@ func (e HlsDelivery) Valid() bool {
 	}
 }
 
+// Defines values for ItemKind.
+const (
+	ItemKindEpisode ItemKind = "episode"
+	ItemKindExtra   ItemKind = "extra"
+	ItemKindMovie   ItemKind = "movie"
+	ItemKindSeason  ItemKind = "season"
+	ItemKindShow    ItemKind = "show"
+)
+
+// Valid indicates whether the value is a known member of the ItemKind enum.
+func (e ItemKind) Valid() bool {
+	switch e {
+	case ItemKindEpisode:
+		return true
+	case ItemKindExtra:
+		return true
+	case ItemKindMovie:
+		return true
+	case ItemKindSeason:
+		return true
+	case ItemKindShow:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LibraryKind.
 const (
 	LibraryKindMovies LibraryKind = "movies"
@@ -111,6 +175,33 @@ func (e MediaStreamKind) Valid() bool {
 	case MediaStreamKindSubtitle:
 		return true
 	case MediaStreamKindVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PersonRole.
+const (
+	PersonRoleActor     PersonRole = "actor"
+	PersonRoleDirector  PersonRole = "director"
+	PersonRoleGuestStar PersonRole = "guest_star"
+	PersonRoleProducer  PersonRole = "producer"
+	PersonRoleWriter    PersonRole = "writer"
+)
+
+// Valid indicates whether the value is a known member of the PersonRole enum.
+func (e PersonRole) Valid() bool {
+	switch e {
+	case PersonRoleActor:
+		return true
+	case PersonRoleDirector:
+		return true
+	case PersonRoleGuestStar:
+		return true
+	case PersonRoleProducer:
+		return true
+	case PersonRoleWriter:
 		return true
 	default:
 		return false
@@ -225,6 +316,24 @@ func (e ScanState) Valid() bool {
 	}
 }
 
+// Defines values for SortOrder.
+const (
+	SortOrderAsc  SortOrder = "asc"
+	SortOrderDesc SortOrder = "desc"
+)
+
+// Valid indicates whether the value is a known member of the SortOrder enum.
+func (e SortOrder) Valid() bool {
+	switch e {
+	case SortOrderAsc:
+		return true
+	case SortOrderDesc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for StreamAction.
 const (
 	StreamActionCopy      StreamAction = "copy"
@@ -241,6 +350,24 @@ func (e StreamAction) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
+type Artwork struct {
+	// Backdrop Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Backdrop *ImageRef `json:"backdrop,omitempty"`
+
+	// Banner Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Banner *ImageRef `json:"banner,omitempty"`
+
+	// Logo Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Logo *ImageRef `json:"logo,omitempty"`
+
+	// Poster Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Poster *ImageRef `json:"poster,omitempty"`
+
+	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Thumb *ImageRef `json:"thumb,omitempty"`
 }
 
 // ClientProfile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
@@ -296,6 +423,11 @@ type DirectPlayProfile struct {
 	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
 }
 
+// ExtraType What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
+//
+// Example: trailer
+type ExtraType string
+
 // HdrFormat High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
 //
 // Example: hdr10
@@ -350,30 +482,161 @@ type HlsProfile struct {
 	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
 }
 
-// ItemDetail An item with its media files and their technical streams.
+// ImageRef Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+type ImageRef struct {
+	// ID ID of the image (getImage imageId).
+	//
+	// Example: 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
+	ID uuid.UUID `json:"id"`
+
+	// Tag Opaque version tag; it changes when the image changes. Clients must not parse or compare it, only pass it on through the helper.
+	//
+	// Example: 9f86d081884c7d65
+	Tag string `json:"tag"`
+}
+
+// ItemAncestor An item above another one in the hierarchy, for breadcrumbs.
+type ItemAncestor struct {
+	// ID ID of the ancestor item.
+	//
+	// Example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+	ID uuid.UUID `json:"id"`
+
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	//
+	// Example: movie
+	Kind ItemKind `json:"kind"`
+
+	// Number Season number of a season ancestor (0 for specials); omitted otherwise.
+	//
+	// Example: 1
+	Number *int32 `json:"number,omitempty"`
+
+	// Title Display title of the ancestor.
+	//
+	// Example: Breaking Bad
+	Title string `json:"title"`
+}
+
+// ItemDetail An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster.
 type ItemDetail struct {
-	// Files Media files of the item; the first one is the primary file. Milestone 2 has exactly one file per item.
+	// Ancestors The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra); empty or omitted for top-level items.
+	Ancestors *[]ItemAncestor `json:"ancestors,omitempty"`
+
+	// Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
+	Artwork *Artwork `json:"artwork,omitempty"`
+
+	// ChildCount Number of seasons of a show or of episodes of a season.
+	//
+	// Example: 5
+	ChildCount *int32 `json:"childCount,omitempty"`
+
+	// ContentRating Age rating as stored in the metadata, for example "FSK 12" or "PG-13"; not normalised by country.
+	//
+	// Example: FSK 6
+	ContentRating *string `json:"contentRating,omitempty"`
+
+	// Countries Production countries in metadata order.
+	//
+	// Example: ["Netherlands"]
+	Countries *[]string `json:"countries,omitempty"`
+
+	// Extras Extras of a movie or show, ordered by type and title.
+	Extras *[]ItemSummary `json:"extras,omitempty"`
+
+	// Files Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows and seasons have none.
 	Files []MediaFile `json:"files"`
+
+	// Genres Genres in metadata order.
+	//
+	// Example: ["Animation","Comedy"]
+	Genres *[]string `json:"genres,omitempty"`
 
 	// ID ID of the item.
 	//
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
 
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	//
+	// Example: movie
+	Kind ItemKind `json:"kind"`
+
+	// LeafCount Number of episodes of a show across all its seasons.
+	//
+	// Example: 62
+	LeafCount *int32 `json:"leafCount,omitempty"`
+
 	// LibraryID ID of the library that contains the item.
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID uuid.UUID `json:"libraryId"`
 
-	// Title Display title; in milestone 2 derived from the file name.
+	// NextID ID of the next sibling of a season or episode in ascending order; omitted for the last one and for other kinds.
+	//
+	// Example: 9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d
+	NextID *uuid.UUID `json:"nextId,omitempty"`
+
+	// OriginalTitle Title in the original language when it differs from the title.
+	//
+	// Example: Big Buck Bunny
+	OriginalTitle *string `json:"originalTitle,omitempty"`
+
+	// People Credited people in metadata order (cast first by billing order).
+	People *[]ItemPerson `json:"people,omitempty"`
+
+	// PlayItemID ID of the item Play starts: the item itself for a movie, episode or extra; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	PlayItemID *uuid.UUID `json:"playItemId,omitempty"`
+
+	// PreviousID ID of the previous sibling of a season or episode in ascending order; omitted for the first one and for other kinds.
+	//
+	// Example: 6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a
+	PreviousID *uuid.UUID `json:"previousId,omitempty"`
+
+	// ProviderIds IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted.
+	ProviderIds *ProviderIds `json:"providerIds,omitempty"`
+
+	// ReleaseDate Release date of a movie or air date of an episode (YYYY-MM-DD).
+	//
+	// Example: 2008-05-20
+	ReleaseDate *openapi_types.Date `json:"releaseDate,omitempty"`
+
+	// Studios Studios or networks in metadata order.
+	//
+	// Example: ["Blender Foundation"]
+	Studios *[]string `json:"studios,omitempty"`
+
+	// Summary Plot summary as plain text.
+	//
+	// Example: A giant rabbit takes revenge on three bullying rodents.
+	Summary *string `json:"summary,omitempty"`
+
+	// Tagline Tagline of a movie or show.
+	//
+	// Example: The story of a giant bunny.
+	Tagline *string `json:"tagline,omitempty"`
+
+	// Title Display title from local metadata (NFO) or else the file or folder name.
 	//
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
+
+	// Year Release year of a movie or first-air year of a show.
+	//
+	// Example: 2008
+	Year *int32 `json:"year,omitempty"`
 }
 
-// ItemPage One page of a library's items.
+// ItemKind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+//
+// Example: movie
+type ItemKind string
+
+// ItemPage One page of items.
 type ItemPage struct {
-	// Items The items of this page, ordered by sort title.
+	// Items The items of this page, in the order of the operation (sort title for library listings, number for children).
 	Items []ItemSummary `json:"items"`
 
 	// NextCursor Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
@@ -382,12 +645,55 @@ type ItemPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// ItemSummary An item in a library listing.
+// ItemPerson A person credited on an item.
+type ItemPerson struct {
+	// Character Character an actor or guest star plays; omitted when unknown.
+	//
+	// Example: Bunny
+	Character *string `json:"character,omitempty"`
+
+	// Name Name of the person as stored in the metadata.
+	//
+	// Example: Sacha Goedegebure
+	Name string `json:"name"`
+
+	// Role Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+	//
+	// Example: actor
+	Role PersonRole `json:"role"`
+}
+
+// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season).
 type ItemSummary struct {
+	// AbsoluteNumber Absolute episode number of an episode named by a bare number (Show - 130).
+	//
+	// Example: 130
+	AbsoluteNumber *int32 `json:"absoluteNumber,omitempty"`
+
+	// ChildCount Number of seasons of a show or of episodes of a season.
+	//
+	// Example: 5
+	ChildCount *int32 `json:"childCount,omitempty"`
+
+	// ExtraType What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
+	//
+	// Example: trailer
+	ExtraType *ExtraType `json:"extraType,omitempty"`
+
 	// ID ID of the item.
 	//
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
+
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	//
+	// Example: movie
+	Kind ItemKind `json:"kind"`
+
+	// LeafCount Number of episodes of a show across all its seasons.
+	//
+	// Example: 62
+	LeafCount *int32 `json:"leafCount,omitempty"`
 
 	// LibraryID ID of the library that contains the item.
 	//
@@ -397,10 +703,36 @@ type ItemSummary struct {
 	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
 	Media *MediaSummary `json:"media,omitempty"`
 
-	// Title Display title; in milestone 2 derived from the file name.
+	// Number Season number of a season (0 for specials) or episode number of an episode.
+	//
+	// Example: 1
+	Number *int32 `json:"number,omitempty"`
+
+	// NumberEnd Last episode number of a file that holds several episodes (S01E01-E02).
+	//
+	// Example: 2
+	NumberEnd *int32 `json:"numberEnd,omitempty"`
+
+	// ParentID ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra; omitted for top-level items.
+	//
+	// Example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+	ParentID *uuid.UUID `json:"parentId,omitempty"`
+
+	// Poster Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Poster *ImageRef `json:"poster,omitempty"`
+
+	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Thumb *ImageRef `json:"thumb,omitempty"`
+
+	// Title Display title from local metadata (NFO) or else the file or folder name.
 	//
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
+
+	// Year Release year of a movie or first-air year of a show.
+	//
+	// Example: 2008
+	Year *int32 `json:"year,omitempty"`
 }
 
 // Library A folder of media files defined in the server configuration.
@@ -415,12 +747,12 @@ type Library struct {
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	ID uuid.UUID `json:"id"`
 
-	// ItemCount Number of items in the library.
+	// ItemCount Number of top-level items in the library (movies and shows), the items listLibraryItems returns; seasons, episodes and extras are not counted.
 	//
 	// Example: 42
 	ItemCount int64 `json:"itemCount"`
 
-	// Kind What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+	// Kind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
 	//
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
@@ -434,7 +766,7 @@ type Library struct {
 	Scan ScanStatus `json:"scan"`
 }
 
-// LibraryKind What a library contains. Milestone 2 lists the items of every kind flat. Clients must tolerate values added in later versions.
+// LibraryKind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
 //
 // Example: movies
 type LibraryKind string
@@ -487,6 +819,11 @@ type MediaFile struct {
 	// Example: 2026-10-01T09:30:00Z
 	ModifiedAt time.Time `json:"modifiedAt"`
 
+	// PartNumber Number of the part (cd1, part2, …) when a version is split into several files; omitted for a file that is a whole version.
+	//
+	// Example: 1
+	PartNumber *int32 `json:"partNumber,omitempty"`
+
 	// SizeBytes File size in bytes.
 	//
 	// Example: 276134947
@@ -494,6 +831,11 @@ type MediaFile struct {
 
 	// Streams Streams in container order; empty when probing failed.
 	Streams []MediaStream `json:"streams"`
+
+	// VersionLabel Label of the version this file belongs to, from the file name (for example "4K" or "Director's Cut"); omitted for the only or unlabelled version.
+	//
+	// Example: Director's Cut
+	VersionLabel *string `json:"versionLabel,omitempty"`
 }
 
 // MediaIdentifier Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
@@ -652,6 +994,11 @@ type MediaSummary struct {
 	Width *int32 `json:"width,omitempty"`
 }
 
+// PersonRole Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+//
+// Example: actor
+type PersonRole string
+
 // PlaybackDelivery How the client loads streamUrl: "file" (a progressive file with range support) or "hls" (an HLS playlist). Clients must tolerate values added in later versions.
 //
 // Example: hls
@@ -806,6 +1153,24 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// ProviderIds IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted.
+type ProviderIds struct {
+	// Imdb IMDb ID ("tt" followed by digits).
+	//
+	// Example: tt1254207
+	Imdb *string `json:"imdb,omitempty"`
+
+	// Tmdb The Movie Database ID (digits).
+	//
+	// Example: 10378
+	Tmdb *string `json:"tmdb,omitempty"`
+
+	// Tvdb TheTVDB ID (digits).
+	//
+	// Example: 81189
+	Tvdb *string `json:"tvdb,omitempty"`
+}
+
 // ScanCounts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
 type ScanCounts struct {
 	// Added New video files that were probed and added.
@@ -869,6 +1234,11 @@ type ScanStatus struct {
 	// Example: idle
 	State ScanState `json:"state"`
 }
+
+// SortOrder Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
+//
+// Example: asc
+type SortOrder string
 
 // StreamAction What happens to one source stream: "copy" (passed through unchanged) or "transcode" (re-encoded). Clients must tolerate values added in later versions.
 //
@@ -950,6 +1320,9 @@ type SystemInfo struct {
 	Version string `json:"version"`
 }
 
+// ImageID defines model for ImageId.
+type ImageID = uuid.UUID
+
 // ItemID defines model for ItemId.
 type ItemID = uuid.UUID
 
@@ -958,6 +1331,18 @@ type LibraryID = uuid.UUID
 
 // SessionID defines model for SessionId.
 type SessionID = uuid.UUID
+
+// ListItemChildrenParams defines parameters for ListItemChildren.
+type ListItemChildrenParams struct {
+	// Limit Maximum number of children in the page.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Order Sort direction of the children; omitted means ascending.
+	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
+}
 
 // ListLibraryItemsParams defines parameters for ListLibraryItems.
 type ListLibraryItemsParams struct {
@@ -976,9 +1361,12 @@ type ServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
-	// GetItem Describe one item with its files and streams
+	// GetItem Describe one item with its metadata, files and streams
 	// (GET /api/v1/items/{itemId})
 	GetItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// ListItemChildren Page through the children of an item
+	// (GET /api/v1/items/{itemId}/children)
+	ListItemChildren(w http.ResponseWriter, r *http.Request, itemID ItemID, params ListItemChildrenParams)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
@@ -1045,6 +1433,74 @@ func (siw *ServerInterfaceWrapper) GetItem(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetItem(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListItemChildren operation middleware
+func (siw *ServerInterfaceWrapper) ListItemChildren(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListItemChildrenParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order", r.URL.Query(), &params.Order, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListItemChildren(w, r, itemID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1382,6 +1838,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/scan", wrapper.StartLibraryScan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/items", wrapper.ListLibraryItems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}/children", wrapper.ListItemChildren)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.CreatePlaybackSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.StopPlaybackSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.GetPlaybackSession)
@@ -1471,6 +1928,46 @@ type GetItemdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetItemdefaultApplicationProblemPlusJSONResponse) VisitGetItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListItemChildrenRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+	Params ListItemChildrenParams
+}
+
+type ListItemChildrenResponseObject interface {
+	VisitListItemChildrenResponse(w http.ResponseWriter) error
+}
+
+type ListItemChildren200JSONResponse ItemPage
+
+func (response ListItemChildren200JSONResponse) VisitListItemChildrenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListItemChildrendefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListItemChildrendefaultApplicationProblemPlusJSONResponse) VisitListItemChildrenResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1826,9 +2323,12 @@ type StrictServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
-	// GetItem Describe one item with its files and streams
+	// GetItem Describe one item with its metadata, files and streams
 	// (GET /api/v1/items/{itemId})
 	GetItem(ctx context.Context, request GetItemRequestObject) (GetItemResponseObject, error)
+	// ListItemChildren Page through the children of an item
+	// (GET /api/v1/items/{itemId}/children)
+	ListItemChildren(ctx context.Context, request ListItemChildrenRequestObject) (ListItemChildrenResponseObject, error)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(ctx context.Context, request ListLibrariesRequestObject) (ListLibrariesResponseObject, error)
@@ -1937,6 +2437,33 @@ func (sh *strictHandler) GetItem(w http.ResponseWriter, r *http.Request, itemID 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetItemResponseObject); ok {
 		if err := validResponse.VisitGetItemResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListItemChildren operation middleware
+func (sh *strictHandler) ListItemChildren(w http.ResponseWriter, r *http.Request, itemID ItemID, params ListItemChildrenParams) {
+	var request ListItemChildrenRequestObject
+
+	request.ItemID = itemID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListItemChildren(ctx, request.(ListItemChildrenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListItemChildren")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListItemChildrenResponseObject); ok {
+		if err := validResponse.VisitListItemChildrenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

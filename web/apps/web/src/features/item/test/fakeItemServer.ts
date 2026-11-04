@@ -49,6 +49,7 @@ export function mediaFile(fields: MediaFileFields = {}): MediaFile {
 export const hdrMovie: ItemDetail = {
   id: "item-1",
   libraryId: "library-1",
+  kind: "movie",
   title: "Big Buck Bunny",
   files: [
     mediaFile({
@@ -83,6 +84,7 @@ export const hdrMovie: ItemDetail = {
 export const unreadableItem: ItemDetail = {
   id: "item-2",
   libraryId: "library-1",
+  kind: "movie",
   title: "broken clip",
   files: [
     mediaFile({

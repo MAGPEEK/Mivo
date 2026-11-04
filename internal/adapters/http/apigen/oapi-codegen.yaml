@@ -16,14 +16,16 @@ compatibility:
   always-prefix-enum-values: true
 output-options:
   # The stream routes (tag "stream", ADR 0024) serve files with Range support and
-  # long-lived writes, which the strict server cannot express. They are plain net/http
-  # handlers in internal/adapters/http/stream, mounted on the REST API mux through
-  # restapi.Options.Mounts. api/spec_test.go checks that this list equals the stream tag.
+  # long-lived writes, and the image route (tag "images", ADR 0027) serves rendered files
+  # with conditional caching; the strict server can express neither. They are plain
+  # net/http handlers mounted on the REST API mux through restapi.Options.Mounts.
+  # api/spec_test.go checks that this list equals the operations of both tags.
   exclude-operation-ids:
     - getPlaybackFile
     - headPlaybackFile
     - getPlaybackHlsFile
     - headPlaybackHlsFile
+    - getImage
   type-mapping:
     string:
       formats:

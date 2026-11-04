@@ -48,8 +48,41 @@ export type ItemSummary = Schemas["ItemSummary"];
 /** Technical summary of an item's primary file for list views. */
 export type MediaSummary = Schemas["MediaSummary"];
 
-/** An item with its media files and their streams. */
+/** An item with its metadata, artwork, hierarchy, extras, media files and their streams. */
 export type ItemDetail = Schemas["ItemDetail"];
+
+/** Kind of an item (movie, show, season, episode, extra). Later API versions may add values. */
+export type ItemKind = Schemas["ItemKind"];
+
+/** What an extra contains. Later API versions may add values. */
+export type ExtraType = Schemas["ExtraType"];
+
+/** An item above another one in the hierarchy, root first in `ItemDetail.ancestors`. */
+export type ItemAncestor = Schemas["ItemAncestor"];
+
+/** A person credited on an item. */
+export type ItemPerson = Schemas["ItemPerson"];
+
+/** Role of a person in an item. Later API versions may add values. */
+export type PersonRole = Schemas["PersonRole"];
+
+/** IDs of an item at external metadata providers. */
+export type ProviderIds = Schemas["ProviderIds"];
+
+/** The selected artwork of an item, one image per {@link ArtworkKind}. */
+export type Artwork = Schemas["Artwork"];
+
+/** Kind of an artwork image. Later API versions may add values. */
+export type ArtworkKind = Schemas["ArtworkKind"];
+
+/** Reference to an artwork image; turn it into a URL only with `imageUrl`. */
+export type ImageRef = Schemas["ImageRef"];
+
+/** A width the server renders images in. Later API versions may add values. */
+export type ImageWidth = Schemas["ImageWidth"];
+
+/** Sort direction of a listing. Later API versions may add values. */
+export type SortOrder = Schemas["SortOrder"];
 
 /** One media file (by name, never by path) with its probed streams. */
 export type MediaFile = Schemas["MediaFile"];

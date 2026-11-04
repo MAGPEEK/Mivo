@@ -3,9 +3,11 @@ package restapi
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -22,6 +24,13 @@ const (
 	// for anything else the byte count is the stricter bound.
 	maxCursorLength = 2048
 )
+
+// operationListItemChildren is the operation name of the children endpoint, for logs.
+const operationListItemChildren = "listItemChildren"
+
+// codeNotImplemented answers an operation of the contract whose use case is not wired yet.
+// It is internal, not a published Problem.code.
+const codeNotImplemented = "not_implemented"
 
 // ListLibraryItems answers one page of a library's items. A limit or cursor outside the
 // contract answers 400 "invalid", an unknown library 404; every other failure is a 500.
@@ -58,6 +67,32 @@ func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject
 	}
 
 	return apigen.GetItem200JSONResponse(response), nil
+}
+
+// ListItemChildren answers 501 until M3-06b implements it on the library read model v2.
+func (api *API) ListItemChildren(ctx context.Context, _ apigen.ListItemChildrenRequestObject) (apigen.ListItemChildrenResponseObject, error) {
+	return apigen.ListItemChildrendefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationListItemChildren)), nil
+}
+
+// notImplemented answers an operation whose use case does not exist yet. The code
+// "not_implemented" is internal and not published in the contract; it disappears with the
+// last stub (M3-06b).
+func (api *API) notImplemented(ctx context.Context, operation string) problemResponse {
+	api.logger.DebugContext(ctx, "api operation not implemented",
+		slog.String("operation", operation),
+		slog.String("request_id", requestid.FromContext(ctx)))
+
+	return problemResponse{
+		Body:       NewProblem(http.StatusNotImplemented, codeNotImplemented),
+		StatusCode: http.StatusNotImplemented,
+	}
+}
+
+// problemResponse has the fields of every generated
+// <Operation>defaultApplicationProblemPlusJSONResponse, so it converts to each of them.
+type problemResponse struct {
+	Body       apigen.Problem
+	StatusCode int
 }
 
 // pageRequest checks the paging parameters against the contract. Errors wrap

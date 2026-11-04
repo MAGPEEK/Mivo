@@ -17,6 +17,7 @@ const noContentStatus = 204;
 const mockItem: ItemDetail = {
   id: mockItemId,
   libraryId: "3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c",
+  kind: "movie",
   title: "Mocked Movie",
   files: [
     {

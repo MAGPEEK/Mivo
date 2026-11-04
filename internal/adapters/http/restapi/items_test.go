@@ -149,8 +149,8 @@ func TestGetItem(t *testing.T) {
 	assertJSONResponse(t, got, http.StatusOK)
 
 	assertSameJSON(t, decodeStrictly[apigen.ItemDetail](t, got.body), apigen.ItemDetail{
-		ID: mustUUID(t, testItemID), LibraryID: mustUUID(t, testLibraryID), Title: "Big Buck Bunny",
-		Files: []apigen.MediaFile{wantProbedFile(t), wantUnprobedFile(t)},
+		ID: mustUUID(t, testItemID), LibraryID: mustUUID(t, testLibraryID), Kind: apigen.ItemKindMovie,
+		Title: "Big Buck Bunny", Files: []apigen.MediaFile{wantProbedFile(t), wantUnprobedFile(t)},
 	})
 
 	assertBodyContains(t, got.body, `"durationSeconds":5423.042,`, `"modifiedAt":"2026-10-01T10:30:00.5Z"`, `"streams":[]`)
@@ -246,10 +246,13 @@ func TestGetItemErrors(t *testing.T) {
 func TestListLibraryItems(t *testing.T) {
 	t.Parallel()
 
+	episode := testItem(testSecondItemID, "Odd Name")
+	episode.Kind = library.ItemKindEpisode
+
 	libraries := &fakeLibraryService{page: applibrary.ItemPage{
 		Items: []applibrary.ItemSummary{
 			{Item: testItem(testItemID, "Big Buck Bunny"), PrimaryFile: probedFile(t)},
-			{Item: testItem(testSecondItemID, "Odd Name"), PrimaryFile: unprobedFile()},
+			{Item: episode, PrimaryFile: unprobedFile()},
 		},
 		NextCursor: "bmV4dA",
 	}}
@@ -261,7 +264,8 @@ func TestListLibraryItems(t *testing.T) {
 	assertSameJSON(t, decodeStrictly[apigen.ItemPage](t, got.body), apigen.ItemPage{
 		Items: []apigen.ItemSummary{
 			{
-				ID: mustUUID(t, testItemID), LibraryID: mustUUID(t, testLibraryID), Title: "Big Buck Bunny",
+				ID: mustUUID(t, testItemID), LibraryID: mustUUID(t, testLibraryID), Kind: apigen.ItemKindMovie,
+				Title: "Big Buck Bunny",
 				Media: &apigen.MediaSummary{
 					Available: true, Container: ptr("mkv"), DurationSeconds: ptr(5423.042), VideoCodec: ptr("hevc"),
 					AudioCodec: ptr("aac"), Width: ptr(int32(3840)), Height: ptr(int32(2160)), BitDepth: ptr(int32(10)),
@@ -269,7 +273,8 @@ func TestListLibraryItems(t *testing.T) {
 				},
 			},
 			{
-				ID: mustUUID(t, testSecondItemID), LibraryID: mustUUID(t, testLibraryID), Title: "Odd Name",
+				ID: mustUUID(t, testSecondItemID), LibraryID: mustUUID(t, testLibraryID), Kind: apigen.ItemKindEpisode,
+				Title: "Odd Name",
 				Media: &apigen.MediaSummary{Available: false},
 			},
 		},
@@ -434,6 +439,52 @@ func TestListLibraryItemsErrors(t *testing.T) {
 			got := serve(t, handler, http.MethodGet, itemsPath)
 			assertProblem(t, got, test.wantStatus, test.wantCode)
 			assertLogged(t, logs.String(), "path="+itemsPath)
+		})
+	}
+}
+
+// notImplementedCode is internal (not in the contract); it disappears when M3-06b
+// implements listItemChildren.
+const notImplementedCode = "not_implemented"
+
+// TestListItemChildrenAnswersNotImplemented pins the stub M3-06b replaces: the operation is
+// routed, binds its parameters and answers 501 without calling the item catalog; only a
+// malformed item ID is rejected by the binder first.
+func TestListItemChildrenAnswersNotImplemented(t *testing.T) {
+	t.Parallel()
+
+	childrenPath := itemPath + "/children"
+
+	tests := []struct {
+		name       string
+		target     string
+		wantStatus int
+		wantCode   string
+	}{
+		{name: "first page", target: childrenPath, wantStatus: http.StatusNotImplemented, wantCode: notImplementedCode},
+		{name: "every parameter", target: childrenPath + "?limit=25&cursor=abc&order=desc", wantStatus: http.StatusNotImplemented, wantCode: notImplementedCode},
+		{name: "unknown item", target: "/api/v1/items/" + unknownID + "/children", wantStatus: http.StatusNotImplemented, wantCode: notImplementedCode},
+		{name: "malformed item id", target: "/api/v1/items/not-a-uuid/children", wantStatus: http.StatusBadRequest, wantCode: restapi.CodeBadRequest},
+		{name: "malformed limit", target: childrenPath + "?limit=many", wantStatus: http.StatusBadRequest, wantCode: restapi.CodeBadRequest},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			items := &fakeLibraryService{}
+			handler, logs := newLibraryHandler(t, items, &fakeScanService{})
+
+			got := serve(t, handler, http.MethodGet, test.target)
+			assertProblem(t, got, test.wantStatus, test.wantCode)
+
+			if test.wantStatus == http.StatusNotImplemented {
+				assertLogged(t, logs.String(), "operation=listItemChildren")
+			}
+
+			if len(items.requestedItems) != 0 || len(items.pages()) != 0 {
+				t.Errorf("item catalog called (items %v, pages %v), want no call", items.requestedItems, items.pages())
+			}
 		})
 	}
 }

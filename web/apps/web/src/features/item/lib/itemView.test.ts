@@ -19,7 +19,14 @@ interface ViewCase {
 }
 
 function item(fields: Partial<ItemDetail>): ItemDetail {
-  return { id: "item-1", libraryId: "library-1", title: "Title", files: [], ...fields };
+  return {
+    id: "item-1",
+    libraryId: "library-1",
+    kind: "movie",
+    title: "Title",
+    files: [],
+    ...fields,
+  };
 }
 
 const viewCases: readonly ViewCase[] = [

@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"regexp"
@@ -32,7 +33,18 @@ const (
 	// streamTag marks the delivery routes that are plain net/http handlers instead of
 	// generated strict handlers (ADR 0024).
 	streamTag = "stream"
+	// imagesTag marks the image route, also a plain net/http handler (ADR 0027 section 8).
+	imagesTag = "images"
 )
+
+// plainHandlerTags are the tags whose operations oapi-codegen must not generate: they
+// serve bytes with range or caching semantics the strict server cannot express.
+func plainHandlerTags() []string {
+	return []string{streamTag, imagesTag}
+}
+
+// imagePath is the route of the image endpoint (ADR 0027 section 8).
+const imagePath = "/api/v1/images/{imageId}"
 
 // versionedPathPrefix is the path prefix every operation must carry: /api/v<major>/ with the
 // major version the server reports as SystemInfo.apiVersion (system.APIVersion).
@@ -65,8 +77,12 @@ func (entry specOperation) String() string {
 	return entry.method + " " + entry.path
 }
 
-func (entry specOperation) isStream() bool {
-	return slices.Contains(entry.operation.Tags, streamTag)
+// isPlainHandler reports whether the operation is served by a plain net/http handler
+// outside the generated strict server.
+func (entry specOperation) isPlainHandler() bool {
+	return slices.ContainsFunc(entry.operation.Tags, func(tag string) bool {
+		return slices.Contains(plainHandlerTags(), tag)
+	})
 }
 
 // allOperations lists every operation of the spec in a stable order.
@@ -198,6 +214,9 @@ func operationCases() []operationCase {
 		{method: http.MethodPost, path: library + "/scan", operationID: "startLibraryScan", tag: "libraries", statuses: []int{http.StatusAccepted}, mediaType: jsonMediaType, schema: "ScanStatus"},
 		{method: http.MethodGet, path: library + "/items", operationID: "listLibraryItems", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}", operationID: "getItem", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
+		{method: http.MethodGet, path: "/api/v1/items/{itemId}/children", operationID: "listItemChildren", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
+		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes", unauthenticated: true},
+		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/png", schema: "ImageBytes", unauthenticated: true},
 		{method: http.MethodPost, path: sessions, operationID: "createPlaybackSession", tag: "playback", statuses: []int{http.StatusCreated}, mediaType: jsonMediaType, schema: "PlaybackSession"},
 		{method: http.MethodPost, path: sessions, operationID: "createPlaybackSession", tag: "playback", statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem"},
 		{method: http.MethodGet, path: session, operationID: "getPlaybackSession", tag: "playback", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "PlaybackSession"},
@@ -290,13 +309,14 @@ func assertResponseSchema(t *testing.T, response *openapi3.ResponseRef, mediaTyp
 }
 
 // TestEveryOperationDeclaresProblemDefault keeps the error contract uniform: whatever status
-// an operation fails with, clients can parse the body as a problem. Stream operations are
-// exempt because their success bodies are media, not JSON; they declare it anyway.
+// an operation fails with, clients can parse the body as a problem. Stream and image
+// operations are exempt because their success bodies are bytes, not JSON; they declare it
+// anyway.
 func TestEveryOperationDeclaresProblemDefault(t *testing.T) {
 	spec := loadSpec(t)
 
 	for _, entry := range allOperations(spec) {
-		if entry.isStream() {
+		if entry.isPlainHandler() {
 			continue
 		}
 
@@ -307,28 +327,28 @@ func TestEveryOperationDeclaresProblemDefault(t *testing.T) {
 	}
 }
 
-// TestStreamOperationsAreExcludedFromTheStrictServer keeps oapi-codegen.yaml in step with
-// the stream tag: a stream route the generator still emitted would clash with its mount,
-// and a non-stream route left out would have no handler.
-func TestStreamOperationsAreExcludedFromTheStrictServer(t *testing.T) {
+// TestPlainHandlerOperationsAreExcludedFromTheStrictServer keeps oapi-codegen.yaml in step
+// with the stream and images tags: a plain-handler route the generator still emitted would
+// clash with its mount, and any other route left out would have no handler.
+func TestPlainHandlerOperationsAreExcludedFromTheStrictServer(t *testing.T) {
 	spec := loadSpec(t)
 
-	var streamOperationIDs []string
+	var plainOperationIDs []string
 
 	for _, entry := range allOperations(spec) {
-		if entry.isStream() {
-			streamOperationIDs = append(streamOperationIDs, entry.operation.OperationID)
+		if entry.isPlainHandler() {
+			plainOperationIDs = append(plainOperationIDs, entry.operation.OperationID)
 			assertUnauthenticated(t, entry.operation)
 		}
 	}
 
 	excluded := excludedOperationIDs(t)
 
-	slices.Sort(streamOperationIDs)
+	slices.Sort(plainOperationIDs)
 	slices.Sort(excluded)
 
-	if !slices.Equal(streamOperationIDs, excluded) {
-		t.Errorf("stream operations %v, but %s excludes %v", streamOperationIDs, generatorConfigFile, excluded)
+	if !slices.Equal(plainOperationIDs, excluded) {
+		t.Errorf("stream and images operations %v, but %s excludes %v", plainOperationIDs, generatorConfigFile, excluded)
 	}
 }
 
@@ -561,11 +581,41 @@ func TestHLSFileNamePattern(t *testing.T) {
 	}
 }
 
-// TestPagingParameters pins the bounds of listLibraryItems (ADR 0022).
+// TestPagingParameters pins the bounds of the paged item listings (ADR 0022, ADR 0027).
 func TestPagingParameters(t *testing.T) {
 	spec := loadSpec(t)
 
-	operation := getOperation(t, spec, http.MethodGet, "/api/v1/libraries/{libraryId}/items")
+	for _, path := range []string{"/api/v1/libraries/{libraryId}/items", "/api/v1/items/{itemId}/children"} {
+		t.Run(path, func(t *testing.T) {
+			assertPagingParameters(t, getOperation(t, spec, http.MethodGet, path))
+		})
+	}
+}
+
+// TestChildrenOrderParameter pins the optional sort direction of listItemChildren.
+func TestChildrenOrderParameter(t *testing.T) {
+	spec := loadSpec(t)
+
+	operation := getOperation(t, spec, http.MethodGet, "/api/v1/items/{itemId}/children")
+
+	order := operation.Parameters.GetByInAndName("query", "order")
+	if order == nil || order.Required {
+		t.Fatal("optional query parameter order is not declared")
+	}
+
+	if order.Schema.Ref != "#/components/schemas/SortOrder" {
+		t.Errorf("order schema = %q, want SortOrder", order.Schema.Ref)
+	}
+
+	assertEnum(t, "SortOrder", order.Schema.Value, []any{"asc", "desc"})
+
+	if order.Schema.Value.Default != "asc" {
+		t.Errorf("order default = %v, want asc", order.Schema.Value.Default)
+	}
+}
+
+func assertPagingParameters(t *testing.T, operation *openapi3.Operation) {
+	t.Helper()
 
 	limit := operation.Parameters.GetByInAndName("query", "limit")
 	if limit == nil {
@@ -596,8 +646,32 @@ func TestStreamURLIsOpaque(t *testing.T) {
 }
 
 // streamURLAsSource matches wording that sends clients to streamUrl for a value, such as
-// "taken from its streamUrl" or "the streamUrl's ID".
-var streamURLAsSource = regexp.MustCompile(`(?i)(from|of|in|out of) (the |its |a |the session's )?streamUrl|streamUrl's`)
+// "taken from its streamUrl" or "the streamUrl's ID". The word boundaries keep words that
+// merely end in one of the prepositions ("proof the streamUrl", "begin streamUrl") out.
+var streamURLAsSource = regexp.MustCompile(`(?i)\b(from|of|in|out of) (the |its |a |the session's )?streamUrl\b|\bstreamUrl's\b`)
+
+func TestStreamURLAsSourcePattern(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]bool{
+		"taken from its streamUrl":        true,
+		"the ID out of the streamUrl":     true,
+		"the value in a streamUrl":        true,
+		"part of the session's streamUrl": true,
+		"the streamUrl's session ID":      true,
+		"FROM STREAMURL":                  true,
+		"clients load streamUrl":          false,
+		"proof the streamUrl":             false,
+		"begin streamUrl":                 false,
+		"from the streamUrlBase":          false,
+	}
+
+	for text, want := range tests {
+		if got := streamURLAsSource.MatchString(text); got != want {
+			t.Errorf("streamURLAsSource matches %q = %v, want %v", text, got, want)
+		}
+	}
+}
 
 // TestNoValueIsTakenFromStreamURL keeps streamUrl opaque (ADR 0024): no parameter or
 // property may mention it, and no other text may present it as a source of values, so
@@ -662,7 +736,8 @@ func parameterDescriptions(spec *openapi3.T) map[string]string {
 	return descriptions
 }
 
-// otherDescriptions returns the descriptions of the document, tags, operations and schemas.
+// otherDescriptions returns the descriptions of the document, tags, operations, responses,
+// response headers and schemas.
 func otherDescriptions(spec *openapi3.T) map[string]string {
 	descriptions := map[string]string{"info": spec.Info.Description}
 
@@ -672,6 +747,18 @@ func otherDescriptions(spec *openapi3.T) map[string]string {
 
 	for _, entry := range allOperations(spec) {
 		descriptions[entry.String()] = entry.operation.Description
+
+		for status, response := range entry.operation.Responses.Map() {
+			addResponseDescriptions(descriptions, entry.String()+" "+status, response)
+		}
+	}
+
+	for name, response := range spec.Components.Responses {
+		addResponseDescriptions(descriptions, "response "+name, response)
+	}
+
+	for name, header := range spec.Components.Headers {
+		descriptions["header "+name] = header.Value.Description
 	}
 
 	for name, schema := range spec.Components.Schemas {
@@ -679,6 +766,17 @@ func otherDescriptions(spec *openapi3.T) map[string]string {
 	}
 
 	return descriptions
+}
+
+// addResponseDescriptions adds the description of a response and of its headers.
+func addResponseDescriptions(descriptions map[string]string, location string, response *openapi3.ResponseRef) {
+	if response.Value.Description != nil {
+		descriptions[location] = *response.Value.Description
+	}
+
+	for name, header := range response.Value.Headers {
+		descriptions[location+" header "+name] = header.Value.Description
+	}
 }
 
 // TestMediaFileExposesNoPath: the API never exposes file system paths (ADR 0022).
@@ -690,6 +788,309 @@ func TestMediaFileExposesNoPath(t *testing.T) {
 			if strings.Contains(strings.ToLower(propertyName), "path") {
 				t.Errorf("%s.%s looks like a file system path", name, propertyName)
 			}
+		}
+	}
+}
+
+// assertEnum compares the enum values of schema with want; integers are compared by their
+// text because the YAML loader reads them as float64.
+func assertEnum(t *testing.T, location string, schema *openapi3.Schema, want []any) {
+	t.Helper()
+
+	if !slices.Equal(enumTexts(schema.Enum), enumTexts(want)) {
+		t.Errorf("%s enum = %v, want %v", location, schema.Enum, want)
+	}
+}
+
+func enumTexts(values []any) []string {
+	texts := make([]string, 0, len(values))
+	for _, value := range values {
+		texts = append(texts, fmt.Sprint(value))
+	}
+
+	return texts
+}
+
+// TestLibraryV2Enums pins the value sets of ADR 0027 (sections 2, 4, 5 and 8).
+func TestLibraryV2Enums(t *testing.T) {
+	spec := loadSpec(t)
+
+	tests := map[string][]any{
+		"ItemKind":    {"movie", "show", "season", "episode", "extra"},
+		"ExtraType":   {"trailer", "featurette", "behind_the_scenes", "deleted_scene", "interview", "scene", "short", "other"},
+		"ArtworkKind": {"poster", "backdrop", "thumb", "logo", "banner"},
+		"PersonRole":  {"actor", "director", "writer", "producer", "guest_star"},
+		"ImageWidth":  {160, 320, 480, 640, 960, 1280, 1920},
+		"SortOrder":   {"asc", "desc"},
+	}
+
+	for name, want := range tests {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		assertEnum(t, name, schema.Value, want)
+	}
+
+	if width := spec.Components.Schemas["ImageWidth"]; width == nil || !width.Value.Type.Is(openapi3.TypeInteger) {
+		t.Error("ImageWidth is not an integer enum")
+	}
+}
+
+// schemaShape lists the required and optional properties a schema must declare.
+type schemaShape struct {
+	required []string
+	optional []string
+}
+
+func libraryV2Shapes() map[string]schemaShape {
+	return map[string]schemaShape{
+		"ImageRef":     {required: []string{"id", "tag"}},
+		"ProviderIds":  {optional: []string{"tmdb", "imdb", "tvdb"}},
+		"ItemPerson":   {required: []string{"name", "role"}, optional: []string{"character"}},
+		"ItemAncestor": {required: []string{"id", "kind", "title"}, optional: []string{"number"}},
+		"Artwork":      {optional: []string{"poster", "backdrop", "thumb", "logo", "banner"}},
+		"ItemSummary": {
+			required: []string{"id", "libraryId", "kind", "title"},
+			optional: []string{
+				"year", "parentId", "number", "numberEnd", "absoluteNumber", "extraType",
+				"childCount", "leafCount", "poster", "thumb", "media",
+			},
+		},
+		"ItemDetail": {
+			required: []string{"id", "libraryId", "kind", "title", "files"},
+			optional: []string{
+				"originalTitle", "year", "releaseDate", "summary", "tagline", "contentRating",
+				"genres", "studios", "countries", "people", "providerIds", "artwork", "ancestors",
+				"previousId", "nextId", "playItemId", "extras", "childCount", "leafCount",
+			},
+		},
+		"MediaFile": {optional: []string{"versionLabel", "partNumber"}},
+	}
+}
+
+// TestLibraryV2SchemaShapes pins the item model of the milestone-3 contract (task M3-02).
+func TestLibraryV2SchemaShapes(t *testing.T) {
+	spec := loadSpec(t)
+
+	for name, shape := range libraryV2Shapes() {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		assertSchemaShape(t, name, schema.Value, shape)
+	}
+}
+
+func assertSchemaShape(t *testing.T, name string, schema *openapi3.Schema, shape schemaShape) {
+	t.Helper()
+
+	for _, property := range slices.Concat(shape.required, shape.optional) {
+		if schema.Properties[property] == nil {
+			t.Errorf("%s has no property %q", name, property)
+		}
+	}
+
+	for _, property := range shape.required {
+		if !slices.Contains(schema.Required, property) {
+			t.Errorf("%s.%s is not required", name, property)
+		}
+	}
+
+	for _, property := range shape.optional {
+		if slices.Contains(schema.Required, property) {
+			t.Errorf("%s.%s is required, want optional", name, property)
+		}
+	}
+}
+
+// propertySchema returns the schema of "Schema.property", or nil when either is missing.
+func propertySchema(spec *openapi3.T, location string) *openapi3.SchemaRef {
+	schemaName, propertyName, _ := strings.Cut(location, ".")
+
+	schema := spec.Components.Schemas[schemaName]
+	if schema == nil {
+		return nil
+	}
+
+	return schema.Value.Properties[propertyName]
+}
+
+// TestLibraryV2PropertyReferences pins which component schema a property uses, so the
+// generated types stay shared between summary, detail and the image helper.
+func TestLibraryV2PropertyReferences(t *testing.T) {
+	spec := loadSpec(t)
+
+	references := map[string]string{
+		"ItemSummary.kind": "ItemKind", "ItemSummary.extraType": "ExtraType",
+		"ItemSummary.poster": "ImageRef", "ItemSummary.thumb": "ImageRef",
+		"ItemDetail.kind": "ItemKind", "ItemDetail.providerIds": "ProviderIds",
+		"ItemDetail.artwork": "Artwork", "ItemAncestor.kind": "ItemKind", "ItemPerson.role": "PersonRole",
+		"Artwork.poster": "ImageRef", "Artwork.backdrop": "ImageRef", "Artwork.thumb": "ImageRef",
+		"Artwork.logo": "ImageRef", "Artwork.banner": "ImageRef",
+	}
+
+	for location, want := range references {
+		if property := propertySchema(spec, location); property == nil || property.Ref != "#/components/schemas/"+want {
+			t.Errorf("%s does not reference %s", location, want)
+		}
+	}
+
+	arrays := map[string]string{
+		"ItemDetail.people": "ItemPerson", "ItemDetail.ancestors": "ItemAncestor", "ItemDetail.extras": "ItemSummary",
+	}
+
+	for location, want := range arrays {
+		property := propertySchema(spec, location)
+		if property == nil || property.Value.Items == nil || property.Value.Items.Ref != "#/components/schemas/"+want {
+			t.Errorf("%s is not an array of %s", location, want)
+		}
+	}
+}
+
+// TestArtworkIsKeyedByArtworkKind: every artwork kind has exactly one slot in Artwork.
+func TestArtworkIsKeyedByArtworkKind(t *testing.T) {
+	spec := loadSpec(t)
+
+	kinds, artwork := spec.Components.Schemas["ArtworkKind"], spec.Components.Schemas["Artwork"]
+	if kinds == nil || artwork == nil {
+		t.Fatal("ArtworkKind or Artwork is not declared")
+	}
+
+	wanted := enumTexts(kinds.Value.Enum)
+	slots := slices.Collect(maps.Keys(artwork.Value.Properties))
+
+	slices.Sort(wanted)
+	slices.Sort(slots)
+
+	if !slices.Equal(wanted, slots) {
+		t.Errorf("Artwork properties %v, want the ArtworkKind values %v", slots, wanted)
+	}
+}
+
+// TestItemDetailBounds pins the formats and bounds of ItemDetail that clients rely on.
+func TestItemDetailBounds(t *testing.T) {
+	spec := loadSpec(t)
+
+	const wantMaxExtras = 100
+	if extras := propertySchema(spec, "ItemDetail.extras"); extras == nil || extras.Value.MaxItems == nil || *extras.Value.MaxItems != wantMaxExtras {
+		t.Errorf("ItemDetail.extras has no maxItems %d", wantMaxExtras)
+	}
+
+	if releaseDate := propertySchema(spec, "ItemDetail.releaseDate"); releaseDate == nil || releaseDate.Value.Format != "date" {
+		t.Error("ItemDetail.releaseDate is not format date")
+	}
+
+	for _, name := range []string{"genres", "studios", "countries"} {
+		property := propertySchema(spec, "ItemDetail."+name)
+		if property == nil || property.Value.Items == nil || !property.Value.Items.Value.Type.Is(openapi3.TypeString) {
+			t.Errorf("ItemDetail.%s is not a string array", name)
+		}
+	}
+}
+
+// TestListingScopesAreDocumented: library listings and counts cover top-level items only,
+// and extras are never listed on their own (ADR 0027 section 2).
+func TestListingScopesAreDocumented(t *testing.T) {
+	spec := loadSpec(t)
+
+	itemCount := propertySchema(spec, "Library.itemCount")
+	if itemCount == nil {
+		t.Fatal("Library.itemCount is not declared")
+	}
+
+	descriptions := map[string]string{
+		"listLibraryItems":  getOperation(t, spec, http.MethodGet, "/api/v1/libraries/{libraryId}/items").Description,
+		"Library.itemCount": itemCount.Value.Description,
+		"listItemChildren":  getOperation(t, spec, http.MethodGet, "/api/v1/items/{itemId}/children").Description,
+	}
+
+	for location, description := range descriptions {
+		if !strings.Contains(description, "top-level") && !strings.Contains(description, "never children") {
+			t.Errorf("%s does not say which items it covers: %q", location, description)
+		}
+
+		if !strings.Contains(strings.ToLower(description), "extras") {
+			t.Errorf("%s does not mention extras: %q", location, description)
+		}
+	}
+}
+
+// TestImageParameters pins the parameters of getImage (ADR 0027 section 8).
+func TestImageParameters(t *testing.T) {
+	spec := loadSpec(t)
+
+	operation := getOperation(t, spec, http.MethodGet, imagePath)
+
+	if parameter := spec.Paths.Value(imagePath).Parameters.GetByInAndName("path", "imageId"); parameter == nil {
+		t.Error("path parameter imageId is not declared on the path")
+	}
+
+	width := operation.Parameters.GetByInAndName("query", "width")
+	if width == nil || !width.Required || width.Schema.Ref != "#/components/schemas/ImageWidth" {
+		t.Error("required query parameter width with schema ImageWidth is not declared")
+	}
+
+	tag := operation.Parameters.GetByInAndName("query", "tag")
+	if tag == nil || tag.Required {
+		t.Fatal("optional query parameter tag is not declared")
+	}
+
+	const wantMaxTagLength = 64
+	if maxLength := tag.Schema.Value.MaxLength; maxLength == nil || *maxLength != wantMaxTagLength {
+		t.Errorf("tag maxLength = %v, want %d", maxLength, wantMaxTagLength)
+	}
+
+	pattern := regexp.MustCompile(tag.Schema.Value.Pattern)
+
+	tests := map[string]bool{
+		"0123456789abcdef": true, "a": true,
+		"": false, "ABCDEF": false, "0x12": false, "12 34": false, "../x": false,
+	}
+
+	for value, want := range tests {
+		if got := pattern.MatchString(value); got != want {
+			t.Errorf("tag pattern matches %q = %v, want %v", value, got, want)
+		}
+	}
+}
+
+// TestImageCachingContract: the image responses carry the validators and the caching rule
+// of ADR 0027 section 8, and clients build the URL only through the api-client helper.
+func TestImageCachingContract(t *testing.T) {
+	spec := loadSpec(t)
+
+	operation := getOperation(t, spec, http.MethodGet, imagePath)
+
+	success := operation.Responses.Status(http.StatusOK)
+	if success == nil {
+		t.Fatal("getImage declares no 200 response")
+	}
+
+	for _, header := range []string{"ETag", "Cache-Control"} {
+		if success.Value.Headers[header] == nil {
+			t.Errorf("getImage 200 has no %s header", header)
+		}
+	}
+
+	if operation.Responses.Status(http.StatusNotModified) == nil {
+		t.Error("getImage declares no 304 response")
+	}
+
+	mentions := []string{
+		"max-age=31536000", "immutable", "no-cache", "If-None-Match", "imageUrl",
+		`"invalid"`, `"not_found"`, `"unsupported"`, `"unavailable"`,
+	}
+
+	for _, text := range mentions {
+		if !strings.Contains(operation.Description, text) {
+			t.Errorf("getImage description does not mention %s", text)
 		}
 	}
 }
