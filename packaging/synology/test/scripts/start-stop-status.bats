@@ -517,17 +517,25 @@ current_boot_id() {
 
 # start_fake_action holds the action lock like a running start-stop-status for $1 seconds and
 # then releases it; its command line names the package's start-stop-status, so the scripts take
-# it for a live action. The lock records boot ID $2 (default: the current boot). Sets
-# FOREIGN_PID.
+# it for a live action. The lock records boot ID $2 (default: the current boot); $3 replaces
+# the script path its command line names. Sets FOREIGN_PID.
 start_fake_action() {
+	local boot=${2:-} script=${3:-$PKG_ROOT/scripts/start-stop-status}
+	[[ -n $boot ]] || boot=$(current_boot_id)
+	# shellcheck disable=SC2016 # expanded by the fake action
+	start_lock_holder 'sleep "$1"; rm -f "$2/pid"; rmdir "$2"' "$script" "$1" "$boot"
+}
+
+# start_lock_holder <script> <path> <seconds> <boot>: creates the action lock and runs the bash
+# script with $0 = path (the command line a waiter sees), $1 = seconds, $2 = lock directory and
+# $3 = boot ID in the background; the lock records its PID and the boot ID. Sets FOREIGN_PID.
+start_lock_holder() {
 	local lock=$SYNOPKG_PKGTMP/$LOCK_DIR_NAME
 	mkdir "$lock"
-	# shellcheck disable=SC2016 # expanded by the fake action
-	bash -c 'sleep "$1"; rm -f "$2/pid"; rmdir "$2"' "$PKG_ROOT/scripts/start-stop-status" "$1" "$lock" \
-		</dev/null >/dev/null 2>&1 3>&- &
+	bash -c "$1" "$2" "$3" "$lock" "$4" </dev/null >/dev/null 2>&1 3>&- &
 	FOREIGN_PID=$!
 	track_foreign_process "$FOREIGN_PID"
-	printf '%s\n%s\n' "$FOREIGN_PID" "${2:-$(current_boot_id)}" >"$lock/pid"
+	printf '%s\n%s\n' "$FOREIGN_PID" "$4" >"$lock/pid"
 }
 
 # fake_slow_command puts a command $1 first in PATH that sleeps $3 seconds before it runs the
@@ -701,6 +709,76 @@ case_lock_released_in_between_is_taken() {
 	assert_failure 3
 	[[ -e $BATS_TEST_TMPDIR/lock-race.done ]] || fail "the fake mkdir was not used"
 	[[ $stderr != *"cannot create the action lock"* ]] || fail "status went on without the lock: $stderr"
+	assert_no_lock
+}
+
+# The wait starts over when the lock changes hands: a fresh lock whose PID is not written yet
+# is not broken because the wait for the previous holder has already run out.
+case_lock_wait_starts_over_for_a_new_holder() {
+	# The holder empties the record (a new holder: mkdir done, PID not yet written), writes it
+	# again half a second later and releases the lock after another second.
+	# shellcheck disable=SC2016 # expanded by the fake action
+	start_lock_holder 'sleep "$1"; : >"$2/pid"; sleep 0.5; printf "%s\n%s\n" "$$" "$3" >"$2/pid"
+		sleep 1; rm -f "$2/pid"; rmdir "$2"' "$PKG_ROOT/scripts/start-stop-status" 2 "$(current_boot_id)"
+	export PKG_TEST_LOCK_WAIT_SECONDS=1
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	[[ $stderr != *"breaking the action lock"* ]] || fail "status broke the lock of a new holder: $stderr"
+	assert_elapsed_at_least "$started" 3 "status did not wait for the new holder"
+	assert_no_lock
+}
+
+# Only this package's start-stop-status counts as a live action: the same script of another
+# package with a reused PID is broken after the lock wait.
+case_lock_of_another_packages_action_is_broken() {
+	start_fake_action 4 '' "$BATS_TEST_TMPDIR/packages/other/scripts/start-stop-status"
+	export PKG_TEST_LOCK_WAIT_SECONDS=1
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	assert_elapsed_below "$started" 3 "status waited for another package's action"
+	assert_stderr_contains "breaking the action lock of pid '$FOREIGN_PID'"
+	assert_no_lock
+}
+
+# A live action that holds the lock past the hard limit is broken anyway, with a message.
+case_lock_held_past_the_hard_limit_is_broken() {
+	start_fake_action 8
+	export PKG_TEST_LOCK_WAIT_SECONDS=1 PKG_TEST_LOCK_LIMIT_SECONDS=2
+	local started
+	started=$(monotonic_centiseconds)
+	run_sss status
+	assert_failure 3
+	assert_elapsed_at_least "$started" 2 "status broke the lock before the hard limit"
+	assert_elapsed_below "$started" 6 "status waited past the hard limit"
+	assert_stderr_contains "pid $FOREIGN_PID still holds the action lock after 2 s"
+	assert_stderr_contains "breaking the action lock of pid '$FOREIGN_PID'"
+	assert_short_output
+	assert_no_lock
+}
+
+# A lock whose record cannot be written would look like one being taken: the action removes it
+# again and goes on without the lock. The fake mkdir leaves a dangling link where the record
+# goes, which fails the write also for root.
+case_lock_without_record_is_given_up() {
+	local real fake_dir=$BATS_TEST_TMPDIR/fake-bin
+	real=$(command -v mkdir)
+	mkdir -p "$fake_dir"
+	cat >"$fake_dir/mkdir" <<EOF
+#!/bin/sh
+"$real" "\$@" || exit
+case "\$1" in
+*/$LOCK_DIR_NAME) ln -s "$BATS_TEST_TMPDIR/missing/pid" "\$1/pid" ;;
+esac
+EOF
+	chmod 0755 "$fake_dir/mkdir"
+	export PATH=$fake_dir:$PATH
+	run_sss status
+	assert_failure 3
+	assert_stderr_contains "cannot record this action in the lock $SYNOPKG_PKGTMP/$LOCK_DIR_NAME; going on without it"
 	assert_no_lock
 }
 
@@ -884,6 +962,10 @@ register_cases \
 	lock_of_a_live_action_is_waited_for \
 	lock_of_an_earlier_boot_is_broken_at_once \
 	lock_released_in_between_is_taken \
+	lock_wait_starts_over_for_a_new_holder \
+	lock_of_another_packages_action_is_broken \
+	lock_held_past_the_hard_limit_is_broken \
+	lock_without_record_is_given_up \
 	actions_go_on_without_a_lock \
 	status_reports_missing_binary_as_broken \
 	status_reports_non_executable_binary_as_broken \

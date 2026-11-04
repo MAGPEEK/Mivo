@@ -26,13 +26,15 @@
 #   PKG_TEST_STOP_TIMEOUT_SECONDS   replaces STOP_TIMEOUT_SECONDS
 #   PKG_TEST_UPTIME_FILE            replaces UPTIME_FILE (a path)
 #   PKG_TEST_LOCK_WAIT_SECONDS      replaces LOCK_WAIT_SECONDS
+#   PKG_TEST_LOCK_LIMIT_SECONDS     replaces LOCK_LIMIT_SECONDS
 #
 # start, stop and status read and replace the PID file under an action lock (take_lock), since
 # DSM does not document that it serializes package actions: a status never removes the PID file
 # a concurrent start has just written, and two starts never launch two servers. The lock is the
 # directory $SYNOPKG_PKGTMP/<id>.lock with the holder's PID and boot ID (ADR 0026 section 9): a
 # lock of an earlier boot or of an exited holder is broken at once, a lock held past
-# LOCK_WAIT_SECONDS only when its holder is no start-stop-status any more.
+# LOCK_WAIT_SECONDS only when its holder is not this package's start-stop-status, and any lock
+# held by the same holder past LOCK_LIMIT_SECONDS.
 set -eu
 
 # Seconds start waits for a healthy server. A server that is alive but not healthy after that
@@ -60,13 +62,19 @@ readonly LOG_TAIL_LINES=20
 # Seconds an action waits for the action lock of another one before it looks at the holder
 # again. The lock is held while the PID file is read and replaced; start also holds it while it
 # clears the transcode directory and rotates the log, which takes as long as the files take. So
-# a lock held longer is broken only when its holder is no start-stop-status any more (a reused
-# PID); a live action is waited for, because breaking its lock could launch a second server.
+# a lock held longer is broken only when its holder is not this package's start-stop-status (a
+# reused PID); a live action is waited for, because breaking its lock could launch a second
+# server. Both waits start over whenever another holder takes the lock.
 readonly LOCK_WAIT_SECONDS=10
+# Seconds after which even a live action's lock is broken (5 minutes): an action that holds it
+# this long hangs (the transcode directory holds output of one stopped server, far less than
+# this to remove), and a hanging action must not block every later start, stop and status.
+readonly LOCK_LIMIT_SECONDS=300
 # The kernel's random ID of the current boot, recorded in the lock: tmp survives reboots, and a
 # lock of an earlier boot names a PID that means nothing now.
 readonly BOOT_ID_FILE=/proc/sys/kernel/random/boot_id
-# Name of this script; a live process with an argument of that name holds the lock legitimately.
+# Name of this script; a live process whose command line names <id>/scripts/<this name> holds
+# the lock legitimately.
 readonly ACTION_SCRIPT_NAME=start-stop-status
 
 # Exit codes of the guide ("scripts" - "start-stop-status").
@@ -161,17 +169,23 @@ lock_holder_boot() {
 	printf '%s\n' "$lock_boot"
 }
 
-# is_action_process succeeds when process $1 runs this script: an argument of its command line
-# names start-stop-status, in any directory.
+# is_action_process succeeds when process $1 runs this package's start-stop-status: an argument
+# of its command line is this script's own path ($0) or ends in /<id>/scripts/start-stop-status
+# (the same script started through another path). The same script of another package does not
+# count. Compared as plain strings: the ID may hold ".".
 is_action_process() {
 	tr '\000' '\n' 2>/dev/null <"/proc/$1/cmdline" |
-		grep -qx -e "$ACTION_SCRIPT_NAME" -e ".*/$ACTION_SCRIPT_NAME"
+		awk -v own="$0" -v suffix="/$ID/scripts/$ACTION_SCRIPT_NAME" '
+			$0 == own { found = 1 }
+			length($0) > length(suffix) && substr($0, length($0) - length(suffix) + 1) == suffix { found = 1 }
+			END { exit !found }'
 }
 
 # lock_is_stale succeeds when the lock of holder $1 must be broken: it was taken in an earlier
 # boot; its holder has exited (a killed script leaves its lock behind) or carries this script's
-# own PID (only possible when the PID was reused); or the wait has run out and the holder is no
-# start-stop-status (a reused PID) or never wrote its PID. A live action is never broken.
+# own PID (only possible when the PID was reused); or the wait has run out and the holder is not
+# this package's start-stop-status (a reused PID) or never wrote its PID. A live action is
+# broken only past the hard limit (lock_held_too_long).
 lock_is_stale() {
 	lock_boot=$(lock_holder_boot)
 	if [ -n "$lock_boot" ] && [ -n "$current_boot_id" ] && [ "$lock_boot" != "$current_boot_id" ]; then
@@ -210,6 +224,39 @@ break_lock() {
 	fi
 }
 
+# lock_held_too_long succeeds, naming the holder $1, when the same holder has held the lock for
+# the hard limit: even a live action is then taken for hanging.
+lock_held_too_long() {
+	if [ "$lock_waited_tenths" -lt "$lock_limit_tenths" ]; then
+		return 1
+	fi
+	pkg_error "pid $1 still holds the action lock after $lock_limit_seconds s; it is taken for hanging"
+}
+
+# watch_lock_holder starts both waits over when the lock has another holder $1 than at the last
+# look (or a PID now that it had none): the waits measure how long one holder keeps the lock, so
+# a fresh lock whose PID is not written yet is never broken for the time its predecessor took.
+watch_lock_holder() {
+	if [ "$1" != "$lock_seen_holder" ]; then
+		lock_seen_holder=$1
+		lock_waited_tenths=0
+		lock_wait_reported=no
+	fi
+}
+
+# record_lock writes this script's PID and the boot ID into the lock it has just created. When
+# that fails, the lock would look like one being taken for the whole lock wait, so it is removed
+# again and the action goes on without it, as when the lock cannot be created.
+record_lock() {
+	if (printf '%s\n%s\n' "$$" "$current_boot_id" >"$PKG_LOCK_DIR/pid") 2>/dev/null; then
+		lock_taken=yes
+		return 0
+	fi
+	pkg_error "cannot record this action in the lock $PKG_LOCK_DIR; going on without it"
+	rm -f "$PKG_LOCK_DIR/pid" 2>/dev/null || :
+	rmdir "$PKG_LOCK_DIR" 2>/dev/null || :
+}
+
 # wait_for_lock waits briefly for the holder $1 of the lock; past the lock wait it names the live
 # action it waits for, once.
 wait_for_lock() {
@@ -226,6 +273,8 @@ wait_for_lock() {
 # be removed, the action runs without it, as it would if DSM serialized the actions.
 take_lock() {
 	lock_waited_tenths=0 lock_wait_reported=no lock_create_retries=1
+	# No PID can be "-": the first look always counts as a new holder.
+	lock_seen_holder=-
 	until mkdir "$PKG_LOCK_DIR" 2>/dev/null; do
 		if [ ! -d "$PKG_LOCK_DIR" ]; then
 			# The holder may have released the lock between mkdir and this test: one more try.
@@ -238,15 +287,15 @@ take_lock() {
 		fi
 		lock_create_retries=1
 		lock_pid=$(lock_holder)
-		if lock_is_stale "$lock_pid"; then
+		watch_lock_holder "$lock_pid"
+		if lock_is_stale "$lock_pid" || lock_held_too_long "$lock_pid"; then
 			break_lock "$lock_pid" || return 0
-			lock_waited_tenths=0
+			lock_seen_holder=-
 			continue
 		fi
 		wait_for_lock "$lock_pid"
 	done
-	lock_taken=yes
-	printf '%s\n%s\n' "$$" "$current_boot_id" >"$PKG_LOCK_DIR/pid" || :
+	record_lock
 }
 
 # release_lock removes the lock this script holds. It runs on every exit (trap), and a lock
@@ -601,6 +650,8 @@ stop_timeout_seconds=$(seconds_setting "${PKG_TEST_STOP_TIMEOUT_SECONDS:-}" "$ST
 uptime_file=${PKG_TEST_UPTIME_FILE:-$UPTIME_FILE}
 lock_wait_seconds=$(seconds_setting "${PKG_TEST_LOCK_WAIT_SECONDS:-}" "$LOCK_WAIT_SECONDS")
 lock_wait_tenths=$((lock_wait_seconds * 10))
+lock_limit_seconds=$(seconds_setting "${PKG_TEST_LOCK_LIMIT_SECONDS:-}" "$LOCK_LIMIT_SECONDS")
+lock_limit_tenths=$((lock_limit_seconds * 10))
 lock_taken=no
 current_boot_id=$(read_boot_id)
 # The lock goes with the script however it ends; a signal ends it through exit, which runs the

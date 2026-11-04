@@ -404,7 +404,7 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (57 cases on a synthetic SPK of fixture.bash) and shellcheck
+# tests of the script (58 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -433,8 +433,9 @@ checks per SPK:
   equal `expected-members.txt`: names, modes 0755/0644, every name once (a duplicate fails
   even where a pattern rule allows the name), no signature, nothing from the build
   environment (`SynoBuildConf`, `build.env`, `prebuilt/`, hidden files, debug files). Names are
-  read whole, blanks included. `package.tgz` is xz and holds the expected members. A size
-  field whose first byte is 0x81 to 0xfe (neither octal nor GNU base-256) makes the archive
+  read whole, inner and trailing blanks included (leading blanks of a name cannot be told
+  apart from the column padding of `tar -tv`). `package.tgz` is xz and holds the expected
+  members. A size field whose first byte is 0x81 to 0xfe (neither octal nor GNU base-256) makes the archive
   unreadable.
 - **INFO** is `key="value"` throughout without `"`, `\`, `$` or backquotes, with `package`,
   `displayname`, `version` (`a.b.c-build`, every number at most 2^31-1), `beta="yes"` exactly

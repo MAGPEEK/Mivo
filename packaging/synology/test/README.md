@@ -99,11 +99,15 @@ Two more tools of `helpers.bash` reach states the fake cannot: a log that is a F
 reader holds the forked shell before `exec` (the window between fork and exec), and
 `fake_failing_command` puts an `rm` or `mv` first in `PATH` that fails for matching arguments
 (the tests run as root, so file permissions cannot make them fail). The action lock cases of
-`start-stop-status.bats` add three of their own: `start_fake_action` holds the lock as a live
-process whose command line names `start-stop-status` (optionally recorded for another boot ID),
-`fake_slow_command` puts an `rm` first in `PATH` that sleeps before matching arguments (a start
-that clears a large transcode directory), and `fake_lock_race` a `mkdir` that fails once for the
-lock without creating it (the holder released the lock between `mkdir` and the `-d` test).
+`start-stop-status.bats` add their own: `start_fake_action` holds the lock as a live process
+whose command line names the package's `start-stop-status` (optionally recorded for another
+boot ID, or naming another package's script), `start_lock_holder` runs any holder script (for
+example one that empties and rewrites the lock record, a new holder whose PID is not written
+yet), `fake_slow_command` puts an `rm` first in `PATH` that sleeps before matching arguments (a
+start that clears a large transcode directory), `fake_lock_race` a `mkdir` that fails once for
+the lock without creating it (the holder released the lock between `mkdir` and the `-d` test),
+and one case a `mkdir` that leaves a dangling link where the lock record goes, so writing it
+fails also for root.
 
 ### Test-only variables of the package scripts
 
@@ -114,7 +118,8 @@ Documented in the script headers; DSM never sets them.
 | `PKG_TEST_START_TIMEOUT_SECONDS` | `start-stop-status` | the 30 s start budget | start budget cases |
 | `PKG_TEST_STOP_TIMEOUT_SECONDS` | `start-stop-status` | the 20 s stop budget before `SIGKILL` | "stop needing SIGKILL" case |
 | `PKG_TEST_UPTIME_FILE` | `start-stop-status` | `/proc/uptime`, the clock of the start budget | "start budget" clock cases |
-| `PKG_TEST_LOCK_WAIT_SECONDS` | `start-stop-status` | the 10 s wait for another action's lock, after which a lock whose holder is no `start-stop-status` is broken | the lock cases |
+| `PKG_TEST_LOCK_WAIT_SECONDS` | `start-stop-status` | the 10 s wait for another action's lock, after which a lock whose holder is not the package's `start-stop-status` is broken | the lock cases |
+| `PKG_TEST_LOCK_LIMIT_SECONDS` | `start-stop-status` | the 5 minute hard limit after which even a live action's lock is broken | "hard limit" case |
 | `PKG_TEST_VOLUMES_ROOT` | `common.sh` (`PKG_VOLUMES_ROOT`): `preinst`, `postuninst` | `/`, where the `volume*` directories are: the shared folders `preinst` looks for and the `volume<N>/@appdata\|@apphome/<id>` shape `postuninst` deletes below | every case (set by `setup_package_tree`) |
 
 ### Timing assertions

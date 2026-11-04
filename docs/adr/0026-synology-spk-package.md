@@ -309,14 +309,21 @@ the package log, the privileges the toolkit needs in a container, and which `arc
   - **at once** when it was taken in an earlier boot (`tmp` survives reboots and PIDs start
     over), when its holder has exited (a killed script leaves its lock behind), or when the
     recorded PID is the waiter's own;
-  - **after 10 s** of waiting only when the holder is no longer a `start-stop-status` process
-    (`/proc/<pid>/cmdline` names no such script: a reused PID) or never wrote its PID. A live
-    action is waited for however long it takes, because breaking its lock while it clears a
-    large transcode directory could launch a second server; the waiter names the action it
-    waits for once in the package log.
+  - **after 10 s** of waiting only when the holder is not this package's `start-stop-status`
+    (no argument of `/proc/<pid>/cmdline` is the waiter's own script path or ends in
+    `/<id>/scripts/start-stop-status`: a reused PID, also one now running another package's
+    script) or never wrote its PID. A live action is waited for, because breaking its lock
+    while it clears a large transcode directory could launch a second server; the waiter names
+    the action it waits for once in the package log;
+  - **after 5 minutes** (hard limit) even when the holder is a live action: it is taken for
+    hanging, and the package log says so, so a hanging script cannot block every later action.
+  Both waits measure how long one holder keeps the lock: they start over whenever the recorded
+  PID changes (also from a PID to none, a new holder between `mkdir` and writing its PID), so a
+  fresh lock is never broken for the time its predecessor took.
   A `mkdir` that fails while the lock directory is gone (the holder released it in between) is
-  retried; a lock that cannot be created at all (no `tmp`) or a broken lock that cannot be
-  removed lets the action run without it. Two waiters that break the same stale lock at the
+  retried; a lock that cannot be created at all (no `tmp`), a lock whose PID cannot be written
+  (it is removed again, else it would look like one being taken) and a broken lock that cannot
+  be removed let the action run without it. Two waiters that break the same stale lock at the
   same moment can both proceed (a window of a few instructions); the PID file rules (written
   by rename, read again before removal) keep that harmless.
 - Logs: the server logs text to stderr; the script redirects it to `$SYNOPKG_PKGVAR/<id>.log`
@@ -434,8 +441,8 @@ taken on them on 2026-10-31. Where a note contradicts the decision text above, t
 **Architectures and kernels**
 - Oldest DSM 7.2 kernel per family: **x86_64 3.10.108, armv8 4.4.302, armv7 3.10.108**; static
   binaries need an ELF ABI note, if present, at or below these (a binary without one, such as
-  the static musl FFmpeg of SPK-15, is checked under `kernelsim` instead). The DSM 7.2 userland is glibc 2.36
-  (inference from the toolchains).
+  the static musl FFmpeg of SPK-15, is checked under `kernelsim` instead). The DSM 7.2
+  userland is glibc 2.36 (inference from the toolchains).
 - DSM's `armv7` family contains only `alpine`/`alpine4k`; `armada38x` and `monaco` are separate
   `arch` values ("armv7 not ready" in the toolkit). **Orchestrator decision**: the armv7 SPK sets
   **`arch="armv7 armada38x monaco"`**, and its binaries target ARMv7 hard-float with VFPv3(-D16),

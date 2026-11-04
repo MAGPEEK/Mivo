@@ -380,11 +380,25 @@ file_member_names() {
 	awk '$1 ~ /^-/ { name = $0; sub(/^[^ ]+ [^ ]+ /, "", name); print name }' "$1"
 }
 
+# listing_mode <line>: the mode column of a listing line.
+listing_mode() {
+	printf '%s\n' "${1%% *}"
+}
+
+# listing_name <line>: the name of a listing line, everything after the mode and owner columns,
+# blanks at either end included (read with IFS= and -r, so nothing is trimmed).
+listing_name() {
+	listing_rest=${1#* }
+	printf '%s\n' "${listing_rest#* }"
+}
+
 # unsafe_members <listing>: one "name(reason)" per member that must not be extracted:
 # anything but a file or directory (links, devices, FIFOs), an absolute name, a ".."
 # component, or a name tar printed with escapes (control characters, backslashes).
 unsafe_members() {
-	while read -r unsafe_mode _ unsafe_name; do
+	while IFS= read -r unsafe_line; do
+		unsafe_mode=$(listing_mode "$unsafe_line")
+		unsafe_name=$(listing_name "$unsafe_line")
 		case "$unsafe_mode" in
 			d* | -*) ;;
 			*) printf '%s(link or special file: %s) ' "$unsafe_name" "$unsafe_mode"; continue ;;
@@ -504,7 +518,9 @@ check_members() {
 	members_problems=""
 	members_seen="$work/seen-$members_archive"
 	: >"$members_seen"
-	while read -r member_mode _ member_name; do
+	while IFS= read -r member_line; do
+		member_mode=$(listing_mode "$member_line")
+		member_name=$(listing_name "$member_line")
 		[ -n "$member_name" ] || continue
 		member_text=$(member_problem "$members_archive" "$member_mode" "$member_name")
 		[ -z "$member_text" ] || members_problems="$members_problems $member_text"
@@ -1102,7 +1118,9 @@ print_digests() {
 		if (substr($1, 7, 1) ~ /[sS]/) mode += 1024
 		if (substr($1, 10, 1) ~ /[tT]/) mode += 512
 		printf "%o %s\n", mode, name
-	}' "$3" | LC_ALL=C sort -k2 | while read -r digest_mode digest_name; do
+	}' "$3" | LC_ALL=C sort -k2 | while IFS= read -r digest_line; do
+		digest_mode=${digest_line%% *}
+		digest_name=${digest_line#* }
 		[ "$1:$digest_name" != spk:package.tgz ] || continue
 		# The redirect and sha256sum are checked: a member that cannot be read gets no line
 		# with an empty digest.
@@ -1123,8 +1141,8 @@ print_member_digests() {
 	} >"$work/digests"
 	grep -v '^unhashed ' "$work/digests"
 	# A here-document, not a pipe: failed must count in this shell.
-	while read -r _ unhashed_member; do
-		[ -z "$unhashed_member" ] || failed "--members: cannot hash $unhashed_member"
+	while IFS= read -r unhashed_line; do
+		[ -z "$unhashed_line" ] || failed "--members: cannot hash ${unhashed_line#unhashed }"
 	done <<EOF
 $(grep '^unhashed ' "$work/digests")
 EOF

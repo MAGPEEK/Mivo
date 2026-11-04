@@ -322,6 +322,17 @@ make_tree_notice_interim() {
 	expect_line "FAIL share/licenses/ffmpeg has no licence file besides SOURCE.txt"
 }
 
+@test "member names keep trailing blanks" {
+	pack_spk "$tree" "$out"
+	echo x >"$tree/spk/trail "
+	tar rf "$out" -C "$tree/spk" "trail "
+	inspect_packed --members x86_64
+	expect_status 1
+	expect_line "trail (unexpected)"
+	refute_line "cannot hash spk:trail"
+	expect_line " 644 spk:trail "
+}
+
 @test "an archive tar cannot read is a finding (exit 1), not a usage error" {
 	pack_spk "$tree" "$out"
 	head -c 1000 "$out" >"$BATS_TEST_TMPDIR/truncated.spk"

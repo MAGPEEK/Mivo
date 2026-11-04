@@ -176,16 +176,17 @@ pkg_remove_directory_contents() {
 }
 
 # pkg_volume_directory_kind prints "var" or "home" when the path $1 is /volume<N>/@appdata/<id>
-# or /volume<N>/@apphome/<id> of this package: the volume is exactly one path component, a
-# "volume" name right below PKG_VOLUMES_ROOT, so no deeper directory of that shape passes.
+# or /volume<N>/@apphome/<id> of this package: the volume is exactly one path component right
+# below PKG_VOLUMES_ROOT, "volume" and a number (N digits only), so no deeper directory of that
+# shape and no other name passes.
 pkg_volume_directory_kind() {
 	pkg_volume_rest=${1#"$PKG_VOLUMES_ROOT"/volume}
 	if [ "$pkg_volume_rest" = "$1" ]; then
 		return 1
 	fi
-	# What follows "volume" up to the next "/": the volume number, never empty, never a "/".
+	# What follows "volume" up to the next "/": the volume number, digits only.
 	case "${pkg_volume_rest%%/*}" in
-	'') return 1 ;;
+	'' | *[!0-9]*) return 1 ;;
 	esac
 	case "${pkg_volume_rest#*/}" in
 	"$pkg_volume_rest") return 1 ;;

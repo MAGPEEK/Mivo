@@ -549,7 +549,8 @@ case_package_directory_check_accepts_only_package_paths() {
 	real_home=$(cd -P "$volume/@apphome/$FIXTURE_ID" && pwd -P)
 	mkdir -p "$BATS_TEST_TMPDIR/demonstration" "$volume/@appdata/${FIXTURE_ID}x" "$volume/@appdata/sub/$FIXTURE_ID/x" \
 		"$volume/nested/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/deeper/volume1/@appdata/$FIXTURE_ID" \
-		"$BATS_TEST_TMPDIR/share/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID"
+		"$BATS_TEST_TMPDIR/share/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID" \
+		"$BATS_TEST_TMPDIR/volumeX/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/volume1x/@appdata/$FIXTURE_ID"
 	touch "$PKG_ROOT/keep"
 	for directory in "$SYNOPKG_PKGVAR" "$SYNOPKG_PKGVAR/" "$volume/@appdata/$FIXTURE_ID"; do
 		run_common pkg_resolve_package_directory var "$directory"
@@ -568,7 +569,8 @@ case_package_directory_check_accepts_only_package_paths() {
 		"$volume/@apptemp/$FIXTURE_ID" "$DSM_PACKAGES_DIR/$FIXTURE_ID" "/var/packages/$FIXTURE_ID/var/." \
 		"$volume/@appdata/$FIXTURE_ID/../$FIXTURE_ID" "$volume/nested/@appdata/$FIXTURE_ID" \
 		"$BATS_TEST_TMPDIR/deeper/volume1/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/share/@appdata/$FIXTURE_ID" \
-		"$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID"; do
+		"$BATS_TEST_TMPDIR/volume/@appdata/$FIXTURE_ID" "$BATS_TEST_TMPDIR/volumeX/@appdata/$FIXTURE_ID" \
+		"$BATS_TEST_TMPDIR/volume1x/@appdata/$FIXTURE_ID"; do
 		run_common pkg_resolve_package_directory var "$directory"
 		[[ $status -eq 1 ]] || fail "'$directory' passed as the package's var directory"
 		assert_output ''
