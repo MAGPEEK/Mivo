@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<movie>
+  <title>Known</title>
+  <fancyfield attr="1"><nested>ignored</nested></fancyfield>
+  <TagLine>Case does not matter</TagLine>
+  <trailer>plugin://plugin.video.youtube/?action=play_video&amp;videoid=abc</trailer>
+</movie>

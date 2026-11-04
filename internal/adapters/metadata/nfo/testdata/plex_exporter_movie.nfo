@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<movie>
+  <title>Elephants Dream</title>
+  <sorttitle>Elephants Dream</sorttitle>
+  <year>2006</year>
+  <releasedate>2006-03-24</releasedate>
+  <certification>DE:FSK 6</certification>
+  <id>tt0807840</id>
+  <tmdbid>9761</tmdbid>
+  <set>Blender Open Movies</set>
+  <studio>Orange Open Movie Project</studio>
+  <genre>Animation</genre>
+  <country>Netherlands</country>
+  <director>Bassam Kurdali</director>
+  <actor>
+    <name>Cas Jansen</name>
+    <role>Emo</role>
+    <order>2</order>
+  </actor>
+  <actor>
+    <name>Tygo Gernandt</name>
+    <role>Proog</role>
+    <order>1</order>
+  </actor>
+</movie>

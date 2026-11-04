@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<tvshow>
+    <title>Pioneer One</title>
+    <showtitle>Pioneer One</showtitle>
+    <plot>An object in the sky over North America.</plot>
+    <mpaa>TV-14</mpaa>
+    <uniqueid type="tvdb" default="true">170551</uniqueid>
+    <uniqueid type="tmdb">30992</uniqueid>
+    <uniqueid type="imdb">tt1748166</uniqueid>
+    <genre>Drama</genre>
+    <genre>Science Fiction</genre>
+    <premiered>2010-06-16</premiered>
+    <studio>VODO</studio>
+    <status>Ended</status>
+    <namedseason number="1">Season One</namedseason>
+    <actor>
+        <name>James Rotenberg</name>
+        <role>Tom Taylor</role>
+        <order>0</order>
+    </actor>
+</tvshow>

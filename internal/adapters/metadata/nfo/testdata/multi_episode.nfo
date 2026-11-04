@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<episodedetails>
+    <title>Earthfall</title>
+    <season>1</season>
+    <episode>1</episode>
+    <aired>2010-06-16</aired>
+    <uniqueid type="tvdb" default="true">2363431</uniqueid>
+</episodedetails>
+<episodedetails>
+    <title>The Man from Mars</title>
+    <season>1</season>
+    <episode>2</episode>
+    <aired>2010-12-13</aired>
+    <uniqueid type="tvdb" default="true">2363432</uniqueid>
+</episodedetails>

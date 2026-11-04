@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<episodedetails>
+    <title>Earthfall</title>
+    <showtitle>Pioneer One</showtitle>
+    <season>1</season>
+    <episode>1</episode>
+    <plot>Agents investigate the crash.</plot>
+    <aired>2010-06-16</aired>
+    <uniqueid type="tvdb" default="true">2363431</uniqueid>
+    <credits>Josh Bernhard</credits>
+    <credits>Bracey Smith</credits>
+    <director>Bracey Smith</director>
+    <actor>
+        <name>Jack Haley</name>
+        <role>Taylor</role>
+    </actor>
+</episodedetails>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<movie>
+  <plot><![CDATA[A girl and a dragon.]]></plot>
+  <outline><![CDATA[Not used because plot exists.]]></outline>
+  <lockdata>false</lockdata>
+  <dateadded>2024-01-05 10:11:12</dateadded>
+  <title>Sintel</title>
+  <originaltitle>Sintel</originaltitle>
+  <writer>Esther Wouda</writer>
+  <credits>Esther Wouda</credits>
+  <director>Colin Levy</director>
+  <rating>7.1</rating>
+  <year>2010</year>
+  <mpaa>NR</mpaa>
+  <imdbid>tt1727587</imdbid>
+  <tmdbid>45745</tmdbid>
+  <premiered>2010-09-27</premiered>
+  <releasedate>2010-09-27</releasedate>
+  <runtime>15</runtime>
+  <genre>Animation</genre>
+  <genre>Fantasy</genre>
+  <genre>Animation</genre>
+  <studio>Blender Foundation</studio>
+  <art>
+    <poster>/config/metadata/library/poster.jpg</poster>
+  </art>
+  <actor>
+    <name>Halina Reijn</name>
+    <role>Sintel</role>
+    <type>Actor</type>
+    <sortorder>0</sortorder>
+  </actor>
+  <set tmdbcolid="1">
+    <name>Blender Open Movies</name>
+  </set>
+  <uniqueid type="imdb">tt1727587</uniqueid>
+  <uniqueid type="tmdb">45745</uniqueid>
+  <fileinfo>
+    <streamdetails>
+      <video>
+        <codec>h264</codec>
+        <width>1920</width>
+      </video>
+    </streamdetails>
+  </fileinfo>
+</movie>

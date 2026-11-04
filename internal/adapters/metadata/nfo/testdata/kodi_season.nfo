@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<season>
+    <title>Season One</title>
+    <plot>The first season.</plot>
+    <seasonnumber>1</seasonnumber>
+    <premiered>2010-06-16</premiered>
+    <uniqueid type="tvdb" default="true">417671</uniqueid>
+</season>

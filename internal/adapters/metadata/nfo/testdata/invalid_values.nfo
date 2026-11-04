@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<movie>
+  <title>Bad IDs</title>
+  <year>20x8</year>
+  <premiered>2008-02-30</premiered>
+  <uniqueid type="tmdb" default="true">0123</uniqueid>
+  <uniqueid type="imdb">nm0000123</uniqueid>
+  <uniqueid type="anidb">42</uniqueid>
+  <uniqueid type="tvdb">170551</uniqueid>
+  <actor><name>Someone</name><order>first</order></actor>
+  <actor><role>Nameless</role></actor>
+</movie>

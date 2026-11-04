@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<movie>
+    <title>Big Buck Bunny</title>
+    <originaltitle>Big Buck Bunny</originaltitle>
+    <sorttitle>Bunny, Big Buck</sorttitle>
+    <ratings>
+        <rating name="themoviedb" max="10" default="true">
+            <value>6.4</value>
+            <votes>1200</votes>
+        </rating>
+    </ratings>
+    <userrating>0</userrating>
+    <outline>A short outline.</outline>
+    <plot>A giant rabbit takes revenge.
+Second paragraph.</plot>
+    <tagline>One big rabbit</tagline>
+    <runtime>10</runtime>
+    <thumb aspect="poster" preview="https://image.tmdb.org/t/p/w500/poster.jpg">https://image.tmdb.org/t/p/original/poster.jpg</thumb>
+    <fanart>
+        <thumb preview="https://image.tmdb.org/t/p/w780/fanart.jpg">https://image.tmdb.org/t/p/original/fanart.jpg</thumb>
+    </fanart>
+    <mpaa>Rated G</mpaa>
+    <playcount>0</playcount>
+    <id>10378</id>
+    <uniqueid type="imdb">tt1254207</uniqueid>
+    <uniqueid type="tmdb" default="true">10378</uniqueid>
+    <genre>Animation</genre>
+    <genre>Comedy</genre>
+    <country>Netherlands</country>
+    <set>
+        <name>Blender Open Movies</name>
+        <overview>Films by the Blender Foundation</overview>
+    </set>
+    <credits>Sacha Goedegebure</credits>
+    <director>Sacha Goedegebure</director>
+    <premiered>2008-05-20</premiered>
+    <year>2008</year>
+    <studio>Blender Foundation</studio>
+    <actor>
+        <name>Big Buck</name>
+        <role>Bunny</role>
+        <order>0</order>
+        <thumb>https://image.tmdb.org/t/p/original/actor.jpg</thumb>
+    </actor>
+    <actor>
+        <name>Frank</name>
+        <role>Flying Squirrel</role>
+        <order>1</order>
+    </actor>
+</movie>

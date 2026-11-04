@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<movie>
+  <title>Defaults</title>
+  <tmdbid>111</tmdbid>
+  <uniqueid type="TMDB">222</uniqueid>
+  <uniqueid type="tmdb" default="true">333</uniqueid>
+  <uniqueid type="tmdb" default="true">444</uniqueid>
+</movie>
