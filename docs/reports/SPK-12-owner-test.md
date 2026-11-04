@@ -38,3 +38,21 @@ were read over SSH (key login of the dedicated user, no root) on 2026-11-04.
 - **SSH for a non-root user**: DSM only admits members of `administrators` over SSH; the test
   user `claude` (uid 1047) is in that group but no password or `sudo` is ever used by the agent,
   so the Docker socket and `/var/packages/<id>/var` stay unreadable for it.
+
+## Run 1 (2026-11-04): test build of 804b256
+
+SPK: `mivo-0.1.0-alpha.2-x86_64.spk`, SHA-256
+`6df5885c19894c73ef62fe42a3c41999ee40622eb1bf8a9a65877d39d7ee4025` (test build with the own
+FFmpeg 9.0.2-static1; release files are rebuilt in SPK-13).
+
+| Step | Result |
+|---|---|
+| Install through Package Center (manual install) | **pass** (owner) – DSM 7.4.1 accepted `arch="x86_64"` on platform `v1000nk` |
+| Uninstall | **pass** (owner) |
+| Detailed steps A2–A12, B–F | not yet recorded step by step |
+
+Owner's verdict: everything works but is "very rudimentary" so far – expected for 0.1.0-alpha.2
+(milestone 2 scope: scan, browse, play; no accounts, metadata, subtitles or artwork yet).
+
+After the run SSH on port 22 was refused, so the agent could not check what the uninstall left
+behind (`/var/packages/<id>`, `@appdata/<id>`, the firewall service file).
