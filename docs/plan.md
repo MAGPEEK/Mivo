@@ -25,8 +25,8 @@
 
 ## Ziel: raus aus der Alpha – stabiler erster Entwurf (Owner, 2026-11-04)
 
-Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Vorschlag zur Definition
-(Owner bestätigt oder ändert):
+Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Definition
+
 
 - **Stufen:** `0.1.0-alpha.N` (jetzt) → `0.1.0-beta.1` (Funktionsumfang komplett) → `0.1.0-rc.N`
   (nur noch Fehlerbehebung) → **`0.1.0`** (erster stabiler Entwurf). Versionen nach SemVer, jede
@@ -45,7 +45,7 @@ Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Vorschl
 
 ## Offene Entscheidungen (Stand 2026-11-04)
 
-Vom Owner zu entscheiden; der Architekt entscheidet sie nicht. OD-UX-2 ist entschieden (B); OD-UX-1 und OD-UX-3 sind offen.
+Entschieden am 2026-11-04 (Owner: „arbeite alles selber ab und hinterfrage nicht“ – der Orchestrator entscheidet nach seinen Empfehlungen): **OD-UX-1 = C** (webOS 4.x als Best Effort, voll getestet und freigegeben ab 6.0; der eigene C9 ist Testgerät), **OD-UX-2 = B** (3 → 6 → 5 → 4 → 7), **OD-UX-3 = B** (Standardprofil ab Meilenstein 5, ADR 0022 bekommt eine Notiz), **ADR 0027 und 0028 angenommen**, **OD-M3-1 = A** (Katalog einmal neu aufbauen), **OD-M3-2 = FFmpeg**, **OD-M3-3 = Watcher an, Scan alle 12 h**, **OD-M3-6 = A** (mehrere Ordner in M3), **OD-M3-7 = Docker startet ohne vorgegebene Bibliothek**. Das Ziel „stabiler erster Entwurf“ ist mit dem oben vorgeschlagenen Umfang bestätigt.
 
 **OD-UX-1 – webOS-Mindestversion.** Der eigene TV des Owners (LG OLED55C97LA, Modelljahr 2019) meldet **webOS 4.10** (LG vermarktet die 2019er-Reihe als „webOS 4.5“; am Gerät prüfen). Am Gerät bestätigt (2026-11-04): Software-Version 05.50.00, **webOS TV-Version 4.10.2-31**. Der Plan und ADR 0013 verlangen webOS 6.0+, der TV wäre also nicht unterstützt. Auch die Zeile „Testhardware: LG-TV mit webOS 23+“ passt nicht dazu – bitte bestätigen, welche LG-TVs zum Testen wirklich verfügbar sind.
 - A: **6.0 bleibt.** Moderne Engine (Chromium 79), weniger Transpiling, einfachere Profile. Der eigene TV bleibt außen vor; Tests auf Emulator bzw. einem anderen Gerät.
