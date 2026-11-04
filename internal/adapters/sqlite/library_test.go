@@ -321,7 +321,7 @@ func TestSyncLibrariesRejectsInvalidInputAndKeepsTheStoredLibraries(t *testing.T
 		{name: "nil id generator", definitions: []library.Definition{movies}},
 		{name: "duplicate root", definitions: []library.Definition{movies, {Name: "Other", Root: moviesRoot, Kind: library.KindShows}}, newID: validIDs},
 		{name: "empty name", definitions: []library.Definition{{Root: animeRoot, Kind: library.KindMovies}}, newID: validIDs},
-		{name: "unknown kind", definitions: []library.Definition{{Name: "Music", Root: animeRoot, Kind: "music"}}, newID: validIDs},
+		{name: "unknown kind", definitions: []library.Definition{{Name: "Music", Root: animeRoot, Kind: "mixed"}}, newID: validIDs},
 		{name: "empty root", definitions: []library.Definition{{Name: "Nowhere", Kind: library.KindMovies}}, newID: validIDs},
 	}
 
@@ -508,7 +508,7 @@ func TestReadingAStoredUnknownKindReturnsInvalid(t *testing.T) {
 	newID, _ := idSequence(firstLibraryID)
 	mustSync(t, repository, []library.Definition{{Name: "Movies", Root: moviesRoot, Kind: library.KindMovies}}, newID)
 
-	storeUncheckedLibraryKind(t, inspection, firstLibraryID, "music")
+	storeUncheckedLibraryKind(t, inspection, firstLibraryID, "mixed")
 
 	if _, err := repository.ListLibraries(t.Context()); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("ListLibraries error = %v, want domain.ErrInvalid", err)

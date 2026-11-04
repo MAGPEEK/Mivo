@@ -75,7 +75,7 @@ func TestSyncLibrariesRejectsAnInvalidDefinitionByIndex(t *testing.T) {
 		},
 		{
 			name:     "unknown kind",
-			invalid:  library.Definition{Name: "Music", Root: showsRoot, Kind: "music"},
+			invalid:  library.Definition{Name: "Music", Root: showsRoot, Kind: "mixed"},
 			wantText: "sync libraries: definition 1: ",
 		},
 		{

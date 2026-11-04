@@ -47,7 +47,7 @@ func TestParseKindAcceptsKnownKinds(t *testing.T) {
 func TestParseKindRejectsUnknownKinds(t *testing.T) {
 	t.Parallel()
 
-	for _, text := range []string{"", "movie", "Movies", "SHOWS", " shows", "music", "mixed"} {
+	for _, text := range []string{"", "movie", "Movies", "SHOWS", " shows", "Music", "mixed"} {
 		t.Run(text, func(t *testing.T) {
 			t.Parallel()
 
@@ -123,7 +123,7 @@ func TestDefinitionValidateRejectsMalformedDefinitions(t *testing.T) {
 		{name: "whitespace-only root", mutate: func(d *library.Definition) { d.Root = " \t\n" }},
 		{name: "root with nul", mutate: func(d *library.Definition) { d.Root = "/media\x00/movies" }},
 		{name: "empty kind", mutate: func(d *library.Definition) { d.Kind = "" }},
-		{name: "unknown kind", mutate: func(d *library.Definition) { d.Kind = "music" }},
+		{name: "unknown kind", mutate: func(d *library.Definition) { d.Kind = "mixed" }},
 	}
 
 	for _, test := range tests {

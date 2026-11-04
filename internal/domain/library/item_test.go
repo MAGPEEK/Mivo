@@ -46,7 +46,7 @@ func TestItemKindForLibrary(t *testing.T) {
 func TestItemKindForLibraryRejectsUnknownKinds(t *testing.T) {
 	t.Parallel()
 
-	got, err := library.ItemKindForLibrary("music")
+	got, err := library.ItemKindForLibrary("mixed")
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Fatalf("ItemKindForLibrary(music) error = %v, want ErrInvalid", err)
 	}
@@ -79,7 +79,7 @@ func TestParseItemKindAcceptsEveryVideoKind(t *testing.T) {
 func TestParseItemKindRejectsUnknownKinds(t *testing.T) {
 	t.Parallel()
 
-	for _, text := range []string{"", "Movie", "movies", "shows", "SEASON", " extra", "track", "album"} {
+	for _, text := range []string{"", "Movie", "movies", "shows", "SEASON", " extra", "Track", "song"} {
 		got, err := library.ParseItemKind(text)
 		if !errors.Is(err, domain.ErrInvalid) || got != "" {
 			t.Errorf("ParseItemKind(%q) = %q, %v, want empty, ErrInvalid", text, got, err)
@@ -104,7 +104,7 @@ func TestItemKindOwnsFiles(t *testing.T) {
 		{kind: library.ItemKindShow, want: false},
 		{kind: library.ItemKindSeason, want: false},
 		{kind: "", want: false},
-		{kind: "track", want: false},
+		{kind: "song", want: false},
 	}
 
 	for _, test := range tests {
@@ -145,7 +145,7 @@ func TestValidParentRejectsUnknownKinds(t *testing.T) {
 
 	tests := []struct{ child, parent library.ItemKind }{
 		{child: "", parent: ""},
-		{child: "track", parent: "album"},
+		{child: "song", parent: "album"},
 		{child: "movie ", parent: ""},
 		{child: library.ItemKindSeason, parent: "shows"},
 		{child: library.ItemKindExtra, parent: "unknown"},

@@ -59,7 +59,7 @@ func TestLibraryDefinitionsNameTheBrokenEntry(t *testing.T) {
 		}},
 		{name: "name that is no UTF-8", broken: config.LibraryConfig{Name: "a\xffb", Path: brokenPath, Kind: config.LibraryKindMovies}},
 		{name: "root with a NUL byte", broken: config.LibraryConfig{Name: "Movies 2", Path: brokenPath + "\x00", Kind: config.LibraryKindMovies}},
-		{name: "unknown kind", broken: config.LibraryConfig{Name: "Music", Path: brokenPath, Kind: "music"}},
+		{name: "unknown kind", broken: config.LibraryConfig{Name: "Music", Path: brokenPath, Kind: "mixed"}},
 	}
 
 	for _, test := range tests {

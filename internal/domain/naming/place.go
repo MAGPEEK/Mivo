@@ -41,6 +41,8 @@ func Place(kind library.Kind, file FileContext) (Result, error) {
 		return placeInMovies(file)
 	case library.KindShows:
 		return placeInShows(file)
+	case library.KindMusic:
+		return Result{}, fmt.Errorf("place %q: music files go through PlaceMusic: %w", file.Path, domain.ErrInvalid)
 	default:
 		return Result{}, fmt.Errorf("place %q: unknown library kind %q: %w", file.Path, kind, domain.ErrInvalid)
 	}

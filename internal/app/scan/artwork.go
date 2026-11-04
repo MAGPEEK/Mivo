@@ -58,7 +58,7 @@ func (run *refreshRun) artworkCandidates(item *refreshItem, state MetadataState)
 		candidates = run.seasonArtwork(item)
 	case library.ItemKindEpisode:
 		candidates = run.episodeArtwork(item)
-	case library.ItemKindExtra:
+	case library.ItemKindExtra, library.ItemKindArtist, library.ItemKindAlbum, library.ItemKindTrack:
 		return nil
 	default:
 		return nil

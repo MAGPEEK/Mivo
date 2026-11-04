@@ -102,7 +102,7 @@ func TestPlacementValidateRejectsMalformedPlacements(t *testing.T) {
 		{name: "extra at the top", mutate: func(p *library.Placement) { p.Levels = []library.Level{extraLevel()} }},
 		{name: "extra below a season", mutate: func(p *library.Placement) { p.Levels[2] = extraLevel() }},
 		{name: "movie below a show", mutate: func(p *library.Placement) { p.Levels = []library.Level{showLevel(), movieLevel()} }},
-		{name: "unknown kind", mutate: func(p *library.Placement) { p.Levels[2].Kind = "track" }},
+		{name: "unknown kind", mutate: func(p *library.Placement) { p.Levels[2].Kind = "song" }},
 		{name: "empty key", mutate: func(p *library.Placement) { p.Levels[1].MatchKey = "" }},
 		{name: "blank key", mutate: func(p *library.Placement) { p.Levels[0].MatchKey = " \t" }},
 		{name: "empty title", mutate: func(p *library.Placement) { p.Levels[2].Title = "" }},

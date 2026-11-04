@@ -257,7 +257,7 @@ func TestCorruptStoredLibrariesAreInternal(t *testing.T) {
 		mutate func(*applibrary.ManagedOverview)
 		status appscan.Status
 	}{
-		{name: "unknown kind", mutate: func(overview *applibrary.ManagedOverview) { overview.Library.Kind = "music" }},
+		{name: "unknown kind", mutate: func(overview *applibrary.ManagedOverview) { overview.Library.Kind = "mixed" }},
 		{name: "malformed id", mutate: func(overview *applibrary.ManagedOverview) { overview.Library.ID = "not-a-uuid" }},
 		{name: "unknown scan state", mutate: func(*applibrary.ManagedOverview) {}, status: appscan.Status{State: "paused"}},
 	}

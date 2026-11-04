@@ -48,7 +48,8 @@ func ParseItemKind(text string) (ItemKind, error) {
 // IsValid reports whether the item kind is one of the known kinds.
 func (kind ItemKind) IsValid() bool {
 	switch kind {
-	case ItemKindMovie, ItemKindShow, ItemKindSeason, ItemKindEpisode, ItemKindExtra:
+	case ItemKindMovie, ItemKindShow, ItemKindSeason, ItemKindEpisode, ItemKindExtra,
+		ItemKindArtist, ItemKindAlbum, ItemKindTrack:
 		return true
 	default:
 		return false
@@ -59,9 +60,9 @@ func (kind ItemKind) IsValid() bool {
 // Shows and seasons only group other items.
 func (kind ItemKind) OwnsFiles() bool {
 	switch kind {
-	case ItemKindMovie, ItemKindEpisode, ItemKindExtra:
+	case ItemKindMovie, ItemKindEpisode, ItemKindExtra, ItemKindTrack:
 		return true
-	case ItemKindShow, ItemKindSeason:
+	case ItemKindShow, ItemKindSeason, ItemKindArtist, ItemKindAlbum:
 		return false
 	default:
 		return false
@@ -82,6 +83,8 @@ func ValidParent(child, parent ItemKind) bool {
 		return parent == ItemKindSeason
 	case ItemKindExtra:
 		return parent == ItemKindMovie || parent == ItemKindShow
+	case ItemKindArtist, ItemKindAlbum, ItemKindTrack:
+		return validMusicParent(child, parent)
 	default:
 		return false
 	}
@@ -96,6 +99,8 @@ func ItemKindForLibrary(kind Kind) (ItemKind, error) {
 		return ItemKindMovie, nil
 	case KindShows:
 		return ItemKindEpisode, nil
+	case KindMusic:
+		return ItemKindTrack, nil
 	default:
 		return "", fmt.Errorf("item kind for library kind %q: unknown kind: %w", kind, domain.ErrInvalid)
 	}

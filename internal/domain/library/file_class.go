@@ -52,7 +52,7 @@ func ParseFileClass(text string) (FileClass, error) {
 // IsValid reports whether the file class is one of the known classes.
 func (class FileClass) IsValid() bool {
 	switch class {
-	case FileClassVideo, FileClassNFO, FileClassImage:
+	case FileClassVideo, FileClassNFO, FileClassImage, FileClassAudio:
 		return true
 	default:
 		return false

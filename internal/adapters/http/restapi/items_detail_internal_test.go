@@ -133,7 +133,7 @@ func assertFragments(t *testing.T, body string, contains, lacks []string) {
 func TestItemSummaryResponseRejectsBadStoredData(t *testing.T) {
 	t.Parallel()
 
-	unknownKind := mapperItem(idEpisode, "music")
+	unknownKind := mapperItem(idEpisode, "mixed")
 	badParent := mapperItem(idEpisode, library.ItemKindEpisode)
 	badParent.ParentID = "nope"
 

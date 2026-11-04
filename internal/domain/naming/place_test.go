@@ -236,7 +236,7 @@ func TestPlaceErrors(t *testing.T) {
 		path string
 		want error
 	}{
-		{"unknown kind", library.Kind("music"), "a.mkv", domain.ErrInvalid},
+		{"unknown kind", library.Kind("mixed"), "a.mkv", domain.ErrInvalid},
 		{"absolute path", library.KindMovies, "/a.mkv", domain.ErrInvalid},
 		{"parent segment", library.KindMovies, "../a.mkv", domain.ErrInvalid},
 		{"blank folder title", library.KindMovies, " /a.mkv", domain.ErrInvalid},
