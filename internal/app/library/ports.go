@@ -1,6 +1,7 @@
 // Package library contains the catalog use cases (ADR 0022): syncing the configured
 // libraries into the catalog at startup, listing libraries with their availability, paging
-// through a library's items and opening one item with its files and streams. Scanning is a
+// through a library's top-level items and an item's children, and opening one item with its
+// detail. Scanning is a
 // separate package (internal/app/scan). It declares the ports it needs; adapters implement
 // them and cmd/mivo wires them (ADR 0003).
 package library
@@ -39,15 +40,37 @@ type Store interface {
 // reported as an error that does not wrap domain.ErrInvalid; the service passes reader errors
 // on unchanged, and the HTTP adapter answers ErrInvalid with 400.
 type ItemReader interface {
-	// ListItems returns one page of a library's items ordered by sort title, each with its
-	// primary file and streams. page.Limit is already normalised (1 to
+	// ListItems returns one page of a library's top-level items (movies and shows, never
+	// seasons, episodes or extras) ordered by sort title, each with its primary file and
+	// streams (none for a show). page.Limit is already normalised (1 to
 	// library.MaxPageLimit). A cursor the reader did not produce wraps domain.ErrInvalid.
 	// The service checks that the library exists, so an unknown library may simply yield an
 	// empty page.
 	ListItems(ctx context.Context, libraryID string, page library.PageRequest) (ItemPage, error)
-	// GetItem returns an item with all its files and their streams, the primary file first.
-	// An unknown ID wraps domain.ErrNotFound.
+	// GetItem returns an item with its detail (ItemDetail), the primary file first. An
+	// unknown ID wraps domain.ErrNotFound.
 	GetItem(ctx context.Context, itemID string) (ItemDetail, error)
+}
+
+// ChildReader pages through the children of a catalog item. It is a port of its own, not a
+// method of ItemReader, so the milestone-2 sqlite reader keeps satisfying ItemReader until
+// M3-05c implements this port and M3-11b wires it (M3-00 dual paths). Implemented by
+// adapters/sqlite (M3-05c).
+//
+// Ordering (ADR 0027 §2, API listItemChildren): the children of a show are its seasons by
+// ascending number with the specials (season 0) last; the children of a season are its
+// episodes by ascending number with episodes without a number last; equal numbers and
+// unnumbered items order by sort title, then by ID. Extras are never children. Descending
+// reverses the whole order, so specials and unnumbered episodes come first.
+//
+// Error contract as ItemReader: an unknown item wraps domain.ErrNotFound, a cursor the reader
+// did not produce (or one issued for the other direction) wraps domain.ErrInvalid, a stored
+// row the domain cannot read is a plain error. A leaf (movie, episode, extra) yields an
+// empty page.
+type ChildReader interface {
+	// ListChildren returns one page of the item's children. request.Page.Limit is already
+	// normalised (1 to library.MaxPageLimit).
+	ListChildren(ctx context.Context, itemID string, request ChildPageRequest) (ItemPage, error)
 }
 
 // IDGenerator creates new random library IDs in canonical lowercase UUID text form.

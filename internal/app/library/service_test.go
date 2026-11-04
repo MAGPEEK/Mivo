@@ -45,6 +45,7 @@ var (
 type testEnvironment struct {
 	store     *memoryLibraryStore
 	items     *memoryItemReader
+	children  *memoryChildReader // nil leaves Dependencies.Children unset
 	generator *sequenceIDGenerator
 	roots     applibrary.RootChecker
 	timeout   time.Duration
@@ -58,6 +59,7 @@ func newTestEnvironment() *testEnvironment {
 	return &testEnvironment{
 		store:     &memoryLibraryStore{},
 		items:     newMemoryItemReader(),
+		children:  &memoryChildReader{},
 		generator: &sequenceIDGenerator{ids: []string{firstGeneratedID, secondGeneratedID}},
 		roots:     availableRoots(moviesRoot, showsRoot, animeRoot),
 		timeout:   generousRootCheckTimeout,
@@ -69,14 +71,20 @@ func newTestEnvironment() *testEnvironment {
 func (environment *testEnvironment) service(t *testing.T) *applibrary.Service {
 	t.Helper()
 
-	service, err := applibrary.NewService(applibrary.Dependencies{
+	dependencies := applibrary.Dependencies{
 		Libraries:        environment.store,
 		Items:            environment.items,
 		IDs:              environment.generator,
 		Roots:            environment.roots,
 		Logger:           environment.logger,
 		RootCheckTimeout: environment.timeout,
-	})
+	}
+	// A nil *memoryChildReader in the interface would not be a missing port.
+	if environment.children != nil {
+		dependencies.Children = environment.children
+	}
+
+	service, err := applibrary.NewService(dependencies)
 	if err != nil {
 		t.Fatalf("NewService error = %v", err)
 	}

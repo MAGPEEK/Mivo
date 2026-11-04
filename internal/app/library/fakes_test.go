@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -376,4 +377,156 @@ func attributes(record slog.Record) map[string]string {
 	})
 
 	return values
+}
+
+// memoryChildReader is an in-memory ChildReader over a flat list of catalog items. It mirrors
+// the behaviour the sqlite reader (adapters/sqlite, M3-05c) must show, so service tests and
+// adapter tests agree on one contract: an unknown item wraps domain.ErrNotFound, a leaf and a
+// container without children yield an empty page, extras are never children, and the order
+// is the one compareChildren defines. Its cursor is the direction and the index of the next
+// child ("asc:2"), so a cursor of the other direction is rejected like a foreign one.
+type memoryChildReader struct {
+	mutex sync.Mutex
+	items []applibrary.ItemSummary
+
+	// listErr, when set, is returned by ListChildren.
+	listErr error
+	// requests records every ListChildren call.
+	requests []childRequest
+}
+
+// childRequest is one recorded ListChildren call.
+type childRequest struct {
+	itemID  string
+	request applibrary.ChildPageRequest
+}
+
+// Cursor prefixes of the fake, one per direction.
+const (
+	ascendingCursorPrefix  = "asc:"
+	descendingCursorPrefix = "desc:"
+)
+
+func (reader *memoryChildReader) put(summaries ...applibrary.ItemSummary) {
+	reader.mutex.Lock()
+	defer reader.mutex.Unlock()
+
+	reader.items = append(reader.items, summaries...)
+}
+
+func (reader *memoryChildReader) ListChildren(_ context.Context, itemID string,
+	request applibrary.ChildPageRequest,
+) (applibrary.ItemPage, error) {
+	reader.mutex.Lock()
+	defer reader.mutex.Unlock()
+
+	reader.requests = append(reader.requests, childRequest{itemID: itemID, request: request})
+
+	if reader.listErr != nil {
+		return applibrary.ItemPage{}, reader.listErr
+	}
+
+	known := slices.ContainsFunc(reader.items, func(summary applibrary.ItemSummary) bool {
+		return summary.Item.ID == itemID
+	})
+	if !known {
+		return applibrary.ItemPage{}, fmt.Errorf("item %q: %w", itemID, domain.ErrNotFound)
+	}
+
+	children := reader.orderedChildren(itemID, request.Descending)
+
+	prefix := ascendingCursorPrefix
+	if request.Descending {
+		prefix = descendingCursorPrefix
+	}
+
+	start, err := parseDirectedCursor(request.Page.Cursor, prefix, len(children))
+	if err != nil {
+		return applibrary.ItemPage{}, err
+	}
+
+	end := min(start+request.Page.Limit, len(children))
+	page := applibrary.ItemPage{Items: slices.Clone(children[start:end])}
+
+	if end < len(children) {
+		page.NextCursor = prefix + strconv.Itoa(end)
+	}
+
+	return page, nil
+}
+
+// orderedChildren returns the children of itemID without extras in the contract order.
+func (reader *memoryChildReader) orderedChildren(itemID string, descending bool) []applibrary.ItemSummary {
+	children := []applibrary.ItemSummary{}
+
+	for _, summary := range reader.items {
+		if summary.Item.ParentID == itemID && summary.Item.Kind != library.ItemKindExtra {
+			children = append(children, summary)
+		}
+	}
+
+	slices.SortFunc(children, compareChildren)
+
+	if descending {
+		slices.Reverse(children)
+	}
+
+	return children
+}
+
+// Number groups of the child order: regular numbers first, then the specials season, then
+// items without a number.
+const (
+	numberGroupRegular = iota
+	numberGroupSpecials
+	numberGroupUnnumbered
+)
+
+// compareChildren is the single place of the fake's child order (ChildReader doc, ADR 0027
+// §2): by number group, then number, then sort title, then ID.
+func compareChildren(first, second applibrary.ItemSummary) int {
+	firstGroup, firstNumber := numberGroup(first.Item)
+	secondGroup, secondNumber := numberGroup(second.Item)
+
+	return cmp.Or(
+		cmp.Compare(firstGroup, secondGroup),
+		cmp.Compare(firstNumber, secondNumber),
+		strings.Compare(first.Item.SortTitle, second.Item.SortTitle),
+		strings.Compare(first.Item.ID, second.Item.ID),
+	)
+}
+
+func numberGroup(item library.Item) (group, number int) {
+	value, ok := item.Number.Get()
+
+	switch {
+	case !ok:
+		return numberGroupUnnumbered, 0
+	case item.Kind == library.ItemKindSeason && value == 0:
+		return numberGroupSpecials, 0
+	default:
+		return numberGroupRegular, value
+	}
+}
+
+// parseDirectedCursor reads the fake's cursor; text without the prefix of the requested
+// direction or with an index outside the list wraps domain.ErrInvalid.
+func parseDirectedCursor(cursor, prefix string, childCount int) (int, error) {
+	if cursor == "" {
+		return 0, nil
+	}
+
+	index, found := strings.CutPrefix(cursor, prefix)
+	if !found {
+		return 0, fmt.Errorf("cursor %q: %w", cursor, domain.ErrInvalid)
+	}
+
+	return parseIndexCursor(index, childCount)
+}
+
+func (reader *memoryChildReader) recordedRequests() []childRequest {
+	reader.mutex.Lock()
+	defer reader.mutex.Unlock()
+
+	return slices.Clone(reader.requests)
 }

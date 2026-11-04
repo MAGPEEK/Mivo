@@ -14,12 +14,17 @@ import (
 // must not block it; a root that does not answer in time is reported as unavailable.
 const DefaultRootCheckTimeout = time.Second
 
-// Dependencies lists everything Service needs. All ports and the logger are required.
+// Dependencies lists everything Service needs. All ports and the logger are required except
+// Children.
 type Dependencies struct {
 	// Libraries persists the configured libraries.
 	Libraries Store
 	// Items reads the media catalog.
 	Items ItemReader
+	// Children pages through the children of an item. It is optional while the milestone-2
+	// catalog is wired (M3-00 dual paths); without it ListChildren reports
+	// domain.ErrUnavailable.
+	Children ChildReader
 	// IDs creates the IDs of new libraries.
 	IDs IDGenerator
 	// Roots tells whether a library root is reachable.
@@ -34,6 +39,7 @@ type Dependencies struct {
 type Service struct {
 	libraries Store
 	items     ItemReader
+	children  ChildReader
 	ids       IDGenerator
 	logger    *slog.Logger
 	roots     *rootChecks
@@ -55,6 +61,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 	return &Service{
 		libraries: dependencies.Libraries,
 		items:     dependencies.Items,
+		children:  dependencies.Children,
 		ids:       dependencies.IDs,
 		logger:    dependencies.Logger,
 		roots:     newRootChecks(dependencies.Roots, timeout),
