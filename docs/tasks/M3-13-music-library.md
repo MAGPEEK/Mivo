@@ -31,10 +31,9 @@ ADR 0027 §10.
 - [ ] Gates: all Go and web gates of the touched areas.
 
 ## Notes
-- **Split before implementation:** this is a slice of the second wave. After the video slice
-  has merged, the architect splits it into one-sitting tasks M3-13a … (domain/naming,
-  contract, sqlite migration, scan pipeline, ffmpeg tags/covers, corpus, wiring, E2E) with
-  the same wave rules as the video slice.
+- **Split (2026-11-04):** M3-13a domain, 13b contract, 13c ffmpeg tags/covers, 13d sqlite
+  (migration 00005), 13e scan, 13f corpus, 13g wiring + tile, 13h web + E2E. See
+  M3-00-overview "Second wave".
 - Lyrics (LRC), ReplayGain and gapless playback are plan items of the music player (M5) and
   not part of this task; store ReplayGain tags only if the probe already exposes them.
 - The probe today skips files without a video stream (ADR 0022); the music pipeline must not

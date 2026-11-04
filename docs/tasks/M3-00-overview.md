@@ -24,7 +24,8 @@ subtitle selectors and generated episode stills (M4); watch state (M7, OD-UX-3);
 | ADR | Decision | Status |
 |---|---|---|
 | [0027](../adr/0027-library-model-v2.md) | Library model v2: kinds, hierarchy, match keys and placement, parser rules incl. DT-24, migration `00003`, metadata merge with field locks, Kodi NFO, local artwork, FFmpeg-rendered image endpoint and cache, scanning v2, watcher and periodic scan, second-wave outline | Proposed (M3-01) |
-| 0028 (to be written) | Library management in the app: database as source of truth, configuration as one-time import seed, several folders per library, browse roots and install kind, management guard (local peers, same origin) until M7; supersedes parts of ADR 0022 | Pending – mivo-architect writes it from the M3-19 Notes before lane L1 starts |
+| [0029](../adr/0029-second-wave-tooling-photos-and-discs.md) | Photo tooling (OD-M3-4) and disc images (OD-M3-5) without new bundled binaries | Accepted |
+| 0028 (written, accepted) | Library management in the app: database as source of truth, configuration as one-time import seed, several folders per library, browse roots and install kind, management guard (local peers, same origin) until M7; supersedes parts of ADR 0022 | Pending – mivo-architect writes it from the M3-19 Notes before lane L1 starts |
 
 ## Numbering
 
@@ -91,17 +92,30 @@ decisions OD-M3-6/7). UX ids: AD-40, LS-01, LS-02, LS-03 (M3 subset), SH-18 (ent
 
 | ID | Title | Owner | Depends on | Gate |
 |---|---|---|---|---|
-| [M3-13](M3-13-music-library.md) | Music: artist → album → track | mivo-backend (+ mivo-media) | 11b, 18 | split into M3-13a … first |
-| [M3-14](M3-14-audiobook-library.md) | Audiobooks with chapters | mivo-backend (+ mivo-media) | 13 | split first |
-| [M3-15](M3-15-photo-library.md) | Photos with EXIF and thumbnails | mivo-media (+ mivo-backend) | 11b, OD-M3-4 | split first |
-| [M3-16](M3-16-disc-images.md) | Disc images ISO/BDMV/VIDEO_TS | mivo-media | 11b, OD-M3-5 | split first |
+| [M3-13](M3-13-music-library.md) | Music (parent) | – | – | split 2026-11-04 |
+| [M3-14](M3-14-audiobook-library.md) | Audiobooks (parent) | – | – | split 2026-11-04 |
+| [M3-15](M3-15-photo-library.md) | Photos (parent) | – | – | split 2026-11-04 |
+| [M3-16](M3-16-disc-images.md) | Disc images (parent) | – | – | split 2026-11-04 |
 
-The second-wave files fix scope and acceptance criteria; each spans several layers and is split
-into one-sitting tasks by the architect once the video slice has merged (and, for 15/16, the
-owner has answered the tooling decision). M3-13 and M3-15/M3-16 can then run in parallel;
-M3-14 reuses M3-13's audio classification and covers. Second-wave migrations number from
-`00005` (M3-19f takes `00004`); each second-wave kind is enabled in `libraryKinds` (M3-19k/l)
-by its own task, so its tile appears in the add-library dialog.
+Baseline for all: video slice (M3-04 domain v2, M3-05 migration `00003`, M3-05c reader v2,
+M3-10/10b scan v2, M3-11b wiring) and library management (M3-19b/h/i/k/l; kinds via
+`libraryKinds`; migration `00004`). Decisions OD-M3-4/5: [ADR 0029](../adr/0029-second-wave-tooling-photos-and-discs.md).
+Migrations: music `00005`, audiobooks `00006`, photos `00007`; discs none.
+
+| Chain | Tasks (in dependency order) | Owners |
+|---|---|---|
+| Music | [13a](M3-13a-domain-music.md) domain ‖ [13b](M3-13b-contract-music.md) contract ‖ [13f](M3-13f-corpus-music.md) corpus → [13c](M3-13c-ffmpeg-audio-tags-covers.md) tags/covers ‖ [13d](M3-13d-sqlite-music.md) sqlite ‖ [13e](M3-13e-scan-music-pipeline.md) scan → [13g](M3-13g-composition-root-music.md) wiring → [13h](M3-13h-web-music.md) web + E2E | backend, media (13c, 13f), frontend (13h) |
+| Audiobooks | [14a](M3-14a-domain-audiobooks.md) ‖ [14b](M3-14b-contract-audiobooks.md) ‖ [14f](M3-14f-corpus-audiobooks.md) → [14c](M3-14c-ffmpeg-chapters.md) ‖ [14d](M3-14d-sqlite-chapters.md) ‖ [14e](M3-14e-scan-audiobook-pipeline.md) → [14g](M3-14g-composition-root-audiobooks.md) → [14h](M3-14h-web-audiobooks.md) | backend, media (14c, 14f), frontend (14h) |
+| Photos | [15a](M3-15a-domain-photos.md) ‖ [15b](M3-15b-contract-photos.md) ‖ [15g](M3-15g-corpus-photos.md) → [15c](M3-15c-photometa-exif-reader.md) → [15d](M3-15d-ffmpeg-photo-thumbnails.md) ‖ [15e](M3-15e-sqlite-photos.md) ‖ [15f](M3-15f-scan-photo-pipeline.md) → [15h](M3-15h-composition-root-photos.md) → [15i](M3-15i-web-photos.md) | backend, media (15c, 15d, 15g), frontend (15i) |
+| Discs | [16a](M3-16a-domain-discs.md) → [16b](M3-16b-fs-disc-detection.md) ‖ [16c](M3-16c-disc-title-selection.md) ‖ [16e](M3-16e-iso-reader.md) → [16d](M3-16d-disc-encryption-detection.md) ‖ [16f](M3-16f-ffmpeg-disc-input.md) → [16h](M3-16h-scan-playback-discs.md) ‖ [16i](M3-16i-corpus-discs.md) ‖ [16g](M3-16g-ffmpeg-iso-input.md) → [16j](M3-16j-packaging-ffmpeg-capabilities.md) → [16k](M3-16k-composition-root-discs.md) | media, backend (16a, 16h, 16k), synology (16j) |
+
+The four chains run in parallel except for shared files: `api/openapi.yaml` (13b → 14b → 15b,
+sequential), migration numbers (13d → 14d → 15e), `restapi` `libraryKinds` and `cmd/mivo` (the
+wiring tasks 13g, 14g, 15h, 16k merge one after another), `internal/app/scan/run.go` (one
+dispatch line each; rebase). Audiobooks reuse the music tag/cover adapters, so 14 starts after
+13c/13e are merged; discs and photos have no cross-dependency and may start first.
+Each chain's wiring task enables its kind in `libraryKinds`, so the tile appears in the
+add-library dialog. Disc ISO (16e, 16g) may ship one release after folder discs.
 
 ## Waves (parallel within a wave; no two tasks of a wave share a file)
 
@@ -199,9 +213,10 @@ Tasks follow the recommendation until answered (details in ADR 0027).
   B migrate rows in place.
 - **OD-M3-2 Artwork resizing** (M3-08, M3-09): A FFmpeg (recommended) / B libvips now.
 - **OD-M3-3 Scan defaults** (M3-11): watcher on, interval 12 h (recommended) / 6 h / 1 h.
-- **OD-M3-4 Photo tooling** (M3-15 only; needed before the second wave).
-- **OD-M3-5 Disc images and FFmpeg build flags** (M3-16 only; touches the Docker image and
-  the SPK FFmpeg build).
+- **DECIDED 2026-11-04 (owner delegated), ADR 0029: OD-M3-4 = B** (pure-Go EXIF, FFmpeg
+  thumbnails, RAW/HEIC via embedded previews or capability probe; no libvips/exiftool) and
+  **OD-M3-5 = stock FFmpeg** (pure-Go main-title selection + `concat`, loopback source for ISO;
+  no libbluray/libdvdnav/libdvdcss; only SPK/Docker task: M3-16j verification).
 - **Scope cut to confirm:** air-date episode names (`Show 2024-01-05`) are not parsed in M3;
   such files become unnumbered episodes (ADR 0027 §4).
 - **DECIDED 2026-11-04 (owner delegated): ADR 0028 accepted, OD-M3-6 = A (several folders),

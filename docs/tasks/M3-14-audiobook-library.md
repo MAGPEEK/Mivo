@@ -30,7 +30,8 @@ Second wave; ADR 0027 §10.
 - [ ] Gates: all Go and web gates of the touched areas.
 
 ## Notes
-- **Split before implementation** into one-sitting tasks M3-14a … after M3-13 has landed.
+- **Split (2026-11-04):** M3-14a domain, 14b contract, 14c ffmpeg chapters, 14d sqlite
+  (migration 00006), 14e scan, 14f corpus, 14g wiring + tile, 14h web + E2E.
 - The chapter table is shared with milestone 4 (video chapters, UX PL-30); design it for both
   and record it in ADR 0027 Notes.
 - Playback speed (PL-15) and resume per user are M5/M7.

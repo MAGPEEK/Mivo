@@ -32,7 +32,10 @@ ADR 0027 §10.
       flags.
 
 ## Notes
-- **Split before implementation** into one-sitting tasks M3-16a … once OD-M3-5 is answered;
-  the whitelist change needs an ADR 0027 note (or a new ADR) before code.
+- **OD-M3-5 decided: stock FFmpeg, concat of pure-Go-selected clips, no libbluray/libdvdnav**
+  (ADR 0029; so the criteria above name `concat`, not `dvdvideo`/`bluray:`). **Split
+  (2026-11-04):** M3-16a domain, 16b fs detection, 16c title selection, 16d encryption, 16e ISO
+  reader, 16f ffmpeg folder input, 16g ffmpeg ISO input, 16h scan + playback, 16i corpus,
+  16j packaging verification, 16k wiring.
 - The schema already has `media_files.layout` (M3-05), so no core table rebuild is needed.
 - Menus, chapters of discs and multiple titles per disc are out of scope.

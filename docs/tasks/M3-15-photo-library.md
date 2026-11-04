@@ -32,8 +32,9 @@ lightbox and EXIF panel of M5. Second wave; ADR 0027 §10.
       is bundled.
 
 ## Notes
-- **Split before implementation** into one-sitting tasks M3-15a … once OD-M3-4 is answered;
-  a new ADR records the tooling (supersedes the "Bilder" row of the plan for photos).
+- **OD-M3-4 decided = B** (pure Go EXIF, FFmpeg thumbnails, RAW via embedded previews;
+  ADR 0029). **Split (2026-11-04):** M3-15a domain, 15b contract, 15c photometa, 15d
+  thumbnails, 15e sqlite (migration 00007), 15f scan, 15g corpus, 15h wiring + tile, 15i web + E2E.
 - No face recognition or AI tagging (plan: "Galerie ohne KI"); no phone upload.
 - Photo libraries can hold tens of thousands of files: thumbnails are rendered on demand, not
   during the scan.
