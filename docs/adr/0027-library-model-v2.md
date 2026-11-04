@@ -1,6 +1,6 @@
 # 0027 Library model v2: hierarchy, local metadata, artwork and scanning (milestone 3)
 
-- Status: Proposed (2026-11-04, deliverable of task M3-01; binding for M3 tasks until the owner
+- Status: Accepted (2026-11-04: proposed as deliverable of task M3-01, accepted by the orchestrator on the owner delegation; binding for M3 tasks; was: until the owner
   accepts or rejects it)
 - Date: 2026-11-04
 - Refines: ADR 0022 (the milestone-2 parts it names as interim: one item per file, title from
@@ -322,3 +322,9 @@ Tasks follow the recommendation until the owner answers.
   FFmpeg build (Docker image, SPK static build SPK-15/16) and whitelist the `bluray`
   protocol/`dvdvideo` demuxer for directory and ISO inputs, or limit disc support to
   platforms whose FFmpeg has them.
+
+## Notes (ADR 0028)
+
+§5: "the startup sync recreates the libraries" now reads "the first start imports the
+configured libraries" (import seed, ADR 0028). Migration `00004` adds the folder id to the
+catalog tables, `library_folders` and the import ledger `library_imports`.

@@ -290,6 +290,12 @@ Wiring in `cmd/mivo`; it refines the decision above without changing it.
 - Availability: `libraryfs.FileSystem.RootAvailable` opens the root with `os.OpenRoot` and stats
   it; the library use case bounds the call (Notes M2-18).
 
+## Notes (ADR 0028)
+
+Partly superseded by ADR 0028: libraries live in the database and are managed in the app
+(not config-only, not deferred to milestone 7); the config is a one-time import seed, library
+identity is the library ID, and a library can have several folders.
+
 ## Notes (M2-39, M2-40)
 
 Decisions taken before release 0.1.0-alpha.2 (planned 2026-10-31 from the BACKLOG); they

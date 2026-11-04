@@ -1,7 +1,7 @@
 # M3-19 Library management in the app (parent: scope, decisions, slices)
 Owner: mivo-architect (parent file); slices M3-19a … M3-19o name their own owners
 Depends on: the M3 data model tasks (M3-02, M3-04, M3-05 … M3-05d via M3-11b), M3-06, M3-11,
-M3-12b; ADR 0028 (to be written, see Notes)
+M3-12b; ADR 0028 (written, Accepted 2026-11-04)
 Files/areas: none directly; each slice lists its own
 
 ## Goal
@@ -147,7 +147,7 @@ before accounts under these limits:
 - `install.kind` (`<PREFIX>_INSTALL_KIND`: `standard` | `docker` | `synology`, default
   `standard`) only selects help texts and defaults; it grants nothing.
 
-### Several folders per library (OD-M3-6)
+### Several folders per library (OD-M3-6) - DECIDED 2026-11-04: A (ADR 0028)
 The owner asked for "one or more folders" (LS-02). It costs one migration and three backend
 slices (M3-19f, M3-19h, M3-19i) because media files, sidecars and local artwork are stored
 relative to a folder. Recommendation **A: now** (Plex parity; NAS users spread movies over
@@ -161,7 +161,7 @@ titles, artwork language, trickplay, intro detection, collections and episode or
 their milestones (LS-03 row). The **metadata language** is stored now and takes effect with
 online metadata in M6; the certification country waits for content limits (M7).
 
-### Docker default (OD-M3-7)
+### Docker default (OD-M3-7) - DECIDED 2026-11-04: replace (ADR 0028)
 The image sets `MIVO_LIBRARIES=/media`. Recommendation: **replace it** by
 `MIVO_BROWSE_ROOTS=/media` and `MIVO_INSTALL_KIND=docker`, so Docker starts empty like the SPK
 and the user adds `/media` or folders below it in the app. Existing Docker installs lose

@@ -212,3 +212,9 @@ Keys added for the automatic scans (ADR 0027 §9; defaults are the OD-M3-3 recom
   since the server started counts from when it was first seen, so the startup scan (ADR
   0022) is not doubled. Network shares that send no events are covered only by this scan.
 - Both keys can be off at the same time; then only the startup scan and manual scans run.
+
+## Notes (ADR 0028)
+
+`libraries` and `<PREFIX>_LIBRARIES` (M2-04) keep their validation but are a one-time import
+seed into the database, not the live library list. New keys `browse.roots`
+(`<PREFIX>_BROWSE_ROOTS`) and `install.kind` (`<PREFIX>_INSTALL_KIND`) follow in M3-19c.

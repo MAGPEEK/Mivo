@@ -204,6 +204,8 @@ Tasks follow the recommendation until answered (details in ADR 0027).
   the SPK FFmpeg build).
 - **Scope cut to confirm:** air-date episode names (`Show 2024-01-05`) are not parsed in M3;
   such files become unnumbered episodes (ADR 0027 §4).
+- **DECIDED 2026-11-04 (owner delegated): ADR 0028 accepted, OD-M3-6 = A (several folders),
+  OD-M3-7 = A (Docker starts empty, `/media` browse root only).** Original text follows.
 - **ADR 0028 acceptance** (library management before accounts; residual risks: reverse
   proxies and DNS rebinding until M7, details in M3-19 Notes "Security").
 - **OD-M3-6 Several folders per library** (M3-19f, M3-19h, M3-19i): A now, as asked in the

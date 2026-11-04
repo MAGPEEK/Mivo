@@ -32,7 +32,8 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0024](0024-streaming-sessions-and-delivery.md) | Streaming sessions and delivery | Accepted |
 | [0025](0025-playback-verification.md) | Playback verification: reference profiles, expected modes, smoke and E2E | Accepted |
 | [0026](0026-synology-spk-package.md) | Native Synology DSM package (SPK) | Accepted |
-| [0027](0027-library-model-v2.md) | Library model v2: hierarchy, local metadata, artwork and scanning (milestone 3) | Proposed |
+| [0027](0027-library-model-v2.md) | Library model v2: hierarchy, local metadata, artwork and scanning (milestone 3) | Accepted |
+| [0028](0028-library-management-before-accounts.md) | Library management in the app, before accounts (partly supersedes 0022) | Accepted |
 
 ## Template
 
