@@ -219,15 +219,30 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 		return fmt.Errorf("create prober: %w", err)
 	}
 
-	scans, err := app.newScanService(db, files, prober)
+	images, err := app.newImageServices(db, files, tools)
 	if err != nil {
 		return err
 	}
 
-	catalog := catalogServices{system: system, libraries: libraries, scans: scans}
-	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
+	scans, err := app.newScanService(db, scanAdapters{files: files, prober: prober, images: images.service})
+	if err != nil {
+		return err
+	}
 
-	return withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scans))
+	trigger, err := app.newScanTrigger(db, scans)
+	if err != nil {
+		return withCleanupError(ctx, err, closeScansStep, app.closeScans(ctx, scans))
+	}
+
+	stopPurge := app.purgeImageCacheInBackground(ctx, images.service)
+	catalog := catalogServices{system: system, libraries: libraries, scans: scans, images: images, trigger: trigger}
+	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
+	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scans))
+
+	// Cancelling and waiting keeps the purge from reading the database after it is closed.
+	stopPurge()
+
+	return serveErr
 }
 
 // serveWithPlayback starts the playback service and serves; the playback sessions are stopped

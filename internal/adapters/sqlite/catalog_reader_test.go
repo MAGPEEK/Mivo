@@ -10,7 +10,6 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
-	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -31,7 +30,7 @@ func TestListItemsPagesThroughALibraryInSortOrder(t *testing.T) {
 	fixture := newCatalogFixture(t)
 	// Saved out of order; "Same" and "same" share the sort title "same".
 	names := []string{"zulu.mkv", "Same.mkv", "alpha.mkv", "same.mp4", "Same.avi", "beta.mkv", "same.webm"}
-	records := map[string]scan.ProbedFile{}
+	records := map[string]sqlite.ProbedFile{}
 
 	for number, name := range names {
 		record := probedRecord(moviesLibraryID, testID('i', len(names)-number), testID('f', number), name)
@@ -165,7 +164,7 @@ func TestListItemsContinuesAfterACursorWhoseItemWasRemoved(t *testing.T) {
 	t.Parallel()
 
 	fixture := newCatalogFixture(t)
-	records := []scan.ProbedFile{
+	records := []sqlite.ProbedFile{
 		probedRecord(moviesLibraryID, testID('i', 1), testID('f', 1), "a.mkv"),
 		probedRecord(moviesLibraryID, testID('i', 2), testID('f', 2), "b.mkv"),
 		probedRecord(moviesLibraryID, testID('i', 3), testID('f', 3), "c.mkv"),

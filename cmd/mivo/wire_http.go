@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 
+	imagehttp "github.com/magpeek/mivo/internal/adapters/http/images"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/server"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
@@ -26,6 +27,9 @@ type catalogServices struct {
 	system    *appsystem.Service
 	libraries *applibrary.Service
 	scans     *appscan.Service
+	// images serves artwork; trigger keeps the libraries current after the startup scan.
+	images  imageServices
+	trigger runner
 }
 
 // wiredServices is everything the HTTP adapter serves.
@@ -41,6 +45,11 @@ type wiredServices struct {
 type httpHandlers struct {
 	api   http.Handler
 	webUI http.Handler
+}
+
+// mounts are the extra API routes: the stream delivery and the image endpoint.
+func (services wiredServices) mounts() []restapi.Mount {
+	return append(services.streams.Mounts(), services.images.handlers.Mounts()...)
 }
 
 // serveHTTP binds the listener, starts the startup scan and serves until ctx is done. The
@@ -65,8 +74,14 @@ func (app application) serveHTTP(ctx context.Context, services wiredServices) er
 	app.hooks.reportListening(listener.Addr())
 	app.startLibraryScans(ctx, services.scans)
 
-	if err := httpServer.Run(ctx); err != nil {
-		return fmt.Errorf("run http server: %w", err)
+	// The trigger starts scans, so it stops before the caller closes the scan service.
+	stopTrigger := startBackground(ctx, services.trigger)
+	runErr := httpServer.Run(ctx)
+
+	stopTrigger()
+
+	if runErr != nil {
+		return fmt.Errorf("run http server: %w", runErr)
 	}
 
 	return nil
@@ -82,7 +97,7 @@ func (app application) serverOptions(listener net.Listener, handlers httpHandler
 		Logger:             app.logger,
 		APIHandler:         handlers.api,
 		Fallback:           handlers.webUI,
-		QuietPatterns:      stream.QuietPatterns(),
+		QuietPatterns:      append(stream.QuietPatterns(), imagehttp.QuietPatterns()...),
 		AllowPublicClients: !app.config.Server.LANOnly,
 	}
 }
@@ -95,7 +110,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Scan:      services.scans,
 		Playback:  services.playback,
 		Logger:    app.logger,
-		Mounts:    services.streams.Mounts(),
+		Mounts:    services.mounts(),
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

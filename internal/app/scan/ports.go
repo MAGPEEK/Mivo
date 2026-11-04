@@ -2,7 +2,6 @@ package scan
 
 import (
 	"context"
-	"time"
 
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -42,51 +41,6 @@ type Prober interface {
 	// the probing tool cannot run at all and domain.ErrUnsupported when the file could not
 	// be described.
 	Probe(ctx context.Context, absolutePath string) (media.Description, error)
-}
-
-// CatalogFile is a media file as the catalog knows it, for change detection.
-type CatalogFile struct {
-	// ID is the media file ID, ItemID the ID of the item it belongs to.
-	ID     string
-	ItemID string
-	State  library.FileState
-}
-
-// ProbedFile is the result of probing one new or changed file. For a new file Item and
-// File carry new IDs; for a changed file they carry the stored IDs and the catalog keeps
-// the stored item (and its creation time) while it replaces the file row and its streams.
-//
-// The catalog rejects a record with an error wrapping domain.ErrInvalid unless:
-//   - ProbedAt is not zero and File passes media.File.Validate,
-//   - Item.LibraryID equals File.LibraryID (for changed files too) and Item.ID equals
-//     File.ItemID,
-//   - File.ID and File.ItemID are not empty and File.RelativePath is canonical
-//     (library.ParseRelativePath),
-//   - for a new item: CreatedAt is not zero, Title is not blank and Kind equals
-//     library.ItemKindForLibrary of the library's kind.
-type ProbedFile struct {
-	Item     library.Item
-	File     media.File
-	ProbedAt time.Time
-}
-
-// CatalogWriter persists scan results. Implemented by adapters/sqlite.
-type CatalogWriter interface {
-	// FileStates returns every media file of the library.
-	FileStates(ctx context.Context, libraryID string) ([]CatalogFile, error)
-	// SaveProbedFile creates or updates one file, its item and its streams atomically. It
-	// changes nothing and returns an error wrapping
-	//   - domain.ErrInvalid for a record that breaks the rules of ProbedFile,
-	//   - domain.ErrNotFound for an unknown library,
-	//   - domain.ErrConflict when another file ID is stored at the same relative path of
-	//     the library,
-	//   - domain.ErrInvalid when a stored file ID belongs to another item or library, or a
-	//     stored item to another library.
-	SaveProbedFile(ctx context.Context, record ProbedFile) error
-	// RemoveFiles deletes the files and the items left without files, atomically. It is
-	// idempotent: unknown IDs and IDs of another library are ignored, so callers cannot
-	// learn from it whether a file existed.
-	RemoveFiles(ctx context.Context, libraryID string, fileIDs []string) error
 }
 
 // IDGenerator creates new random IDs in canonical lowercase UUID text form. Implemented by

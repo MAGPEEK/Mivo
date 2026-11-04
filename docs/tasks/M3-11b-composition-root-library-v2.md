@@ -46,6 +46,28 @@ of milestone 3. UX: LB-40, LB-44, DT-20 … DT-22, DT-24, AD-23.
       ./internal/adapters/http/... ./cmd/...`, coverage gate, `go build -tags webui -o
       bin/mivo.exe ./cmd/mivo`.
 
+## Implementation notes (decisions)
+- Wiring lives in `cmd/mivo/wire_images.go` (image cache, FFmpeg renderer, handler, background
+  purge with a stop function), `wire_scantrigger.go` (trigger on `scan.watch`/`scan.interval`,
+  `startBackground` stops it before the scan service closes), `wire_metadata.go` (adapter from
+  `metadata/nfo` to `scan.NFOParser`) and `wire_library.go` (v2 scan service, `Children` reader).
+- Dead M2 code: the M2 scan pipeline, `scan.CatalogWriter`, `CatalogFile`, `ProbedFile` and
+  their fakes are deleted. `run_test.go` went with them; the behaviour every scan shares
+  (probe errors, resolve errors, no absolute path in logs, probe concurrency, finish log) moved
+  to `run_shared_test.go` on the v2 harness.
+- The M2 `sqlite.CatalogWriter` is no longer production code: it moved to the test-only
+  `catalog_seed_test.go` because the reader tests seed the one-item-per-file shape through it
+  (rewriting them onto `LibraryCatalog` is not worth the churn). Its sqlc queries stay for that
+  reason, so sqlc output is unchanged. `catalog_writer_test.go` (tests of the seeding helper)
+  is deleted; `isUniqueViolation` and `removeBatchSize` moved to `constraint.go`.
+- `corpustest` (outside the listed areas) scans through `LibraryCatalog` now, because the M2
+  writer no longer exists in production code.
+- The `not_implemented` stubs in `restapi` stay: the library management operations of lane L
+  (M3-19f/i/j/k/l) still use them. `app/library` keeps `Children` optional for the same reason
+  (lane L owns that package).
+- Rename left for later: `scan.CatalogV2` / `Dependencies.CatalogV2` could drop the suffix now
+  that it is the only catalog port.
+
 ## Notes
 - Keep `cmd/mivo` free of logic: conversion of config values and wiring only (CLAUDE.md).
 - The renderer and the prober share the configured FFmpeg/ffprobe paths of M2 (`tools.*`).

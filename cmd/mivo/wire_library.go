@@ -10,6 +10,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
+	appimages "github.com/magpeek/mivo/internal/app/images"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -64,9 +65,12 @@ func (app application) newLibraryService(ctx context.Context, db *sqlite.DB, fil
 		return nil, err
 	}
 
+	reader := sqlite.NewCatalogReader(db)
+
 	service, err := applibrary.NewService(applibrary.Dependencies{
 		Libraries: sqlite.NewLibraryRepository(db, time.Now),
-		Items:     sqlite.NewCatalogReader(db),
+		Items:     reader,
+		Children:  reader,
 		IDs:       uuidgen.New(),
 		Roots:     files,
 		Logger:    app.logger,
@@ -85,17 +89,39 @@ func (app application) newLibraryService(ctx context.Context, db *sqlite.DB, fil
 	return service, nil
 }
 
-// newScanService builds the scan use case on the real walker, resolver and ffprobe.
-func (app application) newScanService(db *sqlite.DB, files *libraryfs.FileSystem, prober *ffmpeg.Prober) (*appscan.Service, error) {
+// scanAdapters are the adapters the scan service shares with the rest of the server.
+type scanAdapters struct {
+	files  *libraryfs.FileSystem
+	prober *ffmpeg.Prober
+	images *appimages.Service
+}
+
+// newScanService builds the v2 scan use case on the real walker, resolver and ffprobe, the
+// sqlite catalog, and the metadata refresher that reads NFO files and picks artwork. A
+// finished scan purges the image cache, whose renderings the scan may have outdated.
+func (app application) newScanService(db *sqlite.DB, adapters scanAdapters) (*appscan.Service, error) {
+	catalog := sqlite.NewLibraryCatalog(db, time.Now)
+
+	refresher, err := appscan.NewMetadataRefresher(appscan.MetadataRefresherDeps{
+		Catalog: catalog, Reader: adapters.files, Parser: nfoParser{}, Logger: app.logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create metadata refresher: %w", err)
+	}
+
 	service, err := appscan.NewService(appscan.Dependencies{
 		Libraries: sqlite.NewLibraryRepository(db, time.Now),
-		Walker:    files,
-		Resolver:  files,
-		Prober:    prober,
-		Catalog:   sqlite.NewCatalogWriter(db),
-		IDs:       uuidgen.New(),
-		Clock:     time.Now,
-		Logger:    app.logger,
+		Walker:    adapters.files,
+		Resolver:  adapters.files,
+		Prober:    adapters.prober,
+		CatalogV2: catalog,
+		Refresher: refresher,
+		Finished: func(ctx context.Context, _ string) {
+			app.purgeImageCache(ctx, adapters.images)
+		},
+		IDs:    uuidgen.New(),
+		Clock:  time.Now,
+		Logger: app.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create scan service: %w", err)

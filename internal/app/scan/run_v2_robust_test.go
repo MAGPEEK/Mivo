@@ -15,7 +15,7 @@ import (
 func TestV2EarlyEndStillRefreshesTouchedItems(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, moviesID, moviesRoot, fileAt("Alien (1979).mkv", 1))
@@ -53,7 +53,7 @@ func TestV2EarlyEndStillRefreshesTouchedItems(t *testing.T) {
 func TestV2CancelDuringProbesRemovesNothingAndNextScanConverges(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, moviesID, moviesRoot, fileAt("Alien (1979).mkv", 1), fileAt("Heat (1995).mkv", 2))
@@ -89,7 +89,7 @@ func TestV2CancelDuringProbesRemovesNothingAndNextScanConverges(t *testing.T) {
 func TestV2OrphanExtraIsKeptWhenTheWalkSkippedSomething(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	movie := fileAt("Heat (1995)/Heat (1995).mkv", 1)

@@ -11,33 +11,10 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
-	applibrary "github.com/magpeek/mivo/internal/app/library"
-	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
-	"github.com/magpeek/mivo/internal/domain/metadata"
 )
-
-// storedMovieDetail is the detail of a stored item that owns the given files and nothing else:
-// no metadata beyond its titles, no artwork, children or extras. It plays itself.
-func storedMovieDetail(item library.Item, files ...media.File) applibrary.ItemDetail {
-	detail := applibrary.ItemDetail{
-		Item:       item,
-		Files:      files,
-		Metadata:   metadata.Record{Title: item.Title, SortTitle: item.SortTitle},
-		PlayItemID: item.ID,
-		Artwork:    map[artwork.Kind]artwork.Ref{},
-		Extras:     []applibrary.ItemSummary{},
-	}
-
-	for _, file := range files {
-		detail.ItemFiles = append(detail.ItemFiles, applibrary.ItemFile{File: file})
-	}
-
-	return detail
-}
 
 // Libraries every catalog fixture starts with. The catalog tests insert them directly, so
 // they do not depend on the library sync.
@@ -109,11 +86,11 @@ func testItemKind(libraryID string) library.ItemKind {
 // probedRecord returns a successfully probed file at relativePath with a new item titled
 // after the file, a video stream that sets every column and an audio stream, as a scan at
 // scannedMilli produces it.
-func probedRecord(libraryID, itemID, fileID, relativePath string) scan.ProbedFile {
+func probedRecord(libraryID, itemID, fileID, relativePath string) sqlite.ProbedFile {
 	title := library.TitleFromFileName(relativePath)
 	scanned := time.UnixMilli(scannedMilli).UTC()
 
-	return scan.ProbedFile{
+	return sqlite.ProbedFile{
 		Item: library.Item{
 			ID: itemID, LibraryID: libraryID, Kind: testItemKind(libraryID), MatchKey: relativePath,
 			Title: title, SortTitle: library.SortTitle(title), CreatedAt: scanned,
@@ -150,7 +127,7 @@ func audioStream() media.Stream {
 }
 
 // failedRecord is probedRecord after a failed probe: no description, a probe error.
-func failedRecord(libraryID, itemID, fileID, relativePath string) scan.ProbedFile {
+func failedRecord(libraryID, itemID, fileID, relativePath string) sqlite.ProbedFile {
 	record := probedRecord(libraryID, itemID, fileID, relativePath)
 	record.File.Description = media.Description{}
 	record.File.ProbeError = media.ProbeErrorTimedOut
@@ -158,23 +135,12 @@ func failedRecord(libraryID, itemID, fileID, relativePath string) scan.ProbedFil
 	return record
 }
 
-func mustSave(t *testing.T, writer *sqlite.CatalogWriter, record scan.ProbedFile) {
+func mustSave(t *testing.T, writer *sqlite.CatalogWriter, record sqlite.ProbedFile) {
 	t.Helper()
 
 	if err := writer.SaveProbedFile(t.Context(), record); err != nil {
 		t.Fatalf("SaveProbedFile(%s) error = %v", record.File.RelativePath, err)
 	}
-}
-
-func mustGetItem(t *testing.T, reader *sqlite.CatalogReader, itemID string) applibrary.ItemDetail {
-	t.Helper()
-
-	detail, err := reader.GetItem(t.Context(), itemID)
-	if err != nil {
-		t.Fatalf("GetItem(%s) error = %v", itemID, err)
-	}
-
-	return detail
 }
 
 func assertDeepEqual(t *testing.T, what string, got, want any) {
@@ -261,5 +227,61 @@ func assertUndecodableRowError(t *testing.T, operation string, err error) {
 
 	if err == nil || errors.Is(err, domain.ErrInvalid) || !strings.Contains(err.Error(), "stored row cannot be decoded") {
 		t.Errorf("%s error = %v, want an undecodable-row error that does not wrap domain.ErrInvalid", operation, err)
+	}
+}
+
+// manyItemStreams is the number of streams insertManyItems stores per file: video, audio
+// and subtitle, the shape of a typical film.
+const manyItemStreams = 3
+
+// insertManyItems stores count items with one probed file and manyItemStreams streams each
+// in one transaction, much faster than count saves, and returns the file IDs in sort order.
+func insertManyItems(t *testing.T, inspection *sql.DB, libraryID string, count int) []string {
+	t.Helper()
+
+	transaction, err := inspection.BeginTx(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+
+	defer func() { _ = transaction.Rollback() }()
+
+	fileIDs := make([]string, 0, count)
+
+	for number := range count {
+		itemID, fileID, title := testID('i', number), testID('f', number), testID('t', number)
+		statements := []struct {
+			query string
+			args  []any
+		}{
+			{query: `INSERT INTO items (id, library_id, kind, match_key, title, sort_title, created_at, updated_at)
+				VALUES (?, ?, 'movie', ?, ?, ?, 0, 0)`, args: []any{itemID, libraryID, fileID + ".mkv", title, title}},
+			{query: insertMediaFileQuery, args: []any{fileID, itemID, libraryID, fileID + ".mkv"}},
+			{query: insertMediaStreamQuery, args: []any{fileID, 0, "video"}},
+			{query: insertMediaStreamQuery, args: []any{fileID, 1, "audio"}},
+			{query: insertMediaStreamQuery, args: []any{fileID, 2, "subtitle"}},
+		}
+
+		for _, statement := range statements {
+			if _, err := transaction.ExecContext(t.Context(), statement.query, statement.args...); err != nil {
+				t.Fatalf("insert item %d: %v", number, err)
+			}
+		}
+
+		fileIDs = append(fileIDs, fileID)
+	}
+
+	if err := transaction.Commit(); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	return fileIDs
+}
+
+func closeTestDB(t *testing.T, db *sqlite.DB) {
+	t.Helper()
+
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close error = %v", err)
 	}
 }

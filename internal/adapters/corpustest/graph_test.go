@@ -136,11 +136,11 @@ func requireTranscoding(t *testing.T, ffmpegPath string) {
 func (graph *corpusGraph) scanCorpus(t *testing.T) map[string]string {
 	t.Helper()
 
-	catalog := sqlite.NewCatalogWriter(graph.database)
+	catalog := sqlite.NewLibraryCatalog(graph.database, time.Now)
 
 	service, err := scan.NewService(scan.Dependencies{
 		Libraries: sqlite.NewLibraryRepository(graph.database, time.Now),
-		Walker:    graph.files, Resolver: graph.files, Prober: graph.prober, Catalog: catalog,
+		Walker:    graph.files, Resolver: graph.files, Prober: graph.prober, CatalogV2: catalog,
 		IDs: uuidgen.New(), Clock: time.Now, Logger: graph.logger,
 	})
 	if err != nil {
@@ -159,7 +159,7 @@ func (graph *corpusGraph) scanCorpus(t *testing.T) map[string]string {
 			status.State, status.ErrorCode, status.Counts)
 	}
 
-	stored, err := catalog.FileStates(t.Context(), graph.libraryID)
+	stored, err := catalog.PlacedFiles(t.Context(), graph.libraryID)
 	if err != nil {
 		t.Fatalf("list the catalogued files: %v", err)
 	}

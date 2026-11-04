@@ -25,7 +25,7 @@ func (h *harness) scanFiles(t *testing.T, libraryID, root string, files ...libra
 func TestV2MovieFolderWithVersionsAndTrailer(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	status := h.scanFiles(t, moviesID, moviesRoot,
@@ -60,7 +60,7 @@ func TestV2MovieFolderWithVersionsAndTrailer(t *testing.T) {
 func TestV2ExtraWithoutParentMovieIsSkipped(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	status := h.scanFiles(t, moviesID, moviesRoot, fileAt("Heat (1995)/trailer.mkv", 1))
@@ -75,7 +75,7 @@ func TestV2ExtraWithoutParentMovieIsSkipped(t *testing.T) {
 func TestV2RescanProbesAndMovesNothing(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	files := []library.FileState{
@@ -106,7 +106,7 @@ func TestV2RescanProbesAndMovesNothing(t *testing.T) {
 func TestV2FolderRenameMovesWithoutProbeAndKeepsFileRemovesOldMovie(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, moviesID, moviesRoot, fileAt("Heat (1995)/Heat (1995).mkv", 1))
@@ -133,7 +133,7 @@ func TestV2FolderRenameMovesWithoutProbeAndKeepsFileRemovesOldMovie(t *testing.T
 func TestV2ShowsLibrary(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	status := h.scanFiles(t, showsID, showsRoot,
@@ -162,7 +162,7 @@ func TestV2ShowsLibrary(t *testing.T) {
 func TestV2RenamedEpisodeKeepsItsID(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, showsID, showsRoot, fileAt("Severance/Season 01/Severance - S01E01 - Good News.mkv", 1))
@@ -185,7 +185,7 @@ func TestV2RenamedEpisodeKeepsItsID(t *testing.T) {
 func TestV2ShowFolderRenameMovesFilesAndRemovesOldShow(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, showsID, showsRoot, fileAt("Old Name/Season 01/Old Name - S01E01.mkv", 1))
@@ -215,7 +215,7 @@ func TestV2AbsoluteNumberedShowIsOneShowOneSeason(t *testing.T) {
 
 	const episodes = 131
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	files := make([]library.FileState, 0, episodes)
@@ -238,7 +238,7 @@ func TestV2AbsoluteNumberedShowIsOneShowOneSeason(t *testing.T) {
 func TestV2RefreshSetCoversSidecarChanges(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	movie := fileAt("Heat (1995)/Heat (1995).mkv", 1)
@@ -266,7 +266,7 @@ func TestV2RefreshSetCoversSidecarChanges(t *testing.T) {
 func TestV2SafetyRules(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, moviesID, moviesRoot, fileAt("Locked/Heat (1995)/Heat (1995).mkv", 1), fileAt("Alien (1979).mkv", 2))
@@ -288,7 +288,7 @@ func TestV2SafetyRules(t *testing.T) {
 func TestV2RefreshFailureFailsScanAndKeepsSidecarsUnsaved(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.refresher.err = errors.New("boom")
 	h.start(t)
 
@@ -304,7 +304,7 @@ func TestV2RefreshFailureFailsScanAndKeepsSidecarsUnsaved(t *testing.T) {
 func TestV2DefaultsAndFinished(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.refresher = nil
 
 	var (
@@ -332,7 +332,7 @@ func TestV2DefaultsAndFinished(t *testing.T) {
 	}
 }
 
-func TestM2PathCallsFinished(t *testing.T) {
+func TestFinishedIsCalledAfterEveryScan(t *testing.T) {
 	t.Parallel()
 
 	h := newHarness(t)
@@ -353,7 +353,7 @@ func TestV2ValidationNeedsACatalog(t *testing.T) {
 	t.Parallel()
 
 	h := newHarness(t)
-	h.catalog = nil
+	h.catalogV2 = nil
 
 	if _, err := scan.NewService(h.dependencies()); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("NewService without any catalog error = %v, want ErrInvalid", err)

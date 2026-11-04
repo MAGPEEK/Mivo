@@ -9,23 +9,29 @@ import (
 	"strings"
 	"time"
 
-	sqlitedriver "modernc.org/sqlite"
-	sqlite3 "modernc.org/sqlite/lib"
-
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
-	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 )
 
-// removeBatchSize bounds the IDs bound to one statement of RemoveFiles. SQLite accepts at
-// most 32 766 parameters per statement; a vanished folder can hold more files than that.
-const removeBatchSize = 500
+// ProbedFile is one file with its item and probe result, as the test seeding writer stores
+// it (the milestone-2 catalog shape, one item per file).
+type ProbedFile struct {
+	Item     library.Item
+	File     media.File
+	ProbedAt time.Time
+}
 
-// The writer is the catalog port of the scan use case.
-var _ scan.CatalogWriter = (*CatalogWriter)(nil)
+// CatalogFile is a stored file as the test seeding writer lists it.
+type CatalogFile struct {
+	ID     string
+	ItemID string
+	State  library.FileState
+}
 
-// CatalogWriter stores scan results (ADR 0022). Writes run in one transaction each on the
+// CatalogWriter seeds the milestone-2 catalog shape (one item per file) for the reader tests;
+// production scans write through LibraryCatalog (M3-11b). Writes run in one transaction each on the
 // writer pool; FileStates reads through the reader pool.
 //
 // It keeps the catalog's invariant that a file and its item belong to the same library:
@@ -42,15 +48,15 @@ func NewCatalogWriter(db *DB) *CatalogWriter {
 
 // FileStates returns every stored file of a library ordered by relative path, for change
 // detection. An unknown library has no files.
-func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) ([]scan.CatalogFile, error) {
+func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) ([]CatalogFile, error) {
 	rows, err := writer.reader.ListFileStates(ctx, libraryID)
 	if err != nil {
 		return nil, fmt.Errorf("read file states of library %q: %w", libraryID, err)
 	}
 
-	files := make([]scan.CatalogFile, 0, len(rows))
+	files := make([]CatalogFile, 0, len(rows))
 	for _, row := range rows {
-		files = append(files, scan.CatalogFile{
+		files = append(files, CatalogFile{
 			ID:     row.ID,
 			ItemID: row.ItemID,
 			State: library.FileState{
@@ -76,8 +82,8 @@ func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) (
 // stands for one file.
 //
 // It changes nothing and returns an error wrapping (the contract of
-// scan.CatalogWriter.SaveProbedFile)
-//   - domain.ErrInvalid for a record that breaks the rules of scan.ProbedFile (including a
+// CatalogWriter.SaveProbedFile)
+//   - domain.ErrInvalid for a record that breaks the rules of ProbedFile (including a
 //     zero ProbedAt, a zero CreatedAt or an empty sort title of a new item, and a new item
 //     whose kind does not follow from its library's kind, library.ItemKindForLibrary),
 //   - domain.ErrNotFound for an unknown library,
@@ -86,7 +92,7 @@ func (writer *CatalogWriter) FileStates(ctx context.Context, libraryID string) (
 //     has that path as its match key,
 //   - domain.ErrInvalid when a stored file ID belongs to another item or library, or a
 //     stored item to another library.
-func (writer *CatalogWriter) SaveProbedFile(ctx context.Context, record scan.ProbedFile) error {
+func (writer *CatalogWriter) SaveProbedFile(ctx context.Context, record ProbedFile) error {
 	if err := checkProbedFile(record); err != nil {
 		return fmt.Errorf("save probed file %q: %w", record.File.ID, err)
 	}
@@ -122,7 +128,7 @@ func (writer *CatalogWriter) RemoveFiles(ctx context.Context, libraryID string, 
 
 // checkProbedFile rejects what would otherwise surface as a constraint error or as a file
 // filed under the wrong item or library.
-func checkProbedFile(record scan.ProbedFile) error {
+func checkProbedFile(record ProbedFile) error {
 	file := record.File
 
 	switch {
@@ -150,7 +156,7 @@ func checkProbedFile(record scan.ProbedFile) error {
 // catalogSave is one SaveProbedFile run inside its write transaction.
 type catalogSave struct {
 	queries *sqlcgen.Queries
-	record  scan.ProbedFile
+	record  ProbedFile
 }
 
 func (run catalogSave) apply(ctx context.Context) error {
@@ -321,12 +327,4 @@ func removeFiles(ctx context.Context, queries *sqlcgen.Queries, libraryID string
 	}
 
 	return nil
-}
-
-// isUniqueViolation reports a UNIQUE constraint failure. The connections report extended
-// result codes, so the code tells it apart from other constraint errors.
-func isUniqueViolation(err error) bool {
-	var driverError *sqlitedriver.Error
-
-	return errors.As(err, &driverError) && driverError.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }

@@ -30,7 +30,7 @@ type PlacedFile struct {
 }
 
 // PlacedFileCatalog persists the item hierarchy and the files in it. Implemented by
-// adapters/sqlite (M3-05b) on a type of its own, next to the milestone-2 CatalogWriter.
+// adapters/sqlite (M3-05b).
 //
 // newID creates the IDs of items the catalog has to create; it is called once per new item.
 // A chain is upserted level by level by (library, parent, kind, match key); existing items

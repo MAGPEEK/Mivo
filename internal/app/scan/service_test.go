@@ -25,7 +25,7 @@ func TestNewServiceRejectsMissingDependencies(t *testing.T) {
 		{name: "walker", mutate: func(d *scan.Dependencies) { d.Walker = nil }},
 		{name: "resolver", mutate: func(d *scan.Dependencies) { d.Resolver = nil }},
 		{name: "prober", mutate: func(d *scan.Dependencies) { d.Prober = nil }},
-		{name: "catalog", mutate: func(d *scan.Dependencies) { d.Catalog = nil }},
+		{name: "catalog", mutate: func(d *scan.Dependencies) { d.CatalogV2 = nil }},
 		{name: "id generator", mutate: func(d *scan.Dependencies) { d.IDs = nil }},
 		{name: "clock", mutate: func(d *scan.Dependencies) { d.Clock = nil }},
 		{name: "logger", mutate: func(d *scan.Dependencies) { d.Logger = nil }},
@@ -271,8 +271,8 @@ func TestCloseCancelsARunningScanWithoutRecordingFailures(t *testing.T) {
 	assertState(t, status, scan.StateFailed, scan.ErrorCodeCanceled)
 	assertCounts(t, status, scan.Counts{})
 
-	if h.catalog.saveCount() != 0 {
-		t.Errorf("catalog saved %d files after cancellation, want 0", h.catalog.saveCount())
+	if h.catalogV2.saves != 0 {
+		t.Errorf("catalog saved %d files after cancellation, want 0", h.catalogV2.saves)
 	}
 
 	if status.FinishedAt.IsZero() {

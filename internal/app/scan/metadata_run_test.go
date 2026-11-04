@@ -14,7 +14,7 @@ import (
 func newMetadataHarness(t *testing.T) (*harness, *memorySidecars, *scriptedParser) {
 	t.Helper()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	sidecars := newMemorySidecars()
 	parser := &scriptedParser{results: map[string]scan.NFOResult{
 		"heat":   nfoWith(metadata.Record{Title: "Heat NFO"}),
@@ -115,7 +115,7 @@ func TestScanCanceledDuringTheMetadataStep(t *testing.T) {
 func TestScanPassesPlacedFilesToTheRefresher(t *testing.T) {
 	t.Parallel()
 
-	h := newHarnessV2(t)
+	h := newHarness(t)
 	h.start(t)
 
 	h.scanFiles(t, moviesID, moviesRoot, fileAt("Alien (1979).mkv", 1), imageFile("Alien (1979)-poster.jpg", 2))

@@ -26,11 +26,9 @@ type harness struct {
 	walker    *scriptedWalker
 	resolver  prefixResolver
 	prober    *recordingProber
-	catalog   *memoryCatalog
-	// catalogV2 and refresher select the v2 pipeline when set (see newHarnessV2); finished
-	// is the optional Finished callback.
 	catalogV2 *memoryCatalogV2
 	refresher *recordingRefresher
+	// finished is the optional Finished callback.
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
 	finished          func(ctx context.Context, libraryID string)
@@ -50,16 +48,15 @@ func newHarness(t *testing.T) *harness {
 			{ID: moviesID, Name: "Movies", Root: moviesRoot, Kind: library.KindMovies},
 			{ID: showsID, Name: "Shows", Root: showsRoot, Kind: library.KindShows},
 		}},
-		walker:   newScriptedWalker(),
-		resolver: prefixResolver{errs: map[string]error{}},
-		prober:   newRecordingProber(),
-		catalog:  newMemoryCatalog(),
-		ids:      &counterIDs{},
-		clock:    &tickingClock{now: time.Date(2026, time.October, 30, 18, 0, 0, 0, time.UTC)},
-		logs:     &syncBuffer{},
+		walker:    newScriptedWalker(),
+		resolver:  prefixResolver{errs: map[string]error{}},
+		prober:    newRecordingProber(),
+		ids:       &counterIDs{},
+		clock:     &tickingClock{now: time.Date(2026, time.October, 30, 18, 0, 0, 0, time.UTC)},
+		logs:      &syncBuffer{},
+		catalogV2: newMemoryCatalogV2(),
+		refresher: &recordingRefresher{},
 	}
-
-	h.catalog.libraryKinds = map[string]library.Kind{moviesID: library.KindMovies, showsID: library.KindShows}
 
 	return h
 }
@@ -82,10 +79,6 @@ func (h *harness) dependencies() scan.Dependencies {
 	}
 
 	// A nil pointer in an interface field would count as set.
-	if h.catalog != nil {
-		dependencies.Catalog = h.catalog
-	}
-
 	if h.catalogV2 != nil {
 		dependencies.CatalogV2 = h.catalogV2
 	}
@@ -101,18 +94,6 @@ func (h *harness) dependencies() scan.Dependencies {
 	return dependencies
 }
 
-// newHarnessV2 wires the v2 pipeline: the milestone-2 catalog is not set.
-func newHarnessV2(t *testing.T) *harness {
-	t.Helper()
-
-	h := newHarness(t)
-	h.catalog = nil
-	h.catalogV2 = newMemoryCatalogV2()
-	h.refresher = &recordingRefresher{}
-
-	return h
-}
-
 // start creates the service; Close runs at cleanup.
 func (h *harness) start(t *testing.T) *scan.Service {
 	t.Helper()
@@ -123,17 +104,6 @@ func (h *harness) start(t *testing.T) *scan.Service {
 	}
 
 	h.service = service
-
-	// Registered first, so it runs after Close: no scan may still write then.
-	t.Cleanup(func() {
-		if h.catalog == nil {
-			return
-		}
-
-		if violations := h.catalog.violationList(); len(violations) > 0 {
-			t.Errorf("the scan broke catalog rules: %q", violations)
-		}
-	})
 
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)

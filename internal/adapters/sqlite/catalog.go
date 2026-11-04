@@ -11,10 +11,11 @@ import (
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
-// The media catalog (ADR 0022) is split by use: CatalogWriter serves the scan (change
-// detection and its writes, port app/scan.CatalogWriter), CatalogReader serves the library
-// grid, the item detail (port app/library.ItemReader) and playback (port
-// app/playback.FileSource). Both store paths relative to the library root, never absolute.
+// The media catalog (ADR 0022, ADR 0027) is split by use: LibraryCatalog serves the scan
+// (placement, sidecars, metadata and artwork writes), CatalogReader serves the library grid,
+// the item detail (port app/library.ItemReader), artwork (port app/images.ArtworkSource) and
+// playback (port app/playback.FileSource). Both store paths relative to the library root,
+// never absolute.
 
 // errUndecodableRow marks a stored row the domain rejects: an unknown kind, container or
 // HDR format, a malformed frame rate, streams next to a probe error (an edited database or
