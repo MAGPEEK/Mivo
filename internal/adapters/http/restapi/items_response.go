@@ -28,24 +28,46 @@ func itemPageResponse(page applibrary.ItemPage) (apigen.ItemPage, error) {
 	return apigen.ItemPage{Items: items, NextCursor: optionalString(page.NextCursor)}, nil
 }
 
+// itemSummaryResponse maps a listing entry. Containers own no file and so send no media
+// summary; absent numbers, counts and artwork are omitted.
 func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, error) {
-	id, err := parseStoredID("item", summary.Item.ID)
+	item := summary.Item
+
+	identity, err := itemIdentity(item)
 	if err != nil {
 		return apigen.ItemSummary{}, err
 	}
 
-	libraryID, err := parseStoredID("library", summary.Item.LibraryID)
-	if err != nil {
-		return apigen.ItemSummary{}, fmt.Errorf("item %s: %w", summary.Item.ID, err)
+	response := apigen.ItemSummary{
+		ID:             identity.id,
+		LibraryID:      identity.libraryID,
+		ParentID:       identity.parentID,
+		Kind:           identity.kind,
+		Title:          item.Title,
+		Year:           optionalNumber(item.Year),
+		Number:         optionalNumber(item.Number),
+		NumberEnd:      optionalNumber(item.NumberEnd),
+		AbsoluteNumber: optionalNumber(item.AbsoluteNumber),
+		ExtraType:      extraTypeResponse(item.ExtraType),
+		ChildCount:     optionalInt32(summary.ChildCount),
+		LeafCount:      optionalInt32(summary.LeafCount),
 	}
 
-	return apigen.ItemSummary{
-		ID:        id,
-		LibraryID: libraryID,
-		Kind:      apigen.ItemKind(summary.Item.Kind),
-		Title:     summary.Item.Title,
-		Media:     mediaSummaryResponse(summary.PrimaryFile),
-	}, nil
+	if summary.HasPrimaryFile() {
+		response.Media = mediaSummaryResponse(summary.PrimaryFile)
+	}
+
+	response.Poster, err = imageRefResponse(summary.Poster)
+	if err != nil {
+		return apigen.ItemSummary{}, fmt.Errorf("item %s: poster: %w", item.ID, err)
+	}
+
+	response.Thumb, err = imageRefResponse(summary.Thumb)
+	if err != nil {
+		return apigen.ItemSummary{}, fmt.Errorf("item %s: thumb: %w", item.ID, err)
+	}
+
+	return response, nil
 }
 
 // mediaSummaryResponse describes the primary file for list views. A file whose probe failed
@@ -73,29 +95,17 @@ func mediaSummaryResponse(file media.File) *apigen.MediaSummary {
 	return summary
 }
 
-func itemDetailResponse(detail applibrary.ItemDetail) (apigen.ItemDetail, error) {
-	id, err := parseStoredID("item", detail.Item.ID)
+// itemFileResponse maps a file with its place among the item's files.
+func itemFileResponse(itemFile applibrary.ItemFile) (apigen.MediaFile, error) {
+	response, err := mediaFileResponse(itemFile.File)
 	if err != nil {
-		return apigen.ItemDetail{}, err
+		return apigen.MediaFile{}, err
 	}
 
-	libraryID, err := parseStoredID("library", detail.Item.LibraryID)
-	if err != nil {
-		return apigen.ItemDetail{}, fmt.Errorf("item %s: %w", detail.Item.ID, err)
-	}
+	response.VersionLabel = optionalString(itemFile.VersionLabel)
+	response.PartNumber = optionalNumber(itemFile.PartNumber)
 
-	files := make([]apigen.MediaFile, 0, len(detail.Files))
-
-	for _, file := range detail.Files {
-		response, err := mediaFileResponse(file)
-		if err != nil {
-			return apigen.ItemDetail{}, fmt.Errorf("item %s: %w", detail.Item.ID, err)
-		}
-
-		files = append(files, response)
-	}
-
-	return apigen.ItemDetail{ID: id, LibraryID: libraryID, Kind: apigen.ItemKind(detail.Item.Kind), Title: detail.Item.Title, Files: files}, nil
+	return response, nil
 }
 
 // mediaFileResponse sends the file name only, never the relative path (ADR 0022).

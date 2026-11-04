@@ -38,6 +38,9 @@ type ItemCatalog interface {
 	// GetItem returns an item with its files and streams; an unknown ID wraps
 	// domain.ErrNotFound.
 	GetItem(ctx context.Context, itemID string) (applibrary.ItemDetail, error)
+	// ListChildren returns one page of the seasons of a show or the episodes of a season. A
+	// bad limit or cursor wraps domain.ErrInvalid, an unknown item domain.ErrNotFound.
+	ListChildren(ctx context.Context, itemID string, request applibrary.ChildPageRequest) (applibrary.ItemPage, error)
 }
 
 // ScanService is the port of the scan endpoint and the scan status of a library,

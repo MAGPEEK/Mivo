@@ -19,8 +19,9 @@ through seasons and episodes. UX: DT-20 … DT-22, DT-24, LB-40, DT-06, DT-08, D
       stored tag.
 - [ ] No absolute path and no library root appears in any response (test scans the JSON of a
       fixture item whose fake data contains a root).
-- [ ] BACKLOG `restapi library` row done and deleted (reject an empty `?cursor=`; spec note
-      that `\` counts as a directory separator in `fileName`).
+- [x] BACKLOG `restapi library` row done (empty `?cursor=` rejected). The spec note that `` counts
+      as a directory separator in `fileName` moved to the BACKLOG row `openapi` (orchestrator
+      decision 2026-11-04: spec changes need a client regeneration and are batched).
 - [ ] Table tests per mapper (movie, show, season with fallback poster, episode with
       siblings, extra) and handler tests for children paging and errors against fakes of
       M3-06's ports.

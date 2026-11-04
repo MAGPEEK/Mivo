@@ -3,11 +3,10 @@ package restapi
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
-	"github.com/magpeek/mivo/internal/adapters/http/requestid"
+	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -28,14 +27,10 @@ const (
 // operationListItemChildren is the operation name of the children endpoint, for logs.
 const operationListItemChildren = "listItemChildren"
 
-// codeNotImplemented answers an operation of the contract whose use case is not wired yet.
-// It is internal, not a published Problem.code.
-const codeNotImplemented = "not_implemented"
-
 // ListLibraryItems answers one page of a library's items. A limit or cursor outside the
 // contract answers 400 "invalid", an unknown library 404; every other failure is a 500.
 func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibraryItemsRequestObject) (apigen.ListLibraryItemsResponseObject, error) {
-	page, err := pageRequest(request.Params)
+	page, err := pageRequest(request.Params.Limit, request.Params.Cursor)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationListLibraryItems, err)
 	}
@@ -69,39 +64,59 @@ func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject
 	return apigen.GetItem200JSONResponse(response), nil
 }
 
-// ListItemChildren answers 501 until M3-06b implements it on the library read model v2.
-func (api *API) ListItemChildren(ctx context.Context, _ apigen.ListItemChildrenRequestObject) (apigen.ListItemChildrenResponseObject, error) {
-	return apigen.ListItemChildrendefaultApplicationProblemPlusJSONResponse(api.notImplemented(ctx, operationListItemChildren)), nil
+// ListItemChildren answers one page of the seasons of a show or the episodes of a season. A
+// bad limit, cursor or order answers 400 "invalid", an unknown item 404; every other failure
+// is a 500.
+func (api *API) ListItemChildren(ctx context.Context, request apigen.ListItemChildrenRequestObject) (apigen.ListItemChildrenResponseObject, error) {
+	page, err := pageRequest(request.Params.Limit, request.Params.Cursor)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", operationListItemChildren, err)
+	}
+
+	descending, err := descendingOrder(request.Params.Order)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", operationListItemChildren, err)
+	}
+
+	children, err := api.items.ListChildren(ctx, request.ItemID.String(),
+		applibrary.ChildPageRequest{Page: page, Descending: descending})
+	if err != nil {
+		return nil, operationFailure(operationListItemChildren, err, http.StatusBadRequest, http.StatusNotFound)
+	}
+
+	response, err := itemPageResponse(children)
+	if err != nil {
+		return nil, operationFailure(operationListItemChildren, err)
+	}
+
+	return apigen.ListItemChildren200JSONResponse(response), nil
 }
 
-// notImplemented answers an operation whose use case does not exist yet. The code
-// "not_implemented" is internal and not published in the contract; it disappears with the
-// last stub (M3-06b).
-func (api *API) notImplemented(ctx context.Context, operation string) problemResponse {
-	api.logger.DebugContext(ctx, "api operation not implemented",
-		slog.String("operation", operation),
-		slog.String("request_id", requestid.FromContext(ctx)))
+// descendingOrder reads the order parameter; omitted means ascending. The generated server
+// binds the string but does not check the enum.
+func descendingOrder(order *apigen.SortOrder) (bool, error) {
+	if order == nil {
+		return false, nil
+	}
 
-	return problemResponse{
-		Body:       NewProblem(http.StatusNotImplemented, codeNotImplemented),
-		StatusCode: http.StatusNotImplemented,
+	switch *order {
+	case apigen.SortOrderAsc:
+		return false, nil
+	case apigen.SortOrderDesc:
+		return true, nil
+	default:
+		return false, fmt.Errorf("order not asc or desc: %w", domain.ErrInvalid)
 	}
 }
 
-// problemResponse has the fields of every generated
-// <Operation>defaultApplicationProblemPlusJSONResponse, so it converts to each of them.
-type problemResponse struct {
-	Body       apigen.Problem
-	StatusCode int
-}
-
 // pageRequest checks the paging parameters against the contract. Errors wrap
-// domain.ErrInvalid and do not quote the cursor, which may be long.
-func pageRequest(params apigen.ListLibraryItemsParams) (library.PageRequest, error) {
+// domain.ErrInvalid and do not quote the cursor, which may be long. A present but empty
+// cursor is rejected: clients omit the first page's cursor.
+func pageRequest(limitParam *int32, cursorParam *string) (library.PageRequest, error) {
 	var page library.PageRequest
 
-	if params.Limit != nil {
-		limit := int(*params.Limit)
+	if limitParam != nil {
+		limit := int(*limitParam)
 		if limit < minPageLimit || limit > library.MaxPageLimit {
 			return library.PageRequest{}, fmt.Errorf("limit %d not between %d and %d: %w",
 				limit, minPageLimit, library.MaxPageLimit, domain.ErrInvalid)
@@ -110,13 +125,13 @@ func pageRequest(params apigen.ListLibraryItemsParams) (library.PageRequest, err
 		page.Limit = limit
 	}
 
-	if params.Cursor != nil {
-		if len(*params.Cursor) > maxCursorLength {
-			return library.PageRequest{}, fmt.Errorf("cursor longer than %d bytes: %w",
+	if cursorParam != nil {
+		if *cursorParam == "" || len(*cursorParam) > maxCursorLength {
+			return library.PageRequest{}, fmt.Errorf("cursor empty or longer than %d bytes: %w",
 				maxCursorLength, domain.ErrInvalid)
 		}
 
-		page.Cursor = *params.Cursor
+		page.Cursor = *cursorParam
 	}
 
 	return page, nil

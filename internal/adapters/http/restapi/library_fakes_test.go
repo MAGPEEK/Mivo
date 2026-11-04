@@ -35,10 +35,14 @@ type fakeLibraryService struct {
 	pageErr error
 	detail  applibrary.ItemDetail
 	itemErr error
+	// children and childrenErr answer ListChildren.
+	children    applibrary.ItemPage
+	childrenErr error
 
 	requestedLibraries []string
 	requestedPages     []library.PageRequest
 	requestedItems     []string
+	requestedChildren  []applibrary.ChildPageRequest
 }
 
 func (service *fakeLibraryService) ListLibraries(context.Context) ([]applibrary.Overview, error) {
@@ -79,6 +83,23 @@ func (service *fakeLibraryService) GetItem(_ context.Context, itemID string) (ap
 	service.record(&service.requestedItems, itemID)
 
 	return service.detail, service.itemErr
+}
+
+func (service *fakeLibraryService) ListChildren(_ context.Context, itemID string, request applibrary.ChildPageRequest) (applibrary.ItemPage, error) {
+	service.record(&service.requestedItems, itemID)
+
+	service.mutex.Lock()
+	service.requestedChildren = append(service.requestedChildren, request)
+	service.mutex.Unlock()
+
+	return service.children, service.childrenErr
+}
+
+func (service *fakeLibraryService) childRequests() []applibrary.ChildPageRequest {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	return append([]applibrary.ChildPageRequest(nil), service.requestedChildren...)
 }
 
 func (service *fakeLibraryService) record(target *[]string, id string) {
