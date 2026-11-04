@@ -61,6 +61,7 @@ const (
 	ReasonVideoBitDepthNotSupported ReasonCode = "video_bit_depth_not_supported"
 	ReasonAudioCodecNotSupported    ReasonCode = "audio_codec_not_supported"
 	ReasonAudioTrackNotDefault      ReasonCode = "audio_track_not_default"
+	ReasonDiscSource                ReasonCode = "disc_source"
 )
 
 // WarningCode describes a degraded result. Like reason codes, the values are stable.
