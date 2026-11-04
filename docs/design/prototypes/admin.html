@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mivo – Prototype: Admin area, library management, users</title>
+<style>
+:root{
+  --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#a3a9b0;
+  --accent:#ff6b57;--accent-hover:#ff8572;--on-accent:#3a0e07;--dp:#3dd68c;--ds:#4c9aff;--tc:#f5b544;--err:#ff7a7a;
+  --r-sm:6px;--r-md:8px;--r-lg:10px;--shadow:0 16px 48px rgb(0 0 0/.55);
+  --font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.muted{color:var(--muted)} .mono{font-family:var(--mono)}
+.legend{background:#1d1410;border-bottom:1px solid #4a2a22;padding:12px 16px;font-size:13px}
+.legend summary{cursor:pointer;font-weight:600}.legend ul{margin:6px 0;padding-left:20px}
+.legend code{background:var(--raised);padding:0 4px;border-radius:4px}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--divider);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.logo{font-weight:800;color:var(--accent);font-size:18px}
+.screens{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.screens button,.chip-btn{background:transparent;border:1px solid var(--divider);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--muted)}
+.screens button[aria-current=page]{background:var(--raised);color:var(--text);border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--divider);background:var(--raised);border-radius:var(--r-md);padding:8px 14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:700}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.danger{color:var(--err)} .btn.sm{padding:4px 10px;font-size:13px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.shell{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 120px)}
+.side{background:var(--surface);border-right:1px solid var(--divider);padding:12px 8px}
+.side h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 8px 4px}
+.side button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:7px 10px;cursor:pointer;color:var(--muted)}
+.side button:hover{background:var(--raised)}
+.side button[aria-current=page]{background:var(--raised);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.side .back{color:var(--text);font-weight:600}
+.content{padding:24px 32px;max-width:1100px;width:100%}
+.page[hidden]{display:none}
+.phead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+.phead h1{margin:0;font-size:26px} .phead p{margin:2px 0 0;color:var(--muted)}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.switch input{width:18px;height:18px;accent-color:var(--accent)}
+.adv{display:none} body.expert .adv{display:block} body.expert tr.adv{display:table-row}
+.advmark{font-size:11px;border:1px solid var(--tc);color:var(--tc);border-radius:4px;padding:0 4px;margin-left:6px}
+.card{background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-lg);padding:16px;margin-bottom:16px}
+.card h2{font-size:16px;margin:0 0 10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.field{margin-bottom:14px} .field>label,.field>.lbl{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+select,input[type=text],input[type=number],input[type=password]{width:100%;background:var(--bg);border:1px solid var(--divider);border-radius:var(--r-sm);padding:7px 9px}
+.hint{font-size:12px;color:var(--muted);margin:4px 0}
+.savebar{position:sticky;bottom:0;display:flex;gap:12px;align-items:center;justify-content:flex-end;background:var(--surface);border-top:1px solid var(--divider);padding:10px 16px;margin:24px -32px -24px}
+.dirty{color:var(--tc);margin-right:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--divider);vertical-align:middle}
+th{color:var(--muted);font-weight:500}
+.tablewrap{overflow-x:auto}
+.pill{display:inline-block;border-radius:999px;padding:0 8px;font-size:12px;border:1px solid var(--divider)}
+.pill.ok{color:var(--dp);border-color:var(--dp)} .pill.ds{color:var(--ds);border-color:var(--ds)} .pill.tc{color:var(--tc);border-color:var(--tc)} .pill.bad{color:var(--err);border-color:var(--err)}
+.bar{height:6px;border-radius:3px;background:var(--divider);overflow:hidden;min-width:80px} .bar span{display:block;height:100%;background:var(--accent)}
+.badge{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--muted);border-radius:4px;padding:0 5px}
+.ico{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:var(--r-sm);background:var(--raised);font-weight:800}
+.alert{border-left:3px solid var(--tc);background:#241d10;padding:8px 12px;border-radius:var(--r-sm);margin-bottom:8px}
+.alert.err{border-color:var(--err);background:#2a1414}
+.empty{text-align:center;padding:64px 16px;border:2px dashed var(--divider);border-radius:var(--r-lg)}
+.empty .big{font-size:40px}
+.log{background:#090a0d;border:1px solid var(--divider);border-radius:var(--r-md);padding:10px;font:12px/1.6 var(--mono);height:220px;overflow:auto;white-space:pre-wrap}
+/* dialogs */
+dialog{background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:0;max-width:min(900px,calc(100vw - 24px));width:100%}
+dialog::backdrop{background:rgb(0 0 0/.65)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--divider)}
+.dlg-head h2{margin:0;font-size:18px}
+.dlg-body{padding:18px;max-height:68vh;overflow:auto}
+.dlg-foot{display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--divider);flex-wrap:wrap}
+.lay{display:grid;grid-template-columns:160px 1fr;min-height:380px}
+.tabs{border-right:1px solid var(--divider);padding:8px;display:flex;flex-direction:column;gap:2px}
+.tabs button{background:none;border:0;text-align:left;padding:8px 10px;border-radius:var(--r-sm);cursor:pointer;color:var(--muted)}
+.tabs button[aria-selected=true]{background:var(--raised);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.lay .pane{padding:18px;max-height:62vh;overflow:auto} .pane[hidden]{display:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.tile{background:var(--bg);border:2px solid var(--divider);border-radius:var(--r-md);padding:12px;text-align:center;cursor:pointer}
+.tile[aria-checked=true]{border-color:var(--accent);background:var(--raised)}
+.tile[aria-disabled=true]{opacity:.4;cursor:not-allowed}
+.tile .big{font-size:26px;display:block}
+.folders{list-style:none;margin:0 0 8px;padding:0}
+.folders li{display:flex;gap:8px;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--divider);border-radius:var(--r-sm);padding:6px 10px;margin-bottom:6px}
+.crumbs{display:flex;flex-wrap:wrap;gap:2px;align-items:center;margin-bottom:8px}
+.crumbs button{background:none;border:0;color:var(--accent);cursor:pointer;padding:2px 4px}
+.crumbs button[aria-current=location]{color:var(--text);cursor:default}
+.fslist{list-style:none;margin:0;padding:0;border:1px solid var(--divider);border-radius:var(--r-md);max-height:260px;overflow:auto}
+.fslist li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--divider)}
+.fslist li:last-child{border:0}
+.fslist .nm{background:none;border:0;cursor:pointer;text-align:left;flex:1;padding:2px}
+.fslist li.locked .nm{color:var(--muted)}
+.help{border:1px solid var(--tc);background:#241d10;border-radius:var(--r-md);padding:12px;margin-top:10px}
+.help ol{margin:6px 0;padding-left:20px} .help code{background:var(--raised);padding:0 4px;border-radius:4px}
+.sub{display:flex;gap:4px;margin-bottom:8px}
+.sub button{background:var(--raised);border:1px solid var(--divider);border-radius:999px;padding:3px 10px;cursor:pointer}
+.sub button[aria-selected=true]{border-color:var(--accent);color:var(--accent)}
+.err{color:var(--err)} .field .err{font-size:12px;margin-top:4px}
+/* profile picker */
+.picker{display:grid;place-items:center;min-height:calc(100vh - 120px);text-align:center;padding:24px}
+.profiles{display:flex;gap:24px;flex-wrap:wrap;justify-content:center;margin:24px 0}
+.prof{background:none;border:0;cursor:pointer;width:130px;padding:6px;border-radius:var(--r-lg)}
+.avatar{width:96px;height:96px;border-radius:50%;margin:0 auto 8px;display:grid;place-items:center;font-size:36px;font-weight:800;position:relative;color:#101216}
+.avatar .lock{position:absolute;right:-2px;bottom:-2px;background:var(--surface);color:var(--text);border-radius:50%;width:28px;height:28px;font-size:14px;display:grid;place-items:center;border:1px solid var(--divider)}
+.pin{display:grid;grid-template-columns:repeat(3,64px);gap:8px;justify-content:center;margin:12px 0}
+.pin button{height:56px;font-size:20px;background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-md);cursor:pointer}
+.dots{display:flex;gap:10px;justify-content:center;margin:8px 0}.dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted)}.dots i.on{background:var(--accent);border-color:var(--accent)}
+.checks label{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.checks input{accent-color:var(--accent);width:16px;height:16px}
+@media (max-width:1024px){.content{padding:16px}.savebar{margin:24px -16px -16px}}
+@media (max-width:700px){.shell{grid-template-columns:1fr}.side{display:flex;overflow-x:auto;gap:4px;padding:6px;border-right:0;border-bottom:1px solid var(--divider)}.side h3{display:none}.side button{width:auto;white-space:nowrap}.lay{grid-template-columns:1fr}.tabs{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--divider)}}
+</style>
+</head>
+<body>
+<details class="legend" open>
+  <summary data-i18n="legend.title">Legende – Prototyp „Admin-Bereich, Bibliotheksverwaltung, Benutzer" (Entwurf)</summary>
+  <ul>
+    <li data-i18n="legend.ids">ux-spec-IDs: AD-10…12, AD-20…30, AD-40…42, LS-01…03, HO-09, US-01…03, US-10…12, US-20…25 (Abschnitte 10, 11, 12). Reiter oben wechseln den Bildschirm; „Experteneinstellungen" blendet erweiterte Optionen ein.</li>
+    <li data-i18n="legend.ms">Meilensteine: Bibliotheken (AD-40, LS-01…03, HO-09) M3; Status/Einstellungen M5–M7; Benutzer, Profilwahl, Geräte M7/M7b. Seiten für spätere Meilensteine tragen ein Meilenstein-Abzeichen und sind in M3 schreibgeschützt.</li>
+    <li data-i18n="legend.q">Offene Fragen an den Eigentümer: (1) Eigene Admin-Seitenleiste (wie hier) oder die normale Seitenleiste mit Zahnrad-Menü? (2) Ordner-Browser als zweiter Dialog (hier) oder eingebettet im Reiter „Ordner"? (3) Nicht lesbare Ordner: ausgegraut mit Hilfe-Link (hier) oder ganz ausblenden? (4) „Extras" und „Conversions" als Platzhalterseiten sichtbar lassen oder bis zur Umsetzung verbergen? (5) Profil-PIN: 4 Ziffern fest oder 4–6 wählbar?</li>
+    <li data-i18n="legend.try">Zum Ausprobieren: Bibliotheken → „Bibliothek hinzufügen" → Ordner wählen (Ordner „Archiv" ist nicht lesbar → Hilfe). „Erststart simulieren" zeigt den Leerzustand. Profilwahl: PIN für „Max" ist 1234.</li>
+  </ul>
+</details>
+
+<header class="topbar">
+  <span class="logo" id="brand">Mivo</span>
+  <nav class="screens" aria-label="Prototype screens" id="screens">
+    <button data-go="dash" data-i18n="s.admin">Admin</button>
+    <button data-go="libs" data-i18n="s.libs">Bibliotheken</button>
+    <button data-go="empty" data-i18n="s.empty">Erststart</button>
+    <button data-go="users" data-i18n="s.users">Benutzer</button>
+    <button data-go="devices" data-i18n="s.devices">Geräte</button>
+    <button data-go="picker" data-i18n="s.picker">Profilwahl</button>
+  </nav>
+  <label class="switch"><input type="checkbox" id="expert"> <span data-i18n="expert">Experteneinstellungen</span></label>
+  <button class="chip-btn" id="langToggle" aria-label="Sprache / language">DE · EN</button>
+</header>
+
+<div class="shell" id="shell">
+  <nav class="side" aria-label="Admin" id="side"></nav>
+  <main class="content" id="content"></main>
+</div>
+
+<!-- Library add/edit dialog -->
+<dialog id="libDlg" aria-labelledby="libDlgTitle">
+  <div class="dlg-head"><h2 id="libDlgTitle" data-i18n="d.add">Bibliothek hinzufügen</h2><button class="btn sm" data-close="libDlg" aria-label="Close">✕</button></div>
+  <div class="lay">
+    <div class="tabs" role="tablist" aria-label="Library settings">
+      <button role="tab" aria-selected="true" data-tab="g" data-i18n="t.general">Allgemein</button>
+      <button role="tab" aria-selected="false" data-tab="f" data-i18n="t.folders">Ordner</button>
+      <button role="tab" aria-selected="false" data-tab="a" data-i18n="t.adv">Erweitert</button>
+    </div>
+    <div>
+      <div class="pane" data-pane="g" role="tabpanel">
+        <div class="field"><span class="lbl" id="kindLbl" data-i18n="f.kind">Art der Bibliothek</span>
+          <div class="tiles" role="radiogroup" aria-labelledby="kindLbl" id="kindTiles">
+            <div class="tile" role="radio" tabindex="0" aria-checked="true" data-kind="movies"><span class="big" aria-hidden="true">🎬</span><span data-i18n="k.movies">Filme</span></div>
+            <div class="tile" role="radio" tabindex="0" aria-checked="false" data-kind="shows"><span class="big" aria-hidden="true">📺</span><span data-i18n="k.shows">Serien</span></div>
+            <div class="tile" role="radio" aria-disabled="true" aria-checked="false"><span class="big" aria-hidden="true">🎵</span><span data-i18n="k.music">Musik</span><br><span class="badge">M3b</span></div>
+            <div class="tile" role="radio" aria-disabled="true" aria-checked="false"><span class="big" aria-hidden="true">🖼</span><span data-i18n="k.photos">Fotos</span><br><span class="badge">M3b</span></div>
+            <div class="tile" role="radio" aria-disabled="true" aria-checked="false"><span class="big" aria-hidden="true">🎧</span><span data-i18n="k.books">Hörbücher</span><br><span class="badge">M3b</span></div>
+          </div>
+          <p class="hint" data-i18n="f.kindHint">Nur Arten, die der Server unterstützt, sind wählbar. Die Art lässt sich später nicht ändern.</p>
+          <p class="hint" id="kindLocked" hidden data-i18n="f.kindLocked">Die Art kann nach dem Anlegen nicht geändert werden – lege dafür eine neue Bibliothek an.</p>
+        </div>
+        <div class="field"><label for="libName" data-i18n="f.name">Name</label><input type="text" id="libName" maxlength="80"><div class="err" id="nameErr" role="alert"></div></div>
+        <div class="field"><label for="libLang" data-i18n="f.lang">Sprache der Metadaten</label>
+          <select id="libLang"><option value="de">Deutsch</option><option value="en">English</option><option value="fr">Français</option></select>
+          <p class="hint" data-i18n="f.langHint">Wird gespeichert und mit Online-Metadaten ab M6 wirksam.</p></div>
+        <div class="field adv"><label for="libCert">Zertifizierungsland <span class="badge">M7</span></label><select id="libCert" disabled><option>Deutschland (FSK)</option></select></div>
+      </div>
+      <div class="pane" data-pane="f" role="tabpanel" hidden>
+        <div class="lbl muted" style="font-size:12px" data-i18n="f.folders">Ordner (1 bis 16)</div>
+        <ul class="folders" id="folderList"></ul>
+        <div class="err" id="folderErr" role="alert"></div>
+        <button class="btn" id="addFolder" data-i18n="f.addFolder">+ Ordner hinzufügen</button>
+        <p class="hint" data-i18n="f.folderRules">Prüfungen: Ordner muss lesbar sein, darf nicht doppelt, verschachtelt oder in einer anderen Bibliothek sein und nicht der Konfigurations-, Daten-, Cache- oder Transcode-Ordner.</p>
+      </div>
+      <div class="pane" data-pane="a" role="tabpanel" hidden>
+        <div class="checks">
+          <label><input type="checkbox" checked> <span data-i18n="o.extras">Extras suchen (Trailer, Interviews)</span></label>
+          <label><input type="checkbox" checked> <span data-i18n="o.nfo">NFO-Dateien lesen</span></label>
+          <label><input type="checkbox" checked> <span data-i18n="o.art">Lokale Bilder verwenden</span></label>
+        </div>
+        <p class="hint" data-i18n="o.hint">In M3 gibt es nur diese drei Optionen. Sichtbarkeit, Originaltitel, Trickplay, Intro-Erkennung, Sammlungen und Episodenreihenfolge kommen mit M4–M7.</p>
+        <p class="hint" id="importedHint" hidden data-i18n="o.imported">Aus der Konfiguration importiert.</p>
+      </div>
+      <div class="dlg-foot" style="border-top:1px solid var(--divider)">
+        <button class="btn danger" id="removeLib" hidden data-i18n="a.remove">Entfernen…</button>
+        <span style="flex:1"></span>
+        <button class="btn" data-close="libDlg" data-i18n="a.cancel">Abbrechen</button>
+        <button class="btn primary" id="saveLib" data-i18n="a.save">Speichern</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Folder browser -->
+<dialog id="fsDlg" aria-labelledby="fsTitle">
+  <div class="dlg-head"><h2 id="fsTitle" data-i18n="b.title">Ordner auswählen</h2><button class="btn sm" data-close="fsDlg" aria-label="Close">✕</button></div>
+  <div class="dlg-body">
+    <p class="hint" data-i18n="b.hint">Zeigt nur Ordner unterhalb der erlaubten Wurzeln (Server-Einstellung browse.roots). Versteckte und System-Ordner werden nie angezeigt.</p>
+    <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+    <ul class="fslist" id="fsList"></ul>
+    <p class="hint" id="fsHidden"></p>
+    <div class="help" id="fsHelp" hidden></div>
+  </div>
+  <div class="dlg-foot"><span class="mono muted" id="fsSel"></span><span><button class="btn" data-close="fsDlg" data-i18n="a.cancel">Abbrechen</button> <button class="btn primary" id="fsPick" data-i18n="b.pick">Diesen Ordner wählen</button></span></div>
+</dialog>
+
+<dialog id="confirmDlg" aria-labelledby="cTitle" style="max-width:460px">
+  <div class="dlg-head"><h2 id="cTitle" data-i18n="a.removeTitle">Bibliothek entfernen?</h2></div>
+  <div class="dlg-body"><p data-i18n="a.removeBody">Die Bibliothek, ihr Katalog und ihre Ordnerüberwachung werden entfernt; ein laufender Scan wird zuerst abgebrochen. Deine Mediendateien bleiben unberührt. Wiedergabestatus bleibt, wo möglich, erhalten.</p></div>
+  <div class="dlg-foot"><span></span><span><button class="btn" data-close="confirmDlg" data-i18n="a.cancel">Abbrechen</button> <button class="btn danger" id="confirmRemove" data-i18n="a.removeDo">Entfernen</button></span></div>
+</dialog>
+
+<dialog id="userDlg" aria-labelledby="uTitle">
+  <div class="dlg-head"><h2 id="uTitle" data-i18n="u.newProfile">Verwaltetes Profil anlegen</h2><button class="btn sm" data-close="userDlg" aria-label="Close">✕</button></div>
+  <div class="dlg-body">
+    <div class="grid2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px">
+      <div class="field"><label for="pName" data-i18n="u.name">Name</label><input type="text" id="pName" value="Lena"></div>
+      <div class="field"><label for="pPin" data-i18n="u.pin">PIN (optional, 4 Ziffern)</label><input type="password" id="pPin" inputmode="numeric" maxlength="4" value=""></div>
+      <div class="field"><label for="pLimit" data-i18n="u.limit">Inhaltsgrenze</label>
+        <select id="pLimit"><option data-i18n="u.l0">Kleinkinder (FSK 0)</option><option data-i18n="u.l1">Kinder (FSK 6)</option><option selected data-i18n="u.l2">Jugendliche (FSK 12/16)</option><option data-i18n="u.l3">Erwachsene (keine Grenze)</option><option data-i18n="u.l4">Benutzerdefiniert…</option></select>
+        <label class="switch hint"><input type="checkbox" checked> <span data-i18n="u.unrated">Nicht bewertete Titel ausblenden</span></label></div>
+      <div class="field"><span class="lbl" data-i18n="u.libs">Bibliotheken</span>
+        <div class="checks"><label><input type="checkbox" checked> Filme</label><label><input type="checkbox" checked> Serien</label><label><input type="checkbox"> Familienvideos</label></div></div>
+    </div>
+    <div class="field checks"><label><input type="checkbox" disabled> <span data-i18n="u.remote">Fernzugriff erlaubt</span> <span class="badge">M7b</span></label></div>
+    <p class="hint" data-i18n="u.enforce">Die Grenze wird serverseitig bei jeder Liste, Suche, Detail- und Stream-Anfrage durchgesetzt.</p>
+  </div>
+  <div class="dlg-foot"><span></span><span><button class="btn" data-close="userDlg" data-i18n="a.cancel">Abbrechen</button> <button class="btn primary" data-close="userDlg" data-i18n="a.save">Speichern</button></span></div>
+</dialog>
+
+<script>
+"use strict";
+const BRAND="Mivo";
+const I={
+ de:{
+  "legend.title":"Legende – Prototyp „Admin-Bereich, Bibliotheksverwaltung, Benutzer“ (Entwurf)",
+  "s.admin":"Admin","s.libs":"Bibliotheken","s.empty":"Erststart","s.users":"Benutzer","s.devices":"Geräte","s.picker":"Profilwahl",
+  expert:"Experteneinstellungen",
+  "d.add":"Bibliothek hinzufügen","d.edit":"Bibliothek bearbeiten",
+  "t.general":"Allgemein","t.folders":"Ordner","t.adv":"Erweitert",
+  "f.kind":"Art der Bibliothek","k.movies":"Filme","k.shows":"Serien","k.music":"Musik","k.photos":"Fotos","k.books":"Hörbücher",
+  "f.name":"Name","f.lang":"Sprache der Metadaten","f.folders":"Ordner (1 bis 16)","f.addFolder":"+ Ordner hinzufügen",
+  "a.cancel":"Abbrechen","a.save":"Speichern","a.remove":"Entfernen…","a.removeDo":"Entfernen",
+  "b.title":"Ordner auswählen","b.pick":"Diesen Ordner wählen",
+  "o.extras":"Extras suchen (Trailer, Interviews)","o.nfo":"NFO-Dateien lesen","o.art":"Lokale Bilder verwenden",
+  "u.newProfile":"Verwaltetes Profil anlegen","u.name":"Name","u.limit":"Inhaltsgrenze","u.libs":"Bibliotheken",
+  "e.valName":"Bitte einen Namen eingeben.","e.valFolder":"Mindestens ein Ordner ist nötig.","e.dup":"Dieser Ordner ist schon Teil einer Bibliothek.",
+  "e.nested":"Ordner ist in einem bereits gewählten Ordner enthalten.",
+  "n.hidden":"{n} versteckte oder System-Einträge werden nicht angezeigt.","n.none":"Keine Unterordner.",
+  "n.locked":"Nicht lesbar","n.helpBtn":"Hilfe","n.open":"Öffnen",
+  "h.title":"Der Server darf diesen Ordner nicht lesen","h.dsm":"Synology DSM","h.docker":"Docker","h.other":"Andere",
+  "h.dsm1":"Systemsteuerung › Gemeinsamer Ordner öffnen.","h.dsm2":"Freigabe wählen › Bearbeiten › Berechtigungen.","h.dsm3":"Oben „Interner Systembenutzer“ wählen, den Benutzer des Pakets (hier <code>SynoPkg-mivo</code>) auf „Nur lesen“ setzen und speichern.","h.dsm4":"Danach „Erneut prüfen“ wählen.",
+  "h.docker1":"Binde den Ordner in den Container ein, z. B. <code>-v /volume1/archiv:/media/archiv:ro</code>.","h.docker2":"Starte den Container neu und öffne diesen Dialog erneut.",
+  "h.other1":"Gib dem Dienstbenutzer (<code>mivo</code>) Leserechte auf den Ordner und alle Unterordner.","h.recheck":"Erneut prüfen",
+  "c.nolib":"Keine Bibliotheken"
+ },
+ en:{
+  "legend.title":"Legend – prototype “Admin area, library management, users” (draft)",
+  "legend.ids":"ux-spec ids: AD-10…12, AD-20…30, AD-40…42, LS-01…03, HO-09, US-01…03, US-10…12, US-20…25 (sections 10, 11, 12). The tabs above switch screens; “Expert settings” reveals advanced options.",
+  "legend.ms":"Milestones: Libraries (AD-40, LS-01…03, HO-09) M3; Status/Settings M5–M7; users, profile picker, devices M7/M7b. Pages for later milestones carry a milestone badge and are read-only in M3.",
+  "legend.q":"Open questions for the owner: (1) Own admin sidebar (as here) or the normal sidebar with a gear menu? (2) Folder browser as a second dialog (here) or embedded in the Folders tab? (3) Unreadable folders: greyed out with help link (here) or hidden? (4) Show “Extras” and “Conversions” as placeholder pages or hide them until built? (5) Profile PIN: fixed 4 digits or 4–6 selectable?",
+  "legend.try":"Try: Libraries → “Add library” → choose a folder (folder “Archive” is unreadable → help). “Simulate first start” shows the empty state. Profile picker: PIN for “Max” is 1234.",
+  "s.admin":"Admin","s.libs":"Libraries","s.empty":"First start","s.users":"Users","s.devices":"Devices","s.picker":"Profile picker",
+  expert:"Expert settings",
+  "d.add":"Add library","d.edit":"Edit library",
+  "t.general":"General","t.folders":"Folders","t.adv":"Advanced",
+  "f.kind":"Library type","f.kindHint":"Only types the server supports can be chosen. The type cannot be changed later.",
+  "f.kindLocked":"The type cannot be changed after creation – create a new library instead.",
+  "k.movies":"Movies","k.shows":"Shows","k.music":"Music","k.photos":"Photos","k.books":"Audiobooks",
+  "f.name":"Name","f.lang":"Metadata language","f.langHint":"Stored now; takes effect with online metadata in M6.",
+  "f.folders":"Folders (1 to 16)","f.addFolder":"+ Add folder","f.folderRules":"Checks: folder must be readable, not duplicate, nested or in another library, and not the config, data, cache or transcode directory.",
+  "o.extras":"Find extras (trailers, interviews)","o.nfo":"Read NFO files","o.art":"Use local artwork",
+  "o.hint":"M3 has only these three options. Visibility, original titles, trickplay, intro detection, collections and episode ordering come with M4–M7.","o.imported":"Imported from the configuration.",
+  "a.cancel":"Cancel","a.save":"Save","a.remove":"Remove…","a.removeDo":"Remove","a.removeTitle":"Remove library?",
+  "a.removeBody":"The library, its catalog and its folder watches are removed; a running scan is cancelled first. Your media files are not touched. Watch state is kept where possible.",
+  "b.title":"Choose folder","b.hint":"Shows only folders below the allowed roots (server setting browse.roots). Hidden and system folders are never listed.","b.pick":"Choose this folder",
+  "u.newProfile":"Create managed profile","u.name":"Name","u.pin":"PIN (optional, 4 digits)","u.limit":"Content limit","u.l0":"Young children (FSK 0)","u.l1":"Children (FSK 6)","u.l2":"Teens (FSK 12/16)","u.l3":"Adults (no limit)","u.l4":"Custom…","u.unrated":"Hide unrated titles","u.libs":"Libraries","u.remote":"Remote access allowed","u.enforce":"The limit is enforced on the server for every list, search, detail and stream request.",
+  "e.valName":"Please enter a name.","e.valFolder":"At least one folder is required.","e.dup":"This folder already belongs to a library.","e.nested":"Folder lies inside an already chosen folder.",
+  "n.hidden":"{n} hidden or system entries are not shown.","n.none":"No subfolders.","n.locked":"Not readable","n.helpBtn":"Help","n.open":"Open",
+  "h.title":"The server may not read this folder","h.dsm":"Synology DSM","h.docker":"Docker","h.other":"Other",
+  "h.dsm1":"Open Control Panel › Shared Folder.","h.dsm2":"Select the share › Edit › Permissions.","h.dsm3":"Choose “System internal user” on top, set the package user (here <code>SynoPkg-mivo</code>) to “Read only” and save.","h.dsm4":"Then choose “Check again”.",
+  "h.docker1":"Mount the folder into the container, e.g. <code>-v /volume1/archive:/media/archive:ro</code>.","h.docker2":"Restart the container and reopen this dialog.",
+  "h.other1":"Give the service user (<code>mivo</code>) read access to the folder and all subfolders.","h.recheck":"Check again",
+  "c.nolib":"No libraries"
+ }
+};
+let lang="de";
+const t=(k,v={})=>{let s=(I[lang][k]??I.de[k]??k);for(const x in v)s=s.replace("{"+x+"}",v[x]);return s};
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+
+/* ---- bilingual inline text: [de,en] ---- */
+const L=(de,en)=>`<span data-de="${de.replace(/"/g,'&quot;')}" data-en="${en.replace(/"/g,'&quot;')}">${lang==="de"?de:en}</span>`;
+
+/* ---- admin structure ---- */
+const NAV=[
+ ["Status","Status",[["dash","Dashboard","Dashboard","M5"],["log","Aktivitätsprotokoll","Alerts log","M7"],["conv","Konvertierungen","Conversions","later"]]],
+ ["Einstellungen","Settings",[["general","Allgemein","General","M7"],["remote","Fernzugriff","Remote access","M7b"],["meta","Metadaten-Agenten","Metadata agents","M6"],["library","Bibliothek","Library","M7"],["network","Netzwerk","Network","M7"],["transcoder","Transcoder","Transcoder","M4"],["lang","Sprachen","Languages","M7"],["dlna","DLNA","DLNA","M8"],["tasks","Geplante Aufgaben","Scheduled tasks","M7"],["extras","Extras","Extras","later"]]],
+ ["Verwalten","Manage",[["libs","Bibliotheken","Libraries","M3"],["trouble","Fehlerbehebung","Troubleshooting","M7"],["console","Konsole / Protokoll","Console / logs","M7"]]],
+ ["Benutzer","Users",[["users","Benutzer & Profile","Users & profiles","M7"],["devices","Geräte","Devices","M7b"]]]
+];
+/* settings pages: fields [labelDe,labelEn,type,value,advanced,hintDe,hintEn] */
+const SET={
+ general:{d:["Servername, Updates, Protokollstufe. Keine Telemetrie.","Server name, updates, log level. No telemetry."],f:[
+  ["Servername","Server name","text","Mivo im Wohnzimmer",0,"Wird in der TV-App und in DLNA angezeigt.","Shown in the TV app and DLNA."],
+  ["Nach Updates suchen","Check for updates","sw",1],["Update-Kanal","Update channel","sel",["Stabil|Stable","Vorabversion|Pre-release"]],
+  ["Protokollstufe","Log level","sel",["info","debug","warn"],1]]},
+ remote:{d:["Fernzugriff einrichten (Assistent, M7b).","Set up remote access (wizard, M7b)."],f:[
+  ["Status","Status","pill","Nicht erreichbar – CGNAT erkannt|Not reachable – CGNAT detected"],
+  ["Weg","Path","sel",["A: HTTPS + DuckDNS + Portfreigabe|A: HTTPS + DuckDNS + port mapping","B: Tailscale (eingebaut)|B: Tailscale (built in)"]],
+  ["Öffentlicher Port","Public port","text","443",1],["Eigenes Zertifikat","Custom certificate","text","",1]]},
+ meta:{d:["Anbieter je Bibliotheksart als geordnete Liste.","Providers per library kind as an ordered list."],f:[
+  ["Lokal (NFO)","Local (NFO)","sw",1],["Eingebettete Tags","Embedded tags","sw",1],["Lokale Bilder","Local artwork","sw",1],["TMDB","TMDB","sw",1,0,"Kontaktiert api.themoviedb.org","Contacts api.themoviedb.org"],
+  ["Eigener TMDB-Schlüssel","Own TMDB key","text","",1],["OpenSubtitles-Zugang","OpenSubtitles credentials","text","",1]]},
+ library:{d:["Scan-Verhalten und Wiedergabe-Schwellen.","Scan behaviour and playback thresholds."],f:[
+  ["Bei Dateiänderungen scannen","Scan on file changes","sw",1],["Scan-Intervall (Stunden)","Scan interval (hours)","text","24"],
+  ["Als gesehen ab (%)","Played threshold (%)","text","90"],["Fehlende Einträge entfernen nach N Scans","Remove missing items after N scans","text","3",1,"Schützt vor kurz getrennten Freigaben.","Protects against a share that is briefly away."]]},
+ network:{d:["Port, LAN-Netze, Zugriffsschutz.","Port, LAN networks, access guard."],f:[
+  ["LAN-Netze (CIDR, eine pro Zeile)","LAN networks (CIDR, one per line)","area","192.168.0.0/16\n10.0.0.0/8",0,"Entscheidet über LAN vs. Fernzugriff: Qualität, Nur-LAN-Schutz, Admin nur im LAN, Gast.","Decides LAN vs. remote: quality, LAN-only guard, admin only from LAN, guest."],
+  ["Nur LAN erlauben (server.lan_only)","LAN only (server.lan_only)","sw",1],
+  ["Port (Neustart nötig)","Port (restart needed)","text","8460",1],["Basis-URL","Base URL","text","",1],["Vertrauenswürdige Proxys","Trusted proxies","text","",1]]},
+ transcoder:{d:["Gleichzeitige Transcodes, Hardwarebeschleunigung.","Simultaneous transcodes, hardware acceleration."],f:[
+  ["Maximale gleichzeitige Transcodes","Maximum simultaneous transcodes","text","2",0,"Entspricht transcode.max_sessions. Weitere Streams warten oder werden abgelehnt.","Equals transcode.max_sessions. Further streams wait or are refused."],
+  ["Transcode-Ordner","Transcode directory","ro","/volume1/@appdata/mivo/transcode (per Umgebung gesetzt|set by environment)"],
+  ["Hardwarebeschleunigung","Hardware acceleration","sel",["Automatisch|Automatic","Aus|Off","Gerät wählen…|Choose device…"]],
+  ["Hardware-Test","Hardware test","btn","Hardwarebeschleunigung testen|Test hardware acceleration"],
+  ["Encoder-Voreinstellung","Encoder preset","sel",["veryfast","fast","medium"],1],["Vorlauf drosseln (Sek.)","Throttle ahead (s)","text","180",1],["Max. Ausgabeauflösung","Max output resolution","sel",["1080p","720p"],1],["Video-Transcoding abschalten","Disable video transcoding","sw",0,1]]},
+ lang:{d:["Standards für neue Profile.","Defaults for new profiles."],f:[
+  ["Bevorzugte Tonsprache","Preferred audio language","sel",["Deutsch","English","Original"]],["Untertitelsprache","Subtitle language","sel",["Deutsch","English"]],
+  ["Untertitelmodus","Subtitle mode","sel",["Nur erzwungene|Forced only","Wenn Ton fremd|When audio is foreign","Immer|Always","Aus|Off"]],["Metadatensprache für neue Bibliotheken","Metadata language for new libraries","sel",["Deutsch","English"]]]},
+ dlna:{d:["DLNA/UPnP für Fernseher und Player.","DLNA/UPnP for TVs and players."],f:[
+  ["DLNA aktivieren","Enable DLNA","sw",0],["Servername überschreiben","Server name override","text","",0],["Erkannte Geräte","Detected renderers","ro","Wohnzimmer-TV (Profil: generic-h264)|Living room TV (profile: generic-h264)"],["Discovery-Intervall (Sek.)","Discovery interval (s)","text","900",1],["Erlaubte Netze","Allowed networks","text","",1]]},
+ tasks:{d:["Wartungsfenster und Aufgaben.","Maintenance window and tasks."],f:[
+  ["Wartungsfenster Start (Uhr)","Maintenance window start (h)","text","02"],["Wartungsfenster Ende (Uhr)","Maintenance window end (h)","text","05"],["Aufgaben","Tasks","tasks"]]},
+ extras:{d:["Kino-Trailer und Pre-Roll-Videos.","Cinema trailers and pre-roll videos."],f:[["Status","Status","ro","Geplant für später – derzeit keine Optionen.|Planned for later – no options yet."]]}
+};
+function pick(s){const p=s.split("|");return p.length>1?L(p[0],p[1]):s}
+function fieldHtml(f,i,page){
+ const [de,en,type,val,adv,hd,he]=f; const id=page+i;
+ const cls=adv?" adv":""; const lab=`<label for="${id}">${L(de,en)}${adv?`<span class="advmark">${L("erweitert","advanced")}</span>`:""}</label>`;
+ const hint=hd?`<p class="hint">${L(hd,he)}</p>`:"";
+ let c="";
+ if(type==="text")c=`<input type="text" id="${id}" value="${val}">`;
+ else if(type==="area")c=`<textarea id="${id}" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--divider);border-radius:6px;color:inherit;padding:7px">${val}</textarea>`;
+ else if(type==="sel")c=`<select id="${id}">${val.map(o=>`<option>${o.split("|")[lang==="de"?0:1]||o}</option>`).join("")}</select>`;
+ else if(type==="sw")return `<div class="field${cls}"><label class="switch"><input type="checkbox" ${val?"checked":""}> ${L(de,en)}${adv?`<span class="advmark">${L("erweitert","advanced")}</span>`:""}</label>${hint}</div>`;
+ else if(type==="ro")c=`<div class="mono">${pick(val)}</div>`;
+ else if(type==="pill")c=`<span class="pill bad">${pick(val)}</span>`;
+ else if(type==="btn")c=`<button class="btn" type="button" data-test>${pick(val)}</button><span class="hint" data-testres></span>`;
+ else if(type==="tasks")return `<div class="field"><span class="lbl">${L(de,en)}</span><div class="tablewrap"><table><thead><tr><th>${L("Aufgabe","Task")}</th><th>${L("Intervall","Interval")}</th><th>${L("Letzter Lauf","Last run")}</th><th>${L("Nächster","Next")}</th><th></th></tr></thead><tbody>
+  ${[["Bibliotheksscan","Library scan","24 h","03:02","03.11. 02:00"],["Metadaten aktualisieren","Metadata refresh","7 d","So 02:40","So 02:00"],["Datenbank optimieren","Database optimisation","7 d","So 04:10","So 02:00"],["Cache bereinigen","Cache cleanup","24 h","03:20","03.11. 02:00"],["Sicherung","Backup","7 d","So 04:30","So 04:00"]].map(r=>`<tr><td>${L(r[0],r[1])}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td><td><button class="btn sm" type="button">${L("Jetzt ausführen","Run now")}</button></td></tr>`).join("")}</tbody></table></div></div>`;
+ return `<div class="field${cls}">${lab}${c}${hint}</div>`;
+}
+
+/* ---- pages ---- */
+const libs=[
+ {id:1,kind:"movies",name:"Filme",folders:["/volume1/video/filme","/volume2/video/filme"],items:1284,scan:"vor 2 Std.|2 h ago",ok:true,imp:true,lang:"de"},
+ {id:2,kind:"shows",name:"Serien",folders:["/volume1/video/serien"],items:312,scan:"läuft: 41 %|running: 41 %",ok:true,scanning:41,lang:"de"},
+ {id:3,kind:"movies",name:"Familienvideos",folders:["/volume1/privat/familie"],items:96,scan:"vor 3 Tagen|3 d ago",ok:false,lang:"de"}
+];
+let emptyMode=false, editing=null, dirty=false;
+const kindIco={movies:"🎬",shows:"📺"};
+const kindName=k=>L(k==="movies"?"Filme":"Serien",k==="movies"?"Movies":"Shows");
+const page={
+ dash:()=>`<div class="cards">
+  <div class="card"><h2>${L("Wird gerade wiedergegeben","Now playing")}</h2>
+   <p><b>Nachtzug nach Ravenna</b> <span class="pill ok">Direct Play</span><br><span class="muted">Anna · ${L("Wohnzimmer-TV","Living room TV")} · 54 %</span> <button class="btn sm" disabled title="M7">${L("Sitzung beenden","Stop session")}</button></p>
+   <p><b>Das Leuchtturm-Archiv S01E03</b> <span class="pill ds">Direct Stream</span><br><span class="muted">Max · Browser · 12 %</span></p>
+   <p><b>Kupferstadt S02E07</b> <span class="pill tc">Transcode</span><br><span class="muted">Jonas · ${L("Handy, Fernzugriff","Phone, remote")} · 80 %</span></p></div>
+  <div class="card"><h2>${L("Transcoder-Last","Transcoder load")}</h2><p style="font-size:32px;margin:0">1 / 2</p><div class="bar"><span style="width:50%"></span></div><p class="hint">${L("aktiv / Limit (Transcoder-Einstellungen)","active / limit (Transcoder settings)")}</p></div>
+  <div class="card"><h2>${L("Server","Server")}</h2><p class="mono">${BRAND} 0.3.0 · ${L("Laufzeit 12 T 4 Std.","uptime 12 d 4 h")}</p><p class="hint">${L("Kein Update verfügbar.","No update available.")}</p></div>
+ </div>
+ <div class="card"><h2>${L("Bibliotheks-Scans","Library scans")}</h2>
+  ${libs.map(l=>`<p style="margin:6px 0">${kindIco[l.kind]} ${l.name} <span class="muted">· ${pick(l.scan)}</span> ${l.scanning?`<span class="bar" style="display:inline-block;width:120px;vertical-align:middle"><span style="width:${l.scanning}%"></span></span>`:""}</p>`).join("")}</div>
+ <div class="card"><h2>${L("Warnungen","Warnings")}</h2>
+  <div class="alert err">${L("Bibliothek „Familienvideos“ ist nicht verfügbar – Ordner nicht lesbar.","Library “Family videos” is unavailable – folder not readable.")} <button class="btn sm" data-go="libs">${L("Öffnen","Open")}</button></div>
+  <div class="alert">${L("Wenig Speicherplatz im Transcode-Ordner (4 % frei).","Low disk space in the transcode directory (4 % free).")}</div></div>`,
+ log:()=>`<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select aria-label="${lang==="de"?"Typ":"Type"}" style="width:auto"><option>${L("Alle Typen","All types")}</option><option>Scan</option><option>${L("Sitzungen","Sessions")}</option></select><select aria-label="Level" style="width:auto"><option>info</option><option>warn</option><option>error</option></select></div>
+  <div class="tablewrap"><table><thead><tr><th>${L("Zeit","Time")}</th><th>Level</th><th>${L("Ereignis","Event")}</th></tr></thead><tbody>
+  <tr><td class="mono">14:02</td><td><span class="pill bad">error</span></td><td>${L("Ordner /volume1/privat/familie nicht lesbar","Folder /volume1/privat/familie not readable")}</td></tr>
+  <tr><td class="mono">13:58</td><td><span class="pill ok">info</span></td><td>${L("Scan „Serien“ gestartet","Scan “Shows” started")}</td></tr>
+  <tr><td class="mono">13:40</td><td><span class="pill ok">info</span></td><td>${L("12 Titel hinzugefügt (Filme)","12 items added (Movies)")}</td></tr>
+  <tr><td class="mono">12:15</td><td><span class="pill tc">warn</span></td><td>${L("Kein Treffer für „Unbekannter Film (2019)“","No match for “Unknown Film (2019)”")}</td></tr></tbody></table></div></div>`,
+ conv:()=>`<div class="empty"><div class="big" aria-hidden="true">🗜</div><h2>${L("Konvertierungen (optimierte Versionen)","Conversions (optimized versions)")}</h2><p class="muted">${L("Kommt später. Dieser Platzhalter zeigt, wo die Funktion erscheinen würde.","Comes later. This placeholder shows where the feature would appear.")}</p></div>`,
+ trouble:()=>`<div class="card"><h2>${L("Wartung","Maintenance")}</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn">${L("Datenbank optimieren","Optimise database")}</button><button class="btn">${L("Bild-Cache leeren","Clean image cache")}</button><button class="btn">${L("Trickplay-Cache leeren","Clean trickplay cache")}</button></div></div>
+  <div class="card"><h2>${L("Downloads","Downloads")}</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn">${L("Protokolle (zip, ohne Geheimnisse)","Logs (zip, secrets redacted)")}</button><button class="btn">${L("Support-Paket","Support bundle")}</button><button class="btn danger">${L("Datenbank herunterladen…","Download database…")}</button></div><p class="hint">${L("Die Datenbank enthält Benutzerdaten – nur für Administratoren.","The database contains user data – administrators only.")}</p></div>`,
+ console:()=>`<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><select aria-label="Level" style="width:auto"><option>info</option><option>debug</option><option>warn</option></select><input type="text" placeholder="${lang==="de"?"Suchen…":"Search…"}" style="width:200px" aria-label="Search"><button class="btn sm" id="logPause">${L("Pause","Pause")}</button><button class="btn sm">${L("Herunterladen","Download")}</button></div>
+  <div class="log" id="logBox" tabindex="0" aria-label="Log" aria-live="off">13:58:01 INF scan started library=Serien\n13:58:02 INF folder watch added path=/volume1/video/serien\n14:02:11 ERR folder not readable path=/volume1/privat/familie err="permission denied"\n</div></div>`,
+ libs:()=>emptyMode?`<div class="empty"><div class="big" aria-hidden="true">📂</div><h2>${L("Noch keine Bibliothek","No library yet")}</h2><p class="muted">${L("Füge einen Ordner mit Filmen oder Serien hinzu, damit "+BRAND+" ihn durchsucht.","Add a folder with movies or shows so "+BRAND+" can scan it.")}</p><button class="btn primary" data-add>${L("Bibliothek hinzufügen","Add library")}</button></div>`
+  :`<div class="card" style="padding:0"><div class="tablewrap"><table><thead><tr><th></th><th>${L("Name","Name")}</th><th>${L("Ordner","Folders")}</th><th>${L("Titel","Items")}</th><th>${L("Letzter Scan","Last scan")}</th><th>${L("Status","Status")}</th><th></th></tr></thead><tbody>
+  ${libs.map(l=>`<tr><td><span class="ico" aria-hidden="true">${kindIco[l.kind]}</span></td><td><b>${l.name}</b><br><span class="muted">${kindName(l.kind)}${l.imp?` · <span class="hint">${L("Aus der Konfiguration importiert","Imported from the configuration")}</span>`:""}</span></td>
+   <td class="mono" style="font-size:12px">${l.folders.join("<br>")}</td><td>${l.items}</td><td>${pick(l.scan)}</td>
+   <td>${l.ok?`<span class="pill ok">${L("verfügbar","available")}</span>`:`<span class="pill bad">${L("nicht lesbar","unreadable")}</span>`}</td>
+   <td style="white-space:nowrap"><button class="btn sm" data-scan="${l.id}">${L("Scannen","Scan")}</button> <button class="btn sm" data-edit="${l.id}">${L("Bearbeiten","Edit")}</button> <button class="btn sm" disabled title="M7">${L("Zeilen anpassen","Customize rows")}</button></td></tr>`).join("")}</tbody></table></div></div>
+  <label class="switch hint"><input type="checkbox" disabled> ${L("Zuletzt hinzugefügt nach Medientyp zusammenführen","Merge recently added by media type")} <span class="badge">M7</span></label>`,
+ users:()=>`<div class="card"><div class="phead" style="margin:0 0 8px"><h2 style="margin:0">${L("Konten und Profile","Accounts and profiles")}</h2><span><button class="btn">${L("Einladen","Invite")}</button> <button class="btn primary" data-open="userDlg">${L("Profil anlegen","Add profile")}</button></span></div>
+  <div class="tablewrap"><table><thead><tr><th>${L("Name","Name")}</th><th>${L("Rolle","Role")}</th><th>${L("Inhaltsgrenze","Content limit")}</th><th>${L("Bibliotheken","Libraries")}</th><th>${L("Letzte Aktivität","Last activity")}</th><th>${L("Fernzugriff","Remote")}</th><th>${L("Status","Status")}</th></tr></thead><tbody>
+  <tr><td><b>Anna</b></td><td>${L("Admin","Admin")}</td><td>${L("keine","none")}</td><td>${L("Alle","All")}</td><td>${L("jetzt","now")}</td><td>${L("ja","yes")}</td><td><span class="pill ok">${L("aktiv","active")}</span></td></tr>
+  <tr><td>&nbsp;&nbsp;↳ Max <span class="muted">(${L("Profil, PIN","profile, PIN")})</span></td><td>${L("Profil","Profile")}</td><td>${L("Kinder (FSK 6)","Children (FSK 6)")}</td><td>Filme, Serien</td><td>${L("vor 5 Min.","5 min ago")}</td><td>${L("nein","no")}</td><td><span class="pill ok">${L("aktiv","active")}</span></td></tr>
+  <tr><td><b>Jonas</b></td><td>${L("Benutzer","User")}</td><td>${L("Jugendliche (FSK 16)","Teens (FSK 16)")}</td><td>${L("Auswahl: Filme + 2 Titel","Selected: Movies + 2 titles")}</td><td>${L("gestern","yesterday")}</td><td>${L("ja","yes")}</td><td><span class="pill ok">${L("aktiv","active")}</span></td></tr>
+  <tr><td><b>Oma</b></td><td>${L("Benutzer","User")}</td><td>${L("keine","none")}</td><td>${L("Alle","All")}</td><td>–</td><td>${L("nein","no")}</td><td><span class="pill tc">${L("eingeladen","invited")}</span></td></tr></tbody></table></div></div>
+  <div class="cards"><div class="card"><h2>${L("Bibliothekszugriff (Jonas)","Library access (Jonas)")}</h2><div class="checks"><label><input type="radio" name="acc"> ${L("Alle Bibliotheken","All libraries")}</label><label><input type="radio" name="acc" checked> ${L("Ausgewählte Bibliotheken","Selected libraries")}</label>
+   <div style="margin-left:24px"><label><input type="checkbox" checked> Filme</label><label><input type="checkbox"> Serien</label><label><input type="checkbox"> Familienvideos</label></div>
+   <label><input type="radio" name="acc"> ${L("Einzelne Titel","Single titles")}</label></div></div>
+  <div class="card"><h2>${L("Berechtigungen (Jonas)","Permissions (Jonas)")}</h2><div class="checks"><label><input type="checkbox"> ${L("Originale herunterladen","Download originals")}</label><label><input type="checkbox" checked> ${L("Untertitel hochladen","Upload subtitles")}</label><label><input type="checkbox" checked> ${L("Darf transcodieren","May transcode")}</label><label><input type="checkbox" disabled> ${L("Fernzugriff / max. Bitrate","Remote access / max bitrate")} <span class="badge">M7b</span></label></div></div>
+  <div class="card"><h2>${L("Gast","Guest")}</h2><label class="switch"><input type="checkbox"> ${L("Gastprofil ohne Anmeldung (nur LAN)","Guest profile without sign-in (LAN only)")}</label><p class="hint">${L("Standard: aus. Eigene Bibliotheken und Inhaltsgrenze, kein Wiedergabestatus.","Default: off. Own libraries and content limit, no watch state.")}</p></div></div>`,
+ devices:()=>`<div class="card"><div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"><label class="muted" for="devF">${L("Client-Typ","Client type")}</label><select id="devF" style="width:auto"><option>${L("Alle","All")}</option><option>Web</option><option>TV</option><option>DLNA</option></select></div>
+  <div class="tablewrap"><table><thead><tr><th>${L("Gerät","Device")}</th><th>Client</th><th>${L("Plattform","Platform")}</th><th>${L("Version","Version")}</th><th>${L("Zuletzt gesehen","Last seen")}</th><th>${L("Netz","Network")}</th><th></th></tr></thead><tbody>
+  ${[["Wohnzimmer-TV","TV-App","webOS 24","0.3.0","jetzt|now","LAN"],["Annas Laptop","Web","Firefox / Windows","0.3.0","jetzt|now","LAN"],["Jonas' Handy","Web","Safari / iOS","0.3.0","gestern|yesterday","remote"],["Wohnzimmer-Receiver","DLNA","generic-h264","–","vor 2 T|2 d ago","LAN"]].map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${pick(r[4])}</td><td><span class="pill ${r[5]==="LAN"?"ok":"tc"}">${r[5]}</span></td><td><button class="btn sm danger" data-revoke>${L("Widerrufen","Revoke")}</button></td></tr>`).join("")}</tbody></table></div><p class="hint">${L("Widerrufen beendet Tokens und Sitzungen des Geräts. Anmeldeprotokoll: M7b.","Revoking ends the device's tokens and sessions. Sign-in log: M7b.")}</p></div>`,
+ picker:null, empty:null
+};
+const readonlyPages=new Set(["general","remote","meta","library","network","transcoder","lang","dlna","tasks","extras"]);
+const TITLE={};NAV.forEach(g=>g[2].forEach(p=>TITLE[p[0]]=p));
+const DESC={dash:["Was gerade läuft und was Aufmerksamkeit braucht.","What is running and what needs attention."],log:["Gespeicherte Ereignisse mit Filter.","Persistent events with filters."],conv:["Optimierte Versionen.","Optimized versions."],libs:["Bibliotheken anlegen, ändern und scannen.","Add, change and scan libraries."],trouble:["Wartung und Diagnose.","Maintenance and diagnostics."],console:["Live-Protokoll des Servers (Geheimnisse maskiert).","Live server log (secrets redacted)."],users:["Konten, verwaltete Profile und Zugriff.","Accounts, managed profiles and access."],devices:["Angemeldete Geräte und Clients.","Signed-in devices and clients."]};
+
+let cur="dash";
+function renderSide(){
+ $("#side").innerHTML=`<button class="back" data-exit>← ${L("Zurück zur App","Back to app")}</button>`+NAV.map(g=>`<h3>${L(g[0],g[1])}</h3>`+g[2].map(p=>`<button data-go="${p[0]}" ${cur===p[0]?'aria-current="page"':""}>${L(p[1],p[2])}</button>`).join("")).join("");
+}
+function render(){
+ renderSide();
+ const c=$("#content");
+ $$("#screens button").forEach(b=>b.removeAttribute("aria-current"));
+ const top=cur==="libs"?(emptyMode?"empty":"libs"):["users"].includes(cur)?"users":["devices"].includes(cur)?"devices":cur==="picker"?"picker":"dash";
+ const sb=$(`#screens [data-go="${top}"]`); if(sb)sb.setAttribute("aria-current","page");
+ $("#shell").style.gridTemplateColumns=cur==="picker"?"1fr":"";
+ $("#side").style.display=cur==="picker"?"none":"";
+ if(cur==="picker"){c.style.maxWidth="none";c.innerHTML=pickerHtml();bindPicker();return}
+ c.style.maxWidth="";
+ const meta=TITLE[cur]; const d=DESC[cur]||SET[cur]?.d||["",""];
+ let body;
+ if(SET[cur]){body=`<form id="setForm">${SET[cur].f.map((f,i)=>fieldHtml(f,i,cur)).join("")}
+   <div class="savebar"><span class="dirty" id="dirtyMsg" hidden>● ${L("Ungespeicherte Änderungen","Unsaved changes")}</span><button type="button" class="btn" id="discard">${L("Verwerfen","Discard")}</button><button type="submit" class="btn primary" ${readonlyPages.has(cur)&&false?"disabled":""}>${L("Speichern","Save")}</button></div></form>`}
+ else body=page[cur]();
+ const ms=meta&&meta[3]&&meta[3]!=="M3"?`<span class="badge">${meta[3]}</span>`:"";
+ c.innerHTML=`<div class="phead"><div><h1>${meta?L(meta[1],meta[2]):""} ${ms}</h1><p>${L(d[0],d[1])}</p></div>${cur==="libs"&&!emptyMode?`<span><button class="btn primary" data-add>${L("Bibliothek hinzufügen","Add library")}</button> <button class="btn ghost" id="simEmpty">${L("Erststart simulieren","Simulate first start")}</button></span>`:""}${cur==="libs"&&emptyMode?`<button class="btn" id="simEmpty">${L("Zurück zur Liste","Back to list")}</button>`:""}</div>${SET[cur]&&ms?`<div class="alert">${L("In M3 schreibgeschützt: Einstellungen stehen in config.yaml (ADR 0022). Schreiben ab M7.","Read-only in M3: settings live in config.yaml (ADR 0022). Writable from M7.")}</div>`:""}${body}`;
+ if(SET[cur])bindSettings();
+}
+function bindSettings(){
+ const f=$("#setForm");
+ f.addEventListener("input",()=>{dirty=true;$("#dirtyMsg").hidden=false});
+ f.addEventListener("submit",e=>{e.preventDefault();dirty=false;$("#dirtyMsg").hidden=true});
+ $("#discard").onclick=()=>{dirty=false;render()};
+ const tb=$("[data-test]");if(tb)tb.onclick=()=>{$("[data-testres]").textContent=lang==="de"?" VAAPI: H.264 ok, HEVC ok, AV1 nicht verfügbar":" VAAPI: H.264 ok, HEVC ok, AV1 not available"};
+}
+/* ---- profile picker ---- */
+const PROFILES=[["Anna","#ff8572",0,1],["Max","#4c9aff",1,0],["Lena","#3dd68c",0,0]];
+let pinFor=null,pinVal="";
+function pickerHtml(){return `<div class="picker"><div><h1 style="margin:0">${L("Wer schaut?","Who's watching?")}</h1>
+ <div class="profiles" role="list">${PROFILES.map((p,i)=>`<div role="listitem"><button class="prof" data-prof="${i}"><div class="avatar" style="background:${p[1]}">${p[0][0]}${p[2]?`<span class="lock" aria-label="${lang==="de"?"PIN erforderlich":"PIN required"}">🔒</span>`:""}</div><b>${p[0]}</b>${p[3]?`<br><span class="badge">Admin</span>`:""}</button></div>`).join("")}
+ <div role="listitem"><button class="prof" data-prof="guest"><div class="avatar" style="background:var(--raised);color:var(--text)">G</div><b>${L("Gast","Guest")}</b></button></div>
+ <div role="listitem"><button class="prof" data-prof="add"><div class="avatar" style="background:transparent;border:2px dashed var(--muted);color:var(--muted)">+</div><b>${L("Profil hinzufügen","Add profile")}</b></button></div></div>
+ <div id="pinBox" hidden><p id="pinWho"></p><div class="dots" id="dots" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="pin" id="pinPad">${[1,2,3,4,5,6,7,8,9,"⌫",0,"OK"].map(k=>`<button type="button" data-k="${k}" aria-label="${k}">${k}</button>`).join("")}</div>
+  <p class="err" id="pinErr" role="alert"></p><label class="switch hint"><input type="checkbox"> ${L("Auf diesem Gerät merken","Remember on this device")}</label><p class="hint">${L("5 falsche Versuche sperren das Profil für 5 Minuten. (Prototyp-PIN für Max: 1234)","5 wrong attempts lock the profile for 5 minutes. (Prototype PIN for Max: 1234)")}</p></div></div></div>`}
+let tries=0;
+function bindPicker(){
+ $$("[data-prof]").forEach(b=>b.onclick=()=>{
+  const k=b.dataset.prof; if(k==="add"){$("#userDlg").showModal();return}
+  if(k==="guest"||!PROFILES[k][2]){alert(lang==="de"?"Profil gewählt – weiter zur Startseite.":"Profile chosen – continue to Home.");return}
+  pinFor=+k;pinVal="";tries=0;$("#pinBox").hidden=false;$("#pinWho").textContent=(lang==="de"?"PIN für ":"PIN for ")+PROFILES[k][0];dots();$("#pinErr").textContent="";$("#pinPad button").focus()});
+ $("#pinPad")?.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const k=b.dataset.k;
+  if(k==="⌫")pinVal=pinVal.slice(0,-1);else if(k==="OK"||pinVal.length>=4){} else pinVal+=k;
+  if(pinVal.length===4||k==="OK"){ if(pinVal==="1234"){$("#pinErr").textContent="";$("#pinErr").style.color="var(--dp)";$("#pinErr").textContent=lang==="de"?"PIN korrekt – weiter zur Startseite.":"PIN correct – continue to Home.";}
+   else if(pinVal.length===4){tries++;pinVal="";$("#pinErr").style.color="";$("#pinErr").textContent=tries>=5?(lang==="de"?"Profil für 5 Minuten gesperrt.":"Profile locked for 5 minutes."):(lang==="de"?`Falsche PIN (${tries}/5).`:`Wrong PIN (${tries}/5).`)}}
+  dots()});
+}
+function dots(){$$("#dots i").forEach((d,i)=>d.classList.toggle("on",i<pinVal.length))}
+
+/* ---- navigation ---- */
+function go(p){
+ if(dirty&&!confirm(lang==="de"?"Ungespeicherte Änderungen verwerfen?":"Discard unsaved changes?"))return;
+ dirty=false;
+ if(p==="empty"){emptyMode=true;cur="libs"}else{if(p==="libs"&&cur!=="libs")emptyMode=false;cur=p}
+ render();
+}
+document.addEventListener("click",e=>{
+ const g=e.target.closest("[data-go]");if(g){e.preventDefault();go(g.dataset.go);return}
+ if(e.target.closest("[data-exit]")){alert(lang==="de"?"Zurück zur Startseite der App (nicht Teil des Prototyps).":"Back to the app home (not part of this prototype).");return}
+ const cl=e.target.closest("[data-close]");if(cl){$("#"+cl.dataset.close).close();return}
+ const op=e.target.closest("[data-open]");if(op){$("#"+op.dataset.open).showModal();return}
+ if(e.target.closest("[data-add]")){openLib(null);return}
+ const ed=e.target.closest("[data-edit]");if(ed){openLib(libs.find(l=>l.id==ed.dataset.edit));return}
+ const sc=e.target.closest("[data-scan]");if(sc){const l=libs.find(l=>l.id==sc.dataset.scan);l.scanning=1;l.scan="läuft: 1 %|running: 1 %";render();return}
+ if(e.target.closest("#simEmpty")){emptyMode=!emptyMode;render();return}
+ const rv=e.target.closest("[data-revoke]");if(rv){rv.closest("tr").style.opacity=.4;rv.disabled=true;return}
+ if(e.target.id==="logPause"){logPaused=!logPaused;return}
+});
+$("#expert").onchange=e=>document.body.classList.toggle("expert",e.target.checked);
+$("#langToggle").onclick=()=>{lang=lang==="de"?"en":"de";applyLang()};
+function applyLang(){
+ document.documentElement.lang=lang;
+ $$("[data-i18n]").forEach(el=>{const k=el.dataset.i18n;if(el.dataset.orig===undefined)el.dataset.orig=el.textContent;
+  el.textContent=lang==="en"?(I.en[k]??el.dataset.orig):(I.de[k]??el.dataset.orig)});
+ $("#langToggle").innerHTML=lang==="de"?"<b>DE</b> · EN":"DE · <b>EN</b>";
+ if(!$("#libDlg").open)renderFolders(); else renderFolders();
+ render(); if($("#fsDlg").open)renderFs();
+}
+
+/* ---- library dialog ---- */
+let draft={folders:[]};
+function openLib(l){
+ editing=l; draft={folders:l?[...l.folders]:[],kind:l?l.kind:"movies"};
+ $("#libDlgTitle").dataset.i18n=l?"d.edit":"d.add";$("#libDlgTitle").textContent=t(l?"d.edit":"d.add");
+ $("#libName").value=l?l.name:"";$("#libLang").value=l?l.lang:"de";
+ $$("#kindTiles .tile[data-kind]").forEach(x=>x.setAttribute("aria-checked",x.dataset.kind===draft.kind));
+ $("#kindTiles").style.pointerEvents=l?"none":"";$("#kindTiles").style.opacity=l?.6:"";$("#kindLocked").hidden=!l;
+ $("#removeLib").hidden=!l;$("#importedHint").hidden=!(l&&l.imp);
+ $("#nameErr").textContent="";$("#folderErr").textContent="";
+ selectTab("g");renderFolders();$("#libDlg").showModal();
+}
+function selectTab(k){$$("#libDlg [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===k));$$("#libDlg [data-pane]").forEach(p=>p.hidden=p.dataset.pane!==k)}
+$$("#libDlg [data-tab]").forEach(b=>b.onclick=()=>selectTab(b.dataset.tab));
+$("#kindTiles").addEventListener("click",e=>{const x=e.target.closest(".tile[data-kind]");if(!x)return;draft.kind=x.dataset.kind;$$("#kindTiles .tile[data-kind]").forEach(y=>y.setAttribute("aria-checked",y===x))});
+$("#kindTiles").addEventListener("keydown",e=>{if(e.key===" "||e.key==="Enter"){e.preventDefault();e.target.click()}});
+function renderFolders(){
+ $("#folderList").innerHTML=draft.folders.map((f,i)=>`<li><span class="mono">${f}</span><button class="btn sm" data-rmf="${i}" aria-label="${lang==="de"?"Ordner entfernen":"Remove folder"}">✕</button></li>`).join("")||`<li class="muted">${lang==="de"?"Noch kein Ordner.":"No folder yet."}</li>`;
+}
+$("#folderList").addEventListener("click",e=>{const b=e.target.closest("[data-rmf]");if(b){draft.folders.splice(+b.dataset.rmf,1);renderFolders()}});
+$("#addFolder").onclick=()=>{fsPath=[];fsSel=null;$("#fsHelp").hidden=true;renderFs();$("#fsDlg").showModal()};
+$("#saveLib").onclick=()=>{
+ let ok=true;const name=$("#libName").value.trim();
+ $("#nameErr").textContent=name?"":t("e.valName");if(!name){ok=false;selectTab("g")}
+ $("#folderErr").textContent=draft.folders.length?"":t("e.valFolder");if(!draft.folders.length){ok=false;if(name)selectTab("f")}
+ if(!ok)return;
+ if(editing){editing.name=name;editing.folders=[...draft.folders];editing.lang=$("#libLang").value;editing.scan="läuft: 1 %|running: 1 %";editing.scanning=1}
+ else libs.push({id:Date.now(),kind:draft.kind,name,folders:[...draft.folders],items:0,scan:"läuft: 1 %|running: 1 %",scanning:1,ok:true,lang:$("#libLang").value});
+ emptyMode=false;$("#libDlg").close();render();
+};
+$("#removeLib").onclick=()=>$("#confirmDlg").showModal();
+$("#confirmRemove").onclick=()=>{libs.splice(libs.indexOf(editing),1);$("#confirmDlg").close();$("#libDlg").close();render()};
+
+/* ---- folder browser (fake file system) ---- */
+const FS={name:"",children:{
+ "volume1":{children:{"video":{children:{"filme":{children:{},items:1284},"serien":{children:{},items:312},"dokus":{children:{}}},hidden:3},"privat":{children:{"familie":{children:{}}}},"archiv":{locked:true,children:{}},"@appdata":{hid:1},"#recycle":{hid:1}},hidden:2},
+ "volume2":{children:{"video":{children:{"filme":{children:{}}}}},hidden:1}}};
+let fsPath=[],fsSel=null;
+const node=p=>p.reduce((n,k)=>n.children[k],FS);
+function renderFs(){
+ const n=node(fsPath);
+ const cr=[`<button data-ci="-1" ${fsPath.length?"":'aria-current="location"'}>${lang==="de"?"Speicherorte":"Storage roots"}</button>`].concat(fsPath.map((k,i)=>`<span aria-hidden="true">/</span><button data-ci="${i}" ${i===fsPath.length-1?'aria-current="location"':""}>${k}</button>`));
+ $("#crumbs").innerHTML=cr.join("");
+ const ent=Object.entries(n.children||{}).filter(([k,v])=>!v.hid);
+ $("#fsList").innerHTML=ent.map(([k,v])=>`<li class="${v.locked?"locked":""}"><button class="nm" data-open="${k}" ${v.locked?"":""}>📁 ${k}${v.locked?` <span class="pill bad">🔒 ${t("n.locked")}</span>`:""}</button>${v.locked?`<button class="btn sm" data-help="${k}">${t("n.helpBtn")}</button>`:`<button class="btn sm" data-sel="${k}">${lang==="de"?"Wählen":"Select"}</button>`}</li>`).join("")||`<li class="muted">${t("n.none")}</li>`;
+ const hid=(n.hidden||0)+Object.values(n.children||{}).filter(v=>v.hid).length;
+ $("#fsHidden").textContent=hid?t("n.hidden",{n:hid}):"";
+ const here="/"+fsPath.join("/");
+ $("#fsSel").textContent=fsSel||(fsPath.length?here:"");
+ $("#fsPick").disabled=!(fsSel||fsPath.length);
+}
+$("#crumbs").addEventListener("click",e=>{const b=e.target.closest("[data-ci]");if(!b)return;fsPath=fsPath.slice(0,+b.dataset.ci+1);fsSel=null;$("#fsHelp").hidden=true;renderFs()});
+$("#fsList").addEventListener("click",e=>{
+ const o=e.target.closest(".nm");if(o){const k=o.dataset.open;if(node(fsPath).children[k].locked){showHelp(k)}else{fsPath.push(k);fsSel=null;$("#fsHelp").hidden=true;renderFs()}return}
+ const s=e.target.closest("[data-sel]");if(s){fsSel="/"+[...fsPath,s.dataset.sel].join("/");renderFs();return}
+ const h=e.target.closest("[data-help]");if(h)showHelp(h.dataset.help);
+});
+function showHelp(k){
+ const h=$("#fsHelp");h.hidden=false;
+ const tabs=["dsm","docker","other"];
+ const draw=a=>{h.innerHTML=`<b>${t("h.title")}: <span class="mono">/${[...fsPath,k].join("/")}</span></b><div class="sub" role="tablist" style="margin-top:8px">${tabs.map(x=>`<button role="tab" data-ht="${x}" aria-selected="${x===a}">${t("h."+x)}</button>`).join("")}</div>
+ <ol>${a==="dsm"?[1,2,3,4].map(i=>`<li>${t("h.dsm"+i)}</li>`).join(""):a==="docker"?[1,2].map(i=>`<li>${t("h.docker"+i)}</li>`).join(""):`<li>${t("h.other1")}</li>`}</ol><button class="btn sm" id="recheck">${t("h.recheck")}</button>`;
+  $$("[data-ht]",h).forEach(b=>b.onclick=()=>draw(b.dataset.ht));$("#recheck").onclick=()=>{$("#recheck").textContent=lang==="de"?"Immer noch nicht lesbar":"Still not readable"}};
+ draw("dsm");
+}
+$("#fsPick").onclick=()=>{
+ const p=fsSel||"/"+fsPath.join("/");
+ if(draft.folders.includes(p)){$("#folderErr").textContent=t("e.dup");}
+ else if(draft.folders.some(f=>p.startsWith(f+"/")||f.startsWith(p+"/"))){$("#folderErr").textContent=t("e.nested");}
+ else if(libs.some(l=>l!==editing&&l.folders.includes(p))){$("#folderErr").textContent=t("e.dup");}
+ else{draft.folders.push(p);$("#folderErr").textContent="";if(!$("#libName").value)$("#libName").value=p.split("/").pop().replace(/^./,c=>c.toUpperCase());renderFolders()}
+ $("#fsDlg").close();selectTab("f");
+};
+
+/* ---- live log ---- */
+let logPaused=false;
+setInterval(()=>{const b=$("#logBox");if(!b||logPaused)return;b.textContent+=new Date().toTimeString().slice(0,8)+" INF session heartbeat\n";b.scrollTop=b.scrollHeight},3000);
+
+applyLang();
+</script>
+</body>
+</html>
