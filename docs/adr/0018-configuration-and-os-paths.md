@@ -218,3 +218,21 @@ Keys added for the automatic scans (ADR 0027 §9; defaults are the OD-M3-3 recom
 `libraries` and `<PREFIX>_LIBRARIES` (M2-04) keep their validation but are a one-time import
 seed into the database, not the live library list. New keys `browse.roots`
 (`<PREFIX>_BROWSE_ROOTS`) and `install.kind` (`<PREFIX>_INSTALL_KIND`) follow in M3-19c.
+
+## Notes (M3-19c)
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `browse.roots` (list of paths) | `<PREFIX>_BROWSE_ROOTS` (OS path list; replaces the YAML list as a whole; empty value = no roots) | Windows: every present drive root `A:\`..`Z:\`; others: those of `/media`, `/mnt`, `/srv` and the home directory that exist (probed at startup) | path rules above (relative → config directory, `~` and drive-relative refused); absolute and unique after cleaning (case-insensitive on Windows); a missing directory is not an error (reported unavailable later) |
+| `install.kind` | `<PREFIX>_INSTALL_KIND` | `standard` | `standard`, `docker` or `synology`, case-insensitive; anything else is a startup error naming the key or variable |
+
+`libraries` / `<PREFIX>_LIBRARIES` are an import seed: imported once at startup, then managed in
+Settings > Libraries. Removing an entry from the configuration deletes nothing from the
+database. Browse roots may contain the data or transcode directory; the browser hides it and
+the domain refuses it, so the configuration applies no overlap rule to them.
+
+Decision on the default browse roots: the home directory is added only for `install.kind:
+standard` (desktop installs). On `docker` and `synology` it is skipped because a NAS or
+container home may hold secrets or the data directory. It is never added when relative, when it
+is the filesystem root (`HOME=/` in containers) or when it duplicates another default; the
+value is cleaned first. `browse.roots` overrides all defaults.

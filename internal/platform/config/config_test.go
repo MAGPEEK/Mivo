@@ -99,7 +99,9 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 	f := newFixture(t, "", nil)
 	dirs := defaultDirs(t, f)
 
-	got, err := f.load()
+	got, err := config.Load(config.Options{
+		ConfigDirFlag: f.configDir, Environment: f.env, PathExists: func(string) bool { return false },
+	})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -113,6 +115,8 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		Tools:     config.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"},
 		Transcode: config.Transcode{MaxSessions: 2},
 		Scan:      config.Scan{Watch: true, Interval: 12 * time.Hour},
+		Browse:    config.Browse{Roots: []string{}},
+		Install:   config.Install{Kind: config.InstallKindStandard},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)

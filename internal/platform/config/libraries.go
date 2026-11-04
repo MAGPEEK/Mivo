@@ -11,7 +11,9 @@ import (
 
 // keyLibraries is the list setting of the media libraries (ADR 0022). In config.yaml it is
 // a list of {name, path, kind}; the environment variable <PREFIX>_LIBRARIES holds an OS
-// path list and replaces the list of the file.
+// path list and replaces the list of the file. The libraries are an import seed (ADR 0028):
+// imported once at startup, then managed in Settings > Libraries; removing an entry deletes
+// nothing.
 const keyLibraries = "libraries"
 
 // Fields of a library entry in config.yaml.

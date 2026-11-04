@@ -77,6 +77,10 @@ type Config struct {
 	Tools     Tools
 	Transcode Transcode
 	Scan      Scan
+	// Browse holds the folder browser roots (ADR 0028).
+	Browse Browse
+	// Install is the installation kind.
+	Install Install
 }
 
 // Scan holds the settings of the automatic library scans (ADR 0027 §9).
@@ -135,6 +139,9 @@ type Options struct {
 	ConfigDirFlag string
 	// Environment is the view of the host: OS and environment variables.
 	Environment paths.Environment
+	// PathExists reports whether a directory exists; it only selects the default browse
+	// roots. Nil probes the file system.
+	PathExists func(path string) bool
 }
 
 // Load builds the configuration from defaults, the optional config file and the
@@ -158,6 +165,10 @@ func Load(options Options) (Config, error) {
 		return Config{}, err
 	}
 
+	if err := environmentBrowseRoots(&cfg, options.Environment, configDir); err != nil {
+		return Config{}, err
+	}
+
 	envLibraries, ok, err := environmentLibraries(options.Environment, configDir)
 	if err != nil {
 		return Config{}, err
@@ -176,6 +187,10 @@ func Load(options Options) (Config, error) {
 	}
 
 	cfg.Libraries = libraryConfigs(libraries)
+
+	if err := finalizeBrowseRoots(&cfg, options); err != nil {
+		return Config{}, err
+	}
 
 	return cfg, nil
 }
@@ -208,6 +223,7 @@ func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 		Tools:     Tools{FFmpeg: DefaultFFmpeg, FFprobe: DefaultFFprobe},
 		Transcode: Transcode{MaxSessions: DefaultTranscodeMaxSessions},
 		Scan:      Scan{Watch: DefaultScanWatch, Interval: DefaultScanInterval},
+		Install:   Install{Kind: InstallKindStandard},
 	}
 }
 

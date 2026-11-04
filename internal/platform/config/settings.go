@@ -85,6 +85,7 @@ func settings() []setting {
 		{key: keyTranscodeMaxSessions, apply: applyMaxSessions},
 		{key: keyScanWatch, apply: applyScanWatch},
 		{key: keyScanInterval, apply: applyScanInterval},
+		{key: keyInstallKind, apply: applyInstallKind},
 	}
 }
 

@@ -47,6 +47,8 @@ type fileItem struct {
 type fileContent struct {
 	values map[string]fileValue
 	lists  map[string][]fileItem
+	// scalarLists holds lists of plain values such as browse.roots.
+	scalarLists map[string][]string
 }
 
 // applyFile applies config.yaml from configDir if it exists and returns the libraries it
@@ -77,6 +79,12 @@ func applyFile(cfg *Config, configDir string) ([]configuredLibrary, error) {
 
 		if err := entry.apply(cfg, value.raw, configDir); err != nil {
 			return nil, fmt.Errorf("%s: line %d: key %s: %w", file, value.line, entry.key, err)
+		}
+	}
+
+	if roots, ok := content.scalarLists[keyBrowseRoots]; ok {
+		if err := applyBrowseRoots(cfg, roots, configDir); err != nil {
+			return nil, fmt.Errorf("%s: key %s: %w", file, keyBrowseRoots, err)
 		}
 	}
 
@@ -147,7 +155,13 @@ func newFileWalker() *fileWalker {
 		leaves:   map[string]bool{},
 		lists:    map[string][]string{keyLibraries: libraryFieldNames()},
 		seen:     map[string]bool{},
-		content:  fileContent{values: map[string]fileValue{}, lists: map[string][]fileItem{}},
+		content: fileContent{
+			values: map[string]fileValue{}, lists: map[string][]fileItem{}, scalarLists: map[string][]string{},
+		},
+	}
+
+	for _, section := range parentSections(keyBrowseRoots) {
+		walker.sections[section] = true
 	}
 
 	for _, entry := range settings() {
@@ -213,6 +227,8 @@ func (walker *fileWalker) walkEntry(keyNode, valueNode *yaml.Node, section strin
 		return walker.addValue(key, keyNode.Line, valueNode)
 	case walker.lists[key] != nil:
 		return walker.walkList(key, keyNode.Line, valueNode)
+	case key == keyBrowseRoots:
+		return walker.walkScalarList(key, keyNode.Line, valueNode)
 	default:
 		return fmt.Errorf("line %d: %w %q", keyNode.Line, ErrUnknownKey, key)
 	}
@@ -253,6 +269,33 @@ func (walker *fileWalker) walkList(key string, line int, node *yaml.Node) error 
 	}
 
 	walker.content.lists[key] = items
+
+	return nil
+}
+
+// walkScalarList walks a list of plain values; "[]" is valid and sets an empty list.
+func (walker *fileWalker) walkScalarList(key string, line int, node *yaml.Node) error {
+	node = dereference(node)
+
+	switch {
+	case isNull(node):
+		return fmt.Errorf("line %d: key %s: %w: %w", line, key, ErrInvalid, errNullValue)
+	case node.Kind != yaml.SequenceNode:
+		return fmt.Errorf("line %d: key %s: %w: %w", node.Line, key, ErrInvalid, errNotList)
+	}
+
+	values := make([]string, 0, len(node.Content))
+
+	for index, itemNode := range node.Content {
+		value, err := scalarValue(listItemLabel(key, index), itemNode.Line, itemNode)
+		if err != nil {
+			return err
+		}
+
+		values = append(values, value.raw)
+	}
+
+	walker.content.scalarLists[key] = values
 
 	return nil
 }

@@ -298,9 +298,12 @@ go build -tags webui -o bin/mivo.exe ./cmd/mivo
 
 ### Libraries and tools
 
-Libraries are defined only in the configuration (ADR 0022); the server syncs them into its
-catalog and scans every library at each start, and the web app's scan button scans again.
-Changes need a restart.
+`libraries` is an import seed (ADR 0028): the server imports the entries once at startup and
+you then manage libraries in Settings > Libraries; removing an entry from the configuration
+deletes nothing. `browse.roots` / `MIVO_BROWSE_ROOTS` (OS path list) set where the folder
+browser may start (default: present drive roots on Windows; `/media`, `/mnt`, `/srv` and the
+home directory that exist elsewhere), and `install.kind` / `MIVO_INSTALL_KIND` is `standard`
+(default), `docker` or `synology`.
 
 | YAML key | Environment | Default | Meaning |
 |---|---|---|---|
