@@ -25,7 +25,7 @@
 
 ## Offene Entscheidungen (Stand 2026-11-04)
 
-Vom Owner zu entscheiden; der Architekt entscheidet sie nicht. Aufgaben für Meilenstein 3 ff. werden erst nach OD-UX-2 geschrieben.
+Vom Owner zu entscheiden; der Architekt entscheidet sie nicht. OD-UX-2 ist entschieden (B); OD-UX-1 und OD-UX-3 sind offen.
 
 **OD-UX-1 – webOS-Mindestversion.** Der eigene TV des Owners (LG OLED55C97LA, Modelljahr 2019) meldet **webOS 4.10** (LG vermarktet die 2019er-Reihe als „webOS 4.5“; am Gerät prüfen). Der Plan und ADR 0013 verlangen webOS 6.0+, der TV wäre also nicht unterstützt. Auch die Zeile „Testhardware: LG-TV mit webOS 23+“ passt nicht dazu – bitte bestätigen, welche LG-TVs zum Testen wirklich verfügbar sind.
 - A: **6.0 bleibt.** Moderne Engine (Chromium 79), weniger Transpiling, einfachere Profile. Der eigene TV bleibt außen vor; Tests auf Emulator bzw. einem anderen Gerät.
@@ -33,7 +33,7 @@ Vom Owner zu entscheiden; der Architekt entscheidet sie nicht. Aufgaben für Mei
 - C: **4.x als „Best Effort“**: der Build zielt auf 4.x, freigegeben und voll getestet wird nur 6.0+, der eigene TV ist das einzige 4.x-Testgerät.
 - Dringlichkeit: die Antwort bestimmt schon jetzt, welche Sprachfeatures die gemeinsamen Pakete in Meilenstein 4/5 verwenden dürfen, nicht erst in Meilenstein 10.
 
-**OD-UX-2 – Reihenfolge der Meilensteine.** Der Owner empfindet die Alpha als „sehr rudimentär“.
+**OD-UX-2 – Reihenfolge der Meilensteine – entschieden 2026-11-04: B (3 → 6 → 5 → 4 → 7).** Der Owner empfindet die Alpha als „sehr rudimentär“.
 - A: **Plan-Reihenfolge 3 → 4 → 5 → 6 → 7.** Technisch geradlinig; sichtbar viel UI erst nach dem Streaming-Ausbau.
 - B: **Vorschlag des Orchestrators 3 → 6 → 5 → 4 → 7** (Namensparser und lokale Metadaten, dann TMDB mit Postern, dann die komplette UI): größter sichtbarer Sprung. Folge: der Player in Meilenstein 5 hat noch keine Audio-/Untertitelwahl und keine Qualitätsstufen (kommt mit 4); der Bearbeiten-Dialog (Meilenstein 6) erscheint vor dem vollständigen UI-Gerüst und muss in Meilenstein 5 nachgezogen werden.
 - C: **wie B, aber mit einem kleinen Teil von 4 in 5**: Audiospur-Wahl und Text-Untertitel (SRT/VTT/ASS) kommen mit dem Player-Umbau in 5; HW-Beschleunigung, Bild-Untertitel, Trickplay, Tonemapping, Bandbreitenstufen bleiben in 4. Ein Player ohne Spur- und Untertitelwahl wirkt sonst weiter rudimentär.
@@ -394,7 +394,7 @@ Alle Medienarten sind Teil von v1. Gebaut wird trotzdem als **„Walking Skeleto
 
 1. **Fundament:** Schichtenstruktur (domain/app/adapters/platform), Go-Modul, Config, slog, SQLite + Migrationen, OpenAPI-Grundgerüst, React-App mit Feature-Struktur und Design-Tokens, Einbettung ins Binary, Dockerfile, **Qualitäts-Gates** (golangci-lint, depguard, ESLint, dependency-cruiser, lefthook, Abdeckungs-Grenzen), ADRs 001–015 für die festgelegten Entscheidungen, `scripts/gen-testmedia`
 2. **Durchstich Video:** Ordner scannen → ffprobe → Bibliothek in der Web-UI → Abspielen per Direct Play, Remux oder Transcode inklusive Stream-Info-Overlay. **Danach kann bereits jeder Video-Container im Browser abgespielt werden.**
-Die Reihenfolge 3 → 4 → 5 → 6 → 7 ist offen (OD-UX-2); die Nummern bleiben als Kennung. Element-IDs in Klammern verweisen auf `docs/design/ux-spec.md`.
+Umsetzungsreihenfolge (OD-UX-2, entschieden 2026-11-04): **3 → 6 → 5 → 4 → 7**; die Nummern bleiben als Kennung. Element-IDs in Klammern verweisen auf `docs/design/ux-spec.md`.
 
 3. **Bibliotheken komplett:** Namensparser (Filme/Serien; Regressionstest: Serien mit absoluter Episodennummerierung dürfen nicht als „130 Staffeln“ erscheinen, DT-24), Hierarchie Serie → Staffel → Episode mit einfachen Serien-, Staffel- und Episodenseiten (DT-20…22), Musik-Tags, Foto-EXIF, Hörbuch-Kapitel, Disc-Images (ISO/BDMV/VIDEO_TS), lokale NFO-Dateien (Inhalt, Genres, Personen, Altersfreigabe, Veröffentlichung) und lokales Artwork, **Bild-Endpunkt mit serverseitiger Skalierung in festen Größen und Cache** (LB-44) und Poster in Raster und Detailseite (LB-40), Extras-Ordner, Watcher und periodischer Scan (Config-Schlüssel, AD-23)
 4. **Streaming-Ausbau:** HW-Beschleunigung mit Auto-Erkennung und „HW-Beschleunigung testen“ (AD-25), Untertitel (ASS/PGS), Trickplay, DSD/Hi-Res-Audio, Bandbreitenstufen, Session-Verwaltung und Drosselung, HDR→SDR-Tonemapping, Media Segments mit Intro-Erkennung und „Überspringen“-Button (PL-07), Kapitelbilder und Kapitel-Panel (PL-30), mehrere Versionen. UI-Anteil: **Wiedergabeoptionen-Panel** mit Qualität (Original/Automatisch/Bitratenstufen), Audiospur, Untertiteln und Untertitelgröße (PL-10…13), Auswahl von Version/Audio/Untertitel auf der Detailseite (DT-07), Trickplay und Kapitelmarken an der Zeitleiste (PL-05), erzeugte Episodenbilder (DT-23), Erweiterungen des Stream-Info-Overlays (Ausgabebitrate, HW-Encoder/-Decoder, Tonemapping, Einbrenn-Grund, Transcode-Geschwindigkeit, PL-41), Qualitäts- und Untertitel-Einstellungen pro Gerät (AD-02)
