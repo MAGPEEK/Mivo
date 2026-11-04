@@ -28,6 +28,8 @@ const (
 	keyToolsFFmpeg          = "tools.ffmpeg"
 	keyToolsFFprobe         = "tools.ffprobe"
 	keyTranscodeMaxSessions = "transcode.max_sessions"
+	keyScanWatch            = "scan.watch"
+	keyScanInterval         = "scan.interval"
 )
 
 // keySeparator separates the sections of a key path.
@@ -81,6 +83,8 @@ func settings() []setting {
 		{key: keyToolsFFmpeg, apply: applyTool(ffmpegField)},
 		{key: keyToolsFFprobe, apply: applyTool(ffprobeField)},
 		{key: keyTranscodeMaxSessions, apply: applyMaxSessions},
+		{key: keyScanWatch, apply: applyScanWatch},
+		{key: keyScanInterval, apply: applyScanInterval},
 	}
 }
 
@@ -125,18 +129,29 @@ func applyPort(cfg *Config, raw, _ string) error {
 	return nil
 }
 
-// applyLANOnly accepts only true and false, case-insensitively. strconv.ParseBool would also
-// take "t" or "0", and YAML 1.1 spellings such as "yes" or "off" are plain strings in the
-// YAML 1.2 parser; rejecting them keeps a security switch from flipping on a guess.
+// applyLANOnly accepts only true and false (parseStrictBool), so a security switch never
+// flips on a guess.
 func applyLANOnly(cfg *Config, raw, _ string) error {
-	value, err := parseChoice(raw, strconv.FormatBool(true), strconv.FormatBool(false))
+	value, err := parseStrictBool(raw)
 	if err != nil {
 		return err
 	}
 
-	cfg.Server.LANOnly = value == strconv.FormatBool(true)
+	cfg.Server.LANOnly = value
 
 	return nil
+}
+
+// parseStrictBool accepts only true and false, case-insensitively. strconv.ParseBool would
+// also take "t" or "0", and YAML 1.1 spellings such as "yes" or "off" are plain strings in
+// the YAML 1.2 parser; rejecting them keeps a switch from flipping on a guess.
+func parseStrictBool(raw string) (bool, error) {
+	value, err := parseChoice(raw, strconv.FormatBool(true), strconv.FormatBool(false))
+	if err != nil {
+		return false, err
+	}
+
+	return value == strconv.FormatBool(true), nil
 }
 
 func applyMaxSessions(cfg *Config, raw, _ string) error {

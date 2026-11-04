@@ -174,3 +174,41 @@ Key added for the LAN-only guard (OD-10 A accepted):
     forwarded, devices shared into the tailnet from other tailnets, and cloud or Kubernetes
     networks that use the range.
 - `false` turns the guard off; do that only when another layer restricts access.
+
+## Notes (M3-11)
+
+Keys added for the automatic scans (ADR 0027 §9; defaults are the OD-M3-3 recommendation):
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `scan.watch` | `<PREFIX>_SCAN_WATCH` | `true` | `true` or `false`, case-insensitive, like `server.lan_only`; `yes`, `no`, `on`, `off`, `1`, `0` and an empty value are rejected |
+| `scan.interval` | `<PREFIX>_SCAN_INTERVAL` | `12h` | Go duration (`90m`, `1h30m`, `168h`); `0` (or `0s`) turns the periodic scan off, anything else must lie in 15m–168h. A bare number such as `12` is rejected because its unit would be a guess |
+
+- **Watcher** (`scan.watch`): a change below a library root starts a normal full scan of that
+  library once the library has been quiet for 30 s, at the latest 5 min after the first
+  change; changes during a running scan lead to exactly one more scan after it. Hidden
+  entries and NAS system folders are ignored like in the scan. Linux and other systems use
+  one fsnotify watch per directory, Windows one recursive notification on the root, so
+  folders below a library can still be renamed while the server runs.
+- **When watching fails** (missing or unmounted root, a root that was renamed, the watch
+  limit, lost events) the server logs one warning per library, retries every minute and
+  relies on the periodic scan; once a retried watch is ready, one scan picks up what changed
+  meanwhile. A root that goes away is noticed by its events or, at the latest, by a check of
+  the root's identity every 30 s.
+- **No warning for shares without events**: CIFS/SMB and NFS mounts on Linux, and bind
+  mounts of Docker Desktop (Windows, macOS) from the host, accept watches but deliver no or
+  only some events for changes made by other machines or by the host. The server cannot tell
+  this apart from a quiet library, so it logs nothing; such libraries are kept current by the
+  periodic scan alone. Do not turn `scan.interval` off for them.
+- **inotify budget**: every watched directory costs one inotify watch, counted per user ID
+  against `fs.inotify.max_user_watches` (and one instance per library against
+  `fs.inotify.max_user_instances`). On a NAS, and for containers that run as root, that budget
+  is shared with every other process of the same user ID, for example the NAS's own indexing
+  and sync services. A library with tens of thousands of folders can exhaust it; the server
+  then logs the watch-limit warning and keeps the folders it already watches. Raise the
+  limits on the host (`sysctl fs.inotify.max_user_watches=...`) or rely on the periodic scan.
+- **Periodic scan** (`scan.interval`): checked every minute; a library is scanned again when
+  its last scan finished at least the interval ago. A library whose scan never finished
+  since the server started counts from when it was first seen, so the startup scan (ADR
+  0022) is not doubled. Network shares that send no events are covered only by this scan.
+- Both keys can be off at the same time; then only the startup scan and manual scans run.

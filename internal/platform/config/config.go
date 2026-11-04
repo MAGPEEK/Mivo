@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/magpeek/mivo/internal/platform/logging"
 	"github.com/magpeek/mivo/internal/platform/paths"
@@ -37,6 +38,16 @@ const (
 	// DefaultTranscodeMaxSessions follows OD-4: two re-encoding sessions saturate a typical
 	// NAS CPU.
 	DefaultTranscodeMaxSessions = 2
+)
+
+// Defaults of the automatic scans (ADR 0027 §9, OD-M3-3 recommendation).
+const (
+	// DefaultScanWatch turns the file system watcher on, so new files appear without a
+	// manual scan.
+	DefaultScanWatch = true
+	// DefaultScanInterval rescans each library twice a day, which also covers network shares
+	// that send no file system events.
+	DefaultScanInterval = 12 * time.Hour
 )
 
 var (
@@ -65,6 +76,16 @@ type Config struct {
 	Libraries []LibraryConfig
 	Tools     Tools
 	Transcode Transcode
+	Scan      Scan
+}
+
+// Scan holds the settings of the automatic library scans (ADR 0027 §9).
+type Scan struct {
+	// Watch rescans a library shortly after the file system reports a change below its root.
+	Watch bool
+	// Interval rescans a library this long after its last scan finished; 0 turns the
+	// periodic scan off.
+	Interval time.Duration
 }
 
 // Tools names the external programs the server runs.
@@ -186,6 +207,7 @@ func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 		Libraries: []LibraryConfig{},
 		Tools:     Tools{FFmpeg: DefaultFFmpeg, FFprobe: DefaultFFprobe},
 		Transcode: Transcode{MaxSessions: DefaultTranscodeMaxSessions},
+		Scan:      Scan{Watch: DefaultScanWatch, Interval: DefaultScanInterval},
 	}
 }
 

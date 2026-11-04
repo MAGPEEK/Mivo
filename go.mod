@@ -13,6 +13,7 @@ ignore ./web
 // graph; run them with `go tool -modfile=tools/go.mod <tool>` (ADR 0019).
 
 require (
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/oapi-codegen/runtime v1.8.0
 	github.com/pressly/goose/v3 v3.29.0

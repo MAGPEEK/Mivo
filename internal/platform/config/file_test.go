@@ -255,6 +255,25 @@ func TestLoadInvalidValues(t *testing.T) {
 		{name: "file max sessions negative", yaml: "transcode:\n  max_sessions: -2\n", wantPart: "key transcode.max_sessions"},
 		{name: "env max sessions not a number", vars: map[string]string{env("TRANSCODE_MAX_SESSIONS"): "two"}, wantPart: env("TRANSCODE_MAX_SESSIONS")},
 		{name: "env max sessions empty", vars: map[string]string{env("TRANSCODE_MAX_SESSIONS"): ""}, wantPart: env("TRANSCODE_MAX_SESSIONS")},
+		{
+			name: "file scan watch yes", yaml: "scan:\n  watch: yes\n",
+			wantPart: `line 2: key scan.watch: invalid configuration value: "yes" is not one of true, false`,
+		},
+		{name: "env scan watch one", vars: map[string]string{env("SCAN_WATCH"): "1"}, wantPart: env("SCAN_WATCH")},
+		{name: "env scan watch empty", vars: map[string]string{env("SCAN_WATCH"): ""}, wantPart: env("SCAN_WATCH")},
+		{
+			name: "file scan interval below the minimum", yaml: "scan:\n  interval: 14m59s\n",
+			wantPart: "line 2: key scan.interval: invalid configuration value: scan interval 14m59s is outside 15m-168h; " +
+				"use 0 to turn the periodic scan off",
+		},
+		{name: "env scan interval above the maximum", vars: map[string]string{env("SCAN_INTERVAL"): "169h"}, wantPart: env("SCAN_INTERVAL")},
+		{name: "env scan interval negative", vars: map[string]string{env("SCAN_INTERVAL"): "-1h"}, wantPart: "is outside 15m-168h"},
+		{
+			name: "file scan interval without unit", yaml: "scan:\n  interval: 12\n",
+			wantPart: `line 2: key scan.interval: invalid configuration value: scan interval "12" is not a duration such as 12h or 90m`,
+		},
+		{name: "env scan interval text", vars: map[string]string{env("SCAN_INTERVAL"): "daily"}, wantPart: env("SCAN_INTERVAL")},
+		{name: "env scan interval empty", vars: map[string]string{env("SCAN_INTERVAL"): ""}, wantPart: env("SCAN_INTERVAL")},
 	}
 
 	for _, tt := range tests {

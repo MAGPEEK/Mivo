@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/platform/brand"
 	"github.com/magpeek/mivo/internal/platform/config"
@@ -111,6 +112,7 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		Libraries: []config.LibraryConfig{},
 		Tools:     config.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"},
 		Transcode: config.Transcode{MaxSessions: 2},
+		Scan:      config.Scan{Watch: true, Interval: 12 * time.Hour},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Load = %+v, want %+v", got, want)
@@ -209,7 +211,27 @@ func precedenceCases() []precedenceCase {
 			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Transcode.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Transcode },
 		},
-	}, toolAndTranscodeCases()...)
+	}, append(toolAndTranscodeCases(), scanCases()...)...)
+}
+
+// scanCases cover the automatic scan keys of milestone 3 (ADR 0027 §9).
+func scanCases() []precedenceCase {
+	return []precedenceCase{
+		{
+			key: "scan.watch", yaml: "scan:\n  watch: false\n",
+			envName: env("SCAN_WATCH"), envValue: "True",
+			wantFile: "false", wantEnv: "true",
+			defaultOf: func(paths.DefaultDirectories) string { return "true" },
+			get:       func(cfg config.Config) string { return strconv.FormatBool(cfg.Scan.Watch) },
+		},
+		{
+			key: "scan.interval", yaml: "scan:\n  interval: 6h\n",
+			envName: env("SCAN_INTERVAL"), envValue: "0",
+			wantFile: "6h0m0s", wantEnv: "0s",
+			defaultOf: func(paths.DefaultDirectories) string { return "12h0m0s" },
+			get:       func(cfg config.Config) string { return cfg.Scan.Interval.String() },
+		},
+	}
 }
 
 // toolAndTranscodeCases cover the scalar keys of milestone 2 (ADR 0022, ADR 0024).
