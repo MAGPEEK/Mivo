@@ -14,12 +14,12 @@ import (
 // library, the status tracker and the item kind of the library. runV2 adds the placement.
 type run struct {
 	service  *Service
-	library  library.Library
+	library  library.ManagedLibrary
 	tracker  *tracker
 	itemKind library.ItemKind
 }
 
-func (service *Service) newRun(scanned library.Library, scanTracker *tracker) *run {
+func (service *Service) newRun(scanned library.ManagedLibrary, scanTracker *tracker) *run {
 	return &run{service: service, library: scanned, tracker: scanTracker}
 }
 

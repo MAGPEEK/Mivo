@@ -141,7 +141,7 @@ func (app application) newScanService(db *sqlite.DB, adapters scanAdapters) (*ap
 	}
 
 	service, err := appscan.NewService(appscan.Dependencies{
-		Libraries: sqlite.NewLibraryRepository(db, time.Now),
+		Libraries: sqlite.NewScanLibrarySource(db, time.Now),
 		Walker:    adapters.files,
 		Resolver:  adapters.files,
 		Prober:    adapters.prober,

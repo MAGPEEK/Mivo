@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -32,7 +33,7 @@ const (
 	ErrorCodeProberUnavailable ErrorCode = "prober_unavailable"
 	// ErrorCodeCatalogFailed means the catalog could not be read or written.
 	ErrorCodeCatalogFailed ErrorCode = "catalog_failed"
-	// ErrorCodeCanceled means the scan was stopped because the server shuts down.
+	// ErrorCodeCanceled means the scan was stopped: the server shuts down or Service.Cancel ran.
 	ErrorCodeCanceled ErrorCode = "scan_canceled"
 	// ErrorCodeFailed means the scan failed for another reason.
 	ErrorCodeFailed ErrorCode = "scan_failed"
@@ -68,6 +69,9 @@ type Status struct {
 	Counts     Counts
 	// ErrorCode is ErrorCodeNone unless State is StateFailed.
 	ErrorCode ErrorCode
+	// UnavailableFolders counts the library folders that were missing or lost during the
+	// scan. Their catalog entries were kept (API contract unavailableFolderCount).
+	UnavailableFolders int
 }
 
 // tracker holds the status of one scan. The scan goroutine writes it while Status reads it,
@@ -77,12 +81,20 @@ type tracker struct {
 	mutex  sync.Mutex
 	status Status
 	done   chan struct{}
+	// scanContext is the context of this scan, a child of the service's; cancel ends this scan
+	// only (Service.Cancel).
+	scanContext context.Context
+	cancel      context.CancelFunc
 }
 
-func newTracker(startedAt time.Time) *tracker {
+func newTracker(parent context.Context, startedAt time.Time) *tracker {
+	scanContext, cancel := context.WithCancel(parent)
+
 	return &tracker{
-		status: Status{State: StateRunning, StartedAt: startedAt},
-		done:   make(chan struct{}),
+		status:      Status{State: StateRunning, StartedAt: startedAt},
+		done:        make(chan struct{}),
+		scanContext: scanContext,
+		cancel:      cancel,
 	}
 }
 
@@ -113,6 +125,14 @@ func (scanTracker *tracker) count(change func(*Counts)) {
 	defer scanTracker.mutex.Unlock()
 
 	change(&scanTracker.status.Counts)
+}
+
+// setUnavailableFolders records how many folders the walk could not reach.
+func (scanTracker *tracker) setUnavailableFolders(count int) {
+	scanTracker.mutex.Lock()
+	defer scanTracker.mutex.Unlock()
+
+	scanTracker.status.UnavailableFolders = count
 }
 
 // final returns the status the scan ends with, without publishing it.

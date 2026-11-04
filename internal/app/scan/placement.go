@@ -26,8 +26,10 @@ func (video placedVideo) ownerKey() string {
 	return top.Kind.String() + "\x00" + top.MatchKey
 }
 
-func (video placedVideo) directory() string {
-	return path.Dir(video.state.PathForParsing())
+// directory is the folder of the video, per library folder: two folders may hold equal
+// relative directories whose videos must not be counted together.
+func (video placedVideo) directory() fileKey {
+	return fileKey{rootID: video.state.RootID, path: path.Dir(video.state.PathForParsing())}
 }
 
 func (video placedVideo) context(videoCount int) naming.FileContext {
@@ -39,7 +41,7 @@ func (video placedVideo) context(videoCount int) naming.FileContext {
 // pass classifies each video and a second places the counted ones with the real count. The
 // second result lists the videos that are no catalog files (samples, unplaceable names).
 func placeVideos(kind library.Kind, videos []library.FileState) (placed []placedVideo, ignored []library.FileState) {
-	counts := map[string]int{}
+	counts := map[fileKey]int{}
 	first := make([]placedVideo, 0, len(videos))
 
 	for _, state := range videos {
@@ -76,6 +78,22 @@ func placeVideos(kind library.Kind, videos []library.FileState) (placed []placed
 	}
 
 	return placed, ignored
+}
+
+// withoutExtras splits the extras off for a library that does not scan them. They are no
+// catalog files then, so extras stored earlier are removed by the plan.
+func withoutExtras(videos []placedVideo) (kept []placedVideo, extras []library.FileState) {
+	for _, video := range videos {
+		if video.isExtra() {
+			extras = append(extras, video.state)
+
+			continue
+		}
+
+		kept = append(kept, video)
+	}
+
+	return kept, extras
 }
 
 // dropOrphanExtras removes extras whose movie or show has no video of its own and returns
@@ -115,41 +133,41 @@ type placementPlan struct {
 	removals  []PlacedFileState
 	unchanged int64
 	// chains maps the path of every unchanged file to its stored item chain.
-	chains       map[string][]string
-	withoutVideo map[string]library.FileState
+	chains       map[fileKey][]string
+	withoutVideo map[fileKey]library.FileState
 }
 
 // placementInput is what planPlacements compares.
 type placementInput struct {
 	stored       []PlacedFileState
 	wanted       []placedVideo
-	skipped      []string
-	withoutVideo map[string]library.FileState
+	skipped      skipSet
+	withoutVideo map[fileKey]library.FileState
 }
 
 // planPlacements sorts the wanted files into probes (new or changed), moves (unchanged with
 // a new placement key) and unchanged ones; stored files that are no longer wanted are removed
 // unless they lie at or below a path the walker could not read.
 func planPlacements(input placementInput) placementPlan {
-	storedByPath := make(map[string]PlacedFileState, len(input.stored))
+	storedByPath := make(map[fileKey]PlacedFileState, len(input.stored))
 	for _, file := range input.stored {
-		storedByPath[file.State.RelativePath] = file
+		storedByPath[keyOf(file.State)] = file
 	}
 
-	plan := placementPlan{chains: map[string][]string{}, withoutVideo: map[string]library.FileState{}}
-	wantedPaths := make(map[string]bool, len(input.wanted))
+	plan := placementPlan{chains: map[fileKey][]string{}, withoutVideo: map[fileKey]library.FileState{}}
+	wantedPaths := make(map[fileKey]bool, len(input.wanted))
 
 	for _, video := range input.wanted {
-		if wantedPaths[video.state.RelativePath] {
+		if wantedPaths[keyOf(video.state)] {
 			continue
 		}
 
-		wantedPaths[video.state.RelativePath] = true
+		wantedPaths[keyOf(video.state)] = true
 		plan.add(video, storedByPath, input.withoutVideo)
 	}
 
 	for _, file := range input.stored {
-		if !wantedPaths[file.State.RelativePath] && !belowAny(file.State.RelativePath, input.skipped) {
+		if !wantedPaths[keyOf(file.State)] && !input.skipped.covers(file.State) {
 			plan.removals = append(plan.removals, file)
 		}
 	}
@@ -157,12 +175,12 @@ func planPlacements(input placementInput) placementPlan {
 	return plan
 }
 
-func (plan *placementPlan) add(video placedVideo, storedByPath map[string]PlacedFileState,
-	withoutVideo map[string]library.FileState,
+func (plan *placementPlan) add(video placedVideo, storedByPath map[fileKey]PlacedFileState,
+	withoutVideo map[fileKey]library.FileState,
 ) {
 	state := video.state
 
-	if previous, found := storedByPath[state.RelativePath]; found {
+	if previous, found := storedByPath[keyOf(state)]; found {
 		switch {
 		case library.Changed(previous.State, state):
 			plan.probes = append(plan.probes, probeJob{state: state, placement: video.placement, placed: &previous})
@@ -170,14 +188,14 @@ func (plan *placementPlan) add(video placedVideo, storedByPath map[string]Placed
 			plan.moves = append(plan.moves, moveJob{stored: previous, placement: video.placement})
 		default:
 			plan.unchanged++
-			plan.chains[state.RelativePath] = previous.ItemIDs
+			plan.chains[keyOf(state)] = previous.ItemIDs
 		}
 
 		return
 	}
 
-	if known, remembered := withoutVideo[state.RelativePath]; remembered && !library.Changed(known, state) {
-		plan.withoutVideo[state.RelativePath] = state
+	if known, remembered := withoutVideo[keyOf(state)]; remembered && !library.Changed(known, state) {
+		plan.withoutVideo[keyOf(state)] = state
 
 		return
 	}

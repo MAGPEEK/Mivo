@@ -2,7 +2,6 @@ package scan
 
 import (
 	"context"
-	"path"
 	"slices"
 
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -14,12 +13,12 @@ func (scanRun *runV2) refreshFiles() []RefreshFile {
 	files := make([]RefreshFile, 0, len(scanRun.wanted))
 
 	for _, video := range scanRun.wanted {
-		chain, placed := scanRun.chains[video.state.RelativePath]
+		chain, placed := scanRun.chains[keyOf(video.state)]
 		if !placed || len(chain) != len(video.placement.Levels) {
 			continue
 		}
 
-		pictures, known := scanRun.pictures[video.state.RelativePath]
+		pictures, known := scanRun.pictures[keyOf(video.state)]
 		files = append(files, RefreshFile{
 			State: video.state, Placement: video.placement, ItemIDs: chain,
 			EmbeddedPictures: pictures, PicturesKnown: known,
@@ -78,29 +77,30 @@ func (set *refreshSet) sorted() []string {
 //
 // The changed folders are collected once and each file walks up its own folders, so the cost
 // is files x folder depth, not files x sidecars.
-func (set *refreshSet) addBelowChangedSidecars(changed []string, chains map[string][]string) {
+func (set *refreshSet) addBelowChangedSidecars(changed []fileKey, chains map[fileKey][]string) {
 	if len(changed) == 0 {
 		return
 	}
 
-	changedDirectories := make(map[string]bool, len(changed))
-	for _, sidecarPath := range changed {
-		changedDirectories[path.Dir(sidecarPath)] = true
+	changedDirectories := make(map[fileKey]bool, len(changed))
+	for _, sidecar := range changed {
+		changedDirectories[sidecar.directory()] = true
 	}
 
-	for filePath, chain := range chains {
-		if coveredByChanged(path.Dir(filePath), changedDirectories) {
+	for file, chain := range chains {
+		if coveredByChanged(file.directory(), changedDirectories) {
 			set.add(chain...)
 		}
 	}
 }
 
 // coveredByChanged reports whether fileDirectory or one of its ancestors holds a changed
-// sidecar; a sidecar in the root covers only files directly in the root.
-func coveredByChanged(fileDirectory string, changedDirectories map[string]bool) bool {
-	for directory := fileDirectory; ; directory = path.Dir(directory) {
-		if directory == "." {
-			return changedDirectories["."] && fileDirectory == "."
+// sidecar; a sidecar in the root covers only files directly in the root. Folders are kept
+// apart: a sidecar in one library folder never covers a file of another.
+func coveredByChanged(fileDirectory fileKey, changedDirectories map[fileKey]bool) bool {
+	for directory := fileDirectory; ; directory = directory.directory() {
+		if directory.path == "." {
+			return changedDirectories[directory] && fileDirectory.path == "."
 		}
 
 		if changedDirectories[directory] {
@@ -112,47 +112,52 @@ func coveredByChanged(fileDirectory string, changedDirectories map[string]bool) 
 // sidecarDiff is the difference between the stored sidecars and a completed walk.
 type sidecarDiff struct {
 	upserts  []library.FileState
-	removals []string
+	removals []library.FileState
 }
 
-// changedPaths lists the paths of new, changed and removed sidecars.
-func (diff sidecarDiff) changedPaths() []string {
-	paths := make([]string, 0, len(diff.upserts)+len(diff.removals))
+// changedSidecars lists the keys of new, changed and removed sidecars.
+func (diff sidecarDiff) changedSidecars() []fileKey {
+	keys := make([]fileKey, 0, len(diff.upserts)+len(diff.removals))
+
 	for _, state := range diff.upserts {
-		paths = append(paths, state.RelativePath)
+		keys = append(keys, keyOf(state))
 	}
 
-	return append(paths, diff.removals...)
+	for _, state := range diff.removals {
+		keys = append(keys, keyOf(state))
+	}
+
+	return keys
 }
 
 // diffSidecars compares the walked sidecars with the stored ones. Stored sidecars below a
-// path the walker could not read are kept.
-func diffSidecars(stored, seen []library.FileState, skipped []string) sidecarDiff {
-	storedByPath := make(map[string]library.FileState, len(stored))
+// path the walker could not read, or in a folder that was unavailable, are kept.
+func diffSidecars(stored, seen []library.FileState, skipped skipSet) sidecarDiff {
+	storedByKey := make(map[fileKey]library.FileState, len(stored))
 	for _, state := range stored {
-		storedByPath[state.RelativePath] = state
+		storedByKey[keyOf(state)] = state
 	}
 
 	var diff sidecarDiff
 
-	seenPaths := make(map[string]bool, len(seen))
+	seenKeys := make(map[fileKey]bool, len(seen))
 
 	for _, state := range seen {
-		if seenPaths[state.RelativePath] {
+		if seenKeys[keyOf(state)] {
 			continue
 		}
 
-		seenPaths[state.RelativePath] = true
+		seenKeys[keyOf(state)] = true
 
-		previous, found := storedByPath[state.RelativePath]
+		previous, found := storedByKey[keyOf(state)]
 		if !found || library.Changed(previous, state) {
 			diff.upserts = append(diff.upserts, state)
 		}
 	}
 
 	for _, state := range stored {
-		if !seenPaths[state.RelativePath] && !belowAny(state.RelativePath, skipped) {
-			diff.removals = append(diff.removals, state.RelativePath)
+		if !seenKeys[keyOf(state)] && !skipped.covers(state) {
+			diff.removals = append(diff.removals, state)
 		}
 	}
 

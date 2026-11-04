@@ -68,8 +68,13 @@ type Service struct {
 	trackers map[string]*tracker
 	// withoutVideo holds, per library ID and relative path, the files whose probe found no
 	// video stream, so an unchanged one is not probed again on every scan.
-	withoutVideo map[string]map[string]library.FileState
-	closed       bool
+	withoutVideo map[string]map[fileKey]library.FileState
+	// lastOptions holds the options of the last scan that ended successfully, per library ID.
+	lastOptions map[string]library.Options
+	// pendingRefresh holds, per library ID, the items whose refresh waits for an unavailable
+	// folder to return (memory only, like the options).
+	pendingRefresh map[string]map[string]struct{}
+	closed         bool
 }
 
 // NewService validates the dependencies and returns a Service. A missing dependency is a
@@ -87,22 +92,25 @@ func NewService(dependencies Dependencies) (*Service, error) {
 	}
 
 	return &Service{
-		catalogV2:    dependencies.CatalogV2,
-		refresher:    refresher,
-		finished:     dependencies.Finished,
-		libraries:    dependencies.Libraries,
-		walker:       dependencies.Walker,
-		resolver:     dependencies.Resolver,
-		prober:       dependencies.Prober,
-		ids:          dependencies.IDs,
-		clock:        dependencies.Clock,
-		logger:       dependencies.Logger,
-		scanContext:  scanContext,
-		cancelScans:  cancelScans,
-		logContext:   context.WithoutCancel(scanContext),
-		probeSlots:   make(chan struct{}, MaxConcurrentProbes),
-		trackers:     map[string]*tracker{},
-		withoutVideo: map[string]map[string]library.FileState{},
+		catalogV2:   dependencies.CatalogV2,
+		refresher:   refresher,
+		finished:    dependencies.Finished,
+		libraries:   dependencies.Libraries,
+		walker:      dependencies.Walker,
+		resolver:    dependencies.Resolver,
+		prober:      dependencies.Prober,
+		ids:         dependencies.IDs,
+		clock:       dependencies.Clock,
+		logger:      dependencies.Logger,
+		scanContext: scanContext,
+		cancelScans: cancelScans,
+		logContext:  context.WithoutCancel(scanContext),
+		probeSlots:  make(chan struct{}, MaxConcurrentProbes),
+		trackers:    map[string]*tracker{},
+		lastOptions: map[string]library.Options{},
+
+		pendingRefresh: map[string]map[string]struct{}{},
+		withoutVideo:   map[string]map[fileKey]library.FileState{},
 	}, nil
 }
 
@@ -147,7 +155,7 @@ func (service *Service) Start(ctx context.Context, libraryID string) (Status, er
 		return Status{}, fmt.Errorf("start scan of library %s: %w", libraryID, err)
 	}
 
-	status, err := service.launch(summary.Library)
+	status, err := service.launch(summary)
 	if err != nil {
 		return Status{}, fmt.Errorf("start scan of library %s: %w", libraryID, err)
 	}
@@ -168,8 +176,8 @@ func (service *Service) StartAll(ctx context.Context) error {
 	}
 
 	for _, summary := range summaries {
-		if _, err := service.launch(summary.Library); err != nil {
-			return fmt.Errorf("start all scans: library %s: %w", summary.Library.ID, err)
+		if _, err := service.launch(summary); err != nil {
+			return fmt.Errorf("start all scans: library %s: %w", summary.ID, err)
 		}
 	}
 
@@ -227,7 +235,7 @@ func (service *Service) ensureOpen() error {
 
 // launch starts the scan goroutine unless the service is closed or a scan of the library
 // already runs. Close is checked again here because it may have run during the lookup.
-func (service *Service) launch(scanned library.Library) (Status, error) {
+func (service *Service) launch(scanned library.ManagedLibrary) (Status, error) {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
@@ -241,7 +249,7 @@ func (service *Service) launch(scanned library.Library) (Status, error) {
 		}
 	}
 
-	scanTracker := newTracker(service.clock())
+	scanTracker := newTracker(service.scanContext, service.clock())
 	service.trackers[scanned.ID] = scanTracker
 
 	go service.runScan(scanned, scanTracker)
@@ -251,11 +259,21 @@ func (service *Service) launch(scanned library.Library) (Status, error) {
 
 // runScan executes one scan, logs its end and only then publishes the final status: until
 // publish closes done the scan counts as running, so neither a new Start nor Close can miss
-// this goroutine.
-func (service *Service) runScan(scanned library.Library, scanTracker *tracker) {
-	err := service.newRunV2(scanned, scanTracker).execute(service.scanContext)
-	code, cause := describeEnd(err, service.scanContext.Err() != nil)
+// this goroutine. The options of a scan that succeeded are remembered for the next one.
+func (service *Service) runScan(scanned library.ManagedLibrary, scanTracker *tracker) {
+	// Cancel ends this scan only, Close all of them (through the parent context).
+	scanContext := scanTracker.scanContext
+	defer scanTracker.cancel()
+
+	err := service.newRunV2(scanned, scanTracker).execute(scanContext)
+	code, cause := describeEnd(err, scanContext.Err() != nil)
 	status := scanTracker.final(code, service.clock())
+
+	// A scan that could not see every folder did not apply the options everywhere: the full
+	// refresh stays due.
+	if err == nil && status.UnavailableFolders == 0 {
+		service.rememberOptions(scanned.ID, scanned.Options)
+	}
 
 	service.logFinished(scanned, status, cause)
 
@@ -266,10 +284,106 @@ func (service *Service) runScan(scanned library.Library, scanTracker *tracker) {
 	scanTracker.publish(status)
 }
 
+// Cancel stops the running scan of the library, if any, and returns when it has ended or ctx
+// is done. The scan ends with ErrorCodeCanceled; it removes nothing it had not already
+// justified, because removals only follow a completed walk (ADR 0022). It does nothing for a
+// library without a running scan. Library management uses it before changing or removing a
+// library. Cancel does not stop new scans: M3-19l and M3-19j must stop the scan triggers
+// between Cancel and the library change, or a trigger can start a scan on the old definition.
+func (service *Service) Cancel(ctx context.Context, libraryID string) error {
+	scanTracker := service.trackerOf(libraryID)
+	if scanTracker == nil {
+		return nil
+	}
+
+	scanTracker.cancel()
+
+	return awaitScan(ctx, scanTracker, "cancel scan of library "+libraryID)
+}
+
+// WaitIdle returns when no scan of the library runs or ctx is done.
+func (service *Service) WaitIdle(ctx context.Context, libraryID string) error {
+	scanTracker := service.trackerOf(libraryID)
+	if scanTracker == nil {
+		return nil
+	}
+
+	return awaitScan(ctx, scanTracker, "wait for scan of library "+libraryID)
+}
+
+func (service *Service) trackerOf(libraryID string) *tracker {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	return service.trackers[libraryID]
+}
+
+func awaitScan(ctx context.Context, scanTracker *tracker, what string) error {
+	select {
+	case <-scanTracker.done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("%s: %w", what, ctx.Err())
+	}
+}
+
+// optionsChanged reports whether the library was scanned to the end with other options than
+// options. A library never scanned since the server started reports false: its stored
+// metadata already reflects the options in force, so the first scan refreshes changed items
+// only.
+func (service *Service) optionsChanged(libraryID string, options library.Options) bool {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	last, known := service.lastOptions[libraryID]
+
+	return known && last != options
+}
+
+// takePendingRefresh returns and clears the items waiting for a refresh.
+func (service *Service) takePendingRefresh(libraryID string) []string {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	ids := make([]string, 0, len(service.pendingRefresh[libraryID]))
+	for id := range service.pendingRefresh[libraryID] {
+		ids = append(ids, id)
+	}
+
+	delete(service.pendingRefresh, libraryID)
+
+	return ids
+}
+
+// addPendingRefresh marks items as waiting for a refresh.
+func (service *Service) addPendingRefresh(libraryID string, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	if service.pendingRefresh[libraryID] == nil {
+		service.pendingRefresh[libraryID] = map[string]struct{}{}
+	}
+
+	for _, id := range ids {
+		service.pendingRefresh[libraryID][id] = struct{}{}
+	}
+}
+
+func (service *Service) rememberOptions(libraryID string, options library.Options) {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	service.lastOptions[libraryID] = options
+}
+
 // logFinished writes the one line per scan. A failure is logged with its code and a cause
 // that contains no absolute path; the wrapped error is not logged because walker, resolver
 // and prober errors may name the library root.
-func (service *Service) logFinished(scanned library.Library, status Status, cause string) {
+func (service *Service) logFinished(scanned library.ManagedLibrary, status Status, cause string) {
 	level := slog.LevelInfo
 	attributes := []slog.Attr{
 		slog.String("library", scanned.ID),
@@ -298,7 +412,7 @@ func (service *Service) logFinished(scanned library.Library, status Status, caus
 
 // filesWithoutVideo returns a copy of the remembered files of the library whose probe found
 // no video stream.
-func (service *Service) filesWithoutVideo(libraryID string) map[string]library.FileState {
+func (service *Service) filesWithoutVideo(libraryID string) map[fileKey]library.FileState {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
@@ -308,7 +422,7 @@ func (service *Service) filesWithoutVideo(libraryID string) map[string]library.F
 // rememberFilesWithoutVideo replaces the remembered files without a video stream of the
 // library. They are kept in memory only, like the scan status (ADR 0022 notes): after a
 // restart they are probed once more.
-func (service *Service) rememberFilesWithoutVideo(libraryID string, files map[string]library.FileState) {
+func (service *Service) rememberFilesWithoutVideo(libraryID string, files map[fileKey]library.FileState) {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 

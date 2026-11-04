@@ -14,7 +14,12 @@ const WholeFile = -1
 //
 // Relative paths use the canonical form of library.ParseRelativePath. Use the constructors
 // so StreamIndex is never left at the valid stream index 0 by accident.
+//
+// RootID names the library folder of a local or embedded location (ADR 0028); it is empty
+// for data-directory pictures and for catalogs without folders. It is not part of the cache
+// tag: the tag only has to change when the picture's bytes change.
 type Location struct {
+	RootID       string
 	RelativePath string
 	StreamIndex  int
 	DataPath     string

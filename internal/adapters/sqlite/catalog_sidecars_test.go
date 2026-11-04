@@ -22,7 +22,7 @@ func TestSidecarStatesAreIdempotent(t *testing.T) {
 	nfo := sidecar("M/movie.nfo", library.FileClassNFO, 10)
 	poster := sidecar("M/poster.jpg", library.FileClassImage, 20)
 
-	save := func(libraryID string, upserts []library.FileState, removals []string) {
+	save := func(libraryID string, upserts, removals []library.FileState) {
 		t.Helper()
 
 		if err := fixture.catalog.SaveSidecarStates(t.Context(), libraryID, upserts, removals); err != nil {
@@ -41,10 +41,10 @@ func TestSidecarStatesAreIdempotent(t *testing.T) {
 	assertDeepEqual(t, "states", got, []library.FileState{nfo, poster})
 
 	nfo.Size = 11
-	save(moviesLibraryID, []library.FileState{nfo}, []string{"M/poster.jpg", "M/missing.nfo"})
-	save(moviesLibraryID, nil, []string{"M/poster.jpg"})
+	save(moviesLibraryID, []library.FileState{nfo}, []library.FileState{poster, sidecar("M/missing.nfo", library.FileClassNFO, 1)})
+	save(moviesLibraryID, nil, []library.FileState{poster})
 	// The other library's call must not delete this library's path.
-	save(showsLibraryID, nil, []string{"M/movie.nfo"})
+	save(showsLibraryID, nil, []library.FileState{nfo})
 
 	got, err = fixture.catalog.SidecarStates(t.Context(), moviesLibraryID)
 	if err != nil {

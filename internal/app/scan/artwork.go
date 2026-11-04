@@ -73,7 +73,7 @@ func (run *refreshRun) movieArtwork(item *refreshItem) []artwork.Candidate {
 	var candidates []artwork.Candidate
 
 	for _, file := range item.own {
-		directory := path.Dir(file.State.RelativePath)
+		directory := keyOf(file.State).directory()
 		localContext := artwork.LocalContext{Kind: artwork.ContextLooseMovie, BaseName: baseName(file.State.RelativePath)}
 
 		if run.index.isFolderMovie(directory) {
@@ -91,24 +91,31 @@ func (run *refreshRun) episodeArtwork(item *refreshItem) []artwork.Candidate {
 
 	for _, file := range item.own {
 		localContext := artwork.LocalContext{Kind: artwork.ContextEpisode, BaseName: baseName(file.State.RelativePath)}
-		candidates = append(candidates, run.localCandidates(path.Dir(file.State.RelativePath), localContext, nil)...)
+		candidates = append(candidates, run.localCandidates(keyOf(file.State).directory(), localContext, nil)...)
 	}
 
 	return candidates
 }
 
 func (run *refreshRun) showArtwork(item *refreshItem) []artwork.Candidate {
-	directory := item.showDirectory()
-	if directory == "" {
-		return nil
+	var candidates []artwork.Candidate
+
+	for _, rootID := range item.rootIDs() {
+		directory := item.showDirectory(rootID)
+		if directory == "" {
+			continue
+		}
+
+		candidates = append(candidates, run.localCandidates(fileKey{rootID: rootID, path: directory},
+			artwork.LocalContext{Kind: artwork.ContextShowFolder},
+			func(match artwork.LocalMatch) bool { return !match.ForSeason })...)
 	}
 
-	return run.localCandidates(directory, artwork.LocalContext{Kind: artwork.ContextShowFolder},
-		func(match artwork.LocalMatch) bool { return !match.ForSeason })
+	return candidates
 }
 
 // seasonArtwork takes the poster inside the season folder and "seasonNN-poster" files of the
-// show folder.
+// show folder, in every library folder that holds the season.
 func (run *refreshRun) seasonArtwork(item *refreshItem) []artwork.Candidate {
 	number, hasNumber := item.level.Number.Get()
 	if !hasNumber {
@@ -117,24 +124,31 @@ func (run *refreshRun) seasonArtwork(item *refreshItem) []artwork.Candidate {
 
 	var candidates []artwork.Candidate
 
-	if directory := item.seasonDirectory(); directory != "" {
-		localContext := artwork.LocalContext{Kind: artwork.ContextSeasonFolder, Season: number}
-		candidates = run.localCandidates(directory, localContext, nil)
-	}
+	for _, rootID := range item.rootIDs() {
+		if directory := item.seasonDirectory(rootID); directory != "" {
+			localContext := artwork.LocalContext{Kind: artwork.ContextSeasonFolder, Season: number}
+			candidates = append(candidates, run.localCandidates(fileKey{rootID: rootID, path: directory}, localContext, nil)...)
+		}
 
-	if directory := item.showDirectory(); directory != "" {
-		onlyThisSeason := func(match artwork.LocalMatch) bool { return match.ForSeason && match.Season == number }
-		candidates = append(candidates,
-			run.localCandidates(directory, artwork.LocalContext{Kind: artwork.ContextShowFolder}, onlyThisSeason)...)
+		if directory := item.showDirectory(rootID); directory != "" {
+			onlyThisSeason := func(match artwork.LocalMatch) bool { return match.ForSeason && match.Season == number }
+			candidates = append(candidates, run.localCandidates(fileKey{rootID: rootID, path: directory},
+				artwork.LocalContext{Kind: artwork.ContextShowFolder}, onlyThisSeason)...)
+		}
 	}
 
 	return candidates
 }
 
 // localCandidates classifies the images of directory; accept, when set, filters the matches.
-func (run *refreshRun) localCandidates(directory string, localContext artwork.LocalContext,
+// A library with local artwork switched off has none.
+func (run *refreshRun) localCandidates(directory fileKey, localContext artwork.LocalContext,
 	accept func(artwork.LocalMatch) bool,
 ) []artwork.Candidate {
+	if !run.request.Library.Options.LocalArtwork {
+		return nil
+	}
+
 	var candidates []artwork.Candidate
 
 	for _, image := range run.sidecars.images(directory) {
@@ -143,9 +157,12 @@ func (run *refreshRun) localCandidates(directory string, localContext artwork.Lo
 			continue
 		}
 
+		location := artwork.LocalLocation(image.RelativePath)
+		location.RootID = image.RootID
+
 		candidates = append(candidates, artwork.Candidate{
 			Kind: match.Kind, Source: artwork.SourceLocal, Priority: match.Priority,
-			Location: artwork.LocalLocation(image.RelativePath), Size: image.Size, ModifiedAt: image.ModifiedAt,
+			Location: location, Size: image.Size, ModifiedAt: image.ModifiedAt,
 		})
 	}
 
@@ -166,9 +183,12 @@ func embeddedArtwork(files []RefreshFile, state MetadataState) []artwork.Candida
 		}
 
 		for position, streamIndex := range file.EmbeddedPictures {
+			location := artwork.EmbeddedLocation(file.State.RelativePath, streamIndex)
+			location.RootID = file.State.RootID
+
 			candidates = append(candidates, artwork.Candidate{
 				Kind: artwork.KindPoster, Source: artwork.SourceEmbedded, Priority: position,
-				Location: artwork.EmbeddedLocation(file.State.RelativePath, streamIndex),
+				Location: location,
 				Size:     file.State.Size, ModifiedAt: file.State.ModifiedAt,
 			})
 		}
@@ -181,7 +201,8 @@ func keptEmbedded(file RefreshFile, state MetadataState) []artwork.Candidate {
 	var kept []artwork.Candidate
 
 	for _, current := range state.CurrentArtwork {
-		if current.Source == artwork.SourceEmbedded && current.Location.RelativePath == file.State.RelativePath {
+		sameFolder := current.Location.RootID == "" || current.Location.RootID == file.State.RootID
+		if current.Source == artwork.SourceEmbedded && sameFolder && current.Location.RelativePath == file.State.RelativePath {
 			kept = append(kept, current)
 		}
 	}
@@ -194,6 +215,7 @@ func dedupe(candidates []artwork.Candidate) []artwork.Candidate {
 	slices.SortFunc(candidates, func(first, second artwork.Candidate) int {
 		return cmp.Or(
 			cmp.Compare(first.Kind, second.Kind),
+			strings.Compare(first.Location.RootID, second.Location.RootID),
 			strings.Compare(first.Location.RelativePath, second.Location.RelativePath),
 			cmp.Compare(first.Location.StreamIndex, second.Location.StreamIndex),
 			cmp.Compare(first.Priority, second.Priority),

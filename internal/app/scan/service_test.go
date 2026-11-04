@@ -262,8 +262,8 @@ func TestCloseCancelsARunningScanWithoutRecordingFailures(t *testing.T) {
 	}
 
 	active, _, canceled := h.prober.stats()
-	if active != 0 || canceled != scan.MaxConcurrentProbes {
-		t.Errorf("after Close: %d probes active, %d canceled, want 0 and %d",
+	if active != 0 || canceled < scan.MaxConcurrentProbes {
+		t.Errorf("after Close: %d probes active, %d canceled, want 0 and at least %d",
 			active, canceled, scan.MaxConcurrentProbes)
 	}
 

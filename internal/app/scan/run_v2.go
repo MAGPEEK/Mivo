@@ -15,7 +15,7 @@ import (
 type walked struct {
 	videos   []library.FileState
 	sidecars []library.FileState
-	skipped  []string
+	skipped  skipSet
 }
 
 // runV2 is one scan of one library with the v2 pipeline (placement, versions, extras,
@@ -24,8 +24,14 @@ type runV2 struct {
 	base         *run
 	catalog      CatalogV2
 	refresh      *refreshSet
-	chains       map[string][]string
-	withoutVideo map[string]library.FileState
+	chains       map[fileKey][]string
+	withoutVideo map[fileKey]library.FileState
+	// optionsChanged is set when the library's options differ from those of its last finished
+	// scan: every item is then refreshed once, not only the changed ones.
+	optionsChanged bool
+	// blocked holds the IDs of items that have stored files in an unreadable or unavailable
+	// path; they are not refreshed by this scan but kept pending for the next one.
+	blocked map[string]bool
 	// refreshed is set once the refresher has been called.
 	refreshed bool
 	// sidecars are the sidecar files of the completed walk.
@@ -33,17 +39,18 @@ type runV2 struct {
 	// wanted are the placed videos of the walk; pictures holds the attached-picture stream
 	// indexes of the files probed by this scan.
 	wanted   []placedVideo
-	pictures map[string][]int
+	pictures map[fileKey][]int
 }
 
 // refreshGrace bounds the refresh of an early-ended scan, which runs after cancellation.
 const refreshGrace = 30 * time.Second
 
-func (service *Service) newRunV2(scanned library.Library, scanTracker *tracker) *runV2 {
+func (service *Service) newRunV2(scanned library.ManagedLibrary, scanTracker *tracker) *runV2 {
 	return &runV2{
 		base: service.newRun(scanned, scanTracker), catalog: service.catalogV2,
-		refresh: newRefreshSet(), chains: map[string][]string{},
-		pictures: map[string][]int{},
+		refresh: newRefreshSet(), chains: map[fileKey][]string{},
+		pictures:       map[fileKey][]int{},
+		optionsChanged: service.optionsChanged(scanned.ID, scanned.Options),
 	}
 }
 
@@ -109,7 +116,19 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 		return placementPlan{}, catalogFailure("load placed files", err)
 	}
 
+	for position := range stored {
+		stored[position].State.RootID = canonicalRootID(base.library, stored[position].State.RootID)
+	}
+
 	placed, ignored := placeVideos(base.library.Kind, files.videos)
+
+	if !base.library.Options.ScanExtras {
+		var extras []library.FileState
+
+		placed, extras = withoutExtras(placed)
+		ignored = append(ignored, extras...)
+	}
+
 	wanted, orphans := dropOrphanExtras(placed)
 
 	for _, state := range slices.Concat(ignored, orphans) {
@@ -121,6 +140,7 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 		withoutVideo: base.service.filesWithoutVideo(base.library.ID),
 	})
 	scanRun.withoutVideo = plan.withoutVideo
+	scanRun.carryOverUnreadable(files.skipped, stored)
 	scanRun.chains = plan.chains
 	scanRun.wanted = wanted
 
@@ -132,17 +152,48 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 	return plan, nil
 }
 
+// carryOverUnreadable handles what lies in unreadable or unavailable paths. Files remembered
+// as having no video stream are kept, so they are not probed again when the path returns.
+// Items of stored files there are marked blocked: their NFO and artwork sources are not
+// visible to this scan, so refreshing them now would overwrite good metadata with
+// file-name data.
+func (scanRun *runV2) carryOverUnreadable(skipped skipSet, stored []PlacedFileState) {
+	if len(skipped) == 0 {
+		return
+	}
+
+	for key, state := range scanRun.base.service.filesWithoutVideo(scanRun.base.library.ID) {
+		if _, present := scanRun.withoutVideo[key]; !present && skipped.covers(state) {
+			scanRun.withoutVideo[key] = state
+		}
+	}
+
+	scanRun.blocked = map[string]bool{}
+
+	for _, file := range stored {
+		if skipped.covers(file.State) {
+			for _, id := range file.ItemIDs {
+				scanRun.blocked[id] = true
+			}
+		}
+	}
+}
+
 // protectOrphans keeps stored orphan extras when the walk skipped something: the video that
 // owns the extra may lie in the unreadable part, so an orphan is no proof that the extra is
 // gone. Without skipped paths the walk was complete and orphans are removed.
-func protectOrphans(skipped []string, orphans []library.FileState) []string {
+func protectOrphans(skipped skipSet, orphans []library.FileState) skipSet {
 	if len(skipped) == 0 {
 		return skipped
 	}
 
-	protected := slices.Clone(skipped)
+	protected := skipSet{}
+	for rootID, paths := range skipped {
+		protected[rootID] = slices.Clone(paths)
+	}
+
 	for _, orphan := range orphans {
-		protected = append(protected, orphan.RelativePath)
+		protected.add(orphan.RootID, orphan.RelativePath)
 	}
 
 	return protected
@@ -172,8 +223,18 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 		return catalogFailure("load sidecar states", err)
 	}
 
+	for position := range storedSidecars {
+		storedSidecars[position].RootID = canonicalRootID(base.library, storedSidecars[position].RootID)
+	}
+
 	diff := diffSidecars(storedSidecars, files.sidecars, files.skipped)
-	scanRun.refresh.addBelowChangedSidecars(diff.changedPaths(), scanRun.chains)
+	scanRun.refresh.addBelowChangedSidecars(diff.changedSidecars(), scanRun.chains)
+
+	if scanRun.optionsChanged {
+		for _, chain := range scanRun.chains {
+			scanRun.refresh.add(chain...)
+		}
+	}
 
 	if err := scanRun.refreshTouched(ctx, files.sidecars); err != nil {
 		return err
@@ -194,18 +255,42 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 func (scanRun *runV2) refreshTouched(ctx context.Context, sidecars []library.FileState) error {
 	scanRun.refreshed = true
 	base := scanRun.base
+	service := base.service
+	pending := service.takePendingRefresh(base.library.ID)
+	ready, deferred := scanRun.splitBlocked(slices.Concat(scanRun.refresh.sorted(), pending))
 	request := RefreshRequest{
-		Library: base.library, ItemIDs: scanRun.refresh.sorted(), Sidecars: sidecars, Files: scanRun.refreshFiles(),
+		Library: base.library, ItemIDs: ready, Sidecars: sidecars, Files: scanRun.refreshFiles(),
 		CountMetadataWarnings: func(count int) {
 			base.tracker.count(func(counts *Counts) { counts.MetadataWarnings += int64(count) })
 		},
 	}
 
-	if err := base.service.refresher.RefreshItems(ctx, request); err != nil {
+	if err := service.refresher.RefreshItems(ctx, request); err != nil {
+		// Everything that was due stays due.
+		service.addPendingRefresh(base.library.ID, slices.Concat(deferred, ready))
+
 		return fail(ErrorCodeFailed, "refresh items", fmt.Errorf("refresh items of library %s: %w", base.library.ID, err))
 	}
 
+	service.addPendingRefresh(base.library.ID, deferred)
+
 	return nil
+}
+
+// splitBlocked separates the due items (sorted, unique) into those that can be refreshed now
+// and those that wait until their unavailable path is back.
+func (scanRun *runV2) splitBlocked(due []string) (ready, deferred []string) {
+	slices.Sort(due)
+
+	for _, id := range slices.Compact(due) {
+		if scanRun.blocked[id] {
+			deferred = append(deferred, id)
+		} else {
+			ready = append(ready, id)
+		}
+	}
+
+	return ready, deferred
 }
 
 func (scanRun *runV2) remove(ctx context.Context, removals []PlacedFileState) error {
@@ -239,7 +324,7 @@ func (scanRun *runV2) move(ctx context.Context, moves []moveJob) error {
 
 		scanRun.refresh.add(job.stored.ItemIDs...)
 		scanRun.refresh.add(chain...)
-		scanRun.chains[job.stored.State.RelativePath] = chain
+		scanRun.chains[keyOf(job.stored.State)] = chain
 		scanRun.base.tracker.count(func(counts *Counts) { counts.Updated++ })
 	}
 
@@ -295,7 +380,7 @@ func (scanRun *runV2) recordNoVideo(ctx context.Context, job probeJob) error {
 		}
 	}
 
-	scanRun.withoutVideo[job.state.RelativePath] = job.state
+	scanRun.withoutVideo[keyOf(job.state)] = job.state
 	scanRun.base.tracker.count(func(counts *Counts) { counts.Skipped++ })
 
 	return nil
@@ -320,7 +405,7 @@ func (scanRun *runV2) recordProbed(ctx context.Context, result probeResult) erro
 // save writes one probed file with its placement. A changed file keeps its file ID.
 func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.Description, probeError media.ProbeError) error {
 	base := scanRun.base
-	scanRun.pictures[job.state.RelativePath] = attachedPictures(description)
+	scanRun.pictures[keyOf(job.state)] = attachedPictures(description)
 
 	fileID, err := scanRun.fileID(job)
 	if err != nil {
@@ -329,7 +414,7 @@ func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.
 
 	now := base.service.clock()
 	record := PlacedFile{
-		Placement: job.placement,
+		RootID: job.state.RootID, Placement: job.placement,
 		File: media.File{
 			ID: fileID, LibraryID: base.library.ID,
 			RelativePath: job.state.RelativePath, Size: job.state.Size, ModifiedAt: job.state.ModifiedAt,
@@ -348,7 +433,7 @@ func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.
 	}
 
 	scanRun.refresh.add(chain...)
-	scanRun.chains[job.state.RelativePath] = chain
+	scanRun.chains[keyOf(job.state)] = chain
 
 	return nil
 }
@@ -372,34 +457,12 @@ func catalogFailure(step string, err error) error {
 	return fail(ErrorCodeCatalogFailed, step+": "+err.Error(), fmt.Errorf("%s: %w", step, err))
 }
 
-// walkAll walks the root and sorts the files into videos and sidecars.
-func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
-	var files walked
-
-	skipped, err := scanRun.service.walker.Walk(ctx, scanRun.library.Root, func(state library.FileState) error {
-		if state.Class == library.FileClassVideo {
-			files.videos = append(files.videos, state)
-		} else {
-			files.sidecars = append(files.sidecars, state)
-		}
-
-		return nil
-	})
-	if err != nil {
-		return walked{}, scanRun.walkError(err)
-	}
-
-	files.skipped = skipped
-
-	return files, nil
-}
-
 func (scanRun *run) logPath(ctx context.Context, message, relativePath string) {
 	scanRun.service.logger.LogAttrs(ctx, slog.LevelDebug, message,
 		slog.String("library", scanRun.library.ID), slog.String("path", relativePath))
 }
 
-func libraryItemKind(scanned library.Library) (library.ItemKind, error) {
+func libraryItemKind(scanned library.ManagedLibrary) (library.ItemKind, error) {
 	itemKind, err := library.ItemKindForLibrary(scanned.Kind)
 	if err != nil {
 		return "", fail(ErrorCodeFailed, err.Error(), fmt.Errorf("scan library %s: %w", scanned.ID, err))

@@ -5,10 +5,21 @@ import (
 	"fmt"
 )
 
-// RefreshBelowSidecars returns the item IDs the refresh set collects for the changed sidecars.
+// RefreshBelowSidecars returns the item IDs the refresh set collects for the changed sidecars
+// of one folder. Both arguments use root-relative paths.
 func RefreshBelowSidecars(changed []string, chains map[string][]string) []string {
+	changedKeys := make([]fileKey, 0, len(changed))
+	for _, changedPath := range changed {
+		changedKeys = append(changedKeys, fileKey{path: changedPath})
+	}
+
+	chainKeys := make(map[fileKey][]string, len(chains))
+	for filePath, chain := range chains {
+		chainKeys[fileKey{path: filePath}] = chain
+	}
+
 	set := newRefreshSet()
-	set.addBelowChangedSidecars(changed, chains)
+	set.addBelowChangedSidecars(changedKeys, chainKeys)
 
 	return set.sorted()
 }

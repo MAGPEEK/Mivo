@@ -20,14 +20,14 @@ const fakeRootPrefix = "/abs/"
 // memoryLibraries is an in-memory library source.
 type memoryLibraries struct {
 	mutex     sync.Mutex
-	libraries []library.Library
+	libraries []library.ManagedLibrary
 	listErr   error
 	getErr    error
 	// beforeGet, when set, runs at the start of every GetLibrary call.
 	beforeGet func()
 }
 
-func (source *memoryLibraries) GetLibrary(_ context.Context, libraryID string) (library.Summary, error) {
+func (source *memoryLibraries) GetLibrary(_ context.Context, libraryID string) (library.ManagedLibrary, error) {
 	if source.beforeGet != nil {
 		source.beforeGet()
 	}
@@ -36,19 +36,19 @@ func (source *memoryLibraries) GetLibrary(_ context.Context, libraryID string) (
 	defer source.mutex.Unlock()
 
 	if source.getErr != nil {
-		return library.Summary{}, source.getErr
+		return library.ManagedLibrary{}, source.getErr
 	}
 
 	for _, candidate := range source.libraries {
 		if candidate.ID == libraryID {
-			return library.Summary{Library: candidate}, nil
+			return candidate, nil
 		}
 	}
 
-	return library.Summary{}, fmt.Errorf("library %s: %w", libraryID, domain.ErrNotFound)
+	return library.ManagedLibrary{}, fmt.Errorf("library %s: %w", libraryID, domain.ErrNotFound)
 }
 
-func (source *memoryLibraries) ListLibraries(context.Context) ([]library.Summary, error) {
+func (source *memoryLibraries) ListLibraries(context.Context) ([]library.ManagedLibrary, error) {
 	source.mutex.Lock()
 	defer source.mutex.Unlock()
 
@@ -56,12 +56,24 @@ func (source *memoryLibraries) ListLibraries(context.Context) ([]library.Summary
 		return nil, source.listErr
 	}
 
-	summaries := make([]library.Summary, 0, len(source.libraries))
-	for _, candidate := range source.libraries {
-		summaries = append(summaries, library.Summary{Library: candidate})
-	}
+	return slices.Clone(source.libraries), nil
+}
 
-	return summaries, nil
+// oneFolder returns a library with a single folder whose ID is the library ID and whose
+// options are the defaults, like a library migrated from the configuration.
+func oneFolder(id, name, root string, kind library.Kind) library.ManagedLibrary {
+	return library.ManagedLibrary{
+		ID: id, Name: name, Kind: kind, Folders: []library.Folder{{ID: id, Path: root}},
+		Options: library.DefaultOptions(),
+	}
+}
+
+// set replaces the stored libraries, as library management editing a library would.
+func (source *memoryLibraries) set(libraries ...library.ManagedLibrary) {
+	source.mutex.Lock()
+	defer source.mutex.Unlock()
+
+	source.libraries = libraries
 }
 
 // walkResult is what the fake walker reports for one root.

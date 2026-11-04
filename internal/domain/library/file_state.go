@@ -10,7 +10,12 @@ import "time"
 // stored. NormalizedPath is the same path in Unicode NFC, produced by the adapter (ADR 0027
 // §3: the domain is standard-library only and expects NFC text); it is used for parsing and
 // match keys. An empty NormalizedPath means the relative path is already NFC.
+//
+// RootID is the ID of the library folder the path is relative to (ADR 0028); the same
+// relative path in two folders of a library names two files. It is empty for states a
+// catalog without folders returns.
 type FileState struct {
+	RootID         string
 	RelativePath   string
 	NormalizedPath string
 	Class          FileClass

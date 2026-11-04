@@ -122,7 +122,13 @@ func (scanRun *run) probe(ctx context.Context, job probeJob) probeResult {
 
 	defer releaseSlot()
 
-	absolutePath, err := scanRun.service.resolver.Resolve(scanRun.library.Root, job.state.RelativePath)
+	root, found := folderRoot(scanRun.library, job.state.RootID)
+	if !found {
+		return probeResult{job: job, err: fail(ErrorCodeFailed, "file of an unknown library folder",
+			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}
+	}
+
+	absolutePath, err := scanRun.service.resolver.Resolve(root, job.state.RelativePath)
 	if err != nil {
 		return resolveFailure(job, err)
 	}

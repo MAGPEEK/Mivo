@@ -7,13 +7,14 @@ import (
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
-// LibrarySource looks up the configured libraries. Implemented by adapters/sqlite, whose
-// library repository returns summaries; the scan only uses their Library.
+// LibrarySource looks up the configured libraries with their folders and options, read at the
+// start of each scan so edits apply to the next scan. Implemented in the composition root on top of
+// the library store.
 type LibrarySource interface {
 	// GetLibrary returns one library or an error wrapping domain.ErrNotFound.
-	GetLibrary(ctx context.Context, libraryID string) (library.Summary, error)
+	GetLibrary(ctx context.Context, libraryID string) (library.ManagedLibrary, error)
 	// ListLibraries returns every library.
-	ListLibraries(ctx context.Context) ([]library.Summary, error)
+	ListLibraries(ctx context.Context) ([]library.ManagedLibrary, error)
 }
 
 // Walker lists the video files below a library root. Implemented by adapters/fs/libraryfs.

@@ -48,7 +48,7 @@ func (catalog *LibraryCatalog) SidecarStates(ctx context.Context, libraryID stri
 // SaveSidecarStates upserts the sidecars and deletes the removed paths in one write
 // transaction. Paths that are not stored are ignored, so a repeated call changes nothing.
 func (catalog *LibraryCatalog) SaveSidecarStates(
-	ctx context.Context, libraryID string, upserts []library.FileState, removals []string,
+	ctx context.Context, libraryID string, upserts, removals []library.FileState,
 ) error {
 	if err := checkSidecars(upserts); err != nil {
 		return fmt.Errorf("save sidecar states of library %q: %w", libraryID, err)
@@ -77,7 +77,7 @@ func (catalog *LibraryCatalog) SaveSidecarStates(
 type sidecarChanges struct {
 	libraryID string
 	upserts   []library.FileState
-	removals  []string
+	removals  []library.FileState
 }
 
 func applySidecars(ctx context.Context, queries *sqlcgen.Queries, changes sidecarChanges) error {
@@ -93,12 +93,12 @@ func applySidecars(ctx context.Context, queries *sqlcgen.Queries, changes sideca
 		}
 	}
 
-	for _, path := range changes.removals {
+	for _, removed := range changes.removals {
 		err := queries.DeleteSidecarState(ctx, sqlcgen.DeleteSidecarStateParams{
-			LibraryID: libraryID, RelativePath: path,
+			LibraryID: libraryID, RelativePath: removed.RelativePath,
 		})
 		if err != nil {
-			return fmt.Errorf("delete sidecar %q: %w", path, err)
+			return fmt.Errorf("delete sidecar %q: %w", removed.RelativePath, err)
 		}
 	}
 

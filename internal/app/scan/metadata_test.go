@@ -21,7 +21,9 @@ type refreshRig struct {
 	parser   *scriptedParser
 	logs     *syncBuffer
 	warnings int
-	subject  *scan.MetadataRefresher
+	// library is what requests refresh for; tests may replace it before refreshing.
+	library library.ManagedLibrary
+	subject *scan.MetadataRefresher
 }
 
 func newRefreshRig(t *testing.T, itemIDs ...string) *refreshRig {
@@ -30,6 +32,7 @@ func newRefreshRig(t *testing.T, itemIDs ...string) *refreshRig {
 	rig := &refreshRig{
 		catalog: newMetadataCatalog(itemIDs...), sidecars: newMemorySidecars(),
 		parser: &scriptedParser{results: map[string]scan.NFOResult{}}, logs: &syncBuffer{},
+		library: oneFolder(moviesID, "Movies", moviesRoot, library.KindMovies),
 	}
 
 	subject, err := scan.NewMetadataRefresher(scan.MetadataRefresherDeps{
@@ -46,7 +49,7 @@ func newRefreshRig(t *testing.T, itemIDs ...string) *refreshRig {
 }
 
 func (rig *refreshRig) refresh(ctx context.Context, request scan.RefreshRequest) error {
-	request.Library = library.Library{ID: moviesID, Root: moviesRoot}
+	request.Library = rig.library
 	request.CountMetadataWarnings = func(count int) { rig.warnings += count }
 
 	return rig.subject.RefreshItems(ctx, request)

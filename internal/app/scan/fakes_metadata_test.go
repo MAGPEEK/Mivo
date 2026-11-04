@@ -91,15 +91,18 @@ type memorySidecars struct {
 	errs    map[string]error
 	onRead  func(ctx context.Context) error
 	reads   []string
+	// roots holds the library root of each read, in order.
+	roots []string
 }
 
 func newMemorySidecars() *memorySidecars {
 	return &memorySidecars{content: map[string]string{}, errs: map[string]error{}}
 }
 
-func (sidecars *memorySidecars) ReadSidecar(ctx context.Context, _, relativePath string, _ int64) ([]byte, error) {
+func (sidecars *memorySidecars) ReadSidecar(ctx context.Context, root, relativePath string, _ int64) ([]byte, error) {
 	sidecars.mutex.Lock()
 	sidecars.reads = append(sidecars.reads, relativePath)
+	sidecars.roots = append(sidecars.roots, root)
 	onRead, injected := sidecars.onRead, sidecars.errs[relativePath]
 	text, found := sidecars.content[relativePath]
 	sidecars.mutex.Unlock()

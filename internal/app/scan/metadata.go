@@ -73,7 +73,7 @@ type refreshRun struct {
 func (refresher *MetadataRefresher) RefreshItems(ctx context.Context, request RefreshRequest) error {
 	run := &refreshRun{
 		refresher: refresher, request: request,
-		sidecars: newSidecarIndex(request.Sidecars), index: newItemIndex(request.Files),
+		sidecars: newSidecarIndex(request.Sidecars), index: newItemIndex(request.Files, request.Library.Folders),
 	}
 
 	defer func() {
@@ -195,35 +195,29 @@ const (
 // of replacing good metadata with file-name data.
 func (run *refreshRun) readNFO(ctx context.Context, item *refreshItem) (metadata.Record, nfoOutcome, error) {
 	kind, hasNFO := nfoKindOf(item.level.Kind)
-	if !hasNFO {
+	if !hasNFO || !run.request.Library.Options.ReadNFO {
 		return metadata.Record{}, nfoAbsent, nil
 	}
 
-	nfoPath, found := run.sidecars.first(run.nfoCandidates(item))
+	nfo, found := run.sidecars.first(run.nfoCandidates(item))
 	if !found {
 		return metadata.Record{}, nfoAbsent, nil
 	}
 
-	data, err := run.refresher.deps.Reader.ReadSidecar(ctx, run.request.Library.Root, nfoPath, maxNFOBytes)
+	root, found := folderRoot(run.request.Library, nfo.rootID)
+	if !found {
+		return metadata.Record{}, nfoAbsent, nil
+	}
+
+	nfoPath := nfo.path
+
+	data, err := run.refresher.deps.Reader.ReadSidecar(ctx, root, nfoPath, maxNFOBytes)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return metadata.Record{}, nfoAbsent, fmt.Errorf("read %s: %w", nfoPath, ctxErr)
 	}
 
-	switch {
-	case errors.Is(err, domain.ErrUnavailable) || errors.Is(err, domain.ErrNotFound):
-		return metadata.Record{}, nfoAbsent, fmt.Errorf("read %s: %w", nfoPath, err)
-	case errors.Is(err, domain.ErrUnsupported):
-		run.warn(ctx, nfoPath, nfoOversized)
-
-		return metadata.Record{}, nfoUnusable, nil
-	case err != nil:
-		run.warn(ctx, nfoPath, nfoUnreadable)
-
-		return metadata.Record{}, nfoUnusable, nil
-	case int64(len(data)) > maxNFOBytes:
-		run.warn(ctx, nfoPath, nfoOversized)
-
-		return metadata.Record{}, nfoUnusable, nil
+	if outcome, readErr := run.classifyRead(ctx, nfoPath, data, err); outcome != nfoUsed || readErr != nil {
+		return metadata.Record{}, outcome, readErr
 	}
 
 	record, usable := run.parseNFO(ctx, nfoPath, data, kind)
@@ -232,6 +226,29 @@ func (run *refreshRun) readNFO(ctx context.Context, item *refreshItem) (metadata
 	}
 
 	return record, nfoUsed, nil
+}
+
+// classifyRead judges the result of reading an NFO: nfoUsed means the data may be parsed; an
+// error means the refresh must be retried.
+func (run *refreshRun) classifyRead(ctx context.Context, nfoPath string, data []byte, err error) (nfoOutcome, error) {
+	switch {
+	case errors.Is(err, domain.ErrUnavailable) || errors.Is(err, domain.ErrNotFound):
+		return nfoAbsent, fmt.Errorf("read %s: %w", nfoPath, err)
+	case errors.Is(err, domain.ErrUnsupported):
+		run.warn(ctx, nfoPath, nfoOversized)
+
+		return nfoUnusable, nil
+	case err != nil:
+		run.warn(ctx, nfoPath, nfoUnreadable)
+
+		return nfoUnusable, nil
+	case int64(len(data)) > maxNFOBytes:
+		run.warn(ctx, nfoPath, nfoOversized)
+
+		return nfoUnusable, nil
+	}
+
+	return nfoUsed, nil
 }
 
 // parseNFO returns the record that describes the item. Records carry no episode number, so a
@@ -263,15 +280,16 @@ func (run *refreshRun) warn(ctx context.Context, relativePath, code string) {
 		slog.String("library", run.request.Library.ID), slog.String("path", relativePath), slog.String("code", code))
 }
 
-// nfoCandidates lists the NFO paths of the item in the order of ADR 0027 §7.
-func (run *refreshRun) nfoCandidates(item *refreshItem) []string {
+// nfoCandidates lists the NFO files of the item in the order of ADR 0027 §7; when the item
+// has files in several folders, those of the first folder come first.
+func (run *refreshRun) nfoCandidates(item *refreshItem) []fileKey {
 	switch item.level.Kind {
 	case library.ItemKindMovie:
 		return run.movieNFOCandidates(item)
 	case library.ItemKindShow:
-		return folderFile(item.showDirectory(), showNFOName)
+		return perFolderFile(item, item.showDirectory, showNFOName)
 	case library.ItemKindSeason:
-		return folderFile(item.seasonDirectory(), seasonNFOName)
+		return perFolderFile(item, item.seasonDirectory, seasonNFOName)
 	case library.ItemKindEpisode:
 		return siblingNFOs(item.own)
 	case library.ItemKindExtra:
@@ -281,13 +299,13 @@ func (run *refreshRun) nfoCandidates(item *refreshItem) []string {
 	}
 }
 
-func (run *refreshRun) movieNFOCandidates(item *refreshItem) []string {
+func (run *refreshRun) movieNFOCandidates(item *refreshItem) []fileKey {
 	candidates := siblingNFOs(item.own)
 
 	for _, file := range item.own {
-		directory := path.Dir(file.State.RelativePath)
+		directory := keyOf(file.State).directory()
 		if run.index.isFolderMovie(directory) {
-			candidates = append(candidates, path.Join(directory, movieNFOName))
+			candidates = append(candidates, fileKey{rootID: directory.rootID, path: path.Join(directory.path, movieNFOName)})
 		}
 	}
 
@@ -295,38 +313,52 @@ func (run *refreshRun) movieNFOCandidates(item *refreshItem) []string {
 }
 
 // siblingNFOs lists "<base>.nfo" next to each file.
-func siblingNFOs(files []RefreshFile) []string {
-	candidates := make([]string, 0, len(files))
+func siblingNFOs(files []RefreshFile) []fileKey {
+	candidates := make([]fileKey, 0, len(files))
 
 	for _, file := range files {
-		candidates = append(candidates, strings.TrimSuffix(file.State.RelativePath, path.Ext(file.State.RelativePath))+nfoExtension)
+		candidates = append(candidates, fileKey{
+			rootID: file.State.RootID,
+			path:   strings.TrimSuffix(file.State.RelativePath, path.Ext(file.State.RelativePath)) + nfoExtension,
+		})
 	}
 
 	return candidates
 }
 
-func folderFile(directory, name string) []string {
-	if directory == "" {
-		return nil
+// perFolderFile lists the file called name in the directory directoryOf finds in each folder
+// of the item.
+func perFolderFile(item *refreshItem, directoryOf func(rootID string) string, name string) []fileKey {
+	var candidates []fileKey
+
+	for _, rootID := range item.rootIDs() {
+		if directory := directoryOf(rootID); directory != "" {
+			candidates = append(candidates, fileKey{rootID: rootID, path: path.Join(directory, name)})
+		}
 	}
 
-	return []string{path.Join(directory, name)}
+	return candidates
 }
 
 // sidecarIndex finds sidecars case-insensitively, as SMB shares and exFAT do not keep case.
+// Folders are kept apart: a candidate only matches a sidecar of the same folder.
 type sidecarIndex struct {
-	byLowerPath map[string]library.FileState
-	byPath      map[string]library.FileState
-	byDirectory map[string][]library.FileState
+	byLowerPath map[fileKey]library.FileState
+	byPath      map[fileKey]library.FileState
+	byDirectory map[fileKey][]library.FileState
 }
 
 func newSidecarIndex(sidecars []library.FileState) sidecarIndex {
-	index := sidecarIndex{byLowerPath: map[string]library.FileState{}, byPath: map[string]library.FileState{}, byDirectory: map[string][]library.FileState{}}
+	index := sidecarIndex{
+		byLowerPath: map[fileKey]library.FileState{}, byPath: map[fileKey]library.FileState{},
+		byDirectory: map[fileKey][]library.FileState{},
+	}
 
 	for _, state := range sidecars {
-		index.byPath[state.RelativePath] = state
-		index.byLowerPath[strings.ToLower(state.RelativePath)] = state
-		index.byDirectory[path.Dir(state.RelativePath)] = append(index.byDirectory[path.Dir(state.RelativePath)], state)
+		key := keyOf(state)
+		index.byPath[key] = state
+		index.byLowerPath[fileKey{rootID: key.rootID, path: strings.ToLower(key.path)}] = state
+		index.byDirectory[key.directory()] = append(index.byDirectory[key.directory()], state)
 	}
 
 	for _, states := range index.byDirectory {
@@ -338,24 +370,24 @@ func newSidecarIndex(sidecars []library.FileState) sidecarIndex {
 	return index
 }
 
-// first returns the actual path of the first NFO candidate that exists.
-func (index sidecarIndex) first(candidates []string) (string, bool) {
+// first returns the actual key of the first NFO candidate that exists.
+func (index sidecarIndex) first(candidates []fileKey) (fileKey, bool) {
 	for _, candidate := range candidates {
 		state, found := index.byPath[candidate]
 		if !found {
-			state, found = index.byLowerPath[strings.ToLower(candidate)]
+			state, found = index.byLowerPath[fileKey{rootID: candidate.rootID, path: strings.ToLower(candidate.path)}]
 		}
 
 		if found && state.Class == library.FileClassNFO {
-			return state.RelativePath, true
+			return keyOf(state), true
 		}
 	}
 
-	return "", false
+	return fileKey{}, false
 }
 
 // images lists the image sidecars directly in directory.
-func (index sidecarIndex) images(directory string) []library.FileState {
+func (index sidecarIndex) images(directory fileKey) []library.FileState {
 	var images []library.FileState
 
 	for _, state := range index.byDirectory[directory] {

@@ -116,7 +116,7 @@ func TestMemoryCatalogV2Contract(t *testing.T) {
 
 			state := library.FileState{RelativePath: "a.nfo", Class: library.FileClassNFO}
 			for range 2 {
-				_ = catalog.SaveSidecarStates(context.Background(), "", []library.FileState{state}, []string{"gone.nfo"})
+				_ = catalog.SaveSidecarStates(context.Background(), "", []library.FileState{state}, []library.FileState{{RelativePath: "gone.nfo"}})
 			}
 
 			stored, _ := catalog.SidecarStates(context.Background(), "")

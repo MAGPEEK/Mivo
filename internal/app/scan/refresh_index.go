@@ -13,7 +13,8 @@ type refreshItem struct {
 	id    string
 	level library.Level
 	// own are the files the item holds itself (movie, episode); below are all files of the
-	// item and of its descendants (a show's episodes).
+	// item and of its descendants (a show's episodes). They may lie in several library
+	// folders; the folder order is the order of the files.
 	own   []RefreshFile
 	below []RefreshFile
 }
@@ -21,18 +22,25 @@ type refreshItem struct {
 // itemIndex derives the items of a refresh request from its files.
 type itemIndex struct {
 	items map[string]*refreshItem
-	// moviesPerDirectory counts, per directory, the movies that have a file there; a movie
-	// alone in a folder is a folder movie.
-	moviesPerDirectory map[string]map[string]bool
+	// moviesPerDirectory counts, per folder and directory, the movies that have a file there;
+	// a movie alone in a directory is a folder movie.
+	moviesPerDirectory map[fileKey]map[string]bool
 }
 
-func newItemIndex(files []RefreshFile) *itemIndex {
+// newItemIndex indexes the files; those of several folders are ordered by folder position
+// first, then by path.
+func newItemIndex(files []RefreshFile, folders []library.Folder) *itemIndex {
+	ranks := folderRanks(folders)
 	sorted := slices.Clone(files)
-	slices.SortFunc(sorted, func(first, second RefreshFile) int {
+	slices.SortStableFunc(sorted, func(first, second RefreshFile) int {
+		if byFolder := ranks[first.State.RootID] - ranks[second.State.RootID]; byFolder != 0 {
+			return byFolder
+		}
+
 		return strings.Compare(first.State.RelativePath, second.State.RelativePath)
 	})
 
-	index := &itemIndex{items: map[string]*refreshItem{}, moviesPerDirectory: map[string]map[string]bool{}}
+	index := &itemIndex{items: map[string]*refreshItem{}, moviesPerDirectory: map[fileKey]map[string]bool{}}
 
 	for _, file := range sorted {
 		if len(file.ItemIDs) != len(file.Placement.Levels) || len(file.ItemIDs) == 0 {
@@ -64,12 +72,12 @@ func (index *itemIndex) add(file RefreshFile) {
 		item.own = append(item.own, file)
 
 		if item.level.Kind == library.ItemKindMovie {
-			index.noteMovie(path.Dir(file.State.RelativePath), id)
+			index.noteMovie(keyOf(file.State).directory(), id)
 		}
 	}
 }
 
-func (index *itemIndex) noteMovie(directory, itemID string) {
+func (index *itemIndex) noteMovie(directory fileKey, itemID string) {
 	if index.moviesPerDirectory[directory] == nil {
 		index.moviesPerDirectory[directory] = map[string]bool{}
 	}
@@ -77,9 +85,9 @@ func (index *itemIndex) noteMovie(directory, itemID string) {
 	index.moviesPerDirectory[directory][itemID] = true
 }
 
-// isFolderMovie reports whether the movie lives alone in a folder below the root.
-func (index *itemIndex) isFolderMovie(directory string) bool {
-	return directory != "." && len(index.moviesPerDirectory[directory]) == 1
+// isFolderMovie reports whether the movie lives alone in a directory below its folder's root.
+func (index *itemIndex) isFolderMovie(directory fileKey) bool {
+	return directory.path != "." && len(index.moviesPerDirectory[directory]) == 1
 }
 
 // order lists the IDs to look at: the requested ones present in the index first, then the
@@ -108,9 +116,27 @@ func (index *itemIndex) order(requested []string) (ids []string, isRequested map
 	return append(ids, others...), isRequested
 }
 
-// showDirectory is the top folder of the show's files; empty for files in the root.
-func (item *refreshItem) showDirectory() string {
+// rootIDs lists the folders that hold files of the item, in folder order.
+func (item *refreshItem) rootIDs() []string {
+	var roots []string
+
 	for _, file := range item.below {
+		if !slices.Contains(roots, file.State.RootID) {
+			roots = append(roots, file.State.RootID)
+		}
+	}
+
+	return roots
+}
+
+// showDirectory is the top directory of the show's files in the folder; empty for files in
+// the folder's root.
+func (item *refreshItem) showDirectory(rootID string) string {
+	for _, file := range item.below {
+		if file.State.RootID != rootID {
+			continue
+		}
+
 		if first, _, nested := strings.Cut(file.State.RelativePath, relativePathSeparator); nested {
 			return first
 		}
@@ -119,13 +145,14 @@ func (item *refreshItem) showDirectory() string {
 	return ""
 }
 
-// seasonDirectory is the folder of the season's episodes when it is not the show folder.
-func (item *refreshItem) seasonDirectory() string {
-	showDirectory := item.showDirectory()
+// seasonDirectory is the directory of the season's episodes in the folder when it is not the
+// show directory.
+func (item *refreshItem) seasonDirectory(rootID string) string {
+	showDirectory := item.showDirectory(rootID)
 
 	for _, file := range item.below {
 		directory := path.Dir(file.State.RelativePath)
-		if directory != "." && directory != showDirectory {
+		if file.State.RootID == rootID && directory != "." && directory != showDirectory {
 			return directory
 		}
 	}

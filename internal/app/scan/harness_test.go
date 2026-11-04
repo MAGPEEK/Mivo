@@ -44,9 +44,9 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 
 	h := &harness{
-		libraries: &memoryLibraries{libraries: []library.Library{
-			{ID: moviesID, Name: "Movies", Root: moviesRoot, Kind: library.KindMovies},
-			{ID: showsID, Name: "Shows", Root: showsRoot, Kind: library.KindShows},
+		libraries: &memoryLibraries{libraries: []library.ManagedLibrary{
+			oneFolder(moviesID, "Movies", moviesRoot, library.KindMovies),
+			oneFolder(showsID, "Shows", showsRoot, library.KindShows),
 		}},
 		walker:    newScriptedWalker(),
 		resolver:  prefixResolver{errs: map[string]error{}},

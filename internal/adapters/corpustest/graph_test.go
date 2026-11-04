@@ -139,7 +139,7 @@ func (graph *corpusGraph) scanCorpus(t *testing.T) map[string]string {
 	catalog := sqlite.NewLibraryCatalog(graph.database, time.Now)
 
 	service, err := scan.NewService(scan.Dependencies{
-		Libraries: sqlite.NewLibraryRepository(graph.database, time.Now),
+		Libraries: sqlite.NewScanLibrarySource(graph.database, time.Now),
 		Walker:    graph.files, Resolver: graph.files, Prober: graph.prober, CatalogV2: catalog,
 		IDs: uuidgen.New(), Clock: time.Now, Logger: graph.logger,
 	})

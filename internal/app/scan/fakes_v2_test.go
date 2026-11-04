@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/magpeek/mivo/internal/app/scan"
@@ -24,6 +25,7 @@ type v2Item struct {
 // v2File is a stored file of the in-memory v2 catalog.
 type v2File struct {
 	id, itemID   string
+	libraryID    string
 	placementKey string
 	state        library.FileState
 }
@@ -52,12 +54,16 @@ func newMemoryCatalogV2() *memoryCatalogV2 {
 	}
 }
 
-func (catalog *memoryCatalogV2) PlacedFiles(_ context.Context, _ string) ([]scan.PlacedFileState, error) {
+func (catalog *memoryCatalogV2) PlacedFiles(_ context.Context, libraryID string) ([]scan.PlacedFileState, error) {
 	catalog.mutex.Lock()
 	defer catalog.mutex.Unlock()
 
 	var result []scan.PlacedFileState
 	for _, file := range catalog.files {
+		if file.libraryID != libraryID {
+			continue
+		}
+
 		result = append(result, scan.PlacedFileState{
 			ID: file.id, PlacementKey: file.placementKey, ItemIDs: catalog.chainOf(file.itemID), State: file.state,
 		})
@@ -93,7 +99,7 @@ func (catalog *memoryCatalogV2) SavePlacedFile(_ context.Context, record scan.Pl
 	}
 
 	for _, other := range catalog.files {
-		if other.state.RelativePath == record.File.RelativePath && other.id != record.File.ID {
+		if other.libraryID == record.File.LibraryID && other.state.RootID == record.RootID && other.state.RelativePath == record.File.RelativePath && other.id != record.File.ID {
 			return nil, fmt.Errorf("path taken: %w", domain.ErrConflict)
 		}
 	}
@@ -105,16 +111,25 @@ func (catalog *memoryCatalogV2) SavePlacedFile(_ context.Context, record scan.Pl
 
 	catalog.saves++
 	catalog.place(record.File.ID, chain[len(chain)-1], record.Placement.Key(), library.FileState{
-		RelativePath: record.File.RelativePath, Size: record.File.Size, ModifiedAt: record.File.ModifiedAt,
+		RootID: record.RootID, RelativePath: record.File.RelativePath, Size: record.File.Size, ModifiedAt: record.File.ModifiedAt,
 	})
+	catalog.files[record.File.ID].libraryID = record.File.LibraryID
 
 	return chain, nil
+}
+
+// sidecarKey identifies a sidecar by folder and path, like the writer does.
+func sidecarKey(libraryID string, state library.FileState) string {
+	return libraryID + "|" + state.RootID + "|" + state.RelativePath
 }
 
 // place stores the file and prunes the item it left.
 func (catalog *memoryCatalogV2) place(fileID, itemID, key string, state library.FileState) {
 	previous := catalog.files[fileID]
 	catalog.files[fileID] = &v2File{id: fileID, itemID: itemID, placementKey: key, state: state}
+	if previous != nil {
+		catalog.files[fileID].libraryID = previous.libraryID
+	}
 
 	if previous != nil {
 		catalog.prune(previous.itemID)
@@ -226,20 +241,22 @@ func (catalog *memoryCatalogV2) RemovePlacedFiles(_ context.Context, _ string, f
 	return nil
 }
 
-func (catalog *memoryCatalogV2) SidecarStates(context.Context, string) ([]library.FileState, error) {
+func (catalog *memoryCatalogV2) SidecarStates(_ context.Context, libraryID string) ([]library.FileState, error) {
 	catalog.mutex.Lock()
 	defer catalog.mutex.Unlock()
 
 	result := make([]library.FileState, 0, len(catalog.sidecars))
-	for _, state := range catalog.sidecars {
-		result = append(result, state)
+	for key, state := range catalog.sidecars {
+		if strings.HasPrefix(key, libraryID+"|") {
+			result = append(result, state)
+		}
 	}
 
 	return result, nil
 }
 
-func (catalog *memoryCatalogV2) SaveSidecarStates(_ context.Context, _ string,
-	upserts []library.FileState, removals []string,
+func (catalog *memoryCatalogV2) SaveSidecarStates(_ context.Context, libraryID string,
+	upserts, removals []library.FileState,
 ) error {
 	catalog.mutex.Lock()
 	defer catalog.mutex.Unlock()
@@ -247,11 +264,11 @@ func (catalog *memoryCatalogV2) SaveSidecarStates(_ context.Context, _ string,
 	catalog.sidecarWrites++
 
 	for _, state := range upserts {
-		catalog.sidecars[state.RelativePath] = state
+		catalog.sidecars[sidecarKey(libraryID, state)] = state
 	}
 
 	for _, removed := range removals {
-		delete(catalog.sidecars, removed)
+		delete(catalog.sidecars, sidecarKey(libraryID, removed))
 	}
 
 	return nil

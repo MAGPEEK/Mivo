@@ -24,6 +24,8 @@ type PlacedFileState struct {
 // File.ID is set (new, or the stored ID of a changed file); File.ItemID is left empty and set
 // by the catalog from the chain it creates or finds. ProbedAt must not be zero.
 type PlacedFile struct {
+	// RootID is the library folder File.RelativePath is relative to.
+	RootID    string
 	Placement library.Placement
 	File      media.File
 	ProbedAt  time.Time
@@ -73,10 +75,11 @@ type MoveRequest struct {
 type SidecarCatalog interface {
 	// SidecarStates returns the stored NFO and image files of the library.
 	SidecarStates(ctx context.Context, libraryID string) ([]library.FileState, error)
-	// SaveSidecarStates upserts the sidecars by path and deletes the removed paths in one
-	// transaction. It is idempotent. Errors wrap domain.ErrNotFound for an unknown library and
-	// domain.ErrInvalid for a sidecar with an invalid path or class.
-	SaveSidecarStates(ctx context.Context, libraryID string, upserts []library.FileState, removals []string) error
+	// SaveSidecarStates upserts the sidecars by (RootID, path) and deletes the removed ones, which
+	// only need RootID and RelativePath, in one transaction. It is idempotent. Errors wrap
+	// domain.ErrNotFound for an unknown library and domain.ErrInvalid for a sidecar with an
+	// invalid path or class.
+	SaveSidecarStates(ctx context.Context, libraryID string, upserts, removals []library.FileState) error
 }
 
 // MetadataState is what the refresh needs to know about an item before it merges.
@@ -155,7 +158,9 @@ type NFOParser interface {
 // refresher may fail too; so the refresher should also refresh items that have no stored
 // metadata yet (MetadataCatalog.ItemMetadataState) when it is asked about them.
 type RefreshRequest struct {
-	Library  library.Library
+	// Library carries the folders (sidecars are read from the folder their RootID names) and
+	// the options: ReadNFO and LocalArtwork switch the NFO and local artwork sources off.
+	Library  library.ManagedLibrary
 	ItemIDs  []string
 	Sidecars []library.FileState
 	// Files lists every placed media file of the scan with its placement and item chain; the
