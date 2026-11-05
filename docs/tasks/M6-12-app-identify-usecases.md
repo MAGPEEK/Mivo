@@ -14,9 +14,10 @@ The use cases behind the "Zuordnung korrigieren" dialog.
       `provider_ids`, sets `matched`, enqueues enrichment (reason `identify`) for the item and,
       for a show, its seasons and episodes; other locks untouched; previous provider data is
       replaced except locked fields.
-- [ ] `Unmatch(ctx, itemID)`: state `disabled`, provider IDs removed unless locked by NFO source
-      rules (NFO IDs return after the next scan as `unmatched`, test documents this), provider
-      artwork rows and files deleted, local metadata remains.
+- [ ] `Unmatch(ctx, itemID)`: state `disabled`, the `provider_ids` lock (the identify choice)
+      released and provider IDs reset to the NFO ones (NFO IDs stay after the next scan, the
+      item stays `disabled` per ADR 0031 §9, test documents this), provider artwork rows and
+      files deleted, local metadata remains.
 - [ ] `Refresh(ctx, itemID|libraryID)`: enqueues; refuses with `ErrConflict` when online
       metadata is disabled.
 - [ ] Episode/season items resolve to their show for matching; applying on an episode is
@@ -27,3 +28,7 @@ The use cases behind the "Zuordnung korrigieren" dialog.
 
 ## Notes
 Authorisation is the HTTP guard's job (ADR 0028); use cases stay user-agnostic until M7.
+
+Apply asks no provider, so it works offline. The earlier provider artwork stays until the
+queued enrichment replaces it (offline: until the provider is reachable again); Apply does not
+delete it because a locked artwork kind may have selected one of those pictures.
