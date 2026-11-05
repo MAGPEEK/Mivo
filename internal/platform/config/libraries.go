@@ -28,6 +28,7 @@ const (
 const (
 	LibraryKindMovies = "movies"
 	LibraryKindShows  = "shows"
+	LibraryKindMusic  = "music"
 )
 
 var (
@@ -41,7 +42,7 @@ type LibraryConfig struct {
 	Name string
 	// Path is the absolute root directory. It need not exist yet (ADR 0022).
 	Path string
-	// Kind is LibraryKindMovies (default) or LibraryKindShows.
+	// Kind is LibraryKindMovies (default), LibraryKindShows or LibraryKindMusic.
 	Kind string
 }
 
@@ -105,7 +106,7 @@ func applyLibraryPath(library *LibraryConfig, raw, baseDir string) error {
 }
 
 func applyLibraryKind(library *LibraryConfig, raw, _ string) error {
-	kind, err := parseChoice(raw, LibraryKindMovies, LibraryKindShows)
+	kind, err := parseChoice(raw, LibraryKindMovies, LibraryKindShows, LibraryKindMusic)
 	if err != nil {
 		return err
 	}

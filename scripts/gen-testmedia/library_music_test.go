@@ -62,6 +62,22 @@ func TestMusicCatalogCoversTheRequiredAlbums(t *testing.T) {
 	}
 }
 
+// TestEveryMusicAlbumHasTracks: an album without tracks would produce no files and no
+// catalog entry; the summary describes such an album without failing.
+func TestEveryMusicAlbumHasTracks(t *testing.T) {
+	t.Parallel()
+
+	for _, album := range musicCatalog().Albums {
+		if len(album.Tracks) == 0 {
+			t.Errorf("album %q has no tracks", album.Title)
+		}
+	}
+
+	if got := albumDetails(expectedAlbum{Container: musicContainerMP3}); got != "0 mp3 tracks" {
+		t.Errorf("albumDetails(no tracks) = %q, want %q", got, "0 mp3 tracks")
+	}
+}
+
 func TestWithTracksNumbersPerDiscAndUsesDiscFolders(t *testing.T) {
 	t.Parallel()
 

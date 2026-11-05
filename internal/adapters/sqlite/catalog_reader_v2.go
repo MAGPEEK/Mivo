@@ -13,8 +13,9 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// ListChildren returns one page of the children of an item: the seasons of a show or the
-// episodes of a season in child order, reversed for request.Descending; extras are never
+// ListChildren returns one page of the children of an item: the seasons of a show, the
+// episodes of a season or the albums of an artist in child order, or the tracks of an album
+// in track order (see ListAlbumTracks), reversed for request.Descending; extras are never
 // children. A leaf yields an empty page. An unknown item wraps domain.ErrNotFound, an invalid
 // limit and a cursor that was not issued for this item and direction domain.ErrInvalid. The
 // request is validated before the item is read, so a bad cursor on an unknown item reports
@@ -27,7 +28,7 @@ func (catalog *CatalogReader) ListChildren(ctx context.Context, itemID string, r
 
 	scope := childCursorScope{parentID: itemID, descending: request.Descending}
 
-	after, hasAfter, err := decodeChildCursor(request.Page.Cursor, scope)
+	cursor, err := decodeChildrenCursor(request.Page.Cursor, scope)
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("list children of item %q: %w", itemID, err)
 	}
@@ -38,7 +39,8 @@ func (catalog *CatalogReader) ListChildren(ctx context.Context, itemID string, r
 		var readErr error
 
 		result, readErr = readChildrenPage(ctx, queries, childrenRequest{
-			scope: scope, after: after, hasAfter: hasAfter, limit: limit,
+			scope: scope, after: cursor.child, hasAfter: cursor.hasChild,
+			afterTrack: cursor.track, hasAfterTrack: cursor.hasTrack, limit: limit,
 		})
 
 		return readErr
@@ -59,14 +61,20 @@ type listedItem struct {
 	key        childKey
 }
 
+// childrenRequest is one page of children after a child key (hasAfter) or, for the tracks
+// of an album, after a track position (hasAfterTrack).
 type childrenRequest struct {
-	scope    childCursorScope
-	after    childKey
-	hasAfter bool
-	limit    int
+	scope         childCursorScope
+	after         childKey
+	hasAfter      bool
+	afterTrack    trackPosition
+	hasAfterTrack bool
+	limit         int
 }
 
-// readChildrenPage reads one row more than the limit, like readListingPage.
+// readChildrenPage reads one row more than the limit, like readListingPage. The tracks of an
+// album follow track order, which needs the disc and the file name, so they are paged by
+// readTrackPage; a cursor of the other listing is not issued for these children.
 func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request childrenRequest) (applibrary.ItemPage, error) {
 	parentID := request.scope.parentID
 
@@ -77,6 +85,17 @@ func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request chi
 
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("read item: %w", err)
+	}
+
+	isAlbum := parent.Kind == library.ItemKindAlbum.String()
+	if (isAlbum && request.hasAfter) || (!isAlbum && request.hasAfterTrack) {
+		return applibrary.ItemPage{}, fmt.Errorf("cursor was not issued for these children: %w", domain.ErrInvalid)
+	}
+
+	if isAlbum {
+		return readTrackPage(ctx, queries, trackPageRequest{
+			scope: request.scope, after: request.afterTrack, hasAfter: request.hasAfterTrack, limit: request.limit,
+		})
 	}
 
 	listed, err := listChildren(ctx, queries, request, int64(request.limit)+1)

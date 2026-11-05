@@ -25,6 +25,13 @@ const scanCloseTimeout = 2 * time.Second
 // closeScansStep names the shutdown step in the error when the scans do not end in time.
 const closeScansStep = "close scan service"
 
+// enabledLibraryKinds are the library kinds the server can scan and serve end to end: the
+// library manager accepts them and SystemInfo.libraryKinds reports them. A kind joins the
+// list with the task that wires its scan pipeline (music: M3-13g).
+func enabledLibraryKinds() []library.Kind {
+	return []library.Kind{library.KindMovies, library.KindShows, library.KindMusic}
+}
+
 // libraryDefinitions converts the configured libraries into domain definitions (platform
 // must not import domain) and validates them with the domain's rules, which the config
 // package cannot check, such as the name length. An error names the entry.
@@ -123,6 +130,8 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		Prober:    adapters.prober,
 		CatalogV2: catalog,
 		Refresher: refresher,
+		// ffprobe reads the tags; the catalog stores disc and MusicBrainz IDs (ADR 0027).
+		Music: appscan.MusicPorts{Tags: adapters.prober, Catalog: catalog},
 		Finished: func(ctx context.Context, _ string) {
 			app.purgeImageCache(ctx, adapters.images)
 		},

@@ -62,8 +62,12 @@ func itemKindResponse(kind library.ItemKind) (apigen.ItemKind, error) {
 		return apigen.ItemKindEpisode, nil
 	case library.ItemKindExtra:
 		return apigen.ItemKindExtra, nil
-	case library.ItemKindArtist, library.ItemKindAlbum, library.ItemKindTrack:
-		return "", fmt.Errorf("music item kind %q not in the contract yet", kind)
+	case library.ItemKindArtist:
+		return apigen.ItemKindArtist, nil
+	case library.ItemKindAlbum:
+		return apigen.ItemKindAlbum, nil
+	case library.ItemKindTrack:
+		return apigen.ItemKindTrack, nil
 	case library.ItemKindPhotoAlbum:
 		return apigen.ItemKindPhotoAlbum, nil
 	case library.ItemKindPhoto:
@@ -161,6 +165,7 @@ func itemDetailResponse(detail applibrary.ItemDetail) (apigen.ItemDetail, error)
 		Year:       detailYear(detail),
 		Number:     optionalNumber(detail.Item.Number),
 		NumberEnd:  optionalNumber(detail.Item.NumberEnd),
+		DiscNumber: discNumberResponse(detail.Item.DiscNumber),
 		ChildCount: optionalInt32(detail.ChildCount),
 		LeafCount:  optionalInt32(detail.LeafCount),
 	}
@@ -381,7 +386,7 @@ func applyArtwork(response *apigen.ItemDetail, detail applibrary.ItemDetail) err
 			return fmt.Errorf("artwork %s: %w", kind, err)
 		}
 
-		target, err := artworkTarget(&images, kind)
+		target, err := artworkTarget(&images, kind, detail.Item.Kind)
 		if err != nil {
 			return err
 		}
@@ -394,9 +399,15 @@ func applyArtwork(response *apigen.ItemDetail, detail applibrary.ItemDetail) err
 	return nil
 }
 
-func artworkTarget(images *apigen.Artwork, kind artwork.Kind) (**apigen.ImageRef, error) {
+// artworkTarget picks the slot of an artwork kind; the poster of an album or artist goes to
+// the square slot (see showsSquareArtwork).
+func artworkTarget(images *apigen.Artwork, kind artwork.Kind, itemKind library.ItemKind) (**apigen.ImageRef, error) {
 	switch kind {
 	case artwork.KindPoster:
+		if showsSquareArtwork(itemKind) {
+			return &images.Square, nil
+		}
+
 		return &images.Poster, nil
 	case artwork.KindBackdrop:
 		return &images.Backdrop, nil

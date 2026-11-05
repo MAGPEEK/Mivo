@@ -136,7 +136,9 @@ func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID strin
 		return applibrary.ItemPage{}, fmt.Errorf("list tracks of album %q: %w", albumID, err)
 	}
 
-	after, hasAfter, err := decodeTrackCursor(page.Cursor, albumID)
+	scope := childCursorScope{parentID: albumID}
+
+	after, hasAfter, err := decodeTrackCursor(page.Cursor, scope)
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("list tracks of album %q: %w", albumID, err)
 	}
@@ -144,9 +146,13 @@ func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID strin
 	var result applibrary.ItemPage
 
 	err = inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
+		if _, err := itemOfKind(ctx, queries, albumID, library.ItemKindAlbum); err != nil {
+			return err
+		}
+
 		var readErr error
 
-		result, readErr = readTrackPage(ctx, queries, trackPageRequest{albumID: albumID, after: after, hasAfter: hasAfter, limit: limit})
+		result, readErr = readTrackPage(ctx, queries, trackPageRequest{scope: scope, after: after, hasAfter: hasAfter, limit: limit})
 
 		return readErr
 	})
@@ -157,25 +163,29 @@ func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID strin
 	return result, nil
 }
 
+// trackPageRequest asks for one page of the tracks of the album scope.parentID in the
+// direction of scope.
 type trackPageRequest struct {
-	albumID  string
+	scope    childCursorScope
 	after    trackPosition
 	hasAfter bool
 	limit    int
 }
 
-// readTrackPage reads every track of the album, sorts them in Go (the order needs the file
-// name, which SQL cannot cut from the path portably) and pages the sorted list. Every page
-// pays for the whole album: usually a few dozen tracks, but the "Unknown Album" of untagged
-// files in the root can hold thousands (keyset paging on a stored sort key: BACKLOG).
+// readTrackPage reads every track of a known album, sorts them in Go (the order needs the
+// file name, which SQL cannot cut from the path portably) and pages the sorted list,
+// reversed for a descending scope. Every page pays for the whole album: usually a few dozen
+// tracks, but the "Unknown Album" of untagged files in the root can hold thousands (keyset
+// paging on a stored sort key: BACKLOG).
 func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackPageRequest) (applibrary.ItemPage, error) {
-	if _, err := itemOfKind(ctx, queries, request.albumID, library.ItemKindAlbum); err != nil {
-		return applibrary.ItemPage{}, err
-	}
-
-	rows, err := queries.ListAlbumTracks(ctx, sql.NullString{String: request.albumID, Valid: true})
+	rows, err := queries.ListAlbumTracks(ctx, sql.NullString{String: request.scope.parentID, Valid: true})
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("read tracks: %w", err)
+	}
+
+	compare := compareTrackPositions
+	if request.scope.descending {
+		compare = func(left, right trackPosition) int { return compareTrackPositions(right, left) }
 	}
 
 	positions := make(map[string]trackPosition, len(rows))
@@ -183,7 +193,7 @@ func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackP
 
 	for _, row := range rows {
 		position := trackPositionOf(row)
-		if request.hasAfter && compareTrackPositions(position, request.after) <= 0 {
+		if request.hasAfter && compare(position, request.after) <= 0 {
 			continue
 		}
 
@@ -192,13 +202,13 @@ func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackP
 	}
 
 	slices.SortFunc(listed, func(left, right listedItem) int {
-		return compareTrackPositions(positions[left.item.ID], positions[right.item.ID])
+		return compare(positions[left.item.ID], positions[right.item.ID])
 	})
 
 	page := pageSource{rows: listed[:min(len(listed), request.limit+1)], limit: request.limit}
 
 	return pageOf(ctx, queries, page, func(last listedItem) string {
-		return encodeTrackCursor(request.albumID, positions[last.item.ID])
+		return encodeTrackCursor(request.scope, positions[last.item.ID])
 	})
 }
 

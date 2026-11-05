@@ -162,7 +162,8 @@ func mergedTags(formatTags, streamTags map[string]string) map[string]string {
 }
 
 // copyLowerCase copies tags under lower-case keys. Case variants within one map are visited
-// in descending key order, so the smallest spelling wins, as in tag.
+// in descending key order, so the lexically smallest spelling (for example "ARTIST" before
+// "Artist") is written last and wins.
 func copyLowerCase(target, tags map[string]string) {
 	for _, key := range slices.Backward(slices.Sorted(maps.Keys(tags))) {
 		target[strings.ToLower(key)] = tags[key]

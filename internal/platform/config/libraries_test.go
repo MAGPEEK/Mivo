@@ -46,7 +46,8 @@ func TestLoadLibrariesFromFile(t *testing.T) {
 		"    path: ../movies\n" +
 		"  - path: " + yamlQuoted(shows) + "\n" +
 		"    kind: Shows\n" +
-		"  - {name: '  Kids  ', path: ../movies-kids, kind: movies}\n"
+		"  - {name: '  Kids  ', path: ../movies-kids, kind: movies}\n" +
+		"  - {name: Music, path: ../music, kind: music}\n"
 	f := newFixture(t, yaml, nil)
 
 	got, err := f.load()
@@ -59,6 +60,7 @@ func TestLoadLibrariesFromFile(t *testing.T) {
 		{Name: "Filme", Path: filepath.Join(beside, "movies"), Kind: config.LibraryKindMovies},
 		{Name: "TV Shows", Path: shows, Kind: config.LibraryKindShows},
 		{Name: "Kids", Path: filepath.Join(beside, "movies-kids"), Kind: config.LibraryKindMovies},
+		{Name: "Music", Path: filepath.Join(beside, "music"), Kind: config.LibraryKindMusic},
 	}
 	if !reflect.DeepEqual(got.Libraries, want) {
 		t.Errorf("Libraries = %+v, want %+v", got.Libraries, want)
@@ -177,7 +179,7 @@ func libraryFileErrorCases() []libraryErrorCase {
 		},
 		{name: "null path", yaml: "libraries:\n  - path:\n", wantParts: []string{"line 2: key libraries[0].path", "null"}},
 		{name: "list as path", yaml: "libraries:\n  - path: [a, b]\n", wantParts: []string{"line 2: key libraries[0].path"}},
-		{name: "unknown kind", yaml: "libraries:\n  - path: a\n    kind: music\n", wantParts: []string{"line 3: key libraries[0].kind", "music"}},
+		{name: "unknown kind", yaml: "libraries:\n  - path: a\n    kind: mixed\n", wantParts: []string{"line 3: key libraries[0].kind", "mixed"}},
 		{name: "empty name", yaml: "libraries:\n  - path: a\n    name: ' '\n", wantParts: []string{"line 3: key libraries[0].name"}},
 		{name: "null list", yaml: "libraries:\n", wantParts: []string{"line 1: key libraries", "null"}},
 		{name: "scalar instead of a list", yaml: "libraries: /media\n", wantParts: []string{"line 1: key libraries", "list"}},

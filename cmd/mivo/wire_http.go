@@ -19,7 +19,6 @@ import (
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
-	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 // listenNetwork is the network of the HTTP listener.
@@ -125,7 +124,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Manager:      services.management.manager,
 		Folders:      services.management.manager,
 		Install:      services.management.install,
-		LibraryKinds: []library.Kind{library.KindMovies, library.KindShows},
+		LibraryKinds: enabledLibraryKinds(),
 		Logger:       app.logger,
 		Mounts:       services.mounts(),
 	})

@@ -54,6 +54,7 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 		Number:         optionalNumber(item.Number),
 		NumberEnd:      optionalNumber(item.NumberEnd),
 		AbsoluteNumber: optionalNumber(item.AbsoluteNumber),
+		DiscNumber:     discNumberResponse(item.DiscNumber),
 		ExtraType:      extraTypeResponse(item.ExtraType),
 		ChildCount:     optionalInt32(summary.ChildCount),
 		LeafCount:      optionalInt32(summary.LeafCount),
@@ -63,9 +64,15 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 		response.Media = mediaSummaryResponse(summary.PrimaryFile)
 	}
 
-	response.Poster, err = imageRefResponse(summary.Poster)
+	poster, err := imageRefResponse(summary.Poster)
 	if err != nil {
 		return apigen.ItemSummary{}, fmt.Errorf("item %s: poster: %w", item.ID, err)
+	}
+
+	if showsSquareArtwork(item.Kind) {
+		response.Square = poster
+	} else {
+		response.Poster = poster
 	}
 
 	response.Thumb, err = imageRefResponse(summary.Thumb)

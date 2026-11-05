@@ -130,7 +130,9 @@ func (kind ItemKind) String() string {
 // empty for top-level items, MatchKey identifies the item among its siblings of the same
 // kind across rescans, Number is the season or episode number (season 0 = specials),
 // NumberEnd the last episode of a multi-episode file, AbsoluteNumber the absolute episode
-// number and ExtraType is set for extras only.
+// number and ExtraType is set for extras only. DiscNumber is the disc of a track on its album
+// (absent when unknown and for other kinds); it is read back only, the scan stores it with
+// the track details.
 type Item struct {
 	ID             string
 	LibraryID      string
@@ -143,6 +145,7 @@ type Item struct {
 	Number         OptionalNumber
 	NumberEnd      OptionalNumber
 	AbsoluteNumber OptionalNumber
+	DiscNumber     OptionalNumber
 	ExtraType      ExtraType
 	CreatedAt      time.Time
 }

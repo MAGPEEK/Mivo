@@ -64,6 +64,7 @@ func itemFromRow(row sqlcgen.Item) (library.Item, error) {
 		Number:         optionalNumber(row.Number),
 		NumberEnd:      optionalNumber(row.NumberEnd),
 		AbsoluteNumber: optionalNumber(row.AbsoluteNumber),
+		DiscNumber:     optionalNumber(row.DiscNumber),
 		ExtraType:      extraType,
 		CreatedAt:      time.UnixMilli(row.CreatedAt).UTC(),
 	}

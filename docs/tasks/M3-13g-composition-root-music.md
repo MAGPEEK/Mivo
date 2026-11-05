@@ -7,11 +7,11 @@ Files/areas: `cmd/mivo`, `internal/adapters/http/restapi` (`libraryKinds`), `int
 Music works end to end on the server: add a music library, scan, list albums, play a track.
 
 ## Acceptance criteria
-- [ ] `libraryKinds` reports `music` as available; config and the library service accept it.
-- [ ] Integration test over `testdata/library/music` asserts the manifest (artist/album/track counts, ordering, covers via the image endpoint).
-- [ ] A track starts a playback session and direct-plays (or transcodes to AAC when the profile lacks the codec); the decision engine handles audio-only sources. If it does not, fix it here and note it in ADR 0027 Notes.
-- [ ] Tests: Go integration test; `go test -race -tags webui ./cmd/...`.
-- [ ] Gates: lint + layer rules + coverage thresholds pass.
+- [x] `libraryKinds` reports `music` as available; config and the library service accept it.
+- [x] Integration test over `testdata/library/music` asserts the manifest (artist/album/track counts, ordering, covers via the image endpoint).
+- [x] A track starts a playback session and direct-plays (or transcodes to AAC when the profile lacks the codec); the decision engine handles audio-only sources. If it does not, fix it here and note it in ADR 0027 Notes.
+- [x] Tests: Go integration test; `go test -race -tags webui ./cmd/...`.
+- [x] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes
 Last Go task of the music chain; the web follows in M3-13h.

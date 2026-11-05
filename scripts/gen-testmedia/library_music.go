@@ -120,21 +120,32 @@ func writeMusicSummary(text *strings.Builder, music expectedMusic) {
 			title += fmt.Sprintf(" (%d)", album.Year)
 		}
 
-		details := fmt.Sprintf("%d %s tracks", len(album.Tracks), album.Container)
-		if discs := album.Tracks[0].DiscTotal; discs > 1 {
-			details += fmt.Sprintf(" on %d discs", discs)
-		}
-
-		if !album.Tracks[0].Tagged {
-			details += ", untagged"
-		}
-
-		if album.Compilation {
-			details += ", compilation"
-		}
-
-		fmt.Fprintf(text, "    album %s: %s, cover %s\n", title, details, album.Tracks[0].CoverSource)
+		fmt.Fprintf(text, "    album %s: %s\n", title, albumDetails(album))
 	}
+}
+
+// albumDetails describes the tracks of an album. Disc count, tagging and cover are the same
+// for every track of an album, so the first track speaks for all of them.
+func albumDetails(album expectedAlbum) string {
+	details := fmt.Sprintf("%d %s tracks", len(album.Tracks), album.Container)
+	if len(album.Tracks) == 0 {
+		return details
+	}
+
+	first := album.Tracks[0]
+	if first.DiscTotal > 1 {
+		details += fmt.Sprintf(" on %d discs", first.DiscTotal)
+	}
+
+	if !first.Tagged {
+		details += ", untagged"
+	}
+
+	if album.Compilation {
+		details += ", compilation"
+	}
+
+	return details + ", cover " + first.CoverSource
 }
 
 // trackTags are the FFmpeg metadata keys of a tagged track; FFmpeg maps them to ID3, MP4

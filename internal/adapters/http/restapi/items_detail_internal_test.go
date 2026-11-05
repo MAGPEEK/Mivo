@@ -63,6 +63,14 @@ func TestItemSummaryResponseTable(t *testing.T) {
 
 	file := media.File{ID: idFile, Description: media.Description{Container: media.ContainerMKV}}
 
+	track := mapperItem(idEpisode, library.ItemKindTrack)
+	track.ParentID = idSeason
+	track.Number = library.NumberOf(2)
+	track.DiscNumber = library.NumberOf(2)
+
+	unknownDisc := mapperItem(idEpisode, library.ItemKindTrack)
+	unknownDisc.DiscNumber = library.NumberOf(0)
+
 	tests := []struct {
 		name     string
 		summary  applibrary.ItemSummary
@@ -97,6 +105,29 @@ func TestItemSummaryResponseTable(t *testing.T) {
 			name:     "extra with type",
 			summary:  applibrary.ItemSummary{Item: extra, PrimaryFile: file},
 			contains: []string{`"kind":"extra"`, `"extraType":"behind_the_scenes"`},
+		},
+		{
+			name:     "album cover as square",
+			summary:  applibrary.ItemSummary{Item: mapperItem(idSeason, library.ItemKindAlbum), Poster: poster, ChildCount: 4},
+			contains: []string{`"kind":"album"`, `"square":{"id":"` + idImage + `","tag":"tag-1"}`, `"childCount":4`},
+			lacks:    []string{`"poster"`, `"media"`},
+		},
+		{
+			name:     "artist image as square",
+			summary:  applibrary.ItemSummary{Item: mapperItem(idShow, library.ItemKindArtist), Poster: poster},
+			contains: []string{`"kind":"artist"`, `"square":`},
+			lacks:    []string{`"poster"`},
+		},
+		{
+			name:     "track with disc",
+			summary:  applibrary.ItemSummary{Item: track, PrimaryFile: file},
+			contains: []string{`"kind":"track"`, `"number":2`, `"discNumber":2`, `"media":`},
+		},
+		{
+			name:     "track without a valid disc",
+			summary:  applibrary.ItemSummary{Item: unknownDisc, PrimaryFile: file},
+			contains: []string{`"kind":"track"`},
+			lacks:    []string{`"discNumber"`},
 		},
 	}
 
@@ -221,6 +252,35 @@ func TestItemDetailResponseEpisode(t *testing.T) {
 	}
 }
 
+// TestItemDetailResponseMusic: an album carries its cover in artwork.square (the scan stores
+// it as a poster), a track its disc number.
+func TestItemDetailResponseMusic(t *testing.T) {
+	t.Parallel()
+
+	album := applibrary.ItemDetail{
+		Item:    mapperItem(idSeason, library.ItemKindAlbum),
+		Artwork: map[artwork.Kind]artwork.Ref{artwork.KindPoster: {ID: idImage, Tag: "cover"}},
+	}
+
+	response, err := itemDetailResponse(album)
+	if err != nil {
+		t.Fatalf("itemDetailResponse(album): %v", err)
+	}
+
+	assertFragments(t, mustMarshal(t, response),
+		[]string{`"kind":"album"`, `"artwork":{"square":{"id":"` + idImage + `","tag":"cover"}}`}, []string{`"poster"`})
+
+	track := mapperItem(idEpisode, library.ItemKindTrack)
+	track.DiscNumber = library.NumberOf(2)
+
+	response, err = itemDetailResponse(applibrary.ItemDetail{Item: track})
+	if err != nil {
+		t.Fatalf("itemDetailResponse(track): %v", err)
+	}
+
+	assertFragments(t, mustMarshal(t, response), []string{`"kind":"track"`, `"discNumber":2`}, nil)
+}
+
 func TestItemDetailResponseOmitsAbsentValues(t *testing.T) {
 	t.Parallel()
 
@@ -236,6 +296,7 @@ func TestItemDetailResponseOmitsAbsentValues(t *testing.T) {
 	for _, fragment := range []string{
 		`"ancestors"`, `"artwork"`, `"extras"`, `"genres"`, `"people"`, `"providerIds"`, `"releaseDate"`,
 		`"summary"`, `"nextId"`, `"previousId"`, `"playItemId"`, `"childCount"`, `"year"`, `"numberEnd"`,
+		`"discNumber"`,
 	} {
 		if strings.Contains(body, fragment) {
 			t.Errorf("body %s contains %s", body, fragment)

@@ -40,7 +40,7 @@ func decodeCursor(cursor string) (itemKey, error) {
 	}
 
 	id, sortTitle, found := strings.Cut(string(raw), cursorSeparator)
-	if !found || id == "" || id == childCursorTag {
+	if !found || id == "" || id == childCursorTag || id == trackCursorTag {
 		return itemKey{}, fmt.Errorf("cursor has no item key: %w", domain.ErrInvalid)
 	}
 

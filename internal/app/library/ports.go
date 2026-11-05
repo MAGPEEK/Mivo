@@ -42,7 +42,9 @@ type ItemReader interface {
 // Ordering (ADR 0027 §2, API listItemChildren): the children of a show are its seasons by
 // ascending number with the specials (season 0) last; the children of a season are its
 // episodes by ascending number with episodes without a number last; equal numbers and
-// unnumbered items order by sort title, then by ID. Extras are never children. Descending
+// unnumbered items order by sort title, then by ID. The albums of an artist order by sort
+// title, then ID; the tracks of an album follow library.CompareTracks (disc, track number with
+// unnumbered tracks last, file name), then ID. Extras are never children. Descending
 // reverses the whole order, so specials and unnumbered episodes come first.
 //
 // Error contract as ItemReader: an unknown item wraps domain.ErrNotFound, a cursor the reader

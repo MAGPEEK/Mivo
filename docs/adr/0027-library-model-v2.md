@@ -366,6 +366,18 @@ every track of the library once. Until the photo pipeline (M3-15f), a photos lib
 images as image sidecars. An artist folder like `VA` also wins over a plain artist tag when no
 album artist tag is set.
 
+## Notes (M3-13g)
+
+Music is enabled end to end: `music` is a config kind, the library manager accepts it and
+`SystemInfo.libraryKinds` reports it. `listItemChildren` of an album pages its tracks in
+`library.CompareTracks` order (disc, track number, file name) through a track cursor bound to
+album and direction; the albums of an artist use the generic child order (no number, so sort
+title, then ID). Until artwork has a `square` kind, the HTTP adapter sends the stored `poster`
+of an album or artist as `square` (summary and detail). The playback decision needed no change
+for audio-only sources: an AAC track in MP4/M4A plays directly, FLAC and MP3 (container
+`unknown`, never a direct-play key) are transcoded to AAC over HLS, which the corpus
+integration test (`cmd/mivo`, `TestRunServesTheMusicCorpus`) covers.
+
 ## Notes (M3-14e)
 
 §3 for audiobooks: a book's placement is one `audiobook` level; its match key is `file:` and the

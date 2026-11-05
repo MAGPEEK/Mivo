@@ -87,7 +87,7 @@ func libraryKindResponse(kind library.Kind) (apigen.LibraryKind, error) {
 	case library.KindShows:
 		return apigen.LibraryKindShows, nil
 	case library.KindMusic:
-		return "", fmt.Errorf("music library kind %q not in the contract yet", kind)
+		return apigen.LibraryKindMusic, nil
 	case library.KindPhotos:
 		return apigen.LibraryKindPhotos, nil
 	case library.KindAudiobooks:

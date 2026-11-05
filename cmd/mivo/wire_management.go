@@ -12,7 +12,6 @@ import (
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/app/scantrigger"
-	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 // scanController adapts the scan service to the library manager's ScanControl port: the
@@ -136,7 +135,7 @@ func (app application) newManagement(ctx context.Context, adapters managementAda
 		Events:          adapters.trigger,
 		Suspender:       adapters.trigger,
 		Logger:          app.logger,
-		AllowedKinds:    []library.Kind{library.KindMovies, library.KindShows},
+		AllowedKinds:    enabledLibraryKinds(),
 		Reserved:        reserved,
 		CaseInsensitive: runtime.GOOS == "windows",
 	})

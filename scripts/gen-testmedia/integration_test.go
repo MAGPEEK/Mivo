@@ -248,8 +248,7 @@ func verifyCopies(t *testing.T, dir string, c mediaCase) {
 }
 
 // verifyCoverArt checks the embedded poster: one 600x900 JPEG attached picture (the square
-// album cover for music tracks), and in
-// Matroska an attachment named and typed as a cover.
+// album cover for music tracks), and in Matroska an attachment named and typed as a cover.
 func verifyCoverArt(t *testing.T, ffprobePath, dir string, c mediaCase) {
 	t.Helper()
 
