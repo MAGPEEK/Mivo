@@ -122,26 +122,14 @@ func (p *Producer) Start(ctx context.Context, job appplayback.Job) (appplayback.
 }
 
 func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production, error) {
-	inputPath := job.InputPath
-	if p.inheritInput {
-		inputPath = inheritedInputPath
-	}
-
-	arguments, err := HLSArguments(HLSJob{
-		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	inherited, err := p.inheritedFiles(job)
+	prepared, err := p.prepare(job)
 	if err != nil {
 		return nil, err
 	}
 
 	// FFmpeg holds its own copy of an inherited descriptor once it started, and start
 	// returns only after the start.
-	defer closeAll(inherited)
+	defer closeAll(prepared.inherited)
 
 	processContext, cancel := context.WithCancel(ctx)
 
@@ -153,6 +141,7 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		stopTimeout: p.stopTimeout,
 		cancel:      cancel,
 		done:        make(chan struct{}),
+		release:     prepared.release,
 	}
 
 	// The process is started and waited for on the supervising goroutine, never on the
@@ -161,7 +150,7 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 	startResult := make(chan error, 1)
 
 	go production.run(ctx, func() (*process, error) {
-		return p.ffmpeg.start(processContext, arguments, processFiles{inherited: inherited})
+		return p.ffmpeg.start(processContext, prepared.arguments, processFiles{inherited: prepared.inherited})
 	}, startResult)
 
 	if err := <-startResult; err != nil {
@@ -171,6 +160,42 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 	}
 
 	return production, nil
+}
+
+// preparedRun is what one FFmpeg run of a production needs.
+type preparedRun struct {
+	arguments []string
+	// inherited are closed once the process has started; it holds its own copies.
+	inherited []*os.File
+	// release frees what must outlive the start (a disc's concat list); nil when nothing
+	// does. The production calls it once the process has ended or failed to start.
+	release func()
+}
+
+// prepare builds the run of job: from a single file, or from the clips of a folder disc.
+func (p *Producer) prepare(job appplayback.Job) (preparedRun, error) {
+	if job.Layout.IsDisc() {
+		return p.prepareDisc(job)
+	}
+
+	inputPath := job.InputPath
+	if p.inheritInput {
+		inputPath = inheritedInputPath
+	}
+
+	arguments, err := HLSArguments(HLSJob{
+		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
+	})
+	if err != nil {
+		return preparedRun{}, err
+	}
+
+	inherited, err := p.inheritedFiles(job)
+	if err != nil {
+		return preparedRun{}, err
+	}
+
+	return preparedRun{arguments: arguments, inherited: inherited}, nil
 }
 
 // inheritedFiles opens the job's input inside its library root when FFmpeg inherits it.
@@ -210,6 +235,8 @@ type production struct {
 	stopped atomic.Bool
 	// ready caches that a first segment was seen.
 	ready atomic.Bool
+	// release frees the input files that outlive the start (preparedRun.release); may be nil.
+	release func()
 }
 
 // Ready implements appplayback.Production: it returns nil once the playlist lists a first
@@ -290,6 +317,10 @@ func (p *production) stoppedError() error {
 // started process. ctx is the context Start ran under, used for logging only.
 func (p *production) run(ctx context.Context, start func() (*process, error), startResult chan<- error) {
 	started, err := start()
+	if err != nil {
+		p.releaseInput()
+	}
+
 	startResult <- err
 
 	if err == nil {
@@ -297,13 +328,22 @@ func (p *production) run(ctx context.Context, start func() (*process, error), st
 	}
 }
 
-// supervise waits for the process, records how it ended and closes done. ctx is the
-// context Start ran under, used for logging only.
+// supervise waits for the process, records how it ended, releases the input and closes
+// done, so a stopped production leaves no disc list behind. ctx is the context Start ran
+// under, used for logging only.
 func (p *production) supervise(ctx context.Context, started *process) {
 	waitErr := started.wait()
 	p.result = p.outcome(ctx, started, waitErr)
 	p.cancel()
+	p.releaseInput()
 	close(p.done)
+}
+
+// releaseInput calls release once the process no longer reads the input.
+func (p *production) releaseInput() {
+	if p.release != nil {
+		p.release()
+	}
 }
 
 // outcome turns the end of the process into Ready's answer and logs a failure once. A

@@ -81,6 +81,9 @@ type HLSJob struct {
 	Plan playback.Plan
 	// InputPath is the absolute path of the media file, resolved inside a library root.
 	InputPath string
+	// Disc, when set, replaces InputPath with the prepared input of a folder disc title
+	// (PrepareDiscInput); the caller closes it once FFmpeg has ended.
+	Disc *DiscInputArguments
 	// StartPosition is where the output begins, measured from the format start time like
 	// FFmpeg's -ss; 0 starts at the beginning. When the video is copied it must be a
 	// keyframe (Prober.KeyframeAtOrBefore): copied packets before it are dropped, so any
@@ -113,7 +116,7 @@ func HLSArguments(job HLSJob) ([]string, error) {
 		return nil, fmt.Errorf("hls arguments: negative start position %s: %w", job.StartPosition, domain.ErrInvalid)
 	}
 
-	input, err := ffmpegInputArguments(job.InputPath)
+	input, err := job.inputArguments()
 	if err != nil {
 		return nil, fmt.Errorf("hls arguments: %w", err)
 	}

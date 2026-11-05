@@ -82,3 +82,27 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   mtime) and the width, shares the two-render limit with artwork and keeps current photo
   thumbnails when purging. Wiring (`DetectPhotoDecoders`, `NewPhotoRenderer`, the sqlite
   `PhotoSource`) follows in M3-15e/M3-15h.
+- FFmpeg input of folder discs (M3-16f, `internal/adapters/ffmpeg` `DiscInput`,
+  `Prober.ProbeDisc`, `Job.Layout`/`Job.DiscTitle` in the producer). This adds to the
+  M2-24b whitelist of ADR 0022; single files keep exactly that whitelist.
+  - DVD (`VIDEO_TS`): the title VOBs are one program stream cut into files, so they are joined
+    byte-wise with the `concat:` protocol: `-f mpeg -format_whitelist mpeg
+    -protocol_whitelist file,concat concat:file:…VTS_01_1.VOB|file:…`. The `concat`
+    protocol only opens its `file:` parts; no demuxer that `mpeg` allows opens URLs.
+  - Blu-ray (`BDMV`): the clips restart their timestamps, so the `concat` demuxer reads a
+    list in a new private temporary directory (0700/0600): `-f concat -safe 0
+    -format_whitelist concat -protocol_whitelist file file:…/title.ffconcat`. Each entry
+    carries `option format_whitelist mpegts` and `option protocol_whitelist file`, which
+    replace the whitelists FFmpeg copies into the clip: a clip whose content is itself an
+    ffconcat list is refused (integration test), never followed. Clip durations from the
+    MPLS go into `duration` lines, so `-ss` before the input seeks straight into a later clip.
+  - `-safe 0` is passed only for lists built from validated parts: an absolute library root
+    and a disc folder and clip paths that are clean, local and slash-separated without `|`,
+    `\`, line breaks or NUL. On Linux FFmpeg reads every clip through an inherited
+    descriptor opened inside the library root (`/proc/self/fd/3…`), like a single file.
+  - The list lives as long as the production: it is removed when FFmpeg ends, after `Stop`
+    and when the start fails; the prober removes its own after each run.
+  - Any ffprobe failure on a title (also a build without the `concat`/`mpeg`/`mpegts`
+    demuxers) is `disc_unsupported`. The probed duration is replaced by the title duration
+    when the disc structures know one; DVD/Blu-ray subtitles are bitmap streams
+    (`media.Stream.IsBitmapSubtitle`). ISO images stay `disc_unsupported` here (M3-16g).
