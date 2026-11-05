@@ -13,7 +13,7 @@ func TestSentinelErrorsAreDistinctAndSurviveWrapping(t *testing.T) {
 
 	sentinels := []error{
 		domain.ErrNotFound, domain.ErrConflict, domain.ErrInvalid, domain.ErrForbidden,
-		domain.ErrUnsupported, domain.ErrUnavailable,
+		domain.ErrUnsupported, domain.ErrUnavailable, domain.ErrRateLimited,
 	}
 
 	for index, sentinel := range sentinels {

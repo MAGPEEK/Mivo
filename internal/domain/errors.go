@@ -23,4 +23,8 @@ var (
 	// for example an unmounted library folder, a reached session limit or a server that is
 	// shutting down. Retrying later may succeed.
 	ErrUnavailable = errors.New("unavailable")
+	// ErrRateLimited reports that an external service refused the request because too many
+	// were sent. Unlike ErrUnavailable the service is reachable; retrying after a pause
+	// succeeds.
+	ErrRateLimited = errors.New("rate limited")
 )
