@@ -29,12 +29,13 @@ const (
 // jpegSignature starts every JPEG file.
 func jpegSignature() []byte { return []byte{0xFF, 0xD8, 0xFF} }
 
-// libraryManifest holds the music and disc parts of testdata/library/manifest.json and the
+// libraryManifest holds the music, disc and audiobook parts of testdata/library/manifest.json and the
 // case results; scripts/gen-testmedia is package main, so the shape is repeated.
 type libraryManifest struct {
 	SchemaVersion int                 `json:"schemaVersion"`
 	Music         musicManifest       `json:"music"`
 	Discs         discManifest        `json:"discs"`
+	Audiobooks    audiobookManifest   `json:"audiobooks"`
 	Cases         []libraryCaseResult `json:"cases"`
 }
 

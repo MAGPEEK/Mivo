@@ -62,8 +62,10 @@ type libraryManifest struct {
 	// compare movie and show items, so adding it changed no existing consumer.
 	Music expectedMusic `json:"music"`
 	// Discs is the disc library (task M3-16i), kept apart for the same reason.
-	Discs expectedDiscs      `json:"discs"`
-	Cases []libraryCaseEntry `json:"cases"`
+	Discs expectedDiscs `json:"discs"`
+	// Audiobooks is the audiobook library (task M3-14f), kept apart for the same reason.
+	Audiobooks expectedAudiobooks `json:"audiobooks"`
+	Cases      []libraryCaseEntry `json:"cases"`
 }
 
 // Music cover sources: an attached picture in the file, an image in the album folder, none.
@@ -229,7 +231,8 @@ func newLibraryManifest(ffmpegVersion string, cases []mediaCase, entries []manif
 
 	result := libraryManifest{
 		SchemaVersion: libraryManifestSchemaVersion, FFmpegVersion: ffmpegVersion,
-		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Cases: make([]libraryCaseEntry, 0, len(entries)),
+		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Audiobooks: audiobookCatalog(),
+		Cases: make([]libraryCaseEntry, 0, len(entries)),
 	}
 
 	for _, entry := range newManifest(ffmpegVersion, entries).Cases {

@@ -14,7 +14,7 @@ import (
 
 // catalogFiles lists every file the catalog names, relative to the -library directory. It
 // walks the catalog independently of contentOf, so the tests do not trust the derivation.
-func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expectedDiscs) []string {
+func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expectedDiscs, audiobooks expectedAudiobooks) []string {
 	var files []string
 
 	for _, library := range catalog {
@@ -26,6 +26,7 @@ func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expected
 	}
 
 	files = append(files, musicCatalogFiles(music)...)
+	files = append(files, audiobookCatalogFiles(audiobooks)...)
 
 	for _, disc := range discs.Items {
 		for _, file := range disc.Files {
@@ -177,7 +178,7 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 			t.Errorf("%s: library cases need the prefix, a muxer and encoders and are never gaps", c.Name)
 		}
 
-		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryDiscs}, c.Category) {
+		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryAudiobooks, categoryDiscs}, c.Category) {
 			t.Errorf("%s: unexpected category %q", c.Name, c.Category)
 		}
 
@@ -196,7 +197,9 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 func checkLibraryPath(t *testing.T, name, file string) {
 	t.Helper()
 
-	roots := []string{moviesLibraryPath, showsLibraryPath, musicLibraryPath, discsLibraryPath, discSourcesPath}
+	roots := []string{
+		moviesLibraryPath, showsLibraryPath, musicLibraryPath, audiobooksLibraryPath, discsLibraryPath, discSourcesPath,
+	}
 	inLibrary := slices.ContainsFunc(roots, func(root string) bool {
 		return strings.HasPrefix(file, root+"/")
 	})
@@ -221,7 +224,7 @@ func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 
 	described := map[string]bool{}
 
-	for _, file := range catalogFiles(libraryCatalog(), musicCatalog(), discCatalog()) {
+	for _, file := range catalogFiles(libraryCatalog(), musicCatalog(), discCatalog(), audiobookCatalog()) {
 		if described[file] {
 			t.Errorf("the catalog names %s twice", file)
 		}
@@ -264,9 +267,10 @@ func TestLibraryCopiesShareOneFFmpegRunPerItem(t *testing.T) {
 
 	// One run per artwork shape (3), movie (13, two of them embed covers) and show (4) builds
 	// 8 images, 19 movie files and 138 episode files; the music tree adds one run for the
-	// album cover and one per track (14), because every track carries its own tags. The
+	// album cover and one per track (14), because every track carries its own tags, and the
+	// audiobook tree one for the book cover (and its copy) and one per part (6). The
 	// discs are assembled from five source runs (two DVD title sets, three Blu-ray clips).
-	const wantRuns, wantFiles = 40, 185
+	const wantRuns, wantFiles = 47, 193
 	if len(cases) != wantRuns || files != wantFiles {
 		t.Errorf("%d FFmpeg runs for %d media files, want %d runs for %d files", len(cases), files, wantRuns, wantFiles)
 	}

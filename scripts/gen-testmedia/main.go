@@ -36,6 +36,13 @@
 // rectangle per cue) that the Blu-ray clips copy as hdmv_pgs_subtitle and the DVD re-encodes
 // with dvdsub (bitmap to bitmap) as dvd_subtitle. Library case names start with "library-",
 // so -only 'library-*' builds the tree alone; disc cases start with "library-discs-".
+// <library>/audiobooks (task M3-14f) holds an M4B with three chapters and an embedded cover
+// ("Ada Inkwell/The Clockwork Orchard.m4b"), a folder book of three MP3 parts on two discs
+// whose disc and track tags contradict the file-name order and whose cover is cover.jpg,
+// and a shared folder with a single MP3 book (artist tag only, no narrator, no cover) next
+// to a chapterless M4B whose cover is the image named after it. The MP3 parts of the folder
+// book carry an explicit narrator (ID3 TXXX "narrator"); the M4B files carry only a
+// composer, which is no narrator, so they expect none. All names are invented. Audiobook cases start with "library-audiobooks-".
 //
 // <library>/manifest.json describes the expected catalog (what a scan must produce) and the
 // build result. Paths are relative to the library root (Path of the library) unless noted,
@@ -83,7 +90,23 @@
 //	  streams        probe of the main title: video, width, height, audio[], subtitles[]
 //	                 (ffprobe codec names); omitted for the stand-ins
 //	  files[]        every file of the disc, relative to the library root
-//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"discs"), status
+//	audiobooks     path (below <library>), books[] (added in M3-14f without a version bump,
+//	               kept out of libraries[] like music), in catalog order:
+//	  title, author  expected book title (album tag) and author
+//	  authorTag      "album_artist" (with an equal artist tag) or "artist"
+//	  composer       raw composer tag of the parts, omitted without one
+//	  narrator       narrator a scan must produce (explicit narrator tag, ID3 TXXX); a
+//	                 composer alone is none; omitted without one
+//	  path           book folder; standsAlone marks a one-file book sharing it (M4B)
+//	  container      "m4b"|"mp3"
+//	  coverSource    "embedded"|"folder" (image file)|"none"; coverFile (image, or the part)
+//	  parts[]        play order: file, title, disc, discTotal, track, trackTotal (omitted
+//	                 without tags), durationSeconds (nominal; encoders pad a little)
+//	  chapters[]     play order: file, title, startSeconds, endSeconds (relative to the
+//	                 file), embedded (false: the whole-file chapter a scan derives; its end
+//	                 is the probed length)
+//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"audiobooks"|"discs"),
+//	               status
 //	               ("generated"|"skipped"|"failed"), skipKind, reason, files[] (relative to
 //	               <library>); "library-discs-source-*" cases are the FFmpeg runs, the other
 //	               "library-discs-*" cases the assembled discs
