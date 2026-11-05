@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +25,8 @@ import (
 const (
 	discDVDFolder       = "DVD (2001)"
 	discBlurayFolder    = "Bluray (2019)"
+	discDVDImage        = "DVD (2001).iso"
+	discBlurayImage     = "Bluray (2019).iso"
 	discVOBOne          = "VIDEO_TS/VTS_01_1.VOB"
 	discVOBTwo          = "VIDEO_TS/VTS_01_2.VOB"
 	discClipOne         = "BDMV/STREAM/00001.m2ts"
@@ -30,6 +35,8 @@ const (
 	discClipSeconds     = 4
 	discSectorSize      = 2048
 	discSeekPosition    = 5 * time.Second
+	discSpanOffset      = time.Second
+	discSpanLength      = 2 * time.Second
 	discDurationSlack   = 600 * time.Millisecond
 	discGenerateTimeout = time.Minute
 )
@@ -37,6 +44,8 @@ const (
 type discFixture struct {
 	tools   hlsTools
 	library string
+	// extents maps "<image>/<file>" to the file's extent inside the image.
+	extents map[string]media.DiscClip
 }
 
 // requireDiscFixture generates both discs into a temporary library, or skips without FFmpeg
@@ -54,11 +63,106 @@ func requireDiscFixture(t *testing.T) discFixture {
 	fixture := discFixture{
 		tools:   hlsTools{ffmpegPath: ffmpegPath, ffprobePath: ffprobePath, prober: newCorpusProber(t, ffprobePath)},
 		library: t.TempDir(),
+		extents: map[string]media.DiscClip{},
 	}
 	fixture.generateDVD(t)
 	fixture.generateBluray(t)
+	fixture.generateImages(t)
 
 	return fixture
+}
+
+// generateImages packs both folder discs into ISO 9660 images next to them; the image writer
+// leaves a gap before every file, so the DVD's VOBs are two separate extents.
+func (fixture discFixture) generateImages(t *testing.T) {
+	t.Helper()
+
+	for _, image := range []struct {
+		name, folder string
+		clips        []string
+	}{
+		{name: discDVDImage, folder: discDVDFolder, clips: []string{discVOBOne, discVOBTwo}},
+		{name: discBlurayImage, folder: discBlurayFolder, clips: []string{discClipOne, discClipTwo}},
+	} {
+		files := make([]ffmpeg.TestISOFile, 0, len(image.clips))
+
+		for _, clip := range image.clips {
+			data, err := os.ReadFile(fixture.path(image.folder, clip))
+			if err != nil {
+				t.Fatalf("read %s: %v", clip, err)
+			}
+
+			files = append(files, ffmpeg.TestISOFile{Path: strings.ToUpper(clip), Data: data})
+		}
+
+		data, offsets := ffmpeg.BuildTestISO(files)
+		fixture.write(t, "", image.name, data)
+
+		for _, file := range files {
+			fixture.extents[image.name+"/"+file.Path] = media.DiscClip{Offset: offsets[file.Path], Length: int64(len(file.Data))}
+		}
+	}
+}
+
+// imageClip is the title clip of a file packed into the image name.
+func (fixture discFixture) imageClip(image, clip string, duration time.Duration) media.DiscClip {
+	extent := fixture.extents[image+"/"+strings.ToUpper(clip)]
+	extent.Duration = duration
+
+	return extent
+}
+
+func (fixture discFixture) dvdImage() ffmpeg.DiscInput {
+	return ffmpeg.DiscInput{
+		LibraryRoot: fixture.library, DiscPath: discDVDImage, Layout: media.LayoutISO,
+		Title: media.DiscTitle{
+			fixture.imageClip(discDVDImage, discVOBOne, 0),
+			fixture.imageClip(discDVDImage, discVOBTwo, 0),
+		},
+	}
+}
+
+func (fixture discFixture) blurayImage() ffmpeg.DiscInput {
+	return ffmpeg.DiscInput{
+		LibraryRoot: fixture.library, DiscPath: discBlurayImage, Layout: media.LayoutISO,
+		Title: media.DiscTitle{
+			fixture.imageClip(discBlurayImage, discClipOne, discClipSeconds*time.Second),
+			fixture.imageClip(discBlurayImage, discClipTwo, discClipSeconds*time.Second),
+		},
+	}
+}
+
+// blurayCut is the Blu-ray folder with its first clip cut to a playlist span that starts one
+// second after the clip's first timestamp (a play item's IN_time is a timestamp of the clip).
+func (fixture discFixture) blurayCut(t *testing.T) ffmpeg.DiscInput {
+	t.Helper()
+
+	input := fixture.bluray()
+	input.Title = slices.Clone(input.Title)
+	input.Title[0].Start = fixture.startTime(t, fixture.path(discBlurayFolder, discClipOne)) + discSpanOffset
+	input.Title[0].Duration = discSpanLength
+
+	return input
+}
+
+// startTime is the first timestamp of a generated clip, as ffprobe reports it.
+func (fixture discFixture) startTime(t *testing.T, clip string) time.Duration {
+	t.Helper()
+
+	command := exec.CommandContext(t.Context(), fixture.tools.ffprobePath, //nolint:gosec // test tool
+		"-v", "error", "-show_entries", "format=start_time", "-of", "default=noprint_wrappers=1:nokey=1", clip)
+
+	output, err := command.Output()
+	if err != nil {
+		t.Fatalf("read the start time of %s: %v", clip, err)
+	}
+
+	seconds, err := strconv.ParseFloat(strings.TrimSpace(string(output)), 64)
+	if err != nil {
+		t.Fatalf("parse the start time %q: %v", output, err)
+	}
+
+	return time.Duration(seconds * float64(time.Second))
 }
 
 func (fixture discFixture) generateDVD(t *testing.T) {
@@ -146,10 +250,10 @@ func (fixture discFixture) bluray() ffmpeg.DiscInput {
 	}
 }
 
-// TestProbeDiscDescribesFolderDiscTitles probes both generated discs through the local
-// ffprobe: the joined VOBs and the concat list each yield one video and one audio stream and
-// the duration of the whole title.
-func TestProbeDiscDescribesFolderDiscTitles(t *testing.T) {
+// TestProbeDiscDescribesDiscTitles probes the generated discs, folders and images, through the
+// local ffprobe: each title yields one video and one audio stream and the duration of the
+// whole title.
+func TestProbeDiscDescribesDiscTitles(t *testing.T) {
 	fixture := requireDiscFixture(t)
 
 	tests := []struct {
@@ -161,6 +265,8 @@ func TestProbeDiscDescribesFolderDiscTitles(t *testing.T) {
 	}{
 		{name: "DVD", input: fixture.dvd(), wantContainer: media.ContainerVOB, wantVideo: "mpeg2video", wantDuration: discDVDSeconds * time.Second},
 		{name: "Blu-ray", input: fixture.bluray(), wantContainer: media.ContainerM2TS, wantVideo: "h264", wantDuration: 2 * discClipSeconds * time.Second},
+		{name: "DVD image", input: fixture.dvdImage(), wantContainer: media.ContainerVOB, wantVideo: "mpeg2video", wantDuration: discDVDSeconds * time.Second},
+		{name: "Blu-ray image", input: fixture.blurayImage(), wantContainer: media.ContainerM2TS, wantVideo: "h264", wantDuration: 2 * discClipSeconds * time.Second},
 	}
 
 	for _, test := range tests {
@@ -184,12 +290,13 @@ func TestProbeDiscDescribesFolderDiscTitles(t *testing.T) {
 }
 
 // TestProbeDiscRefusesAClipThatIsAConcatList: a crafted clip whose content is an ffconcat list
-// must not make FFmpeg open the file it names (ADR 0022 Notes M2-24b, ADR 0029).
+// must not make FFmpeg open the file it names (ADR 0022 Notes M2-24b, ADR 0029). The canary is
+// a relative sibling name, which a nested concat demuxer (safe=1) would accept, so only the
+// per-clip format whitelist refuses it.
 func TestProbeDiscRefusesAClipThatIsAConcatList(t *testing.T) {
 	fixture := requireDiscFixture(t)
 
-	canary := fixture.path(discBlurayFolder, discClipOne)
-	list := "ffconcat version 1.0\nfile '" + filepath.ToSlash(canary) + "'\n"
+	list := "ffconcat version 1.0\nfile '" + path.Base(discClipOne) + "'\n"
 	fixture.write(t, discBlurayFolder, discClipTwo, []byte(list))
 
 	input := fixture.bluray()
@@ -200,9 +307,11 @@ func TestProbeDiscRefusesAClipThatIsAConcatList(t *testing.T) {
 	}
 }
 
-// TestProducerStreamsFolderDiscTitles produces both discs as HLS through the producer: the
-// Blu-ray with copied video from a seek into its second clip, the DVD fully transcoded.
-func TestProducerStreamsFolderDiscTitles(t *testing.T) {
+// TestProducerStreamsDiscTitles produces the discs, folders and images, as HLS through the
+// producer: a Blu-ray with copied video from a seek into its second clip, a DVD fully
+// transcoded, and a Blu-ray whose first clip is cut to its playlist span (inpoint and outpoint;
+// transcoded, because copied video can only start at a keyframe).
+func TestProducerStreamsDiscTitles(t *testing.T) {
 	fixture := requireDiscFixture(t)
 	producer := corpusProducer(t, fixture.tools)
 
@@ -219,6 +328,18 @@ func TestProducerStreamsFolderDiscTitles(t *testing.T) {
 		},
 		{
 			name: "DVD transcode", input: fixture.dvd(), plan: discPlan(playback.ActionTranscode),
+			wantDuration: discDVDSeconds * time.Second,
+		},
+		{
+			name: "Blu-ray cut to the playlist span", input: fixture.blurayCut(t), plan: discPlan(playback.ActionTranscode),
+			wantDuration: discSpanLength + discClipSeconds*time.Second,
+		},
+		{
+			name: "Blu-ray image remux after a seek", input: fixture.blurayImage(), plan: discPlan(playback.ActionCopy),
+			start: discSeekPosition, wantDuration: 2*discClipSeconds*time.Second - discSeekPosition,
+		},
+		{
+			name: "DVD image transcode", input: fixture.dvdImage(), plan: discPlan(playback.ActionTranscode),
 			wantDuration: discDVDSeconds * time.Second,
 		},
 	}

@@ -162,13 +162,48 @@ func TestProducerDiscStartFailures(t *testing.T) {
 	}
 }
 
-func TestProducerRefusesAnImageAsFolderDisc(t *testing.T) {
+func TestProducerRefusesFolderClipsForAnImage(t *testing.T) {
 	setup, _ := newDiscProducerTest(t, fakeModeHLSLive)
 	setup.job.Layout = media.LayoutISO
 
-	if _, err := setup.producer.Start(t.Context(), setup.job); !errors.Is(err, media.ErrDiscUnsupported) {
-		t.Errorf("Start = %v, want %v", err, media.ErrDiscUnsupported)
+	if _, err := setup.producer.Start(t.Context(), setup.job); !errors.Is(err, domain.ErrInvalid) {
+		t.Errorf("Start = %v, want %v", err, domain.ErrInvalid)
 	}
+}
+
+// TestProducerPlaysAnImageThroughSubfileRanges: the list names subfile ranges of the image,
+// on Linux of the inherited descriptor the image was checked with.
+func TestProducerPlaysAnImageThroughSubfileRanges(t *testing.T) {
+	setup, temporary := newDiscProducerTest(t, fakeModeHLSComplete)
+	image := newBlurayImageTest(t)
+	setup.job.LibraryRoot, setup.job.RelativePath = image.root, testImagePath
+	setup.job.InputPath = filepath.Join(image.root, filepath.FromSlash(testImagePath))
+	setup.job.Layout = media.LayoutISO
+	setup.job.DiscTitle = media.DiscTitle{
+		image.clip(testBlurayClipOne, 0, 2*time.Second), image.clip(testBlurayClipTwo, 0, 0),
+	}
+
+	production := setup.start(t.Context(), t)
+	awaitDone(t, production)
+	readyOrFailInternal(t, production.Ready(t.Context()))
+
+	// The fake copies its input, the concat list, into the segment.
+	list, err := os.ReadFile(filepath.Join(setup.job.OutputDir, fakeSegmentName))
+	if err != nil {
+		t.Fatalf("read the segment: %v", err)
+	}
+
+	imageURL := ":file:" + setup.job.InputPath + "'"
+	if runtime.GOOS == "linux" {
+		imageURL = ":file:/proc/self/fd/3'"
+	}
+
+	if strings.Count(string(list), imageURL) != 2 || !strings.Contains(string(list), "option protocol_whitelist file,subfile\n") {
+		t.Errorf("list %q does not read two subfile ranges of %q", list, imageURL)
+	}
+
+	assertEmptyDirectory(t, temporary)
+	assertNoWarnings(t, setup.logs)
 }
 
 func readyOrFailInternal(t *testing.T, err error) {

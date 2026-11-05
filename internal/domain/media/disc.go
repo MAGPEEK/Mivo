@@ -45,11 +45,16 @@ type DiscClip struct {
 	Path string
 	// Offset and Length locate the clip inside an ISO image in bytes; set for ISO discs.
 	Offset, Length int64
-	Duration       time.Duration
+	// Start is the presentation time inside the clip where the title's span begins (a Blu-ray
+	// playlist item's IN_time); 0 plays the clip from its beginning. With a positive Duration
+	// the span ends at Start + Duration, so a player cuts the clip to it instead of playing
+	// the parts the playlist skips.
+	Start    time.Duration
+	Duration time.Duration
 }
 
 // Validate requires exactly one of Path or an extent with a positive length, and a
-// non-negative offset and duration. Errors wrap domain.ErrInvalid.
+// non-negative offset, start and duration. Errors wrap domain.ErrInvalid.
 func (clip DiscClip) Validate() error {
 	hasPath := clip.Path != ""
 	hasExtent := clip.Length != 0 || clip.Offset != 0
@@ -61,6 +66,8 @@ func (clip DiscClip) Validate() error {
 		return fmt.Errorf("validate disc clip %d+%d: bad extent: %w", clip.Offset, clip.Length, domain.ErrInvalid)
 	case clip.Duration < 0:
 		return fmt.Errorf("validate disc clip: negative duration: %w", domain.ErrInvalid)
+	case clip.Start < 0:
+		return fmt.Errorf("validate disc clip: negative start: %w", domain.ErrInvalid)
 	}
 
 	return nil

@@ -24,6 +24,25 @@ func assertTitle(t *testing.T, got, want media.DiscTitle) {
 	}
 }
 
+// TestResolveTreeBDMVCarriesTheSpanStart: a play item's IN_time becomes the clip's Start, so
+// the player can cut the clip to the playlist's span.
+func TestResolveTreeBDMVCarriesTheSpanStart(t *testing.T) {
+	t.Parallel()
+
+	const inTicks = 3 * mplsTicksPerSecond
+	tree := fstest.MapFS{
+		"BDMV/STREAM/00001.m2ts": sized(10),
+		"BDMV/PLAYLIST/00000.mpls": file(buildMPLS(
+			testItem{clip: "00001", codec: "M2TS", in: inTicks, out: inTicks + 90*mplsTicksPerSecond})),
+	}
+
+	got, err := ResolveTree(context.Background(), tree, media.LayoutBDMV)
+	if err != nil {
+		t.Fatalf("ResolveTree: %v", err)
+	}
+	assertTitle(t, got, media.DiscTitle{{Path: "BDMV/STREAM/00001.m2ts", Start: 3 * time.Second, Duration: 90 * time.Second}})
+}
+
 func TestResolveTreeBDMV(t *testing.T) {
 	t.Parallel()
 

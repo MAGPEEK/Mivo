@@ -69,7 +69,8 @@ type Job struct {
 	// Layout says how the input is stored; empty or media.LayoutFile is a single file. For a
 	// folder disc (media.LayoutVideoTS, media.LayoutBDMV) RelativePath and InputPath name the
 	// disc folder the clip paths of DiscTitle are relative to, and the producer reads the
-	// clips of DiscTitle in order (ADR 0029).
+	// clips of DiscTitle in order (ADR 0029). For a disc image (media.LayoutISO) they name the
+	// image file and DiscTitle holds image extents.
 	Layout    media.Layout
 	DiscTitle media.DiscTitle
 	// StartPosition is where FFmpeg seeks to (-ss) before reading; 0 starts at the

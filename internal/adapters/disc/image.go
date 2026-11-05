@@ -13,7 +13,7 @@ import (
 // ResolveImage selects the main title of a disc image (BDMV preferred over VIDEO_TS at the
 // image root) and returns it as image byte extents. A clip's duration is split over its
 // extents by length; extents that continue each other are merged, so a contiguous DVD feature
-// becomes one clip. A disc that looks CSS or AACS protected fails with media.ErrDiscEncrypted.
+// becomes one clip, while Blu-ray clips stay apart (see appendPieces). A disc that looks CSS or AACS protected fails with media.ErrDiscEncrypted.
 // Corrupt image structures met on the way are reported as disc_unsupported.
 func ResolveImage(ctx context.Context, img Image) (media.DiscTitle, error) {
 	title, err := resolveImage(ctx, img)
@@ -53,16 +53,28 @@ func resolveImage(ctx context.Context, img Image) (media.DiscTitle, error) {
 
 	var title media.DiscTitle
 	for _, clip := range clips {
-		extentClips, err := clipExtents(img, clip)
+		pieces, err := clipExtents(img, clip)
 		if err != nil {
 			return nil, err
 		}
-		for _, extentClip := range extentClips {
-			title = appendMerged(title, extentClip)
-		}
+		title = appendPieces(title, pieces, layout)
 	}
 
 	return validated(title)
+}
+
+// appendPieces appends the pieces of one clip. DVD VOBs are one program stream cut into files,
+// so pieces that continue the previous clip merge into it; Blu-ray clips restart their
+// timestamps and each carries its own span, so they stay apart even when they lie back to back.
+func appendPieces(title media.DiscTitle, pieces []media.DiscClip, layout media.Layout) media.DiscTitle {
+	if layout != media.LayoutVideoTS {
+		return append(title, pieces...)
+	}
+	for _, piece := range pieces {
+		title = appendMerged(title, piece)
+	}
+
+	return title
 }
 
 // imageLayout detects the disc structure at the image root.
@@ -83,7 +95,9 @@ func imageLayout(files *fileTree) (media.Layout, error) {
 	return "", fmt.Errorf("detect disc image layout: no BDMV or VIDEO_TS folder: %w", media.ErrDiscUnsupported)
 }
 
-// clipExtents maps one clip file to its non-empty image extents.
+// clipExtents maps one clip file to its non-empty image extents, merging those that continue
+// each other. Only a clip that ends up in one piece keeps its span start: the start is a
+// timestamp of the whole clip, and a later piece read on its own cannot be cut to it.
 func clipExtents(img Image, clip titleClip) ([]media.DiscClip, error) {
 	extents, err := img.Extents(clip.path)
 	if err != nil {
@@ -95,14 +109,17 @@ func clipExtents(img Image, clip titleClip) ([]media.DiscClip, error) {
 	}
 	shares := splitDuration(clip.duration, lengths)
 
-	located := make([]media.DiscClip, 0, len(extents))
+	located := make(media.DiscTitle, 0, len(extents))
 	for index, extent := range extents {
 		if extent.Length > 0 {
-			located = append(located, media.DiscClip{Offset: extent.Offset, Length: extent.Length, Duration: shares[index]})
+			located = appendMerged(located, media.DiscClip{Offset: extent.Offset, Length: extent.Length, Duration: shares[index]})
 		}
 	}
-	if len(located) == 0 {
+	switch len(located) {
+	case 0:
 		return nil, fmt.Errorf("locate disc clip %s: no data: %w", clip.path, media.ErrDiscNoTitle)
+	case 1:
+		located[0].Start = clip.start
 	}
 
 	return located, nil

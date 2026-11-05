@@ -84,7 +84,9 @@ func (files *fileTree) playlistClips(playlistPath string, streams map[string]str
 		if !ok {
 			return nil, nil // a missing clip makes the playlist unplayable
 		}
-		clips = append(clips, titleClip{path: clipPath, duration: ticksToDuration(entry.out - entry.in)})
+		clips = append(clips, titleClip{
+			path: clipPath, start: ticksToDuration(entry.in), duration: ticksToDuration(entry.out - entry.in),
+		})
 	}
 
 	return clips, nil

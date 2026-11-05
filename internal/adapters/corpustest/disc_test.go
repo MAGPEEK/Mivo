@@ -267,15 +267,15 @@ func assertImageTitle(t *testing.T, imagePath string, title media.DiscTitle, cli
 	}
 }
 
-// TestCorpusDiscTitlesProbe probes the main title of every clear folder disc: the duration
-// and the video, audio and bitmap subtitle streams of the manifest. ISO images are read
-// through a loopback source (M3-16g), not probed here.
+// TestCorpusDiscTitlesProbe probes the main title of every clear disc, folders and ISO images
+// (read through subfile ranges, M3-16g): the duration and the video, audio and bitmap
+// subtitle streams of the manifest.
 func TestCorpusDiscTitlesProbe(t *testing.T) {
 	t.Parallel()
 
 	corpus := requireDiscCorpus(t)
 
-	for _, row := range corpus.playableFolderDiscs() {
+	for _, row := range corpus.playableDiscs() {
 		t.Run(row.Title, func(t *testing.T) {
 			t.Parallel()
 
@@ -293,12 +293,12 @@ func TestCorpusDiscTitlesProbe(t *testing.T) {
 	}
 }
 
-// playableFolderDiscs are the clear VIDEO_TS and BDMV discs.
-func (corpus discCorpus) playableFolderDiscs() []discRow {
+// playableDiscs are the clear discs: VIDEO_TS and BDMV folders and ISO images.
+func (corpus discCorpus) playableDiscs() []discRow {
 	var rows []discRow
 
 	for _, row := range corpus.discs {
-		if row.ErrorCode == "" && row.layout() != media.LayoutISO {
+		if row.ErrorCode == "" {
 			rows = append(rows, row)
 		}
 	}
@@ -306,7 +306,7 @@ func (corpus discCorpus) playableFolderDiscs() []discRow {
 	return rows
 }
 
-// discInput resolves the title of a folder disc into the FFmpeg input of its clips.
+// discInput resolves the title of a disc folder or image into the FFmpeg input of its clips.
 func (corpus discCorpus) discInput(t *testing.T, row discRow) ffmpeg.DiscInput {
 	t.Helper()
 
@@ -394,7 +394,7 @@ func TestCorpusDVDTitlePlays(t *testing.T) {
 func (corpus discCorpus) firstDisc(t *testing.T, layout media.Layout) discRow {
 	t.Helper()
 
-	for _, row := range corpus.playableFolderDiscs() {
+	for _, row := range corpus.playableDiscs() {
 		if row.layout() == layout {
 			return row
 		}

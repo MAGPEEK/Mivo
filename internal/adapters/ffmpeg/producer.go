@@ -122,7 +122,7 @@ func (p *Producer) Start(ctx context.Context, job appplayback.Job) (appplayback.
 }
 
 func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production, error) {
-	prepared, err := p.prepare(job)
+	prepared, err := p.prepare(ctx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -167,15 +167,16 @@ type preparedRun struct {
 	arguments []string
 	// inherited are closed once the process has started; it holds its own copies.
 	inherited []*os.File
-	// release frees what must outlive the start (a disc's concat list); nil when nothing
-	// does. The production calls it once the process has ended or failed to start.
+	// release frees what must outlive the start (a disc's concat list or loopback source);
+	// nil when nothing does. The production calls it once the process has ended or failed
+	// to start.
 	release func()
 }
 
-// prepare builds the run of job: from a single file, or from the clips of a folder disc.
-func (p *Producer) prepare(job appplayback.Job) (preparedRun, error) {
+// prepare builds the run of job: from a single file, or from the clips of a disc folder or image.
+func (p *Producer) prepare(ctx context.Context, job appplayback.Job) (preparedRun, error) {
 	if job.Layout.IsDisc() {
-		return p.prepareDisc(job)
+		return p.prepareDisc(ctx, job)
 	}
 
 	inputPath := job.InputPath

@@ -43,6 +43,8 @@ func TestDiscClipValidate(t *testing.T) {
 		{"negative offset", DiscClip{Offset: -1, Length: 1}, false},
 		{"zero length", DiscClip{Offset: 5}, false},
 		{"negative duration", DiscClip{Path: "a", Duration: -1}, false},
+		{"span start", DiscClip{Path: "a", Start: time.Second, Duration: time.Second}, true},
+		{"negative span start", DiscClip{Path: "a", Start: -1}, false},
 	}
 	for _, test := range tests {
 		err := test.clip.Validate()

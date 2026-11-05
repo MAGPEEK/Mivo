@@ -29,11 +29,13 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
 - Folder discs (`VIDEO_TS`, `BDMV`): Mivo picks the main title in pure Go (MPLS playlist
   parser; largest VTS set) and feeds the ordered VOB/m2ts clips to FFmpeg through the `concat`
   demuxer and its `mpeg`/`mpegts` demuxers. These are in every default FFmpeg build.
-- ISO: a pure-Go UDF/ISO 9660 reader serves clips through a per-session loopback HTTP range
-  source; the `http` protocol is allowed only for that loopback form. ISO may ship one release
-  after folder support.
-- Whitelist additions are exactly: `concat` format, `file` protocol for the list file, and the
-  loopback `http` form. All other protocols stay blocked (extends the M2-24b whitelist).
+- ISO: a pure-Go UDF/ISO 9660 reader locates the clips as byte extents of the image, and
+  FFmpeg reads those ranges with its `subfile` protocol (amended in M3-16g: originally a
+  per-session loopback HTTP range source, dropped because the bundled NAS FFmpeg is built
+  without network protocols; see Notes). ISO may ship one release after folder support.
+- Whitelist additions are exactly: `concat` format, `file` protocol for the list file, and
+  `subfile` (plus the `concat` protocol for DVD) for image ranges. No network protocol is
+  ever allowed (extends the M2-24b whitelist).
 - Encrypted discs (CSS, AACS) are detected heuristically and shown unavailable
   (`disc_encrypted`); no libdvdcss, no keys, no decryption.
 - Why: libdvdnav/libdvdread are GPL and libbluray LGPL; they would force custom static FFmpeg
@@ -59,9 +61,9 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   size and modification time of the clips are not part of the scan state (M3-16b).
 - Main-title rules (M3-16c, `internal/adapters/disc`): Blu-ray = longest MPLS playlist that
   repeats no clip and whose STREAM clips all exist (ties: lowest playlist number; multi-angle
-  items use angle 1; only the in/out span counts toward the duration, the whole clip file is
-  played). DVD = title set with the largest total size of `VTS_nn_k.VOB` (k ≥ 1, no gaps);
-  duration = longest PGC in `VTS_nn_0.IFO` (or `.BUP`), unknown (0) when neither parses.
+  items use angle 1; only the in/out span counts toward the duration, and since M3-16g the
+  clip is cut to it, see below). DVD = title set with the largest total size of
+  `VTS_nn_k.VOB` (k ≥ 1, no gaps); duration = longest PGC in `VTS_nn_0.IFO` (or `.BUP`), unknown (0) when neither parses.
   Playlists/sets with missing clips are skipped; none left → `disc_no_title`. Directory
   listings, file sizes and the total bytes read per disc are capped (hostile input →
   `disc_unsupported`); 0-byte stream clips count as missing; corrupt ISO structures are
@@ -90,7 +92,8 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
     -protocol_whitelist file,concat concat:file:…VTS_01_1.VOB|file:…`. The `concat`
     protocol only opens its `file:` parts; no demuxer that `mpeg` allows opens URLs.
   - Blu-ray (`BDMV`): the clips restart their timestamps, so the `concat` demuxer reads a
-    list in a new private temporary directory (0700/0600): `-f concat -safe 0
+    list in a new private temporary directory (0700/0600 on Unix; on Windows the ACL of the
+    user's temporary directory): `-f concat -safe 0
     -format_whitelist concat -protocol_whitelist file file:…/title.ffconcat`. Each entry
     carries `option format_whitelist mpegts` and `option protocol_whitelist file`, which
     replace the whitelists FFmpeg copies into the clip: a clip whose content is itself an
@@ -105,7 +108,11 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   - Any ffprobe failure on a title (also a build without the `concat`/`mpeg`/`mpegts`
     demuxers) is `disc_unsupported`. The probed duration is replaced by the title duration
     when the disc structures know one; DVD/Blu-ray subtitles are bitmap streams
-    (`media.Stream.IsBitmapSubtitle`). ISO images stay `disc_unsupported` here (M3-16g).
+    (`media.Stream.IsBitmapSubtitle`).
+  - Paths are checked lexically; on Windows and in the prober (no inherited descriptors) a
+    clip path is opened by FFmpeg itself, so a symlink swapped in after resolution is
+    followed. Library roots are trusted local folders (ADR 0022); Linux productions are not
+    affected because the clips are opened through `os.Root`.
 - Packaging (M3-16j): Debian's FFmpeg in the Docker image already has everything; the own SPK
   build did not ("Docker and SPK sizes stay unchanged" held only for the image). Recipe revision
   3 (`9.0.2-static3`) adds the `concat` demuxer (`DISC_DEMUXERS`, kept off the library-file
@@ -115,5 +122,34 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   `mpeg` or `mpegts` demuxer, the `file` or `concat` input protocol or a photo decoder (`mjpeg`,
   `png`, `webp`, `gif`, `tiff`) is missing, and reports `hevc`, HEIF (`mov` plus `hevc`) and
   `libdav1d`: in the image build log and `/usr/local/share/doc/ffmpeg-capabilities.txt`, and on
-  the NAS from postinst in `/var/log/packages/<id>.log`. The loopback `http` input of M3-16g is
-  not in the SPK build (`--disable-network`); adding it is a further recipe revision.
+  the NAS from postinst in `/var/log/packages/<id>.log`. The SPK build is `--disable-network`;
+  the `subfile` protocol the ISO input of M3-16g needs is not in it yet, adding it is a further
+  recipe revision (follow-up).
+- Playlist spans and disc images (M3-16g):
+  - `media.DiscClip.Start` carries a Blu-ray play item's IN_time (a timestamp of the clip,
+    45 kHz ticks). A clip with a start and a duration gets `inpoint`/`outpoint` (and
+    `duration`) lines, so the parts a playlist skips are neither played nor overlap the next
+    clip. With copied video the cut lands on a keyframe (FFmpeg); real discs start play items
+    at one. In images, clips that lie back to back stay apart for Blu-ray (timestamps restart)
+    and merge only for DVD; a clip split over separate extents loses its start.
+  - ISO images (`DiscInput.Layout = iso`, `DiscPath` = the image, title = image extents) are
+    opened with `os.OpenInRoot`; the iso reader finds `BDMV` (preferred) or `VIDEO_TS` at
+    the image root, else `disc_unsupported`; extents beyond the image are `invalid`.
+  - FFmpeg reads each extent with the `subfile` protocol:
+    `subfile,,start,<first byte>,end,<byte after the last>,,:file:<image>`; it is seekable
+    and opens nothing but its inner `file:` URL. A DVD's extents are joined with the
+    `concat:` protocol into one program stream (`-f mpeg -format_whitelist mpeg
+    -protocol_whitelist file,subfile,concat`); a Blu-ray's extents are the clips of a concat
+    list (outer whitelist still `file`), each entry with `option protocol_whitelist
+    file,subfile`. On Linux the producer passes the descriptor the image was checked with
+    (`file:/proc/self/fd/3`), like a single file; the prober and Windows use the path.
+  - Why not the loopback HTTP source the task first planned: it was implemented and passed on
+    Windows and Linux, but the bundled SPK FFmpeg (M3-16j) is built with `--disable-network`,
+    so `http`/`tcp` do not exist there, and it would have been the only network protocol in
+    the whitelists. `subfile` needs no network, no server goroutines and no token.
+  - Packaging consequence: an FFmpeg build must include the `subfile` protocol (it is in
+    default builds; a minimal build needs `--enable-protocol=subfile`). Without it ffprobe
+    fails on the image and the title is `disc_unsupported`.
+  - Fallback if `subfile` cannot be shipped: feed the title to FFmpeg on `pipe:0`
+    sequentially (`-protocol_whitelist pipe`). It cannot seek, so it would allow only
+    transcoding from the start (no resume, no remux seeks); not implemented.

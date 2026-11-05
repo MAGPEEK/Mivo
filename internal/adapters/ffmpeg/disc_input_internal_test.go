@@ -57,7 +57,7 @@ func TestDiscInputRejectsUnsafeInput(t *testing.T) {
 	}{
 		{name: "file layout", change: func(input *DiscInput) { input.Layout = media.LayoutFile }, want: domain.ErrInvalid},
 		{name: "unknown layout", change: func(input *DiscInput) { input.Layout = "" }, want: domain.ErrInvalid},
-		{name: "ISO image", change: func(input *DiscInput) { input.Layout = media.LayoutISO }, want: media.ErrDiscUnsupported},
+		{name: "image with folder clips", change: func(input *DiscInput) { input.Layout = media.LayoutISO }, want: domain.ErrInvalid},
 		{name: "relative library root", change: func(input *DiscInput) { input.LibraryRoot = "Library" }, want: domain.ErrInvalid},
 		{name: "pipe in library root", change: func(input *DiscInput) { input.LibraryRoot = root + "|x" }, want: domain.ErrInvalid},
 		{name: "disc path leaves the root", change: func(input *DiscInput) { input.DiscPath = "../other" }, want: domain.ErrInvalid},
@@ -78,7 +78,7 @@ func TestDiscInputRejectsUnsafeInput(t *testing.T) {
 			input.Title = slices.Clone(input.Title)
 			test.change(&input)
 
-			prepared, err := PrepareDiscInput(input)
+			prepared, err := PrepareDiscInput(t.Context(), input)
 			if !errors.Is(err, test.want) || prepared != nil {
 				t.Fatalf("PrepareDiscInput = %v, %v, want nil, %v", prepared, err, test.want)
 			}
@@ -93,7 +93,7 @@ func TestDiscInputAcceptsADiscAtTheLibraryRoot(t *testing.T) {
 		input := dvdInput(root)
 		input.DiscPath = discPath
 
-		prepared, err := PrepareDiscInput(input)
+		prepared, err := PrepareDiscInput(t.Context(), input)
 		if err != nil {
 			t.Fatalf("PrepareDiscInput(%q) = %v", discPath, err)
 		}
@@ -108,7 +108,7 @@ func TestDiscInputAcceptsADiscAtTheLibraryRoot(t *testing.T) {
 func TestPrepareDiscInputJoinsDVDClipsWithTheConcatProtocol(t *testing.T) {
 	root := testLibraryRoot(t)
 
-	prepared, err := PrepareDiscInput(dvdInput(root))
+	prepared, err := PrepareDiscInput(t.Context(), dvdInput(root))
 	if err != nil {
 		t.Fatalf("PrepareDiscInput = %v", err)
 	}
@@ -138,7 +138,7 @@ func TestPrepareDiscInputWritesAPrivateConcatListForBluray(t *testing.T) {
 	temporary := useTemporaryDirectory(t)
 	root := testLibraryRoot(t)
 
-	prepared, err := PrepareDiscInput(blurayInput(root))
+	prepared, err := PrepareDiscInput(t.Context(), blurayInput(root))
 	if err != nil {
 		t.Fatalf("PrepareDiscInput = %v", err)
 	}
@@ -186,7 +186,7 @@ func TestPrepareDiscInputWritesAPrivateConcatListForBluray(t *testing.T) {
 }
 
 func TestConcatListQuotesSingleQuotes(t *testing.T) {
-	list := concatList([]discClip{{}}, []string{"file:/media/It's/00001.m2ts"})
+	list := concatList([]concatEntry{{url: "file:/media/It's/00001.m2ts"}}, folderClipOptions)
 
 	if want := `file 'file:/media/It'\''s/00001.m2ts'`; !strings.Contains(list, want+"\n") {
 		t.Errorf("list %q lacks %q", list, want)
@@ -210,14 +210,14 @@ func TestPrepareDiscInputReportsAMissingTemporaryDirectory(t *testing.T) {
 	t.Setenv("TMP", missing)
 	t.Setenv("TEMP", missing)
 
-	prepared, err := PrepareDiscInput(blurayInput(testLibraryRoot(t)))
+	prepared, err := PrepareDiscInput(t.Context(), blurayInput(testLibraryRoot(t)))
 	if err == nil || errors.Is(err, domain.ErrInvalid) || prepared != nil {
 		t.Fatalf("PrepareDiscInput = %v, %v, want an I/O error", prepared, err)
 	}
 }
 
 func TestHLSArgumentsReadADiscInput(t *testing.T) {
-	prepared, err := PrepareDiscInput(dvdInput(testLibraryRoot(t)))
+	prepared, err := PrepareDiscInput(t.Context(), dvdInput(testLibraryRoot(t)))
 	if err != nil {
 		t.Fatalf("PrepareDiscInput = %v", err)
 	}
@@ -259,7 +259,7 @@ func TestDescribeDiscUsesTheTitleDurationAndFlagsBitmapSubtitles(t *testing.T) {
 
 	input := blurayInput(testLibraryRoot(t))
 
-	description, err := describeDisc(output, input)
+	description, err := describeDisc(output, input.Layout, input.Title)
 	if err != nil {
 		t.Fatalf("describeDisc = %v", err)
 	}
@@ -281,7 +281,7 @@ func TestDescribeDiscKeepsTheProbedDurationWithoutTitleDurations(t *testing.T) {
 	input := dvdInput(testLibraryRoot(t))
 	input.Title = media.DiscTitle{{Path: "VIDEO_TS/VTS_01_1.VOB"}}
 
-	description, err := describeDisc(output, input)
+	description, err := describeDisc(output, input.Layout, input.Title)
 	if err != nil {
 		t.Fatalf("describeDisc = %v", err)
 	}
@@ -296,7 +296,7 @@ func TestDescribeDiscKeepsTheProbedDurationWithoutTitleDurations(t *testing.T) {
 }
 
 func TestDescribeDiscMarksUnusableOutputAsDiscUnsupported(t *testing.T) {
-	_, err := describeDisc([]byte("{"), dvdInput(testLibraryRoot(t)))
+	_, err := describeDisc([]byte("{"), media.LayoutVideoTS, dvdInput(testLibraryRoot(t)).Title)
 	if !errors.Is(err, media.ErrDiscUnsupported) || !errors.Is(err, domain.ErrUnsupported) {
 		t.Errorf("describeDisc = %v, want %v", err, media.ErrDiscUnsupported)
 	}

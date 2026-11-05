@@ -20,8 +20,10 @@ type Image interface {
 }
 
 // titleClip is one selected clip file before it is mapped to a path or image extents.
+// start is the presentation time the title's span begins at inside the clip (media.DiscClip.Start).
 type titleClip struct {
 	path     string
+	start    time.Duration
 	duration time.Duration
 }
 
@@ -97,7 +99,7 @@ func ResolveTree(ctx context.Context, tree fs.FS, layout media.Layout) (media.Di
 
 	title := make(media.DiscTitle, 0, len(clips))
 	for _, clip := range clips {
-		title = append(title, media.DiscClip{Path: clip.path, Duration: clip.duration})
+		title = append(title, media.DiscClip{Path: clip.path, Start: clip.start, Duration: clip.duration})
 	}
 
 	return validated(title)

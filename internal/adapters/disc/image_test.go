@@ -96,6 +96,40 @@ func TestResolveImage(t *testing.T) {
 	}
 }
 
+// TestResolveImageKeepsBlurayClipsApart: Blu-ray clips restart their timestamps, so clips that
+// lie back to back in the image stay separate, and a clip in one piece keeps its span start.
+// A clip split over separate extents loses the start: the pieces cannot be cut to the span.
+func TestResolveImageKeepsBlurayClipsApart(t *testing.T) {
+	t.Parallel()
+
+	const inTicks = 2 * mplsTicksPerSecond
+	spanned := func(clip string, seconds uint32) testItem {
+		return testItem{clip: clip, codec: "M2TS", in: inTicks, out: inTicks + seconds*mplsTicksPerSecond}
+	}
+	image := fakeImage{
+		MapFS: fstest.MapFS{
+			"BDMV/PLAYLIST/00000.mpls": file(buildMPLS(spanned("00001", 60), spanned("00002", 40), spanned("00003", 20))),
+			"BDMV/STREAM/00001.m2ts":   sized(1), "BDMV/STREAM/00002.m2ts": sized(1), "BDMV/STREAM/00003.m2ts": sized(1),
+		},
+		extents: map[string][]iso.Extent{
+			"BDMV/STREAM/00001.m2ts": {{Offset: 2048, Length: 100}, {Offset: 2148, Length: 50}},
+			"BDMV/STREAM/00002.m2ts": {{Offset: 2198, Length: 30}},
+			"BDMV/STREAM/00003.m2ts": {{Offset: 9000, Length: 10}, {Offset: 12000, Length: 30}},
+		},
+	}
+
+	got, err := ResolveImage(context.Background(), image)
+	if err != nil {
+		t.Fatalf("ResolveImage: %v", err)
+	}
+	assertTitle(t, got, media.DiscTitle{
+		{Offset: 2048, Length: 150, Start: 2 * time.Second, Duration: 60 * time.Second},
+		{Offset: 2198, Length: 30, Start: 2 * time.Second, Duration: 40 * time.Second},
+		{Offset: 9000, Length: 10, Duration: 5 * time.Second},
+		{Offset: 12000, Length: 30, Duration: 15 * time.Second},
+	})
+}
+
 func TestResolveImageFailures(t *testing.T) {
 	t.Parallel()
 

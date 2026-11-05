@@ -14,12 +14,13 @@ import (
 // discProbeOperation names the prober's disc runs in debug logs.
 const discProbeOperation = "probe disc"
 
-// ProbeDisc describes the main title of a folder disc: its duration and the video, audio and
-// subtitle streams FFmpeg finds in the joined clips (DVD and Blu-ray subtitles are pictures,
-// see media.Stream.IsBitmapSubtitle). The caller has checked that the disc lies inside the
-// library root; the clip paths are validated here (DiscInput). Errors wrap
+// ProbeDisc describes the main title of a disc folder or image: its duration and the video,
+// audio and subtitle streams FFmpeg finds in the joined clips (DVD and Blu-ray subtitles are
+// pictures, see media.Stream.IsBitmapSubtitle). The caller has checked that the disc lies
+// inside the library root; the clip paths and extents are validated here (DiscInput). Errors
+// wrap
 //   - the errors of PrepareDiscInput (domain.ErrInvalid, media.ErrDiscNoTitle,
-//     media.ErrDiscUnsupported for an ISO image),
+//     media.ErrDiscUnsupported for an image without a readable disc structure),
 //   - context errors and domain.ErrUnavailable like Probe,
 //   - media.ErrDiscUnsupported (and so domain.ErrUnsupported) when ffprobe failed on the
 //     title, for example because the FFmpeg build lacks the concat or mpeg demuxer, or its
@@ -27,7 +28,7 @@ const discProbeOperation = "probe disc"
 func (p *Prober) ProbeDisc(ctx context.Context, input DiscInput) (media.Description, error) {
 	name := path.Base(input.DiscPath)
 
-	prepared, err := PrepareDiscInput(input)
+	prepared, err := PrepareDiscInput(ctx, input)
 	if err != nil {
 		return media.Description{}, fmt.Errorf("probe disc %s: %w", name, err)
 	}
@@ -44,7 +45,7 @@ func (p *Prober) ProbeDisc(ctx context.Context, input DiscInput) (media.Descript
 		return media.Description{}, fmt.Errorf("probe disc %s: %w", name, classifyDiscRunError(err))
 	}
 
-	description, err := describeDisc(output, input)
+	description, err := describeDisc(output, prepared.layout, input.Title)
 	if err != nil {
 		return media.Description{}, fmt.Errorf("probe disc %s: %w", name, err)
 	}
@@ -52,11 +53,11 @@ func (p *Prober) ProbeDisc(ctx context.Context, input DiscInput) (media.Descript
 	return description, nil
 }
 
-// closeDiscInput removes the list of a finished run; a failure only leaves a small file in
-// the temporary directory, so it is logged, not returned.
+// closeDiscInput releases the list or loopback source of a finished run; a failure only leaves
+// a small file in the temporary directory, so it is logged, not returned.
 func (p *Prober) closeDiscInput(ctx context.Context, prepared *DiscInputArguments) {
 	if err := prepared.Close(); err != nil {
-		p.logger.LogAttrs(ctx, slog.LevelWarn, "disc list could not be removed", slog.String("error", err.Error()))
+		p.logger.LogAttrs(ctx, slog.LevelWarn, "disc input could not be released", slog.String("error", err.Error()))
 	}
 }
 
@@ -64,15 +65,15 @@ func (p *Prober) closeDiscInput(ctx context.Context, prepared *DiscInputArgument
 // concat demuxer reports "concat"), and the duration comes from the title when the disc
 // structures name one: FFmpeg can only estimate it for joined VOBs and does not know it for
 // a concat list. Errors wrap media.ErrDiscUnsupported.
-func describeDisc(output []byte, input DiscInput) (media.Description, error) {
-	description, err := describe(output, input.extension())
+func describeDisc(output []byte, layout media.Layout, title media.DiscTitle) (media.Description, error) {
+	description, err := describe(output, discExtension(layout))
 	if err != nil {
 		return media.Description{}, fmt.Errorf("%w: %w", media.ErrDiscUnsupported, err)
 	}
 
-	description.Container = discContainer(input.Layout)
+	description.Container = discContainer(layout)
 
-	if duration := input.Title.Duration(); duration > 0 {
+	if duration := title.Duration(); duration > 0 {
 		description.Duration = duration
 	}
 
