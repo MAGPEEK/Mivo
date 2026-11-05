@@ -13,6 +13,10 @@
       "add": "Bibliothek hinzufügen"
     }
   },
+  "bottomNav": {
+    "allLibraries": "Alle Bibliotheken",
+    "closeLibraries": "Bibliotheken schließen"
+  },
   "search": {
     "label": "Suche",
     "placeholder": "Filme, Serien und Musik durchsuchen"

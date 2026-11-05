@@ -11,7 +11,7 @@ import {
   respondWithProblem,
 } from "../../test/fakeApi";
 import { fakeLibrary, librariesRoute, libraryRoute } from "../../test/libraryFixtures";
-import { stubMediaQueries } from "../../test/mediaQuery";
+import { stubViewportWidth } from "../../test/mediaQuery";
 import { renderApp } from "../../test/renderApp";
 import { isVisuallyHidden } from "../../test/visibility";
 import { sidebarCollapsedStorageKey } from "./useSidebarState";
@@ -346,12 +346,16 @@ describe("Search shortcut", () => {
 });
 
 describe("Sidebar on a narrow screen", () => {
+  // Narrow means below `md` but not below `sm`, where the bottom navigation replaces it.
+  const tabletWidth = 700;
+  const desktopWidth = 1280;
+
   function expanded(): boolean {
     return sidebarToggle().getAttribute("aria-expanded") === "true";
   }
 
   async function renderNarrowWithOpenSidebar(path = "/") {
-    stubMediaQueries(true);
+    stubViewportWidth(tabletWidth);
     const movies = fakeLibrary({ id: "lib-movies", name: "Movies" });
     const rendered = renderApp(path, {
       fetch: createFakeServer([librariesRoute([movies]), libraryRoute(movies)]).fetch,
@@ -364,7 +368,7 @@ describe("Sidebar on a narrow screen", () => {
   }
 
   it("starts collapsed, even when the wide-screen preference is expanded", async () => {
-    stubMediaQueries(true);
+    stubViewportWidth(tabletWidth);
     window.localStorage.setItem(sidebarCollapsedStorageKey, "false");
 
     renderApp("/");
@@ -467,31 +471,31 @@ describe("Sidebar on a narrow screen", () => {
   });
 
   it("switches between overlay and preference when the window is resized", async () => {
-    const screenWidth = stubMediaQueries(false);
+    const screenWidth = stubViewportWidth(desktopWidth);
     renderApp("/");
     await findSidebar();
     expect(expanded()).toBe(true);
 
     act(() => {
-      screenWidth.setMatches(true);
+      screenWidth.setWidth(tabletWidth);
     });
     expect(expanded()).toBe(false);
     fireEvent.click(sidebarToggle());
     expect(expanded()).toBe(true);
 
     act(() => {
-      screenWidth.setMatches(false);
+      screenWidth.setWidth(desktopWidth);
     });
     expect(expanded()).toBe(true);
     act(() => {
-      screenWidth.setMatches(true);
+      screenWidth.setWidth(tabletWidth);
     });
     expect(expanded()).toBe(false);
     expect(window.localStorage.getItem(sidebarCollapsedStorageKey)).toBeNull();
   });
 
   it("opens the overlay from the unreachable indicator without saving it", async () => {
-    stubMediaQueries(true);
+    stubViewportWidth(tabletWidth);
     renderApp("/", { fetch: respondWithProblem(internalError) });
     const sidebar = await findSidebar();
     const indicator = await within(within(sidebar).getByRole("status")).findByRole("button", {

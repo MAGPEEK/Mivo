@@ -1,4 +1,5 @@
 export { Badge, type BadgeProps } from "./Badge";
+export { BottomNav, type BottomNavProps } from "./BottomNav";
 export { MediaCard, stretchedLinkClass, type CardLinkProps, type MediaCardProps } from "./Card";
 export { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
@@ -40,4 +41,5 @@ export {
 } from "./Sidebar";
 export { Poster, type PosterAspect, type PosterProps } from "./Poster";
 export { Skeleton, type SkeletonProps } from "./Skeleton";
+export { useMediaQuery } from "./useMediaQuery";
 export { TopBar, type TopBarProps } from "./TopBar";

@@ -1,4 +1,5 @@
 export { productId, productName, repositoryUrl } from "./brand";
+export { belowBreakpointQuery, breakpoints, type BreakpointToken } from "./breakpoints";
 export { colors, type ColorToken, type HexColor } from "./colors";
 export { contrastRatio, InvalidColorError, relativeLuminance } from "./contrast";
 export { radii, type RadiusToken } from "./radii";

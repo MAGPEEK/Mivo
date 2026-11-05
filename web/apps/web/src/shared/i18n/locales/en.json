@@ -13,6 +13,10 @@
       "add": "Add library"
     }
   },
+  "bottomNav": {
+    "allLibraries": "All libraries",
+    "closeLibraries": "Close libraries"
+  },
   "search": {
     "label": "Search",
     "placeholder": "Search movies, shows and music"

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  breakpoints,
   colors,
   fontStackMono,
   fontStackSans,
@@ -83,6 +84,10 @@ describe("theme.css typography, spacing, radii and shadows", () => {
     expect(declarations.get(`--text-${step}--line-height`)).toBe(toRem(style.lineHeight));
   });
 
+  it.each(Object.entries(breakpoints))("declares breakpoint-%s", (name, pixels) => {
+    expect(declarations.get(`--breakpoint-${name}`)).toBe(toRem(pixels));
+  });
+
   it("uses the spacing unit as Tailwind's spacing base", () => {
     expect(declarations.get("--spacing")).toBe(toRem(spacingUnit));
   });
@@ -108,6 +113,7 @@ describe("theme.css declarations", () => {
       `--text-${step}--line-height`,
     ]),
     "--spacing",
+    ...Object.keys(breakpoints).map((name) => `--breakpoint-${name}`),
     ...Object.keys(radii).map((name) => `--radius-${name}`),
     ...Object.keys(shadows).map((name) => `--shadow-${toKebabCase(name)}`),
   ];

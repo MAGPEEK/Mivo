@@ -1,10 +1,14 @@
+import { belowBreakpointQuery } from "@mivo/ui-tokens";
 import { useSyncExternalStore } from "react";
 
 /**
- * Screens narrower than Tailwind's `md` breakpoint, written like Tailwind's own `max-md`
- * variant, so script and styles switch at exactly the same width.
+ * Screens narrower than the `md` breakpoint, written like Tailwind's own `max-md` variant, so
+ * script and styles switch at exactly the same width.
  */
-export const narrowScreenQuery = "(width < 48rem)";
+export const narrowScreenQuery = belowBreakpointQuery("md");
+
+/** Phone screens, narrower than the `sm` breakpoint: the bottom navigation replaces the sidebar. */
+export const phoneScreenQuery = belowBreakpointQuery("sm");
 
 // The DOM types promise matchMedia, but jsdom leaves it undefined; such environments count
 // as wide screens.
