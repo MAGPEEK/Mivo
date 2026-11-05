@@ -71,6 +71,20 @@ assert_no_output() {
 	assert_equal "$stderr" ""
 }
 
+# assert_only_capability_report: postinst printed nothing on stdout and on stderr only the short
+# FFmpeg capability report (task M3-16j): the version, the three optional decoders and the
+# summary, without the "required ...: ok" lines.
+# shellcheck disable=SC2154 # stderr and stderr_lines are set by bats' run
+assert_only_capability_report() {
+	assert_output ''
+	assert_equal "${#stderr_lines[@]}" 5
+	assert_equal "${stderr_lines[0]}" \
+		"ffmpeg capabilities of $SYNOPKG_PKGDEST/bin/ffmpeg: ffmpeg version 9.9-fake Copyright (c) 2000-2026 the FFmpeg developers"
+	assert_stderr_contains "optional heif (mov demuxer and hevc decoder): available"
+	assert_equal "${stderr_lines[4]}" "summary: required capabilities present"
+	refute_error_words
+}
+
 # --- preinst -------------------------------------------------------------------------------
 
 case_preinst_asks_nothing() {
@@ -99,7 +113,7 @@ case_postinst_creates_the_directories_and_writes_no_config() {
 		export SYNOPKG_PKG_STATUS=$status wizard_media_share=video
 		run_lifecycle postinst
 		assert_success
-		assert_no_output
+		assert_only_capability_report
 		[[ ! -e $CONFIG && ! -L $CONFIG && ! -e $CONFIG.new ]] || fail "postinst wrote config.yaml with status '$status'"
 		assert_mode "$SYNOPKG_PKGVAR/data" 750
 		assert_mode "$SYNOPKG_PKGVAR/cache" 750
@@ -115,7 +129,7 @@ case_postinst_keeps_existing_config() {
 	before=$(tree_snapshot "$SYNOPKG_PKGVAR")
 	run_lifecycle postinst
 	assert_success
-	assert_no_output
+	assert_only_capability_report
 	assert_equal "$(tree_snapshot "$SYNOPKG_PKGVAR" | grep -v -e '^./data ' -e '^./cache ')" "$before"
 
 	# A link the user made stays a link, even a dangling one.
@@ -149,6 +163,34 @@ case_postinst_reports_directories_it_cannot_create() {
 	assert_failure 1
 	assert_file_line "$TEMP_LOGFILE" \
 		"Die Verzeichnisse von $FIXTURE_DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGTMP konnten nicht angelegt werden"
+}
+
+case_postinst_reports_missing_ffmpeg_capabilities_and_succeeds() {
+	export SYNOPKG_PKG_STATUS=INSTALL FAKE_FFMPEG_MISSING="concat hevc"
+	run_lifecycle postinst
+	assert_success
+	assert_output ''
+	assert_stderr_contains "required demuxer concat: MISSING"
+	assert_stderr_contains "required protocol concat: MISSING"
+	assert_stderr_contains "optional hevc decoder: not available"
+	assert_stderr_contains "the bundled FFmpeg lacks capabilities named above"
+	refute_error_words
+	[[ ! -s $TEMP_LOGFILE ]] || fail "postinst showed a dialog message: $(cat "$TEMP_LOGFILE")"
+	assert_mode "$SYNOPKG_PKGVAR/data" 750
+	unset FAKE_FFMPEG_MISSING
+}
+
+case_postinst_succeeds_when_ffmpeg_lists_nothing() {
+	export SYNOPKG_PKG_STATUS=INSTALL FAKE_FFMPEG_SILENT=1
+	run_lifecycle postinst
+	assert_success
+	assert_stderr_contains "cannot list its demuxers, decoders and protocols"
+	assert_stderr_contains "the bundled FFmpeg lacks capabilities named above"
+	unset FAKE_FFMPEG_SILENT
+	rm "$PKG_ROOT/target/bin/ffmpeg"
+	run_lifecycle postinst
+	assert_success
+	assert_stderr_contains "the bundled FFmpeg lacks capabilities named above"
 }
 
 case_postinst_fails_without_dsm_variables() {
@@ -725,6 +767,8 @@ register_cases \
 	postinst_keeps_existing_config \
 	postinst_keeps_existing_directories \
 	postinst_reports_directories_it_cannot_create \
+	postinst_reports_missing_ffmpeg_capabilities_and_succeeds \
+	postinst_succeeds_when_ffmpeg_lists_nothing \
 	postinst_fails_without_dsm_variables \
 	preupgrade_records_the_targets_of_the_share_links \
 	preupgrade_records_nothing_without_links \

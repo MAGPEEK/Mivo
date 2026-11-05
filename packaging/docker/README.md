@@ -29,7 +29,18 @@ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -f packaging
 ```
 
 `Dockerfile.dockerignore` limits the build context to `go.mod`, `go.sum`, `cmd/`, `internal/`
-and `web/` (without `node_modules`, build output, coverage and Playwright output).
+and `web/` (without `node_modules`, build output, coverage and Playwright output), plus the
+FFmpeg capability check `packaging/synology/package/scripts/ffmpeg-capabilities.sh`.
+
+The build fails when Debian's FFmpeg lacks a capability that folder discs or photo thumbnails
+need (task M3-16j): the `concat`, `mpeg` and `mpegts` demuxers, the `file` and `concat` input
+protocols, or one of the decoders `mjpeg`, `png`, `webp`, `gif`, `tiff`. The same step reports,
+without failing, whether `hevc`, HEIF (`mov` demuxer plus `hevc`) and `libdav1d` decode is
+available; the report is in the build log and in the image:
+
+```
+docker run --rm --entrypoint cat mivo:dev /usr/local/share/doc/ffmpeg-capabilities.txt
+```
 
 ## Run
 

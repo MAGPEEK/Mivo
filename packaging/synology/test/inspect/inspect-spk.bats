@@ -121,6 +121,44 @@ expect_fail() {
 	expect_line "ok   INFO has no beta"
 }
 
+# --- FFmpeg capabilities (M3-16j) ----------------------------------------------------------
+
+@test "without --capabilities the capability script is not run" {
+	inspect x86_64
+	expect_clean
+	expect_line "info FFmpeg capabilities not run"
+	refute_line "info capability:"
+}
+
+@test "--capabilities runs the packed script on the packed ffmpeg and passes" {
+	inspect --capabilities x86_64
+	expect_clean
+	expect_line "info capability: required demuxer concat: ok"
+	expect_line "info capability: binary ffmpeg"
+	expect_line "ok   bin/ffmpeg has the required disc and photo capabilities"
+}
+
+@test "--capabilities fails when a required capability is missing" {
+	fixture_capabilities 1 >"$tree/spk/scripts/ffmpeg-capabilities.sh"
+	inspect --capabilities x86_64
+	expect_fail "bin/ffmpeg lacks required disc or photo capabilities"
+	expect_line "info capability: required demuxer concat: MISSING"
+}
+
+@test "--capabilities fails when the packed ffmpeg cannot be run" {
+	fixture_capabilities 2 >"$tree/spk/scripts/ffmpeg-capabilities.sh"
+	inspect --capabilities x86_64
+	expect_fail "bin/ffmpeg cannot be run to list its capabilities (exit 2)"
+}
+
+@test "a missing capability script fails the member check" {
+	rm "$tree/spk/scripts/ffmpeg-capabilities.sh"
+	inspect --capabilities x86_64
+	expect_status 1
+	expect_line "scripts/ffmpeg-capabilities.sh"
+	refute_line "ok   bin/ffmpeg has the required"
+}
+
 # --- interim and release rules -----------------------------------------------------------
 
 @test "an interim dynamically linked FFmpeg warns in test mode and fails in release mode" {
@@ -704,8 +742,9 @@ set_desktop() {
 	expect_line " 644 spk:INFO"
 	expect_line " 755 package.tgz:bin/ffmpeg"
 	expect_line " 644 package.tgz:share/licenses/ffmpeg/SOURCE.txt"
-	# 25 members before the main menu entry, plus ui/config and seven icons
-	[ "$(wc -l <<<"$table_a")" -eq 33 ]
+	# 26 members before the main menu entry (scripts/ffmpeg-capabilities.sh since M3-16j), plus
+	# ui/config and seven icons
+	[ "$(wc -l <<<"$table_a")" -eq 34 ]
 	sleep 1
 	inspect --members x86_64
 	table_b="$(grep -E '^[0-9a-f]{64} ' <<<"$output")"

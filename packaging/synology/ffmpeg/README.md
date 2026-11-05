@@ -112,7 +112,7 @@ source. ✓ means the ADR 0026 criterion is met, ✗ means it is missed.
 | jellyfin-ffmpeg portable `linux64-gpl` v8.1.3-1 | yes | 8.1.3 ✓ | ✗ dynamic: libc, libm, libdl, libpthread, libmvec (GLIBC_2.28) | ✗ GPLv3 + libx264 + **libfdk-aac** (non-free, not redistributable) | 4.18.20 ✗ | x86-64 v1 (no `-march`) ✓ | 109.5 / 109.2 | ✓ GitHub release asset | ✓ tag archive: FFmpeg tree + `debian/patches` + `builder/` |
 | BtbN `linux64-gpl-8.1` n8.1.3-27-g8dca1586f4 | yes | 8.1.3+27 ✓ | ✗ dynamic: as above + librt, libgcc_s | GPLv3 + libx264 ✓ | 4.18.20 ✗ | x86-64 v1 ✓ | 173.1 / 172.9 | ✗ daily build kept 14 days (month-end builds 2 years) | ✓ FFmpeg commit + FFmpeg-Builds repo commit |
 | johnvansickle `amd64` release | yes | 7.0.2 ✗ | ✓ | GPLv3 + libx264 ✓ | 3.2.0 ✓ | ran under QEMU `Opteron_G1` | 79.8 / 79.7 | ✗ `ffmpeg-release-…` is replaced by the next release | ✗ none for 7.0.2 |
-| own static build (SPK-15) | built (9.0.2-static2), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 3.10 | x86-64 v1 | smaller (reduced configure) | ✓ GitHub Release | ✓ produced by the recipe |
+| own static build (SPK-15) | built (9.0.2-static3), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 3.10 | x86-64 v1 | smaller (reduced configure) | ✓ GitHub Release | ✓ produced by the recipe |
 
 ### armv8
 
@@ -121,7 +121,7 @@ source. ✓ means the ADR 0026 criterion is met, ✗ means it is missed.
 | jellyfin-ffmpeg portable `linuxarm64-gpl` v8.1.3-1 | yes | 8.1.3 ✓ | ✗ dynamic: libc, libm, libdl, libpthread (GLIBC_2.28) | ✗ GPLv3 + libx264 + **libfdk-aac** (non-free, not redistributable) | 4.18.20 ✗ | `-march=armv8-a` ✓ | 79.8 / 79.5 | ✓ | ✓ as x86_64 |
 | BtbN `linuxarm64-gpl-8.1` n8.1.3-27-g8dca1586f4 | yes | 8.1.3+27 ✓ | ✗ dynamic + librt, libgcc_s | GPLv3 + libx264 ✓ | 4.18.20 ✗ | armv8-a ✓ | 131.1 / 130.9 | ✗ as x86_64 | ✓ as x86_64 |
 | johnvansickle `arm64` release | yes | 7.0.2 ✗ | ✓ | GPLv3 + libx264 ✓ | 3.7.0 ✓ | ran under QEMU `cortex-a53` | 51.1 / 51.0 | ✗ | ✗ |
-| own static build (SPK-15) | built (9.0.2-static2), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 4.4 | armv8-a | smaller | ✓ | ✓ |
+| own static build (SPK-15) | built (9.0.2-static3), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 4.4 | armv8-a | smaller | ✓ | ✓ |
 
 ### armv7 (family alpine, alpine4k, plus the separate values armada38x and monaco)
 
@@ -130,7 +130,7 @@ source. ✓ means the ADR 0026 criterion is met, ✗ means it is missed.
 | jellyfin-ffmpeg portable | **no** 32-bit ARM build (assets of v8.1.3-1: linux64, linuxarm64, mac, win only) | – | – | – | – | – | – | – | – |
 | BtbN FFmpeg-Builds | **no** (linux64 and linuxarm64 only) | – | – | – | – | – | – | – | – |
 | johnvansickle `armhf` release | yes | 7.0.2 ✗ | ✓ | GPLv3 + libx264 ✓ | 3.2.0 ✓ | armv7-a hard-float, **VFPv4** + NEON (2249 VFMA instructions): fits alpine/alpine4k, ✗ on armada38x and monaco (Cortex-A9) | 31.8 / 31.7 | ~ versioned file name `ffmpeg-7.0.2-armhf-static.tar.xz` (same SHA-256), but the directory may move to `old-releases/` | ✗ |
-| own static build (SPK-15) | built (9.0.2-static2), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 3.10 | armv7-a, VFPv3-D16, hard-float; NEON only with run-time detection | smaller | ✓ | ✓ |
+| own static build (SPK-15) | built (9.0.2-static3), see "Own build" | 9.0.2 ✓ | ✓ | GPLv3 + libx264 | ≤ 3.10 | armv7-a, VFPv3-D16, hard-float; NEON only with run-time detection | smaller | ✓ | ✓ |
 
 ### Archives measured
 
@@ -216,19 +216,20 @@ seconds). It meets every criterion of ADR 0026 section 4 for all three families:
 
 | Family | Build | Fully static | ELF ABI note | Baseline | ffmpeg / ffprobe (MB) |
 |---|---|---|---|---|---|
-| x86_64 | FFmpeg 9.0.2-static2, musl 1.2.6 | ✓ | none (limit 3.10.108) | x86-64 v1 | 24.26 / 24.04 |
-| armv8 | same | ✓ | none (limit 4.4.302) | armv8-a | 18.68 / 18.42 |
-| armv7 | same | ✓ | none (limit 3.10.108) | armv7-a, VFPv3-D16, hard-float, 0 VFPv4 instructions; NEON only behind run-time detection (FFmpeg: `HAVE_NEON=1` with `HAVE_NEON_INLINE/EXTERNAL=0`, x264, dav1d) – `readelf -A` reports the merged build attributes `Tag_FP_arch: VFPv3` and `Tag_Advanced_SIMD_arch: NEONv1` (build/README.md "Baselines") | 15.91 / 15.71 |
+| x86_64 | FFmpeg 9.0.2-static3, musl 1.2.6 | ✓ | none (limit 3.10.108) | x86-64 v1 | 24.60 / 24.38 |
+| armv8 | same | ✓ | none (limit 4.4.302) | armv8-a | 18.95 / 18.68 |
+| armv7 | same | ✓ | none (limit 3.10.108) | armv7-a, VFPv3-D16, hard-float, 0 VFPv4 instructions; NEON only behind run-time detection (FFmpeg: `HAVE_NEON=1` with `HAVE_NEON_INLINE/EXTERNAL=0`, x264, dav1d) – `readelf -A` reports the merged build attributes `Tag_FP_arch: VFPv3` and `Tag_Advanced_SIMD_arch: NEONv1` (build/README.md "Baselines") | 16.16 / 15.96 |
 
 - GPL version 3 (`--enable-gpl --enable-version3`), libx264 and the native AAC encoder; no
   `--enable-nonfree`, no libfdk-aac. Also linked: dav1d (AV1), zlib, musl, libgcc.
-- Reduced configuration: exactly the server's `-format_whitelist` demuxers plus image2 (no
-  concat, hls, dash, imf, vobsub), muxers hls/mp4/null, encoders libx264/aac, all decoders. The
+- Reduced configuration: exactly the server's `-format_whitelist` demuxers plus image2, and concat
+  for folder discs only (no hls, dash, imf, vobsub; recipe revision 3, M3-16j), protocols file, pipe
+  and concat, muxers hls/mp4/null, encoders libx264/aac, all decoders. The
   Go test `packaging/synology/internal/recipecheck` keeps the recipe's list and `probe.go` equal.
 - Every input (FFmpeg, x264, dav1d, zlib, musl, gcc, binutils, gmp, mpc, mpfr, musl-cross-make,
   NASM) is pinned by SHA-256 in `build/sources.list`; a changed checksum fails the build.
 - The recipe also produces the corresponding source archive
-  (`ffmpeg-9.0.2-static2-source.tar`, 168.6 MB, all sources plus the recipe); the SPK build puts
+  (`ffmpeg-9.0.2-static3-source.tar`, 168.6 MB, all sources plus the recipe); the SPK build puts
   it into `dist/` next to the SPKs with a line in `SHA256SUMS`, to attach to every GitHub
   Release. Clean builds give byte-identical binaries (the hashes in `sources.lock`).
 - Verified under the emulation conditions above for x86_64 (Opteron_G1), armv8 (cortex-a53) and
@@ -261,7 +262,7 @@ Build commands, configuration, checksums, build times and the full results:
 ## `sources.lock` and `fetch.sh`
 
 The field list is in the header of `sources.lock`: per family the status, the version label
-(`9.0.2-static2`: FFmpeg release plus `RECIPE_REVISION` of `build/scripts/recipe.sh`), the
+(`9.0.2-static3`: FFmpeg release plus `RECIPE_REVISION` of `build/scripts/recipe.sh`), the
 licence and the SHA-256 of `ffmpeg` and `ffprobe`. The binaries are reproducible, so the lock
 pins the exact files that were verified under emulation; the source archive's SHA-256 is not in
 the lock, because it changes with every edit of the recipe directory (each build records it in

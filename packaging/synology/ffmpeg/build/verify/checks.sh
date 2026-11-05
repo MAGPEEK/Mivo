@@ -1,5 +1,5 @@
 #!/bin/sh
-# checks.sh - capability, corpus, hostile-input and HLS checks of one FFmpeg build, run by
+# checks.sh - capability, corpus, hostile-input, HLS and folder-disc checks of one FFmpeg build, run by
 # verify.sh inside a debian:bookworm-slim container of the family's platform, under kernelsim.
 #
 # Environment (set by verify.sh):
@@ -115,14 +115,27 @@ check_components() {
 		listed "$scratch/demuxers" "$demuxer" || missing="$missing $demuxer"
 	done
 	if [ -z "$missing" ]; then pass "every whitelisted demuxer is built ($WHITELIST,image2)"; else failed "demuxers missing:$missing"; fi
-	for absent in concat hls dash imf vobsub; do
+	# concat is built for folder discs (DISC_DEMUXERS) but stays off the whitelist.
+	for absent in hls dash imf vobsub; do
 		if listed "$scratch/demuxers" "$absent"; then failed "demuxer $absent is not built"; else pass "demuxer $absent is not built"; fi
 	done
-	printf 'INFO input protocols: %s\n' "$(ffmpeg -hide_banner -protocols 2>/dev/null | awk '/^Input:/{i=1;next}/^Output:/{i=0}i{printf "%s ", $1}')"
+	ffmpeg -hide_banner -protocols 2>/dev/null | awk '/^Input:/{i=1;next}/^Output:/{i=0}i{print $1}' >"$scratch/protocols"
+	printf 'INFO input protocols: %s\n' "$(tr '\n' ' ' <"$scratch/protocols")"
+	check "input protocols are exactly concat, file, pipe" test "$(sort "$scratch/protocols" | tr '\n' ' ')" = "concat file pipe "
 	for tool in ffmpeg ffprobe; do
 		"$tool" -hide_banner -h full >"$scratch/help-$tool" 2>/dev/null
 		check "$tool -h full lists format_whitelist" grep -q 'format_whitelist' "$scratch/help-$tool"
 	done
+}
+
+# check_capabilities runs the capability check every shipped build runs (task M3-16j): disc
+# demuxers and protocols and photo decoders are required, HEIC/AVIF decoders are reported.
+check_capabilities() {
+	capabilities=/repo/packaging/synology/package/scripts/ffmpeg-capabilities.sh
+	sh "$capabilities" ffmpeg >"$scratch/capabilities" 2>&1
+	status=$?
+	sed 's/^/INFO /' "$scratch/capabilities"
+	check "ffmpeg-capabilities.sh: required disc and photo capabilities present" test "$status" -eq 0
 }
 
 # whitelist_for prints the server's whitelist for a path: image2 only without "%" (probe.go).
@@ -190,7 +203,7 @@ check_hostile() {
 		"file:$library/evil.mkv" 2>/dev/null | grep -q h264; then
 		printf 'INFO an unrestricted ffprobe follows the ffconcat list\n'
 	else
-		printf 'INFO an unrestricted ffprobe does not follow the ffconcat list (no concat demuxer)\n'
+		printf 'INFO an unrestricted ffprobe does not follow the ffconcat list\n'
 	fi
 	for name in evil.mkv evil.m3u8; do
 		check "hostile $name refused by the probe" refused ffprobe -v error -hide_banner -show_streams \
@@ -241,6 +254,70 @@ check_hls() {
 	check "HLS audio is aac stereo" hls_audio_ok "$scratch/hls.probe"
 	duration=$(sed -n 's/^duration=\([0-9]*\).*/\1/p' "$scratch/hls.probe")
 	check "HLS output covers the 2 s clip within -t 3 (got ${duration:-?} s)" test "${duration:-0}" -ge 2 -a "${duration:-0}" -le 3
+}
+
+# probe_duration <ffprobe input options...>: the container duration in seconds as ffprobe
+# prints it; errors go to $scratch/disc.err.
+probe_duration() {
+	ffprobe -v error -hide_banner -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$@" 2>"$scratch/disc.err"
+}
+
+# whole <seconds>: the integer part.
+whole() { printf '%s\n' "$1" | sed -n 's/^\([0-9]*\).*/\1/p'; }
+
+# corpus_duration <file>: the duration of a corpus file probed with the server's whitelist.
+corpus_duration() {
+	probe_duration -format_whitelist "$(whitelist_for "$1")" -protocol_whitelist file "file:$1"
+}
+
+# check_dvd_title joins a VOB cut in two at a 2048-byte sector boundary like a DVD title's
+# VTS_01_1.VOB, VTS_01_2.VOB: concat protocol, mpeg demuxer, the server's whitelists.
+check_dvd_title() {
+	vob=/corpus/video/mpeg2_ac3.vob
+	sectors=$(($(wc -c <"$vob") / 2048))
+	half=$((sectors / 2 * 2048))
+	head -c "$half" "$vob" >"$disc/VTS_01_1.VOB"
+	tail -c +"$((half + 1))" "$vob" >"$disc/VTS_01_2.VOB"
+	want=$(whole "$(corpus_duration "$vob")")
+	got=$(whole "$(probe_duration -f mpeg -format_whitelist mpeg -protocol_whitelist file,concat \
+		"concat:file:$disc/VTS_01_1.VOB|file:$disc/VTS_01_2.VOB")")
+	printf 'INFO DVD title (concat protocol, 2 VOB parts): %s s, source %s s %s\n' "${got:-?}" "${want:-?}" "$(tr '\n' ' ' <"$scratch/disc.err")"
+	check "DVD title through the concat protocol has the source's duration" test -n "$got" -a "${got:-x}" = "${want:-y}"
+}
+
+# check_bluray_title reads an ffconcat list of the same m2ts clip twice, written like the
+# server's list (per-clip whitelists and durations): the title lasts two clips and its last
+# video packet lies in the second clip.
+check_bluray_title() {
+	m2ts=/corpus/video/h264_ac3.m2ts
+	list="$disc/title.ffconcat"
+	clip=$(corpus_duration "$m2ts")
+	{
+		printf 'ffconcat version 1.0\n'
+		for _ in 1 2; do
+			printf "file 'file:%s'\noption format_whitelist mpegts\noption protocol_whitelist file\nduration %s\n" "$m2ts" "$clip"
+		done
+	} >"$list"
+	set -- -f concat -safe 0 -format_whitelist concat -protocol_whitelist file
+	got=$(whole "$(probe_duration "$@" "file:$list")")
+	last=$(whole "$(ffprobe -v error -hide_banner "$@" -select_streams v:0 -show_entries packet=pts_time -of csv=p=0 \
+		"file:$list" 2>/dev/null | tail -n 1)")
+	clip=$(whole "$clip")
+	printf 'INFO Blu-ray title (concat demuxer, 2 clips): %s s, last video packet at %s s, clip %s s %s\n' \
+		"${got:-?}" "${last:-?}" "${clip:-?}" "$(tr '\n' ' ' <"$scratch/disc.err")"
+	check "Blu-ray title through the concat demuxer lasts both clips" test -n "$got" -a -n "$clip" -a "${got:-0}" -ge "$((2 * ${clip:-1}))"
+	check "Blu-ray title is read into the second clip" test -n "$last" -a -n "$clip" -a "${last:-0}" -ge "${clip:-1}"
+	check "Blu-ray title remuxes through the concat demuxer" ffmpeg -hide_banner -nostdin -v error "$@" \
+		-i "file:$list" -map 0 -c copy -f null -
+}
+
+# check_discs reads folder-disc titles with the server's disc arguments (disc_input.go). The
+# corpus has no disc folders, so the parts are made here from single corpus files.
+check_discs() {
+	disc=/tmp/disc
+	mkdir -p "$disc"
+	check_dvd_title
+	check_bluray_title
 }
 
 # render_poster <format> <encoder args...>: the image renderer's arguments (image_args.go) on a
@@ -296,9 +373,11 @@ install_wrappers
 report_environment
 check_version
 check_components
+check_capabilities
 check_corpus
 check_hostile
 check_hls
+check_discs
 check_images
 run_go_tests
 printf 'SUMMARY %s %s: %s/%s checks passed\n' "$FAMILY" "$CPU_MODEL" "$((total - failures))" "$total"

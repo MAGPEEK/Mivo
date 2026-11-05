@@ -9,6 +9,8 @@
 !cmd/
 !internal/
 !web/
+# The FFmpeg capability check shared with the SPK (task M3-16j)
+!packaging/synology/package/scripts/ffmpeg-capabilities.sh
 
 # Version control and local tooling state
 .git

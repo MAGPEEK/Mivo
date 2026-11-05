@@ -3,7 +3,8 @@
 # Runs after package.tgz is extracted (ADR 0026 section 10, task SPK-17), as the package user.
 #
 # Creates the server's data, cache and transcode directories that are missing (0750) and nothing
-# else. It writes no config.yaml: a fresh installation starts with zero libraries, which the user
+# else, then records the bundled FFmpeg's capabilities in the package log (report only, task
+# M3-16j). It writes no config.yaml: a fresh installation starts with zero libraries, which the user
 # adds in the web app (Settings > Libraries). An existing config.yaml, from an earlier
 # installation or a kept uninstall, is never touched. A non-zero exit marks the package as
 # damaged in Package Center; the reason goes to $SYNOPKG_TEMP_LOGFILE.
@@ -31,4 +32,5 @@ if ! pkg_create_server_dirs; then
 		"Die Verzeichnisse von $DISPLAY_NAME in $SYNOPKG_PKGVAR und $SYNOPKG_PKGTMP konnten nicht angelegt werden")"
 	exit 1
 fi
+pkg_report_ffmpeg_capabilities
 exit 0

@@ -16,6 +16,7 @@ spk 0644 conf/privilege
 spk 0644 conf/resource
 spk 0755 scripts/
 spk 0755 scripts/common.sh
+spk 0755 scripts/ffmpeg-capabilities.sh
 spk 0755 scripts/package.env
 spk 0755 scripts/postinst
 spk 0755 scripts/postuninst

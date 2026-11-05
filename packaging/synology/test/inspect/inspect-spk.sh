@@ -4,7 +4,8 @@
 # resources, icons, the DSM main menu entry (INFO dsmuidir, ui/config, ui/images), leftovers
 # from the build environment and the FFmpeg status.
 #
-#   inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <family>
+#   inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] [--capabilities]
+#                  <file.spk> <family>
 #
 #   family       x86_64, armv8 or armv7: decides the expected INFO arch, the ELF class and
 #                machine of the binaries and the oldest DSM 7.2 kernel (ADR 0026 Notes)
@@ -16,6 +17,11 @@
 #   --expected   the expected-member list (default expected-members.txt next to this script)
 #   --members    also print one line per file of both archives: SHA-256, mode, archive:name
 #                (for comparing two builds; the toolkit's packing is not byte-reproducible)
+#   --capabilities  run the packed scripts/ffmpeg-capabilities.sh on the packed bin/ffmpeg
+#                (task M3-16j): fails when a disc demuxer or protocol or a photo decoder is
+#                missing, prints the optional HEIC/AVIF decoders as info. It executes the
+#                family's binary, so the container must run it: natively for x86_64, through
+#                Docker Desktop's binfmt QEMU for armv8 and armv7
 #
 # Prints one line per check: "ok", "WARN" or "FAIL" followed by the check, "info" lines for
 # facts that are recorded but not judged, and a summary. Exit 0 when nothing failed, 1 when a
@@ -90,6 +96,7 @@ port=$DEFAULT_PORT
 # "" until resolve_expected_file sets the default next to this script.
 expected_file=""
 print_members=no
+run_capabilities=no
 spk=""
 family=""
 work=""
@@ -170,6 +177,7 @@ parse_args() {
 		case "$1" in
 			--release) release=yes ;;
 			--members) print_members=yes ;;
+			--capabilities) run_capabilities=yes ;;
 			--port)
 				[ "$#" -ge 2 ] || die "--port needs a value"
 				port=$2
@@ -893,6 +901,25 @@ check_ffmpeg_notice() {
 	fi
 }
 
+# check_ffmpeg_capabilities runs the packed capability script on the packed ffmpeg, as postinst
+# does on the NAS (--capabilities only; a missing member is reported by the member check).
+check_ffmpeg_capabilities() {
+	if [ "$run_capabilities" = no ]; then
+		info "FFmpeg capabilities not run (--capabilities runs scripts/ffmpeg-capabilities.sh)"
+		return 0
+	fi
+	capabilities_script="$work/spk/scripts/ffmpeg-capabilities.sh"
+	[ -f "$capabilities_script" ] && [ -f "$work/pkg/bin/ffmpeg" ] || return 0
+	sh "$capabilities_script" "$work/pkg/bin/ffmpeg" >"$work/capabilities.out" 2>&1
+	capabilities_status=$?
+	sed 's/^/info capability: /' "$work/capabilities.out"
+	case "$capabilities_status" in
+		0) pass "bin/ffmpeg has the required disc and photo capabilities" ;;
+		1) failed "bin/ffmpeg lacks required disc or photo capabilities (see the capability lines)" ;;
+		*) failed "bin/ffmpeg cannot be run to list its capabilities (exit $capabilities_status)" ;;
+	esac
+}
+
 # --- firewall service file --------------------------------------------------------------
 
 check_service_file() {
@@ -1223,6 +1250,7 @@ main() {
 	check_binary ffmpeg ffmpeg
 	check_binary ffprobe ffmpeg
 	check_ffmpeg_notice
+	check_ffmpeg_capabilities
 	check_service_file
 	check_scripts
 	check_json_files

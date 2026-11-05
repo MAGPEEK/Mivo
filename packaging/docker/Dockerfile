@@ -96,6 +96,16 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates ffmpeg tzdata \
  && rm -rf /var/lib/apt/lists/*
 
+# The build fails when Debian's FFmpeg lacks what folder discs and photo thumbnails need
+# (concat, mpeg and mpegts demuxers, file and concat protocols, the photo decoders; task
+# M3-16j). The same script checks the SPK builds; it also reports whether HEVC, HEIF and
+# libdav1d decode is available. The report shows in the build log and stays in the image.
+COPY packaging/synology/package/scripts/ffmpeg-capabilities.sh /usr/local/share/ffmpeg-capabilities.sh
+RUN install -d -m 0755 /usr/local/share/doc \
+ && report=/usr/local/share/doc/ffmpeg-capabilities.txt \
+ && if sh /usr/local/share/ffmpeg-capabilities.sh ffmpeg >"$report"; then cat "$report"; else cat "$report"; exit 1; fi \
+ && rm /usr/local/share/ffmpeg-capabilities.sh
+
 # Docker copies ownership and mode of these directories into new named or anonymous volumes,
 # so the default user can write /config and /transcode without a bind mount. /media is read
 # by the server and stays owned by root. Bind mounts keep the ownership of the host directory

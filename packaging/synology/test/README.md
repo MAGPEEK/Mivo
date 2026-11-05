@@ -20,8 +20,8 @@ on a host.
 # PowerShell
 docker build -t spk-script-test:dev packaging/synology/test
 docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/scripts
-docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade
-docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/scripts/start-stop-status.bats packaging/synology/test/scripts/lifecycle.bats packaging/synology/test/scripts/package-files.bats packaging/synology/test/scripts/helpers.bash packaging/synology/test/fake-server.bash packaging/synology/test/fixtures/package.env
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/ffmpeg-capabilities.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/scripts/start-stop-status.bats packaging/synology/test/scripts/lifecycle.bats packaging/synology/test/scripts/ffmpeg-capabilities.bats packaging/synology/test/scripts/package-files.bats packaging/synology/test/scripts/helpers.bash packaging/synology/test/fake-server.bash packaging/synology/test/fake-ffmpeg.sh packaging/synology/test/fixtures/package.env
 ```
 
 In Git Bash, prefix each command with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)"` instead of
@@ -39,7 +39,9 @@ regular expression over the test names) runs a subset.
   `lifecycle.bats` the lifecycle scripts and the `common.sh` helpers they use (browse roots, the alpha.2 upgrade rewrite (SPK-17),
   YAML quoting, the package-directory guard of every deletion), `package-files.bats` the static
   templates (JSON syntax, privilege, resource, service file, the info-only install wizard and
-  no media folder question).
+  no media folder question), `ffmpeg-capabilities.bats` the FFmpeg capability check
+  `scripts/ffmpeg-capabilities.sh` of task M3-16j (required disc demuxers and protocols and photo
+  decoders, the reported HEIC/AVIF decoders) that postinst runs into the package log.
 - `scripts/helpers.bash` – shared setup: a DSM-like package tree per test in `$BATS_TEST_TMPDIR`
   (`target`, `var`, `tmp` and `home` are links into `volume1/@appstore|@appdata|@apptemp|@apphome/<id>`
   as on DSM; `scripts/` with every package script and the fixture `package.env`), reached
@@ -55,6 +57,9 @@ regular expression over the test names) runs a subset.
   `TestScriptFixtureIsSpkmetaOutput` in `packaging/synology/cmd/spkstage`), so `common.sh` is
   tested against the format `spkstage` stages.
 - `fake-server.bash` – the fake server.
+- `fake-ffmpeg.sh` – the fake `bin/ffmpeg`: answers `-version`, `-demuxers`, `-decoders` and
+  `-protocols` in FFmpeg's layout; `FAKE_FFMPEG_MISSING` leaves names out, `FAKE_FFMPEG_SILENT`
+  makes it list nothing.
 
 ### Shells
 

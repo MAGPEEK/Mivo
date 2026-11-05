@@ -83,8 +83,9 @@ setup_package_tree() {
 	cp "$PACKAGE_SCRIPTS"/* "$PKG_ROOT/scripts/"
 	cp "$TEST_DIR/fixtures/package.env" "$PKG_ROOT/scripts/"
 	cp "$(command -v bash)" "$PKG_ROOT/target/bin/$FIXTURE_ID"
-	printf '#!/bin/sh\nexit 0\n' >"$PKG_ROOT/target/bin/ffmpeg"
-	cp "$PKG_ROOT/target/bin/ffmpeg" "$PKG_ROOT/target/bin/ffprobe"
+	# ffmpeg answers the listing options postinst's capability report asks (fake-ffmpeg.sh).
+	cp "$TEST_DIR/fake-ffmpeg.sh" "$PKG_ROOT/target/bin/ffmpeg"
+	printf '#!/bin/sh\nexit 0\n' >"$PKG_ROOT/target/bin/ffprobe"
 	chmod 0755 "$PKG_ROOT/target/bin/"*
 
 	PKG_LOG=$DSM_PKG_ROOT/var/$FIXTURE_ID.log

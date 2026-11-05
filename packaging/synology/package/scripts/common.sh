@@ -272,6 +272,24 @@ pkg_share_link_prefix() {
 	printf '%s\n' "$PKG_DSM_PACKAGES_DIR/$ID/shares/"
 }
 
+# pkg_report_ffmpeg_capabilities writes what the bundled FFmpeg can do (disc demuxers and
+# protocols, photo decoders, the optional HEIC/AVIF decoders; ffmpeg-capabilities.sh next to
+# this file, task M3-16j) to stderr, so DSM keeps it in /var/log/packages/<id>.log. The
+# "required ...: ok" lines are left out to keep that log short; the version, the optional
+# decoders, anything missing and the summary stay. It reports only and never fails: the
+# server's own capability probe decides at start what it uses.
+pkg_report_ffmpeg_capabilities() {
+	# Callers run under set -e: neither the failing check nor an empty filter result may end them.
+	pkg_capabilities_status=0
+	pkg_capabilities=$(sh "$PKG_SCRIPT_DIR/ffmpeg-capabilities.sh" "$PKG_FFMPEG" 2>&1) ||
+		pkg_capabilities_status=$?
+	printf '%s\n' "$pkg_capabilities" | grep -v ': ok$' >&2 || :
+	if [ "$pkg_capabilities_status" -ne 0 ]; then
+		pkg_error "the bundled FFmpeg lacks capabilities named above; disc or photo features may be unavailable"
+	fi
+	return 0
+}
+
 # pkg_yaml_quote prints $1 as a YAML double-quoted scalar. Only "\" and """ need an escape there;
 # callers reject control characters first, which double quotes would carry as raw bytes.
 pkg_yaml_quote() {

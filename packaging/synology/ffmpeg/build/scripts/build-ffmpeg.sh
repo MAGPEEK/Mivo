@@ -44,13 +44,19 @@ work="$BUILD_ROOT/ffmpeg"
 # Input demuxers: exactly the single-file demuxers of the server's -format_whitelist
 # (allowedDemuxers and image2 in internal/adapters/ffmpeg/probe.go, ADR 0022 Notes M2-24b),
 # by configure name: "mpeg" is mpegps, "<x>_pipe" is image_<x>_pipe. Playlist and reference
-# demuxers (concat, hls, dash, imf, vobsub) are not built at all. Two gates tie the two lists
-# together: the Go test packaging/synology/internal/recipecheck compares this line with
-# probe.go without a build, verify/verify.sh checks the built binary against probe.go.
+# demuxers (hls, dash, imf, vobsub) are not built at all; concat is built only for folder discs
+# (DISC_DEMUXERS). Two gates tie the two lists together: the Go test
+# packaging/synology/internal/recipecheck compares this line with probe.go without a build,
+# verify/verify.sh checks the built binary against probe.go.
 readonly DEMUXERS="matroska,mov,mpegts,mpegps,mpegvideo,avi,flv,live_flv,ogg,asf,mxf,rm,\
 flac,mp3,wav,aiff,wv,ape,dsf,iff,aac,ac3,eac3,dts,\
 gif,image_png_pipe,image_jpeg_pipe,image_tiff_pipe,image_webp_pipe,\
 srt,webvtt,ass,sup,image2"
+# Folder discs (ADR 0029, M3-16f disc_input.go): a Blu-ray title's clips are read from a private
+# ffconcat list. It is not on the -format_whitelist of a library file, so a hostile list in the
+# library is still refused (verify/checks.sh "hostile"); the server forces it only for the list
+# it wrote itself.
+readonly DISC_DEMUXERS="concat"
 # Output: fMP4 HLS (ADR 0024) selects mov, mpegts and webvtt itself; null serves diagnostics;
 # image2pipe writes the rendered posters (M3-08, internal/adapters/ffmpeg/image_args.go).
 readonly MUXERS="hls,mp4,null,image2pipe"
@@ -62,8 +68,9 @@ readonly ENCODERS="libx264,aac,mjpeg,png"
 readonly FILTERS="buffer,buffersink,abuffer,abuffersink,format,aformat,null,anull,\
 scale,aresample,trim,atrim,crop,hflip,vflip,transpose,rotate,setpts,asetpts,fps,pad,setsar,\
 apad,volume"
-# The server opens every input as file: and writes HLS to files; pipe serves diagnostics.
-readonly PROTOCOLS="file,pipe"
+# The server opens every input as file: and writes HLS to files; pipe feeds the photo renderer's
+# embedded previews; concat joins the VOBs of a DVD title (concat:file:a|file:b, ADR 0029).
+readonly PROTOCOLS="file,pipe,concat"
 
 configure_ffmpeg() {
 	PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig" PKG_CONFIG_PATH="" ./configure \
@@ -76,7 +83,7 @@ configure_ffmpeg() {
 		--disable-autodetect --enable-zlib --enable-iconv --enable-libx264 --enable-libdav1d \
 		--disable-debug --disable-doc --disable-ffplay --disable-avdevice --disable-network \
 		--disable-protocols --enable-protocol="$PROTOCOLS" \
-		--disable-demuxers --enable-demuxer="$DEMUXERS" \
+		--disable-demuxers --enable-demuxer="$DEMUXERS,$DISC_DEMUXERS" \
 		--disable-muxers --enable-muxer="$MUXERS" \
 		--disable-encoders --enable-encoder="$ENCODERS" \
 		--disable-filters --enable-filter="$FILTERS"

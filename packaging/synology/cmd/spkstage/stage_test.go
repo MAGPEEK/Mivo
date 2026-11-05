@@ -71,6 +71,7 @@ func goldenTree() []treeEntry {
 		{"prebuilt/ui/images/" + brand.ID + "_256.png", f},
 		{"scripts/", d},
 		{"scripts/common.sh", x},
+		{"scripts/ffmpeg-capabilities.sh", x},
 		{"scripts/package.env", f},
 		{"scripts/postinst", x},
 		{"scripts/postuninst", x},

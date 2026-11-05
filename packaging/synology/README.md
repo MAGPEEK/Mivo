@@ -340,7 +340,8 @@ prebuilt builds in [`ffmpeg/README.md`](ffmpeg/README.md)):
   FFmpeg's native AAC encoder, dav1d (AV1 decoder) and zlib; **no** libfdk-aac and nothing
   non-free, so the binaries are redistributable;
 - reduced to what the server uses: the demuxers of the server's format whitelist, all decoders,
-  the HLS and MP4 muxers, the libx264 and AAC encoders, file access only (no network protocols);
+  the HLS and MP4 muxers, the libx264 and AAC encoders, local files only (protocols file, pipe and
+  concat; no network protocols), plus the concat demuxer for folder discs (task M3-16j);
 - baselines x86-64 v1, ARMv8-A and ARMv7-A with VFPv3-D16 hard-float; NEON and newer x86
   instruction sets only through run-time CPU detection, so the same binary runs on Armada 38x
   (whose NEON support is unconfirmed) and on Alpine.
@@ -586,7 +587,7 @@ until its line in `toolkit/tarballs.sha256` is updated on purpose.
 |---|---|
 | package scripts (bats, four shells) and templates | `docker build -t spk-script-test:dev packaging/synology/test` then `docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/scripts` |
 | build scripts (`build.sh`, `build.ps1` parity, `stage.sh`, fake Docker and spkstage, `ffmpeg/fetch.sh`, the FFmpeg package gates) | `docker build -t spk-build-test:dev packaging/synology/test/build` then `docker run --rm -v "${PWD}:/code" -w /code spk-build-test:dev packaging/synology/test/build` |
-| shellcheck of the package scripts | `docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade` |
+| shellcheck of the package scripts | `docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/ffmpeg-capabilities.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade` |
 | shellcheck of the build and test scripts | `docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/build.sh packaging/synology/stage.sh packaging/synology/ffmpeg/fetch.sh packaging/synology/toolkit/run.sh packaging/synology/toolkit/test.sh packaging/synology/test/build/build-scripts.bats packaging/synology/test/build/stage.bats packaging/synology/test/build/package-gates.bats packaging/synology/test/build/fetch.bats packaging/synology/test/build/fake-docker.bash packaging/synology/test/build/fake-spkstage.bash` |
 | toolkit (lint, build-stage checks, pack and verify all families) | `bash packaging/synology/toolkit/test.sh` (needs the volume; `lint` or a family name narrows it) |
 | Go packages (`spkmeta`, `spkicon`, `spkstage`) | `go test ./packaging/...` (part of `go test ./...`) |

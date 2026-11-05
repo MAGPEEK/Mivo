@@ -210,6 +210,14 @@ fixture_desktop_config() {
 EOF
 }
 
+# fixture_capabilities <exit status>: a stand-in for scripts/ffmpeg-capabilities.sh; the fake
+# ELF files cannot run, so it names the binary it was given and ends with the status.
+fixture_capabilities() {
+	# shellcheck disable=SC2016 # ${1##*/} belongs to the generated script
+	printf '#!/bin/sh\nprintf "required demuxer concat: %%s\\n" "%s"\nprintf "binary %%s\\n" "${1##*/}"\nexit %s\n' \
+		"$([ "$1" -eq 0 ] && echo ok || echo MISSING)" "$1"
+}
+
 # make_tree <dir> <family> <status> <static|dynamic> <abi>: the unpacked SPK below <dir>/spk
 # with the payload below <dir>/pkg, every mode set explicitly.
 make_tree() {
@@ -232,6 +240,7 @@ make_tree() {
 		printf '#!/bin/sh\nexit 0\n' >"$spk/scripts/$script"
 	done
 	printf 'pkg_noop() { :; }\n' >"$spk/scripts/common.sh"
+	fixture_capabilities 0 >"$spk/scripts/ffmpeg-capabilities.sh"
 	printf "ID='%s'\nPORT='%s'\n" "$FIXTURE_ID" "$FIXTURE_PORT" >"$spk/scripts/package.env"
 	for script in install_uifile install_uifile_ger uninstall_uifile uninstall_uifile_ger; do
 		echo '[{"step_title": "Fixture", "items": []}]' >"$spk/WIZARD_UIFILES/$script"

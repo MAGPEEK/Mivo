@@ -406,7 +406,9 @@ docker build -t spk-inspect:dev packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
 # before a release: interim FFmpeg, a non-free licence, a dynamically linked ffmpeg/ffprobe or an ABI note above the family's kernel fail instead of warning
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --release packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
-# tests of the script (59 cases on a synthetic SPK of fixture.bash) and shellcheck
+# disc and photo capabilities of the packed FFmpeg (M3-16j): runs scripts/ffmpeg-capabilities.sh of the SPK on bin/ffmpeg (armv8/armv7 through Docker Desktop's binfmt QEMU)
+docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev sh packaging/synology/test/inspect/inspect-spk.sh --capabilities packaging/synology/dist/mivo-0.1.0-alpha.2-x86_64.spk x86_64
+# tests of the script (66 cases on a synthetic SPK of fixture.bash) and shellcheck
 docker run --rm -v "${PWD}:/code:ro" -w /code spk-inspect:dev bats packaging/synology/test/inspect
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/test/inspect/inspect-spk.sh
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/inspect/inspect-spk.bats packaging/synology/test/inspect/fixture.bash
@@ -415,7 +417,7 @@ docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/s
 In Git Bash prefix the commands with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)"` for `${PWD}`.
 
 ```
-inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] <file.spk> <family>
+inspect-spk.sh [--release] [--port N] [--expected FILE] [--members] [--capabilities] <file.spk> <family>
 ```
 
 One line per check (`ok`, `WARN`, `FAIL`), `info` lines for recorded facts, a summary line;

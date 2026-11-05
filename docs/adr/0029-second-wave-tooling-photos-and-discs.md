@@ -106,3 +106,14 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
     demuxers) is `disc_unsupported`. The probed duration is replaced by the title duration
     when the disc structures know one; DVD/Blu-ray subtitles are bitmap streams
     (`media.Stream.IsBitmapSubtitle`). ISO images stay `disc_unsupported` here (M3-16g).
+- Packaging (M3-16j): Debian's FFmpeg in the Docker image already has everything; the own SPK
+  build did not ("Docker and SPK sizes stay unchanged" held only for the image). Recipe revision
+  3 (`9.0.2-static3`) adds the `concat` demuxer (`DISC_DEMUXERS`, kept off the library-file
+  whitelist) and the `concat` protocol; no new library, 0 to 64 KiB more per binary. One script,
+  `packaging/synology/package/scripts/ffmpeg-capabilities.sh`, fails the Docker build, the SPK
+  verification (`verify/checks.sh`) and `inspect-spk.sh --capabilities` when the `concat`,
+  `mpeg` or `mpegts` demuxer, the `file` or `concat` input protocol or a photo decoder (`mjpeg`,
+  `png`, `webp`, `gif`, `tiff`) is missing, and reports `hevc`, HEIF (`mov` plus `hevc`) and
+  `libdav1d`: in the image build log and `/usr/local/share/doc/ffmpeg-capabilities.txt`, and on
+  the NAS from postinst in `/var/log/packages/<id>.log`. The loopback `http` input of M3-16g is
+  not in the SPK build (`--disable-network`); adding it is a further recipe revision.
