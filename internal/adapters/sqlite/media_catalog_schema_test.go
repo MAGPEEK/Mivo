@@ -86,6 +86,7 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "library_roots", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "library_sidecars", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "library_sidecars", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
+		{table: "media_chapters", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
 		{table: "media_files", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "media_files", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "media_files", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},

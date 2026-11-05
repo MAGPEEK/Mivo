@@ -139,6 +139,14 @@ type LibrarySidecar struct {
 	ModifiedAt   int64
 }
 
+type MediaChapter struct {
+	MediaFileID string
+	Ordinal     int64
+	Title       string
+	StartMs     int64
+	EndMs       int64
+}
+
 type MediaFile struct {
 	ID           string
 	ItemID       string

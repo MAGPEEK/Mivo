@@ -1,7 +1,7 @@
-# M3-14d SQLite: migration 00007 `media_chapters`, writer and reader
+# M3-14d SQLite: migration 00008 `media_chapters`, writer and reader
 Owner: mivo-backend
 Depends on: M3-14a, M3-13d
-Files/areas: `internal/adapters/sqlite/migrations/00007_*.sql`, `queries/chapters.sql`, `sqlcgen/`, `library_catalog_chapters.go`
+Files/areas: `internal/adapters/sqlite/migrations/00008_*.sql` (00007 is M6-11, merged first), `queries/chapters.sql`, `sqlcgen/`, `library_catalog_chapters.go`
 
 ## Goal
 Store chapters per media file and read them per item in playback order.
