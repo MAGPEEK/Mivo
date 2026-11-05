@@ -1,9 +1,11 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import { HomeIcon, LibraryIcon, SearchIcon, SettingsIcon } from "./icons";
 import { Sheet } from "./Sheet";
+import { AllLibraries, LayoutLiveRegion } from "./SidebarLibraryLists";
+import { useAllLibrariesSwitch } from "./useAllLibrariesSwitch";
 import type { SidebarLibraries } from "./Sidebar";
 
 /** Props of {@link BottomNav}. */
@@ -21,6 +23,9 @@ const barHeightClass = "h-16";
 // min-h-11/min-w-11 = 44 px, the minimum touch target (WCAG 2.5.5, Apple HIG).
 const tabClass =
   "flex h-full min-h-11 min-w-11 w-full flex-col items-center justify-center gap-0.5 rounded-md text-xs font-medium text-text-muted hover:text-text aria-[current=page]:text-accent";
+
+const sheetActionClass =
+  "mt-3 flex min-h-11 w-full items-center rounded-md px-2.5 text-sm font-medium text-accent hover:text-accent-hover";
 
 const sheetLinkClass =
   "flex min-h-11 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-text hover:bg-surface aria-[current=page]:text-accent";
@@ -52,15 +57,7 @@ export function BottomNav({ libraries, onSearch }: BottomNavProps) {
           onSearch={onSearch}
         />
       </nav>
-      {sheetOpen && (
-        <Sheet
-          title={t("sidebar.libraries.heading")}
-          closeLabel={t("bottomNav.closeLibraries")}
-          onClose={closeSheet}
-        >
-          <LibrariesSheetContent libraries={libraries} onNavigate={closeSheet} />
-        </Sheet>
-      )}
+      {sheetOpen && <LibrariesSheet libraries={libraries} onClose={closeSheet} />}
     </>
   );
 }
@@ -114,30 +111,99 @@ function BottomNavTabs({ librariesOpen, onOpenLibraries, onSearch }: BottomNavTa
   );
 }
 
-interface LibrariesSheetContentProps {
+interface LibrariesSheetProps {
+  readonly libraries: SidebarLibraries;
+  readonly onClose: () => void;
+}
+
+// The sheet holds the same two views as the sidebar: the pinned libraries and, when the
+// layout can be changed, "All libraries" with move and pin buttons sized for touch (SH-12).
+function LibrariesSheet({ libraries, onClose }: LibrariesSheetProps) {
+  const { t } = useTranslation();
+  const doneRef = useRef<HTMLButtonElement>(null);
+  const showAllRef = useRef<HTMLButtonElement>(null);
+  const allSwitch = useAllLibrariesSwitch({
+    collapsed: false,
+    // Never collapsed: the sheet only exists while open.
+    onExpand: () => undefined,
+    doneRef,
+    showAllRef,
+  });
+  const layout = libraries.state === "loaded" ? libraries.layout : undefined;
+  const showAll = allSwitch.showAll && layout !== undefined && libraries.state === "loaded";
+  return (
+    <Sheet
+      title={showAll ? t("sidebar.libraries.allLibraries") : t("sidebar.libraries.heading")}
+      closeLabel={t("bottomNav.closeLibraries")}
+      onClose={onClose}
+    >
+      {showAll ? (
+        <>
+          <button type="button" ref={doneRef} onClick={allSwitch.hide} className={sheetActionClass}>
+            {t("sidebar.libraries.done")}
+          </button>
+          <AllLibraries
+            links={libraries.links}
+            layout={layout}
+            variant="touch"
+            onNavigate={onClose}
+          />
+        </>
+      ) : (
+        <>
+          <LibraryList libraries={libraries} onNavigate={onClose} />
+          <AllLibrariesEntry
+            arrangeable={
+              layout !== undefined && libraries.state === "loaded" && libraries.links.length > 0
+            }
+            onShowAll={allSwitch.show}
+            showAllRef={showAllRef}
+            onNavigate={onClose}
+          />
+        </>
+      )}
+      {layout !== undefined && <LayoutLiveRegion announcement={layout.announcement} />}
+    </Sheet>
+  );
+}
+
+interface AllLibrariesEntryProps {
+  /** True when the full list can be shown in the sheet; else the entry opens library management. */
+  readonly arrangeable: boolean;
+  readonly onShowAll: () => void;
+  readonly showAllRef: Ref<HTMLButtonElement>;
+  readonly onNavigate: () => void;
+}
+
+function AllLibrariesEntry({
+  arrangeable,
+  onShowAll,
+  showAllRef,
+  onNavigate,
+}: AllLibrariesEntryProps) {
+  const { t } = useTranslation();
+  if (arrangeable) {
+    return (
+      <button type="button" ref={showAllRef} onClick={onShowAll} className={sheetActionClass}>
+        {t("bottomNav.allLibraries")}
+      </button>
+    );
+  }
+  // Without libraries (or layout controls) there is nothing to arrange; management can add one.
+  return (
+    <Link to="/admin/manage/libraries" onClick={onNavigate} className={sheetActionClass}>
+      {t("bottomNav.allLibraries")}
+    </Link>
+  );
+}
+
+interface LibraryListProps {
   readonly libraries: SidebarLibraries;
   /** Closes the sheet: the opened page must not start covered. */
   readonly onNavigate: () => void;
 }
 
-function LibrariesSheetContent({ libraries, onNavigate }: LibrariesSheetContentProps) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <LibraryList libraries={libraries} onNavigate={onNavigate} />
-      {/* Until the full list with pin toggles exists (M5-21), library management lists all. */}
-      <Link
-        to="/admin/manage/libraries"
-        onClick={onNavigate}
-        className="mt-3 flex min-h-11 items-center rounded-md px-2.5 text-sm font-medium text-accent hover:text-accent-hover"
-      >
-        {t("bottomNav.allLibraries")}
-      </Link>
-    </>
-  );
-}
-
-function LibraryList({ libraries, onNavigate }: LibrariesSheetContentProps): ReactNode {
+function LibraryList({ libraries, onNavigate }: LibraryListProps): ReactNode {
   const { t } = useTranslation();
   const messageClass = "px-2.5 text-sm text-text-muted";
   if (libraries.state !== "loaded") {
@@ -148,22 +214,24 @@ function LibraryList({ libraries, onNavigate }: LibrariesSheetContentProps): Rea
   }
   return (
     <ul className="flex flex-col gap-1">
-      {libraries.links.map((library) => (
-        <li key={library.id}>
-          <Link
-            to="/libraries/$libraryId"
-            params={{ libraryId: library.id }}
-            onClick={onNavigate}
-            className={sheetLinkClass}
-          >
-            <span className="contents">{library.icon}</span>
-            <span className="min-w-0 flex-1 truncate">{library.name}</span>
-            {library.note !== undefined && (
-              <span className="shrink-0 text-xs text-text-muted">{library.note}</span>
-            )}
-          </Link>
-        </li>
-      ))}
+      {libraries.links
+        .filter((library) => library.pinned !== false)
+        .map((library) => (
+          <li key={library.id}>
+            <Link
+              to="/libraries/$libraryId"
+              params={{ libraryId: library.id }}
+              onClick={onNavigate}
+              className={sheetLinkClass}
+            >
+              <span className="contents">{library.icon}</span>
+              <span className="min-w-0 flex-1 truncate">{library.name}</span>
+              {library.note !== undefined && (
+                <span className="shrink-0 text-xs text-text-muted">{library.note}</span>
+              )}
+            </Link>
+          </li>
+        ))}
     </ul>
   );
 }

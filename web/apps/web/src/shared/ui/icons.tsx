@@ -75,6 +75,44 @@ export function LibraryIcon({ className }: IconProps) {
   );
 }
 
+/** Push pin: keeps a library in the sidebar. */
+export function PinIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="M9 4h6l-1 6 4 3H6l4-3z" />
+      <path d="M12 13v8" />
+    </IconFrame>
+  );
+}
+
+/** Chevron pointing up: moves an entry up. */
+export function ChevronUpIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="m6 15 6-6 6 6" />
+    </IconFrame>
+  );
+}
+
+/** Chevron pointing down: moves an entry down. */
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </IconFrame>
+  );
+}
+
+/** Circular arrow: restores defaults. */
+export function ResetIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="M4 12a8 8 0 1 0 2.3-5.6" />
+      <path d="M4 4v4h4" />
+    </IconFrame>
+  );
+}
+
 /** Window with a left panel: shows or hides the sidebar labels. */
 export function SidebarIcon({ className }: IconProps) {
   return (

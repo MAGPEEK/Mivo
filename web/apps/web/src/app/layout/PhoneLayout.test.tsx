@@ -2,6 +2,7 @@ import type { Library } from "@mivo/api-client";
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { libraryLayoutStorageKey } from "../../features/sidebar-layout";
 import { blockingAxeViolations } from "../../test/axe";
 import { createFakeServer, respondNever } from "../../test/fakeApi";
 import { fakeLibrary, librariesRoute, libraryRoute } from "../../test/libraryFixtures";
@@ -15,6 +16,12 @@ const desktopWidth = 1280;
 
 const movies = fakeLibrary({ id: "lib-movies", name: "Movies" });
 const shows = fakeLibrary({ id: "lib-shows", name: "Shows", kind: "shows" });
+const archive = fakeLibrary({ id: "lib-archive", name: "Archive" });
+
+// Same shape as the sidebar layout's stored value (features/sidebar-layout), version 1.
+function serializeTestLayout(order: string[], unpinned: string[]): string {
+  return JSON.stringify({ version: 1, order, unpinned });
+}
 
 function renderPhone(path = "/", libraries: readonly Library[] = [movies, shows]) {
   const viewport = stubViewportWidth(phoneWidth);
@@ -150,7 +157,7 @@ describe("Phone layout", () => {
 });
 
 describe("Phone libraries sheet", () => {
-  it("lists the libraries and links to all libraries", async () => {
+  it("lists the libraries and offers all libraries", async () => {
     renderPhone();
     const navigation = await findBottomNav();
     const tab = librariesTab(navigation);
@@ -163,7 +170,55 @@ describe("Phone libraries sheet", () => {
     const movieLink = await within(sheet).findByRole("link", { name: "Movies" });
     expect(movieLink.getAttribute("href")).toBe("/libraries/lib-movies");
     expect(within(sheet).getByRole("link", { name: "Shows" })).toBeTruthy();
-    expect(within(sheet).getByRole("link", { name: "All libraries" })).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: "All libraries" })).toBeTruthy();
+  });
+
+  it("lists only pinned libraries, in the saved order", async () => {
+    window.localStorage.setItem(
+      libraryLayoutStorageKey,
+      serializeTestLayout(["lib-shows", "lib-archive", "lib-movies"], ["lib-archive"]),
+    );
+    renderPhone("/", [movies, shows, archive]);
+    const sheet = await openLibrariesSheet();
+    await within(sheet).findByRole("link", { name: "Movies" });
+
+    const names = within(sheet)
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+
+    expect(names).toEqual(["Shows", "Movies"]);
+  });
+
+  it("shows all libraries with touch-sized pin buttons in the sheet and returns", async () => {
+    renderPhone("/", [movies, shows, archive]);
+    const sheet = await openLibrariesSheet();
+
+    fireEvent.click(await within(sheet).findByRole("button", { name: "All libraries" }));
+    const allSheet = screen.getByRole("dialog", { name: "All libraries" });
+    expect(document.activeElement).toBe(within(allSheet).getByRole("button", { name: "Done" }));
+    const pin = within(allSheet).getByRole("button", { name: "Pin Archive" });
+    expect(pin.className).toContain("size-11");
+
+    fireEvent.click(pin);
+    fireEvent.click(within(allSheet).getByRole("button", { name: "Done" }));
+
+    const pinnedSheet = screen.getByRole("dialog", { name: "Libraries" });
+    expect(within(pinnedSheet).queryByRole("link", { name: "Archive" })).toBeNull();
+    expect(document.activeElement).toBe(
+      within(pinnedSheet).getByRole("button", { name: "All libraries" }),
+    );
+  });
+
+  it("closes the sheet when a library in the full list is opened", async () => {
+    const { router } = renderPhone();
+    const sheet = await openLibrariesSheet();
+    fireEvent.click(await within(sheet).findByRole("button", { name: "All libraries" }));
+
+    fireEvent.click(screen.getByRole("link", { name: "Shows" }));
+
+    await screen.findByRole("heading", { level: 1, name: "Shows" });
+    expect(router.state.location.pathname).toBe("/libraries/lib-shows");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("opens a library and closes", async () => {
@@ -225,7 +280,7 @@ describe("Phone libraries sheet", () => {
     fireEvent.click(await within(navigation).findByRole("button", { name: "Bibliotheken" }));
     const sheet = screen.getByRole("dialog", { name: "Bibliotheken" });
 
-    expect(within(sheet).getByRole("link", { name: "Alle Bibliotheken" })).toBeTruthy();
+    expect(await within(sheet).findByRole("button", { name: "Alle Bibliotheken" })).toBeTruthy();
     expect(within(sheet).getByRole("button", { name: "Bibliotheken schließen" })).toBeTruthy();
     expect(within(navigation).getByRole("button", { name: "Suche" })).toBeTruthy();
   });

@@ -3,6 +3,7 @@ import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useSidebarLibraries } from "../../features/library";
+import { useArrangedLibraries } from "../../features/sidebar-layout";
 import { ServerVersion } from "../../features/system";
 import { BottomNav, Sidebar, TopBar } from "../../shared/ui";
 import { useNarrowScreen } from "./useNarrowScreen";
@@ -30,7 +31,7 @@ export function AppLayout({ children = <Outlet /> }: AppLayoutProps) {
   const navigationRef = useRef<HTMLElement>(null);
   useSidebarOverlay({ open: overlayOpen, close: closeOverlay, navigationRef, toggleRef });
   const searchInputRef = useSearchShortcut();
-  const libraries = useSidebarLibraries();
+  const libraries = useArrangedLibraries(useSidebarLibraries());
   const phone = usePhoneScreen();
   const shell = shellClasses(phone);
   const focusSearch = () => {

@@ -10,7 +10,19 @@
     "libraries": {
       "heading": "Libraries",
       "empty": "No libraries yet",
-      "add": "Add library"
+      "add": "Add library",
+      "allLibraries": "All libraries",
+      "done": "Done",
+      "resetLayout": "Reset layout",
+      "moveUp": "Move up: {{name}}",
+      "moveDown": "Move down: {{name}}",
+      "pin": "Pin {{name}}",
+      "layout": {
+        "moved": "{{name}} moved to position {{position}} of {{count}}",
+        "pinnedNotice": "{{name}} pinned",
+        "unpinnedNotice": "{{name}} unpinned",
+        "resetNotice": "Layout reset"
+      }
     }
   },
   "bottomNav": {

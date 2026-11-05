@@ -1,28 +1,24 @@
 import { productName } from "@mivo/ui-tokens";
 import { Link } from "@tanstack/react-router";
-import { useId, type ReactNode, type Ref } from "react";
+import { useId, useRef, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AlertIcon, HomeIcon, SettingsIcon, SidebarIcon } from "./icons";
+import { HomeIcon, SettingsIcon, SidebarIcon } from "./icons";
+import { labelClass, sidebarLinkClass, type SidebarLibraries } from "./sidebarParts";
+import {
+  AllLibraries,
+  LayoutLiveRegion,
+  LibraryLink,
+  PinnedLibraries,
+} from "./SidebarLibraryLists";
+import { useAllLibrariesSwitch } from "./useAllLibrariesSwitch";
 
-/** One library link of the sidebar. */
-export interface SidebarLibraryLink {
-  readonly id: string;
-  readonly name: string;
-  /** Decorative icon of the library kind. */
-  readonly icon: ReactNode;
-  /** Short state such as "Unavailable", shown and announced after the name. */
-  readonly note?: string | undefined;
-}
-
-/** Content of the libraries section; the texts come translated from the library feature. */
-export type SidebarLibraries =
-  | { readonly state: "loading"; readonly message: string }
-  | { readonly state: "error"; readonly message: string }
-  | {
-      readonly state: "loaded";
-      readonly links: readonly SidebarLibraryLink[];
-    };
+export type {
+  LayoutAnnouncement,
+  SidebarLayoutControls,
+  SidebarLibraries,
+  SidebarLibraryLink,
+} from "./sidebarParts";
 
 /** Props of {@link Sidebar}. */
 export interface SidebarProps {
@@ -45,15 +41,6 @@ export interface SidebarProps {
    */
   readonly footer?: (navigationId: string) => ReactNode;
 }
-
-// Collapsing hides labels visually but keeps them in the accessibility tree, so the
-// navigation reads the same with a screen reader in both states.
-function labelClass(collapsed: boolean, expandedClass: string): string {
-  return collapsed ? "sr-only" : expandedClass;
-}
-
-const linkClass =
-  "group flex h-10 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-text-muted hover:bg-surface-raised hover:text-text aria-[current=page]:bg-surface-raised aria-[current=page]:text-text";
 
 /** Main navigation on the left: brand, page links, libraries and a footer slot. */
 export function Sidebar({
@@ -94,7 +81,11 @@ export function Sidebar({
           </span>
         </div>
         <SidebarLinks collapsed={collapsed} />
-        <LibrariesSection collapsed={collapsed} libraries={libraries} />
+        <LibrariesSection
+          collapsed={collapsed}
+          libraries={libraries}
+          onExpand={onToggleCollapsed}
+        />
         <SettingsLink collapsed={collapsed} />
         {footer !== undefined && (
           <div className={`mt-auto border-t border-divider py-3 ${collapsed ? "px-2" : "px-4"}`}>
@@ -118,7 +109,7 @@ function SidebarLinks({ collapsed }: CollapsibleProps) {
         <Link
           to="/"
           activeOptions={{ exact: true }}
-          className={`${linkClass} ${collapsed ? "justify-center" : ""}`}
+          className={`${sidebarLinkClass} ${collapsed ? "justify-center" : ""}`}
         >
           <HomeIcon className="size-5 shrink-0 group-aria-[current=page]:text-accent" />
           <span className={labelClass(collapsed, "truncate")}>{t("sidebar.home")}</span>
@@ -137,7 +128,7 @@ function SettingsLink({ collapsed }: CollapsibleProps) {
       <li>
         <Link
           to="/admin/manage/libraries"
-          className={`${linkClass} ${collapsed ? "justify-center" : ""}`}
+          className={`${sidebarLinkClass} ${collapsed ? "justify-center" : ""}`}
         >
           <SettingsIcon className="size-5 shrink-0 group-aria-[current=page]:text-accent" />
           <span className={labelClass(collapsed, "truncate")}>{t("sidebar.settings")}</span>
@@ -149,29 +140,65 @@ function SettingsLink({ collapsed }: CollapsibleProps) {
 
 interface LibrariesSectionProps extends CollapsibleProps {
   readonly libraries: SidebarLibraries;
+  /** Expands the sidebar, for "All libraries" pressed while collapsed. */
+  readonly onExpand: () => void;
 }
 
 // The section scrolls on its own, so a long list never pushes the footer off screen.
-function LibrariesSection({ collapsed, libraries }: LibrariesSectionProps) {
+function LibrariesSection({ collapsed, libraries, onExpand }: LibrariesSectionProps) {
   const { t } = useTranslation();
   const headingId = useId();
+  const doneRef = useRef<HTMLButtonElement>(null);
+  const showAllRef = useRef<HTMLButtonElement>(null);
+  const allSwitch = useAllLibrariesSwitch({ collapsed, onExpand, doneRef, showAllRef });
+  const layout = libraries.state === "loaded" ? libraries.layout : undefined;
   return (
     <section aria-labelledby={headingId} className="mt-6 min-h-0 overflow-y-auto px-3 pb-3">
-      <h2
-        id={headingId}
-        className={labelClass(
-          collapsed,
-          "px-2.5 text-xs font-semibold tracking-wide text-text-muted uppercase",
+      <div className="flex items-center justify-between gap-2 px-2.5">
+        <h2
+          id={headingId}
+          className={labelClass(
+            collapsed,
+            "text-xs font-semibold tracking-wide text-text-muted uppercase",
+          )}
+        >
+          {allSwitch.showAll && layout !== undefined
+            ? t("sidebar.libraries.allLibraries")
+            : t("sidebar.libraries.heading")}
+        </h2>
+        {allSwitch.showAll && layout !== undefined && (
+          <button
+            type="button"
+            ref={doneRef}
+            onClick={allSwitch.hide}
+            className="rounded-md px-2 py-0.5 text-xs font-medium text-text-muted hover:bg-surface-raised hover:text-text"
+          >
+            {t("sidebar.libraries.done")}
+          </button>
         )}
-      >
-        {t("sidebar.libraries.heading")}
-      </h2>
-      <LibrariesContent collapsed={collapsed} libraries={libraries} />
+      </div>
+      {allSwitch.showAll && libraries.state === "loaded" && libraries.layout !== undefined ? (
+        <AllLibraries links={libraries.links} layout={libraries.layout} />
+      ) : (
+        <LibrariesContent
+          collapsed={collapsed}
+          libraries={libraries}
+          onShowAll={allSwitch.show}
+          showAllRef={showAllRef}
+        />
+      )}
+      {layout !== undefined && <LayoutLiveRegion announcement={layout.announcement} />}
     </section>
   );
 }
 
-function LibrariesContent({ collapsed, libraries }: LibrariesSectionProps) {
+interface LibrariesContentProps extends CollapsibleProps {
+  readonly libraries: SidebarLibraries;
+  readonly onShowAll: () => void;
+  readonly showAllRef: Ref<HTMLButtonElement>;
+}
+
+function LibrariesContent({ collapsed, libraries, onShowAll, showAllRef }: LibrariesContentProps) {
   const { t } = useTranslation();
   const messageClass = labelClass(collapsed, "mt-2 px-2.5 text-sm text-text-muted");
   if (libraries.state !== "loaded") {
@@ -194,44 +221,24 @@ function LibrariesContent({ collapsed, libraries }: LibrariesSectionProps) {
       </>
     );
   }
+  if (libraries.layout !== undefined) {
+    return (
+      <PinnedLibraries
+        collapsed={collapsed}
+        links={libraries.links.filter((library) => library.pinned !== false)}
+        layout={libraries.layout}
+        onShowAll={onShowAll}
+        showAllRef={showAllRef}
+      />
+    );
+  }
   return (
     <ul className="mt-2 flex flex-col gap-1">
       {libraries.links.map((library) => (
-        <li key={library.id}>
+        <li key={library.id} className="flex">
           <LibraryLink collapsed={collapsed} library={library} />
         </li>
       ))}
     </ul>
-  );
-}
-
-interface LibraryLinkProps extends CollapsibleProps {
-  readonly library: SidebarLibraryLink;
-}
-
-function LibraryLink({ collapsed, library }: LibraryLinkProps) {
-  return (
-    <Link
-      to="/libraries/$libraryId"
-      params={{ libraryId: library.id }}
-      className={`${linkClass} relative ${collapsed ? "justify-center" : ""}`}
-    >
-      {/* The icon draws in currentColor, so the wrapper's colour marks the current library. */}
-      <span className="contents group-aria-[current=page]:text-accent">{library.icon}</span>
-      <span className={labelClass(collapsed, "min-w-0 flex-1 truncate")}>{library.name}</span>
-      {library.note !== undefined && (
-        <>
-          {/* Visible in both states: the only hint at an unavailable library while collapsed. */}
-          <AlertIcon
-            className={
-              collapsed
-                ? "absolute top-1 right-1 size-3.5 text-accent"
-                : "size-4 shrink-0 text-accent"
-            }
-          />
-          <span className="sr-only">{`, ${library.note}`}</span>
-        </>
-      )}
-    </Link>
   );
 }

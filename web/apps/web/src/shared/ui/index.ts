@@ -45,6 +45,8 @@ export {
 } from "./icons";
 export {
   Sidebar,
+  type LayoutAnnouncement,
+  type SidebarLayoutControls,
   type SidebarLibraries,
   type SidebarLibraryLink,
   type SidebarProps,

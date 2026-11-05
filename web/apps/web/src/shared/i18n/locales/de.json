@@ -10,7 +10,19 @@
     "libraries": {
       "heading": "Bibliotheken",
       "empty": "Noch keine Bibliotheken",
-      "add": "Bibliothek hinzufügen"
+      "add": "Bibliothek hinzufügen",
+      "allLibraries": "Alle Bibliotheken",
+      "done": "Fertig",
+      "resetLayout": "Layout zurücksetzen",
+      "moveUp": "Nach oben: {{name}}",
+      "moveDown": "Nach unten: {{name}}",
+      "pin": "{{name}} anheften",
+      "layout": {
+        "moved": "{{name}} an Position {{position}} von {{count}} verschoben",
+        "pinnedNotice": "{{name}} angeheftet",
+        "unpinnedNotice": "{{name}} nicht mehr angeheftet",
+        "resetNotice": "Layout zurückgesetzt"
+      }
     }
   },
   "bottomNav": {
