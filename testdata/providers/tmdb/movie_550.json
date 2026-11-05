@@ -1,0 +1,22 @@
+{
+  "id": 550,
+  "imdb_id": "tt0137523",
+  "title": "Fight Club",
+  "original_title": "Fight Club",
+  "release_date": "1999-10-15",
+  "overview": "A ticking-time-bomb insomniac and a slippery soap salesman channel primal male aggression into a shocking new form of therapy.",
+  "tagline": "Mischief. Mayhem. Soap.",
+  "genres": [{"id": 18, "name": "Drama"}],
+  "production_companies": [{"id": 711, "name": "Fox 2000 Pictures"}],
+  "production_countries": [{"iso_3166_1": "US", "name": "United States of America"}],
+  "belongs_to_collection": null,
+  "poster_path": "/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg",
+  "backdrop_path": null,
+  "credits": {
+    "cast": [{"name": "Edward Norton", "character": "Narrator", "order": 0}],
+    "crew": [{"name": "David Fincher", "job": "Director", "department": "Directing"}]
+  },
+  "external_ids": {"imdb_id": null},
+  "release_dates": {"results": [{"iso_3166_1": "US", "release_dates": [{"certification": "R", "type": 3}]}]},
+  "images": {"posters": [], "backdrops": [], "logos": []}
+}

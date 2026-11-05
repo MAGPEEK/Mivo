@@ -1,0 +1,11 @@
+{
+  "page": 1,
+  "results": [
+    {"id": 603, "title": "The Matrix", "original_title": "The Matrix", "release_date": "1999-03-31", "popularity": 85.3},
+    {"id": 604, "title": "The Matrix Reloaded", "original_title": "The Matrix Reloaded", "release_date": "2003-05-15", "popularity": 40.1},
+    {"id": 0, "title": "broken entry without id"},
+    {"id": 1000001, "title": "The Matrix Revisited", "original_title": "The Matrix Revisited", "release_date": "", "popularity": 2.5}
+  ],
+  "total_pages": 1,
+  "total_results": 4
+}

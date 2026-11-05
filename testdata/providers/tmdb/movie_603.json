@@ -1,0 +1,42 @@
+{
+  "id": 603,
+  "imdb_id": "tt0133093",
+  "title": "The Matrix",
+  "original_title": "The Matrix",
+  "release_date": "1999-03-31",
+  "overview": "Set in the 22nd century, The Matrix tells the story of a computer hacker who joins a group of underground insurgents fighting the vast and powerful computers who now rule the earth.",
+  "tagline": "Welcome to the Real World.",
+  "genres": [{"id": 28, "name": "Action"}, {"id": 878, "name": "Science Fiction"}],
+  "production_companies": [{"id": 79, "name": "Village Roadshow Pictures"}, {"id": 174, "name": "Warner Bros. Pictures"}],
+  "production_countries": [{"iso_3166_1": "US", "name": "United States of America"}],
+  "belongs_to_collection": {"id": 2344, "name": "The Matrix Collection", "poster_path": "/bV9qTVHTVf0gkW0j7p7M0ILD4pG.jpg"},
+  "poster_path": "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+  "backdrop_path": "/fNG7i7RqMErkcqhohV2a6cV1Ehy.jpg",
+  "credits": {
+    "cast": [
+      {"name": "Keanu Reeves", "character": "Neo", "order": 0},
+      {"name": "Laurence Fishburne", "character": "Morpheus", "order": 1},
+      {"name": "", "character": "Nameless", "order": 2}
+    ],
+    "crew": [
+      {"name": "Lana Wachowski", "job": "Director", "department": "Directing"},
+      {"name": "Lilly Wachowski", "job": "Director", "department": "Directing"},
+      {"name": "Lana Wachowski", "job": "Writer", "department": "Writing"},
+      {"name": "Lana Wachowski", "job": "Screenplay", "department": "Writing"},
+      {"name": "Joel Silver", "job": "Producer", "department": "Production"},
+      {"name": "Don Davis", "job": "Original Music Composer", "department": "Sound"}
+    ]
+  },
+  "external_ids": {"imdb_id": "tt0133093", "tvdb_id": null},
+  "release_dates": {
+    "results": [
+      {"iso_3166_1": "DE", "release_dates": [{"certification": "", "type": 1}, {"certification": "16", "type": 3}]},
+      {"iso_3166_1": "US", "release_dates": [{"certification": "R", "type": 3}]}
+    ]
+  },
+  "images": {
+    "posters": [{"file_path": "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg"}, {"file_path": "/aOIuZAjPaRIE6CMzbazvcHuHXDc.jpg"}, {"file_path": "/../../etc/passwd"}],
+    "backdrops": [{"file_path": "/l4QHerTSbMI7qgvasqxP36pqjN6.jpg"}],
+    "logos": [{"file_path": "/hXbnbLpTBGVAdAnyMJdvn8rpTvz.png"}]
+  }
+}

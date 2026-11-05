@@ -1,0 +1,27 @@
+{
+  "id": 1396,
+  "name": "Breaking Bad",
+  "original_name": "Breaking Bad",
+  "first_air_date": "2008-01-20",
+  "overview": "Walter White, a New Mexico chemistry teacher, is diagnosed with Stage III cancer and given a prognosis of only two years left to live.",
+  "tagline": "Change the equation.",
+  "genres": [{"id": 18, "name": "Drama"}, {"id": 80, "name": "Crime"}],
+  "networks": [{"id": 174, "name": "AMC"}],
+  "production_countries": [{"iso_3166_1": "US", "name": "United States of America"}],
+  "poster_path": "/ztkUQFLlC19CCMYHW9o1zWhJRNq.jpg",
+  "backdrop_path": "/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg",
+  "credits": {
+    "cast": [
+      {"name": "Bryan Cranston", "character": "Walter White", "order": 0},
+      {"name": "Aaron Paul", "character": "Jesse Pinkman", "order": 1}
+    ],
+    "crew": [{"name": "Vince Gilligan", "job": "Executive Producer", "department": "Production"}]
+  },
+  "external_ids": {"imdb_id": "tt0903747", "tvdb_id": 81189},
+  "content_ratings": {"results": [{"iso_3166_1": "DE", "rating": "16"}, {"iso_3166_1": "US", "rating": "TV-MA"}]},
+  "images": {
+    "posters": [{"file_path": "/ggFHVNu6YYI5L9pCfOacjizRGt.jpg"}],
+    "backdrops": [],
+    "logos": [{"file_path": "/chw44B2VnSha8iiCtcqXh0JEdaE.png"}]
+  }
+}

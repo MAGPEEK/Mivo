@@ -58,6 +58,12 @@ func Rank(query Query, candidates []Candidate) []Scored {
 	return ranked
 }
 
+// isExactID reports whether the candidate is the entry the query named. Kinds must agree when
+// both are known, because TMDB movie 603 and TMDB show 603 are different entries.
 func isExactID(query Query, candidate Candidate) bool {
-	return !query.Ref.IsZero() && query.Ref.ID == candidate.Ref.ID && query.Ref.Provider == candidate.Ref.Provider
+	if query.Ref.IsZero() || query.Ref.ID != candidate.Ref.ID || query.Ref.Provider != candidate.Ref.Provider {
+		return false
+	}
+
+	return query.Ref.Kind == RefKindUnknown || candidate.Ref.Kind == RefKindUnknown || query.Ref.Kind == candidate.Ref.Kind
 }

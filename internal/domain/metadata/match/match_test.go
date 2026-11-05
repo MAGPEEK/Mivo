@@ -237,6 +237,42 @@ func TestRankMarksExactID(t *testing.T) {
 	}
 }
 
+// TMDB movie 603 and TMDB show 603 are different entries; only an unknown kind on either
+// side may still count as the same entry (a bare pasted number has no kind).
+func TestExactIDRequiresMatchingKinds(t *testing.T) {
+	tmdbShow := ProviderRef{Provider: RefTMDB, Kind: RefKindShow, ID: "603"}
+	tmdbBare := ProviderRef{Provider: RefTMDB, ID: "603"}
+
+	tests := []struct {
+		name      string
+		query     ProviderRef
+		candidate ProviderRef
+		want      bool
+	}{
+		{"same kind", tmdbMovie("603"), tmdbMovie("603"), true},
+		{"movie query, show candidate", tmdbMovie("603"), tmdbShow, false},
+		{"show query, movie candidate", tmdbShow, tmdbMovie("603"), false},
+		{"unknown query kind", tmdbBare, tmdbShow, true},
+		{"unknown candidate kind", tmdbMovie("603"), tmdbBare, true},
+		{"different id", tmdbMovie("603"), tmdbMovie("604"), false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := Candidate{Ref: test.candidate, Title: "unrelated"}
+			ranked := Rank(Query{Title: "wrong", Ref: test.query}, []Candidate{candidate})
+
+			if ranked[0].ExactID != test.want {
+				t.Errorf("ExactID = %v, want %v", ranked[0].ExactID, test.want)
+			}
+
+			if exact := Score(Query{Title: "wrong", Ref: test.query}, candidate) == 1; exact != test.want {
+				t.Errorf("Score == 1 is %v, want %v", exact, test.want)
+			}
+		})
+	}
+}
+
 func scored(confidences ...float64) []Scored {
 	ranked := make([]Scored, 0, len(confidences))
 	for _, confidence := range confidences {

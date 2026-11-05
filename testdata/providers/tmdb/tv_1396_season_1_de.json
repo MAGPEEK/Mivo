@@ -1,0 +1,28 @@
+{
+  "id": 3572,
+  "name": "Staffel 1",
+  "overview": "",
+  "air_date": "2008-01-20",
+  "season_number": 1,
+  "poster_path": "/1BP4xYv9ZG4ZVHkL7ocOziBbSYH.jpg",
+  "episodes": [
+    {
+      "episode_number": 1,
+      "name": "Der Einstieg",
+      "overview": "Walter White, Chemielehrer an einer Highschool, erfährt, dass er Lungenkrebs hat.",
+      "air_date": "2008-01-20",
+      "still_path": "/ydlY3iPfeOAvu8gVqrxPoMvzNCn.jpg",
+      "crew": [],
+      "guest_stars": []
+    },
+    {
+      "episode_number": 2,
+      "name": "",
+      "overview": "",
+      "air_date": "2008-01-27",
+      "still_path": null,
+      "crew": [],
+      "guest_stars": []
+    }
+  ]
+}

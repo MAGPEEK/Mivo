@@ -1,0 +1,31 @@
+{
+  "id": 3572,
+  "name": "Season 1",
+  "overview": "High school chemistry teacher Walter White's life is suddenly transformed by a dire medical diagnosis.",
+  "air_date": "2008-01-20",
+  "season_number": 1,
+  "poster_path": "/1BP4xYv9ZG4ZVHkL7ocOziBbSYH.jpg",
+  "episodes": [
+    {
+      "episode_number": 1,
+      "name": "Pilot",
+      "overview": "When an unassuming high school chemistry teacher discovers he has a rare form of lung cancer, he decides to team up with a former student.",
+      "air_date": "2008-01-20",
+      "still_path": "/ydlY3iPfeOAvu8gVqrxPoMvzNCn.jpg",
+      "crew": [
+        {"name": "Vince Gilligan", "job": "Director", "department": "Directing"},
+        {"name": "Vince Gilligan", "job": "Writer", "department": "Writing"}
+      ],
+      "guest_stars": [{"name": "Max Arciniega", "character": "Krazy-8", "order": 0}]
+    },
+    {
+      "episode_number": 2,
+      "name": "Cat's in the Bag...",
+      "overview": "Walt and Jesse attempt to tie up loose ends.",
+      "air_date": "2008-01-27",
+      "still_path": "/tjDNvbokPLtEnpFyFPyXMOd6Zr1.jpg",
+      "crew": [],
+      "guest_stars": []
+    }
+  ]
+}
