@@ -8,7 +8,7 @@ reference for every setting of the image; the step-by-step user guides are
 Container Manager, QNAP Container Station) with the ready-made
 [docker-compose.yml](docker-compose.yml) next to this file.
 
-Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.2` and `alpha`
+Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.4` and `alpha`
 (no `latest`), platforms `linux/amd64` and `linux/arm64`. The examples below use the
 published tag; replace it with `mivo:dev` for an image you built yourself.
 
@@ -36,7 +36,7 @@ and `web/` (without `node_modules`, build output, coverage and Playwright output
 ```
 docker run -d --name mivo -p 0.0.0.0:8460:8460 --stop-timeout 20 \
   -v /path/to/config:/config -v /path/to/media:/media:ro -v /path/to/transcode:/transcode \
-  docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
+  docker.io/magpeek/mivo-media-server:0.1.0-alpha.4
 ```
 
 `--stop-timeout 20` (compose: `stop_grace_period: 20s`) gives the server time for its
@@ -207,7 +207,7 @@ Synology (Container Manager project), one library from the `video` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.4
     user: "1026:100"
     stop_grace_period: 20s
     ports:
@@ -226,7 +226,7 @@ QNAP (Container Station application), two libraries from the `Multimedia` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.2
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.4
     user: "1000:100"
     stop_grace_period: 20s
     ports:
@@ -249,7 +249,7 @@ into a volume only when it creates the empty volume. They work with the default 
 with `--user` / `user:` set to another ID the server cannot write them. Use bind mounts in
 that case, or `chown` the volume to that user once before the first start (a one-off root
 container that only changes ownership, not the server):
-`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.2 -R 1026:100 /config`.
+`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.4 -R 1026:100 /config`.
 Note that Docker re-initialises a volume from the image while it is still empty, so the
 `chown` only sticks once the volume holds a file; bind mounts avoid the problem.
 
@@ -260,7 +260,7 @@ An unwritable `/transcode` does not stop the start: the log warns `leftover play
 directories could not be deleted … open /transcode: permission denied` and remux and
 transcode sessions fail later. An unreadable `/media` ends the scan with
 `library scan finished … state=failed code=root_unavailable`. (All three messages verified
-with the `0.1.0-alpha.2` image.) The server creates its directories with mode `0750`, so the
+with the `0.1.0-alpha.4` image.) The server creates its directories with mode `0750`, so the
 user's group can read them.
 
 `PUID`/`PGID` variables with a privilege drop in an entrypoint come in milestone 9.
