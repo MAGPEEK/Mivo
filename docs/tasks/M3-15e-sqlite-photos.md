@@ -1,16 +1,16 @@
-# M3-15e SQLite: migration 00008 `photo_info`, writer and reader
+# M3-15e SQLite: migration 00009 `photo_info`, writer and reader
 Owner: mivo-backend
 Depends on: M3-15a, M3-14d (migration order), M3-19h
-Files/areas: `internal/adapters/sqlite/migrations/00008_*.sql`, `queries/photos.sql`, `sqlcgen/`, `library_catalog_photos.go`
+Files/areas: `internal/adapters/sqlite/migrations/00009_*.sql`, `queries/photos.sql`, `sqlcgen/`, `library_catalog_photos.go`
 
 ## Goal
 Persist photo albums, photos and EXIF values; list albums and photos by capture time.
 
 ## Acceptance criteria
-- [ ] `photo_info(item_id PK, taken_at, make, model, lens, exposure, f_number, iso, focal_mm, orientation, lat, lon, width, height, thumbnail_state)`; additive, index on (parent, taken_at).
+- [ ] `photo_info(item_id PK, taken_at, make, model, lens, exposure, f_number, iso, focal_mm, orientation, lat, lon, width, height, thumbnail_state)`; additive, indexes on (parent, taken_at), (library, taken_at) for the timeline and on primary_file_id (foreign key). Implemented with library_id, parent_id, primary_file_id, name_key and taken_at_source as extra columns.
 - [ ] Writer upserts album/photo items and info; alternate RAW file stored as a second media file of the photo.
 - [ ] Reader: children of an album (sub-albums first, then photos by capture time, file name), paging by cursor, detail with info.
-- [ ] Tests: real SQLite, migration up from `00007`, ordering, paging, 10 000-row paging smoke under 1 s.
+- [ ] Tests: real SQLite, migration up from `00007` and 00009 down to `00008`, ordering, paging, 10 000-row paging smoke under 1 s.
 - [ ] Gates: lint + layer rules + coverage thresholds; sqlc diff clean.
 
 ## Notes

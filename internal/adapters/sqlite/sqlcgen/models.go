@@ -200,6 +200,29 @@ type Person struct {
 	SortName string
 }
 
+type PhotoInfo struct {
+	ItemID         string
+	LibraryID      string
+	ParentID       sql.NullString
+	PrimaryFileID  sql.NullString
+	NameKey        string
+	TakenAt        int64
+	TakenAtSource  string
+	Make           string
+	Model          string
+	Lens           string
+	Exposure       float64
+	FNumber        float64
+	Iso            int64
+	FocalMm        float64
+	Orientation    int64
+	Lat            sql.NullFloat64
+	Lon            sql.NullFloat64
+	Width          int64
+	Height         int64
+	ThumbnailState string
+}
+
 type ProviderCache struct {
 	Provider  string
 	CacheKey  string

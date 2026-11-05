@@ -32,6 +32,8 @@ type PhotoDetails struct {
 	// are the stored pixel size; the API's displayed size is Info.DisplaySize(). A video
 	// carries only TakenAt and the size of its primary video stream.
 	Info photo.Info
+	// TakenAtSource says whether Info.TakenAt is the EXIF time or the modification time.
+	TakenAtSource photo.TakenAtSource
 	// ThumbnailState says whether a thumbnail can be rendered (photo.ThumbnailStateFor).
 	ThumbnailState photo.ThumbnailState
 }

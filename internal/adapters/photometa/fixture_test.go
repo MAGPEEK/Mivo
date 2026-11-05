@@ -27,6 +27,7 @@ func cameraTIFF(options cameraOptions) []byte {
 
 	exif := builder.addIFD([]testEntry{
 		builder.rational(tagExposureTime, typeRational, 1, 250),
+		builder.rational(tagFNumber, typeRational, 18, 10),
 		builder.short(tagISO, 400),
 		builder.ascii(tagDateTimeOriginal, "2024:06:01 14:30:15"),
 		builder.rational(tagFocalLength, typeRational, 50, 1),
@@ -76,6 +77,7 @@ func cameraInfo() photo.Info {
 		Model:           "EOS R5",
 		Lens:            "RF50mm F1.8 STM",
 		ExposureSeconds: 1.0 / 250,
+		FNumber:         1.8,
 		ISO:             400,
 		FocalLengthMM:   50,
 		Orientation:     6,

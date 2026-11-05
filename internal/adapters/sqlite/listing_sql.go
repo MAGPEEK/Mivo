@@ -92,12 +92,14 @@ const (
 )
 
 // memberPathOf returns the deciding items of a kind: a show by its episodes, an artist by the
-// tracks of its albums, an album by its tracks, everything else by itself.
+// tracks of its albums, an album by its tracks, a photo album by its own photos (not those of
+// its sub-albums), everything else by itself.
 func memberPathOf(kind library.ItemKind) memberPath {
 	containers := map[library.ItemKind]memberPath{
-		library.ItemKindShow:   {depth: memberGrandchild, memberKind: library.ItemKindEpisode},
-		library.ItemKindArtist: {depth: memberGrandchild, memberKind: library.ItemKindTrack},
-		library.ItemKindAlbum:  {depth: memberChild, memberKind: library.ItemKindTrack},
+		library.ItemKindShow:       {depth: memberGrandchild, memberKind: library.ItemKindEpisode},
+		library.ItemKindArtist:     {depth: memberGrandchild, memberKind: library.ItemKindTrack},
+		library.ItemKindAlbum:      {depth: memberChild, memberKind: library.ItemKindTrack},
+		library.ItemKindPhotoAlbum: {depth: memberChild, memberKind: library.ItemKindPhoto},
 	}
 
 	if path, found := containers[kind]; found {

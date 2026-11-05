@@ -33,6 +33,7 @@ const (
 // Exif IFD tags (EXIF 2.32).
 const (
 	tagExposureTime      = 0x829A
+	tagFNumber           = 0x829D
 	tagISO               = 0x8827
 	tagDateTimeOriginal  = 0x9003
 	tagDateTimeDigitized = 0x9004
@@ -174,6 +175,10 @@ func (builder *infoBuilder) applyExif(stream *tiffStream, directory ifd) {
 
 	if exposure, ok := stream.rational(directory, tagExposureTime, 0); ok && exposure >= 0 {
 		builder.info.ExposureSeconds = exposure
+	}
+
+	if fNumber, ok := stream.rational(directory, tagFNumber, 0); ok && fNumber >= 0 {
+		builder.info.FNumber = fNumber
 	}
 
 	if focal, ok := stream.rational(directory, tagFocalLength, 0); ok && focal >= 0 {

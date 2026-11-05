@@ -63,7 +63,7 @@ func TestReadInfoFormats(t *testing.T) {
 	})
 	cmt2 := singleIFDTIFF(func(b *tiffBuilder) []testEntry {
 		return []testEntry{
-			b.rational(tagExposureTime, typeRational, 1, 250), b.short(tagISO, 400),
+			b.rational(tagExposureTime, typeRational, 1, 250), b.rational(tagFNumber, typeRational, 18, 10), b.short(tagISO, 400),
 			b.ascii(tagDateTimeOriginal, "2024:06:01 14:30:15"), b.rational(tagFocalLength, typeRational, 50, 1),
 			b.long(tagPixelXDimension, 6000), b.long(tagPixelYDimension, 4000), b.ascii(tagLensModel, "RF50mm F1.8 STM"),
 		}

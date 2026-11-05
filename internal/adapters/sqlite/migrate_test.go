@@ -12,7 +12,7 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 8
+const latestSchemaVersion = 9
 
 // schemaTables returns all tables the migrations create, in creation order.
 func schemaTables() []string {

@@ -109,8 +109,7 @@ func (scanRun *photoRun) recordPhoto(ctx context.Context, result photoResult) er
 		return err
 	}
 
-	info, thumbnail := scanRun.photoInfo(ctx, result)
-	if err := scanRun.saveDetails(ctx, job.probeJob, info, thumbnail); err != nil {
+	if err := scanRun.saveDetails(ctx, job.probeJob, scanRun.photoDetails(ctx, result)); err != nil {
 		return err
 	}
 
@@ -120,14 +119,14 @@ func (scanRun *photoRun) recordPhoto(ctx context.Context, result photoResult) er
 }
 
 // saveDetails writes the details of the photo item the saved primary file belongs to.
-func (scanRun *photoRun) saveDetails(ctx context.Context, job probeJob, info photo.Info, thumbnail photo.ThumbnailState) error {
+func (scanRun *photoRun) saveDetails(ctx context.Context, job probeJob, details PhotoDetails) error {
 	chain := scanRun.chains[keyOf(job.state)]
 	if len(chain) == 0 {
 		return fail(ErrorCodeFailed, "save photo details",
 			fmt.Errorf("photo %s has no item chain: %w", job.state.RelativePath, domain.ErrInvalid))
 	}
 
-	details := PhotoDetails{ItemID: chain[len(chain)-1], PrimaryFileID: job.fileID, Info: info, ThumbnailState: thumbnail}
+	details.ItemID, details.PrimaryFileID = chain[len(chain)-1], job.fileID
 	if err := scanRun.ports.Catalog.SavePhotoDetails(ctx, details); err != nil {
 		return catalogFailure("save photo details of "+job.state.RelativePath, err)
 	}
@@ -135,17 +134,20 @@ func (scanRun *photoRun) saveDetails(ctx context.Context, job probeJob, info pho
 	return nil
 }
 
-// photoInfo derives the details of a saved primary file. The capture time falls back to the
-// modification time as the server's wall clock, so every photo sorts.
-func (scanRun *photoRun) photoInfo(ctx context.Context, result photoResult) (photo.Info, photo.ThumbnailState) {
+// photoDetails derives the details of a saved primary file, without the IDs saveDetails
+// adds. The capture time falls back to the modification time as the server's wall clock, so
+// every photo sorts; TakenAtSource records which of the two it is.
+func (scanRun *photoRun) photoDetails(ctx context.Context, result photoResult) PhotoDetails {
 	state := result.job.state
 	modified := photo.WallClock(state.ModifiedAt, scanRun.ports.Zone)
 
 	switch {
 	case result.probe.outcome == outcomeProbeFailed:
-		return photo.Info{TakenAt: modified}, photo.ThumbnailUnsupported
+		return PhotoDetails{Info: photo.Info{TakenAt: modified}, TakenAtSource: photo.TakenAtFile, ThumbnailState: photo.ThumbnailUnsupported}
 	case state.Class == library.FileClassVideo:
-		return videoInfo(result.probe.description, modified), photo.ThumbnailReady
+		return PhotoDetails{
+			Info: videoInfo(result.probe.description, modified), TakenAtSource: photo.TakenAtFile, ThumbnailState: photo.ThumbnailReady,
+		}
 	}
 
 	info, err := result.info, result.infoErr
@@ -165,9 +167,10 @@ func (scanRun *photoRun) photoInfo(ctx context.Context, result photoResult) (pho
 			errors.New(metadataReason(err)))
 	}
 
+	source := photo.SourceOf(info)
 	info.TakenAt = photo.CaptureTime(info, modified)
 
-	return info, thumbnail
+	return PhotoDetails{Info: info, TakenAtSource: source, ThumbnailState: thumbnail}
 }
 
 // videoInfo is what a video of a photos library contributes: the size of its primary video

@@ -46,11 +46,13 @@ func TestPhotoScanBuildsNestedAlbumsFromTheFolderTree(t *testing.T) {
 	fileID, _ := h.catalogV2.fileOf("Trip/Day 1/a.jpg")
 
 	if got.PrimaryFileID != fileID || !got.Info.TakenAt.Equal(cameraTime) || got.Info.Model != "R6" ||
-		got.Info.FNumber != 2.8 || got.Info.GPS == nil || got.ThumbnailState != photo.ThumbnailReady {
+		got.Info.FNumber != 2.8 || got.Info.GPS == nil || got.ThumbnailState != photo.ThumbnailReady ||
+		got.TakenAtSource != photo.TakenAtExif {
 		t.Errorf("details of a.jpg = %+v, want the EXIF values, primary %s and ready", got, fileID)
 	}
 
-	if png := detailsOf(t, h, details, "Trip/b.png"); !png.Info.TakenAt.Equal(fileAt("Trip/b.png", 2).ModifiedAt) {
+	if png := detailsOf(t, h, details, "Trip/b.png"); !png.Info.TakenAt.Equal(fileAt("Trip/b.png", 2).ModifiedAt) ||
+		png.TakenAtSource != photo.TakenAtFile {
 		t.Errorf("taken at of b.png = %v, want its modification time", png.Info.TakenAt)
 	}
 
@@ -206,7 +208,7 @@ func TestPhotoScanProbesVideosAsPhotoItems(t *testing.T) {
 
 	clip := detailsOf(t, h, details, "Trip/clip.mp4")
 	if clip.Info.Width != 1920 || clip.Info.Height != 1080 || clip.ThumbnailState != photo.ThumbnailReady ||
-		!clip.Info.TakenAt.Equal(fileAt("Trip/clip.mp4", 1).ModifiedAt) {
+		!clip.Info.TakenAt.Equal(fileAt("Trip/clip.mp4", 1).ModifiedAt) || clip.TakenAtSource != photo.TakenAtFile {
 		t.Errorf("details of the clip = %+v, want the stream size, the modification time and ready", clip)
 	}
 
