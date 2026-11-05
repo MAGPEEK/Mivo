@@ -430,8 +430,20 @@ smoke script use as one movies library.
 - All videos are the same 2 s H.264/AAC clip: one FFmpeg run per item, further files are
   byte copies, so the 165 media files take 20 runs. Images are single `testsrc2` frames (600×900
   posters, 1280×720 backdrops and thumbnails); NFO files are written by the generator.
+- **Discs** (`discs/`, task M3-16i, ADR 0029; a library root of its own, so movie counts stay
+  unchanged): `Movie (2019)/VIDEO_TS` (6 s PAL feature split into two VOBs, a bonus title
+  set, IFO/BUP files), `Feature (2021)/BDMV` (4 s + 3 s feature playlist, a longer menu loop
+  and a playlist with a missing clip), an ISO 9660 image of the DVD, and two protected
+  stand-ins that only carry the flags of the encryption check (CSS `PES_scrambling_control`;
+  AACS folder, `copy_permission_indicator` and lost sync bytes). Nothing is encrypted, there
+  are no keys. FFmpeg writes the streams to `.disc-sources/` (outside every library root);
+  the generator writes IFO, MPLS, index files and the image itself. The features carry real
+  bitmap subtitles: FFmpeg cannot render text into bitmaps, so the generator writes a raw PGS
+  stream that the Blu-ray copies (`hdmv_pgs_subtitle`) and the DVD re-encodes with `dvdsub`
+  (`dvd_subtitle`). The corpus test checks detection, title selection, error codes, probe
+  results and one DVD title produced as HLS (`go test -count=1 -run "Disc|DVD" ./internal/adapters/corpustest/`).
 - `-library <dir>` changes the directory, `-library ""` skips the tree, and
-  `-only 'library-*'` builds only the tree. `-force` and kept files work as for the corpus;
+  `-only 'library-*'` builds only the tree (`-only 'library-discs-*'` only the discs). `-force` and kept files work as for the corpus;
   deleted copies and NFO files are restored on the next run.
 
 ### Corpus integration test

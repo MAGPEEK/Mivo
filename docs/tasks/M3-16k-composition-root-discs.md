@@ -9,6 +9,8 @@ Discs work end to end on the server in movie and show libraries.
 ## Acceptance criteria
 - [ ] Resolver, encryption check, prober and (when merged) ISO source are wired; no new library kind or tile.
 - [ ] Integration test over the disc corpus: VIDEO_TS and BDMV movies appear with duration and streams, the encrypted stand-in is `unavailable` with its code, a session starts and delivers a first segment.
+- [ ] Session API over the disc corpus (`testdata/library/discs`, M3-16i): `Movie (2019)/VIDEO_TS` plays to the end through a session (assert in `internal/adapters/corpustest` next to `TestCorpusDVDTitlePlays`, which today stops at the producer).
+- [ ] `scripts/playback-smoke` gets one profile row that plays the VIDEO_TS title through the session API (left open by M3-16i because the server could not reach discs yet).
 - [ ] Tests: `go test -race -tags webui ./cmd/...`.
 - [ ] Gates: lint + layer rules + coverage thresholds pass.
 

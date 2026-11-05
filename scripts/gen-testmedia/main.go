@@ -21,8 +21,21 @@
 // <library>/music (task M3-13f) holds a tagged two-disc FLAC album with embedded covers, a
 // tagged MP3 album, an M4A album with cover.jpg in its folder, a "Various Artists"
 // compilation and an untagged FLAC album; every track is a 2 s sine tone with its own tags,
-// all names are invented. Library case names start with "library-", so -only 'library-*'
-// builds the tree alone.
+// all names are invented. <library>/discs (task M3-16i, ADR 0029) holds a clear DVD
+// ("Movie (2019)/VIDEO_TS": a 6 s PAL feature split into VTS_01_1.VOB and VTS_01_2.VOB plus
+// a 2 s bonus title set, IFO and BUP files), a clear Blu-ray ("Feature (2021)/BDMV": the
+// 4 s + 3 s feature playlist, a longer menu loop that repeats the trailer clip and a
+// playlist whose clip is missing), an ISO 9660 image of the DVD and two protected stand-ins:
+// a DVD whose feature packs carry the CSS PES_scrambling_control flag and a Blu-ray with an
+// AACS folder whose feature clips carry copy_permission_indicator and lost sync bytes in
+// their first aligned units. The stand-ins hold only these flags; nothing is encrypted and
+// there are no keys. FFmpeg encodes the streams into <library>/.disc-sources (outside every
+// library root); the generator writes the IFO, MPLS, index and image structures around
+// them. The feature titles carry real bitmap subtitles: FFmpeg cannot turn text into bitmap
+// subtitles and has no subtitle source, so the generator writes a raw PGS stream (one
+// rectangle per cue) that the Blu-ray clips copy as hdmv_pgs_subtitle and the DVD re-encodes
+// with dvdsub (bitmap to bitmap) as dvd_subtitle. Library case names start with "library-",
+// so -only 'library-*' builds the tree alone; disc cases start with "library-discs-".
 //
 // <library>/manifest.json describes the expected catalog (what a scan must produce) and the
 // build result. Paths are relative to the library root (Path of the library) unless noted,
@@ -58,8 +71,22 @@
 //	                 (false: no tags, a scan reads the layout "Artist/Album/[CD n/]NN Title"),
 //	                 coverSource ("embedded"|"folder"|"none"), coverFile (folder image, or
 //	                 the track itself when embedded)
-//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"), status ("generated"|
-//	               "skipped"|"failed"), skipKind, reason, files[] (relative to <library>)
+//	discs          path (below <library>), items[] (added in M3-16i without a version bump,
+//	               kept out of libraries[] like music):
+//	  title, year    invented title and year of the folder that holds the disc
+//	  path           the disc as a scan reports it: the VIDEO_TS or BDMV folder, or the image
+//	  layout         "video_ts"|"bdmv"|"iso"
+//	  mainTitle      clips[] (relative to path; inside the image for "iso") and
+//	                 durationSeconds (from the IFO or MPLS) of the selected main title
+//	  errorCode      "disc_encrypted" for the stand-ins, omitted for discs that play
+//	  protection     "css"|"aacs" for the stand-ins
+//	  streams        probe of the main title: video, width, height, audio[], subtitles[]
+//	                 (ffprobe codec names); omitted for the stand-ins
+//	  files[]        every file of the disc, relative to the library root
+//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"discs"), status
+//	               ("generated"|"skipped"|"failed"), skipKind, reason, files[] (relative to
+//	               <library>); "library-discs-source-*" cases are the FFmpeg runs, the other
+//	               "library-discs-*" cases the assembled discs
 //
 // The catalog is static; consumers check that every case is generated (or skip with the
 // reason) before they compare a scan with it.

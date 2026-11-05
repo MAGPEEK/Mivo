@@ -14,3 +14,14 @@ Licence-free disc fixtures covering clear and encrypted cases.
 
 ## Notes
 Seconds-long streams only. The generator's IFO/MPLS writers are test-only code.
+
+Implementation (2026-11-05): discs live in their own root `testdata/library/discs` (manifest
+top-level `discs`, schema version unchanged); FFmpeg writes the streams to
+`testdata/library/.disc-sources`, the generator assembles VIDEO_TS, BDMV, an ISO 9660 image
+of the DVD and the CSS/AACS stand-ins (flags only, no keys, nothing encrypted). Real bitmap
+subtitles: the generator writes a raw PGS stream (FFmpeg cannot render text to bitmaps); the
+Blu-ray copies it (`hdmv_pgs_subtitle`), the DVD re-encodes it with `dvdsub`. The corpus test
+plays the DVD title through the decision engine and the FFmpeg producer; playing it through
+the session API and the `scripts/playback-smoke` row need the disc scan and wiring of
+M3-16h/M3-16k and are left to those tasks. The ISO title is checked by selection and extent
+bytes only; probing it needs the loopback input of M3-16g.

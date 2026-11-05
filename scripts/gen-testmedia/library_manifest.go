@@ -60,7 +60,9 @@ type libraryManifest struct {
 	Libraries     []expectedLibrary `json:"libraries"`
 	// Music is the music library (task M3-13f). It is kept out of Libraries, whose consumers
 	// compare movie and show items, so adding it changed no existing consumer.
-	Music expectedMusic      `json:"music"`
+	Music expectedMusic `json:"music"`
+	// Discs is the disc library (task M3-16i), kept apart for the same reason.
+	Discs expectedDiscs      `json:"discs"`
 	Cases []libraryCaseEntry `json:"cases"`
 }
 
@@ -227,7 +229,7 @@ func newLibraryManifest(ffmpegVersion string, cases []mediaCase, entries []manif
 
 	result := libraryManifest{
 		SchemaVersion: libraryManifestSchemaVersion, FFmpegVersion: ffmpegVersion,
-		Libraries: libraryCatalog(), Music: musicCatalog(), Cases: make([]libraryCaseEntry, 0, len(entries)),
+		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Cases: make([]libraryCaseEntry, 0, len(entries)),
 	}
 
 	for _, entry := range newManifest(ffmpegVersion, entries).Cases {

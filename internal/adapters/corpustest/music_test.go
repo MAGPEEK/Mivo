@@ -29,11 +29,12 @@ const (
 // jpegSignature starts every JPEG file.
 func jpegSignature() []byte { return []byte{0xFF, 0xD8, 0xFF} }
 
-// libraryManifest holds the music part of testdata/library/manifest.json and the case
-// results; scripts/gen-testmedia is package main, so the shape is repeated.
+// libraryManifest holds the music and disc parts of testdata/library/manifest.json and the
+// case results; scripts/gen-testmedia is package main, so the shape is repeated.
 type libraryManifest struct {
 	SchemaVersion int                 `json:"schemaVersion"`
 	Music         musicManifest       `json:"music"`
+	Discs         discManifest        `json:"discs"`
 	Cases         []libraryCaseResult `json:"cases"`
 }
 
@@ -151,7 +152,7 @@ func readLibraryManifest(t *testing.T, root string) libraryManifest {
 
 	data, err := os.ReadFile(filepath.Join(root, manifestFileName)) //nolint:gosec // fixed corpus path
 	if errors.Is(err, fs.ErrNotExist) {
-		t.Skip("skipping the corpus music integration test: testdata/library/manifest.json is missing " +
+		t.Skip("skipping the corpus library integration test: testdata/library/manifest.json is missing " +
 			"(generate it with `go run ./scripts/gen-testmedia`)")
 	}
 

@@ -77,7 +77,7 @@ type itemFiles struct {
 }
 
 // libraryCases returns every case of the library tree: the artwork images first, then the
-// clips of each item in catalog order, then the music cover and tracks.
+// clips of each item in catalog order, then the music cover and tracks, then the disc sources.
 func libraryCases() []mediaCase {
 	var (
 		items   []itemFiles
@@ -99,7 +99,7 @@ func libraryCases() []mediaCase {
 		cases = append(cases, itemCases(item, cover)...)
 	}
 
-	return append(cases, musicCases()...)
+	return slices.Concat(cases, musicCases(), discSourceCases())
 }
 
 // posterOutput is the built poster image, the cover art source of embedded-artwork cases.
@@ -359,8 +359,9 @@ func (g *generator) requireCovers(plans []plannedCase) []plannedCase {
 	return result
 }
 
-// generateLibrary builds the library tree into s.opts.libraryDir in two phases (cover art
-// needs the poster image) and writes its manifest and summary. It returns the manifest.
+// generateLibrary builds the library tree into s.opts.libraryDir in two FFmpeg phases (cover
+// art needs the poster image), assembles the discs from their sources and writes the manifest
+// and summary. It returns the manifest.
 func (s session) generateLibrary(ctx context.Context) (libraryManifest, error) {
 	cases := libraryCases()
 	gen := &generator{
@@ -371,7 +372,8 @@ func (s session) generateLibrary(ctx context.Context) (libraryManifest, error) {
 	first, covers := splitCoverPlans(planCases(cases, s.caps, s.opts.only))
 	entries := gen.generateAll(ctx, first)
 	entries = append(entries, gen.generateAll(ctx, gen.requireCovers(covers))...)
-	result := newLibraryManifest(s.caps.version, cases, entries)
+	entries = append(entries, gen.assembleDiscs(ctx, s.opts.only)...)
+	result := newLibraryManifest(s.caps.version, slices.Concat(cases, discAssemblyCases()), entries)
 
 	if err := writeLibraryManifest(s.opts.libraryDir, result); err != nil {
 		return libraryManifest{}, err
@@ -407,6 +409,7 @@ func writeLibrarySummary(output io.Writer, m libraryManifest, manifestPath strin
 	}
 
 	writeMusicSummary(&text, m.Music)
+	writeDiscSummary(&text, m.Discs)
 
 	fmt.Fprintf(&text, "manifest: %s\n", manifestPath)
 

@@ -11,6 +11,7 @@ Let FFmpeg read clips inside an ISO without mounting and without new FFmpeg prot
 - [ ] The `http` protocol is whitelisted only for that loopback form (host + token checked before the process starts); no other URL can reach FFmpeg.
 - [ ] Range requests, EOF and cancellation handled; server leaks no goroutines (test with `goleak`-style check or counted goroutines).
 - [ ] Tests: unit tests for the range server; integration test with a generated ISO (skip under `-short`).
+- [ ] Corpus test probes the ISO title of the disc corpus (`Image Movie (2020)/Image Movie (2020).iso`, M3-16i): extend `TestCorpusDiscTitlesProbe` in `internal/adapters/corpustest/disc_test.go`, which skips images today, to the duration and streams of the manifest row.
 - [ ] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes

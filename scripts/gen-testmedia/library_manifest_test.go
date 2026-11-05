@@ -55,17 +55,20 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 		t.Errorf("manifest header = %d %q", result.SchemaVersion, result.FFmpegVersion)
 	}
 
-	if !reflect.DeepEqual(result.Libraries, libraryCatalog()) || !reflect.DeepEqual(result.Music, musicCatalog()) {
-		t.Error("the manifest catalog differs from libraryCatalog() or musicCatalog()")
+	if !reflect.DeepEqual(result.Libraries, libraryCatalog()) || !reflect.DeepEqual(result.Music, musicCatalog()) ||
+		!reflect.DeepEqual(result.Discs, discCatalog()) {
+		t.Error("the manifest catalog differs from libraryCatalog(), musicCatalog() or discCatalog()")
 	}
 
-	if len(result.Cases) != len(libraryCases()) || result.count(statusGenerated) != len(result.Cases) {
-		t.Errorf("cases = %+v, want every library case generated", result.Cases)
+	wantCases := len(libraryCases()) + len(discAssemblyCases())
+	if len(result.Cases) != wantCases || result.count(statusGenerated) != len(result.Cases) {
+		t.Errorf("cases = %+v, want every library case and disc generated", result.Cases)
 	}
 
 	checkCatalogFilesExist(t, opts.libraryDir, result)
 
-	// One run per case; the cover runs read the poster or the album cover image as input.
+	// One run per case (discs are assembled without FFmpeg); the cover runs read the poster
+	// or the album cover image as input, the subtitled disc sources the generated PGS stream.
 	if encodes := len(ffmpeg.encodedOutputs()); encodes != len(libraryCases()) {
 		t.Errorf("%d FFmpeg runs, want %d", encodes, len(libraryCases()))
 	}
@@ -90,11 +93,14 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 		"    album Generated Orchestra - Two Disc Symphony (2019): 4 flac tracks on 2 discs, cover embedded\n",
 		"    album Various Artists - Generated Hits (2024): 3 mp3 tracks, compilation, cover none\n",
 		"    album Folder Artist - Folder Album: 2 flac tracks, untagged, cover none\n",
+		"  discs    10 generated", "  discs/ (5 discs)\n",
+		"    bdmv     Feature (2021): 7 s main title\n",
+		"    video_ts Scrambled Movie (2018): css stand-in, disc_encrypted\n",
 	)
 }
 
-// checkCoverInputs expects the poster for the MP4 cover and the album cover for each FLAC
-// track with an embedded cover.
+// checkCoverInputs expects the poster for the MP4 cover, the album cover for each FLAC track
+// with an embedded cover and the PGS subtitles of the DVD feature and the two Blu-ray clips.
 func checkCoverInputs(t *testing.T, inputs []seenInput) {
 	t.Helper()
 
@@ -105,7 +111,10 @@ func checkCoverInputs(t *testing.T, inputs []seenInput) {
 
 	slices.Sort(names)
 
-	want := []string{folderCoverName, folderCoverName, folderCoverName, folderCoverName, "poster.jpg"}
+	want := []string{
+		folderCoverName, folderCoverName, folderCoverName, folderCoverName, "poster.jpg",
+		subtitleFileName, subtitleFileName, subtitleFileName,
+	}
 	if !slices.Equal(names, want) {
 		t.Errorf("file inputs = %v, want %v", names, want)
 	}
@@ -114,7 +123,7 @@ func checkCoverInputs(t *testing.T, inputs []seenInput) {
 func checkCatalogFilesExist(t *testing.T, dir string, result libraryManifest) {
 	t.Helper()
 
-	for _, file := range catalogFiles(result.Libraries, result.Music) {
+	for _, file := range catalogFiles(result.Libraries, result.Music, result.Discs) {
 		if _, err := fs.Stat(os.DirFS(dir), file); err != nil {
 			t.Errorf("catalog file missing on disk: %v", err)
 		}

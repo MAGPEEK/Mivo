@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -75,7 +76,7 @@ func (f *fakeFFmpeg) Run(ctx context.Context, args []string) ([]byte, error) {
 	output := args[len(args)-1]
 
 	// Like FFmpeg, a failing encode may leave a partial file behind.
-	if err := os.WriteFile(output, []byte(fakeMediaContent), 0o600); err != nil {
+	if err := os.WriteFile(output, fakeContent(args), 0o600); err != nil {
 		return nil, err
 	}
 
@@ -130,4 +131,51 @@ func (f *fakeFFmpeg) textInputs() []seenInput {
 	defer f.mutex.Unlock()
 
 	return append([]seenInput(nil), f.inputs...)
+}
+
+// Sizes of the fake disc sources: enough sectors to split a VOB and enough source packets
+// for the aligned units the AACS stand-in marks.
+const (
+	fakeProgramStreamSectors = 4
+	fakeSourcePackets        = markedAlignedUnits * alignedUnitSize / sourcePacketSize
+	fakeVideoStreamID        = 0xE0
+)
+
+// fakeContent is what an encode writes: the disc assembly reads the structure of its source
+// program streams (dvd muxer) and m2ts clips, so those get a minimal valid layout; every
+// other output gets fakeMediaContent.
+func fakeContent(args []string) []byte {
+	isDiscSource := strings.Contains(filepath.ToSlash(args[len(args)-1]), discSourcesPath+"/")
+
+	switch {
+	case isDiscSource && slices.Contains(args, "dvd"):
+		return fakeProgramStream()
+	case isDiscSource && slices.Contains(args, "-mpegts_m2ts_mode"):
+		return fakeSourcePacketStream()
+	default:
+		return []byte(fakeMediaContent)
+	}
+}
+
+// fakeProgramStream is a run of MPEG-2 packs that each start a video PES packet.
+func fakeProgramStream() []byte {
+	stream := make([]byte, fakeProgramStreamSectors*dvdSectorSize)
+
+	for start := 0; start < len(stream); start += dvdSectorSize {
+		copy(stream[start:], []byte{0, 0, 1, packStartCode, mpeg2PackMarker})
+		copy(stream[start+packHeaderSize:], []byte{0, 0, 1, fakeVideoStreamID, 0, 0, pesMarker})
+	}
+
+	return stream
+}
+
+// fakeSourcePacketStream is a run of 192-byte source packets with TS sync bytes.
+func fakeSourcePacketStream() []byte {
+	stream := make([]byte, fakeSourcePackets*sourcePacketSize)
+
+	for packet := range fakeSourcePackets {
+		stream[packet*sourcePacketSize+tpExtraHeaderSize] = tsSyncByte
+	}
+
+	return stream
 }

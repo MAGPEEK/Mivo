@@ -14,7 +14,7 @@ import (
 
 // catalogFiles lists every file the catalog names, relative to the -library directory. It
 // walks the catalog independently of contentOf, so the tests do not trust the derivation.
-func catalogFiles(catalog []expectedLibrary, music expectedMusic) []string {
+func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expectedDiscs) []string {
 	var files []string
 
 	for _, library := range catalog {
@@ -25,7 +25,15 @@ func catalogFiles(catalog []expectedLibrary, music expectedMusic) []string {
 		}
 	}
 
-	return append(files, musicCatalogFiles(music)...)
+	files = append(files, musicCatalogFiles(music)...)
+
+	for _, disc := range discs.Items {
+		for _, file := range disc.Files {
+			files = append(files, path.Join(discs.Path, file))
+		}
+	}
+
+	return files
 }
 
 // musicCatalogFiles lists the tracks and the folder covers (once per album).
@@ -169,7 +177,7 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 			t.Errorf("%s: library cases need the prefix, a muxer and encoders and are never gaps", c.Name)
 		}
 
-		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic}, c.Category) {
+		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryDiscs}, c.Category) {
 			t.Errorf("%s: unexpected category %q", c.Name, c.Category)
 		}
 
@@ -188,30 +196,32 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 func checkLibraryPath(t *testing.T, name, file string) {
 	t.Helper()
 
-	inLibrary := slices.ContainsFunc([]string{moviesLibraryPath, showsLibraryPath, musicLibraryPath}, func(root string) bool {
+	roots := []string{moviesLibraryPath, showsLibraryPath, musicLibraryPath, discsLibraryPath, discSourcesPath}
+	inLibrary := slices.ContainsFunc(roots, func(root string) bool {
 		return strings.HasPrefix(file, root+"/")
 	})
 	if !inLibrary || path.Clean(file) != file || strings.Contains(file, `\`) || path.Ext(file) == "" {
-		t.Errorf("%s: %q must be a clean movies/, shows/ or music/ path with forward slashes and an extension", name, file)
+		t.Errorf("%s: %q must be a clean path below a library root or the disc sources, with forward slashes and an extension", name, file)
 	}
 }
 
 // TestLibraryCatalogIsBackedByCases checks both directions: every file of the manifest is
-// written by a case, and no case writes a file the manifest does not describe.
+// written by a case, and no case writes a file the manifest does not describe. The disc
+// sources are staging files outside every library root, so the catalog does not list them.
 func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 	t.Parallel()
 
 	written := map[string]bool{}
 
-	for _, c := range libraryCases() {
+	for _, c := range slices.Concat(libraryCases(), discAssemblyCases()) {
 		for _, file := range c.files() {
-			written[file] = true
+			written[file] = !strings.HasPrefix(file, discSourcesPath+"/")
 		}
 	}
 
 	described := map[string]bool{}
 
-	for _, file := range catalogFiles(libraryCatalog(), musicCatalog()) {
+	for _, file := range catalogFiles(libraryCatalog(), musicCatalog(), discCatalog()) {
 		if described[file] {
 			t.Errorf("the catalog names %s twice", file)
 		}
@@ -224,7 +234,7 @@ func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 	}
 
 	for file := range written {
-		if !described[file] {
+		if !described[file] && written[file] {
 			t.Errorf("a case writes %s, which the catalog does not describe", file)
 		}
 	}
@@ -254,8 +264,9 @@ func TestLibraryCopiesShareOneFFmpegRunPerItem(t *testing.T) {
 
 	// One run per artwork shape (3), movie (13, two of them embed covers) and show (4) builds
 	// 8 images, 19 movie files and 138 episode files; the music tree adds one run for the
-	// album cover and one per track (14), because every track carries its own tags.
-	const wantRuns, wantFiles = 35, 180
+	// album cover and one per track (14), because every track carries its own tags. The
+	// discs are assembled from five source runs (two DVD title sets, three Blu-ray clips).
+	const wantRuns, wantFiles = 40, 185
 	if len(cases) != wantRuns || files != wantFiles {
 		t.Errorf("%d FFmpeg runs for %d media files, want %d runs for %d files", len(cases), files, wantRuns, wantFiles)
 	}
