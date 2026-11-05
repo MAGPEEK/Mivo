@@ -31,6 +31,11 @@ Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Definit
 - **Stufen:** `0.1.0-alpha.N` (jetzt) → `0.1.0-beta.1` (Funktionsumfang komplett) → `0.1.0-rc.N`
   (nur noch Fehlerbehebung) → **`0.1.0`** (erster stabiler Entwurf). Versionen nach SemVer, jede
   Änderung bekommt eine neue Nummer.
+- **Nächstes Release (Owner-Entscheidung 2026-11-05):** `0.1.0-alpha.5` (Docker-Image und SPKs)
+  wird gebaut, sobald Meilenstein 3 komplett ist (zuletzt M3-14h, M3-15h, M3-15i), damit alle
+  Bibliotheksarten in der Web-App sichtbar sind. Grund: Der Owner fand die Oberfläche von alpha.4
+  auf der DS925+ sehr eingeschränkt. Beim DS925+-Test von alpha.5 wird B6a (FFmpeg
+  `9.0.2-static4`) mitgeprüft.
 - **Funktionsumfang für beta.1:** Meilenstein 3 (Bibliotheken inkl. Bibliotheksverwaltung in der
   App), 6 (TMDB-Metadaten, Bearbeiten-Dialog), 5 (komplette Web-UI nach `docs/design/ux-spec.md`),
   4 (Untertitel, Tonspur, Hardware-Beschleunigung) und 7 (Konten, PIN, Weiterschauen). Docker und
