@@ -3,8 +3,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { openApp } from "./support/shell";
 
-// The narrowest phone width WCAG 1.4.10 (reflow) asks for, and a common desktop width.
+// The narrowest phone width WCAG 1.4.10 (reflow) asks for, where the bottom navigation replaces
+// the sidebar (M5-22); a small tablet between the sm and md breakpoints, where the expanded
+// sidebar lies over the page; and a common desktop width.
 const phoneViewport = { width: 320, height: 640 };
+const tabletViewport = { width: 700, height: 900 };
 const desktopViewport = { width: 1280, height: 800 };
 
 const library: Library = {
@@ -92,6 +95,24 @@ async function openOverlay(sidebarToggle: Locator): Promise<void> {
 test.describe("on a 320 px phone", () => {
   test.use({ viewport: phoneViewport });
 
+  test("home shows the bottom navigation instead of the sidebar and fits the screen", async ({
+    page,
+  }) => {
+    const { heading, sidebar, sidebarToggle } = await openApp(page);
+    const settings = sidebar.getByRole("link", { name: "Settings" });
+
+    await expect(sidebarToggle).toHaveCount(0);
+    await expect(sidebar.getByRole("link", { name: "Home" })).toBeVisible();
+    await expect(settings).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await expectUncovered(heading);
+    await expectUncovered(settings);
+  });
+});
+
+test.describe("on a 700 px tablet", () => {
+  test.use({ viewport: tabletViewport });
+
   test("home starts with the sidebar closed and fits the screen", async ({ page }) => {
     const { heading } = await openApp(page);
 
@@ -144,7 +165,7 @@ test.describe("on a 320 px phone", () => {
     const { sidebarToggle, heading } = await openApp(page);
     await openOverlay(sidebarToggle);
 
-    await page.mouse.click(phoneViewport.width - 10, phoneViewport.height / 2);
+    await page.mouse.click(tabletViewport.width - 10, tabletViewport.height / 2);
 
     await expect(sidebarToggle).toHaveAttribute("aria-expanded", "false");
     await expectUncovered(heading);
@@ -165,14 +186,32 @@ test("the expanded sidebar sits beside the content on a desktop screen", async (
   await expectUncovered(heading);
 });
 
-test("a desktop window resized to phone width closes the sidebar", async ({ page }) => {
+test("a desktop window resized to tablet width closes the sidebar", async ({ page }) => {
   await page.setViewportSize(desktopViewport);
   const { sidebarToggle, heading } = await openApp(page);
   await expect(sidebarToggle).toHaveAttribute("aria-expanded", "true");
 
-  await page.setViewportSize(phoneViewport);
+  await page.setViewportSize(tabletViewport);
 
   await expect(sidebarToggle).toHaveAttribute("aria-expanded", "false");
+  await expectNoHorizontalScroll(page);
+  await expectUncovered(heading);
+
+  await page.setViewportSize(desktopViewport);
+  await expect(sidebarToggle).toHaveAttribute("aria-expanded", "true");
+});
+
+test("a desktop window resized to phone width swaps the sidebar for the bottom navigation", async ({
+  page,
+}) => {
+  await page.setViewportSize(desktopViewport);
+  const { sidebar, sidebarToggle, heading } = await openApp(page);
+  await expect(sidebarToggle).toBeVisible();
+
+  await page.setViewportSize(phoneViewport);
+
+  await expect(sidebarToggle).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "Settings" })).toBeVisible();
   await expectNoHorizontalScroll(page);
   await expectUncovered(heading);
 
