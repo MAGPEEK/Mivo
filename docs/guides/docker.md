@@ -151,7 +151,14 @@ change (`docker rm -f mivo`, then the `docker run` again; the data in `/config` 
 | Variable | Default | Meaning |
 |---|---|---|
 | `MIVO_LIBRARIES` | `/media` | library roots inside the container, separated by `:` |
-| `MIVO_TRANSCODE_MAX_SESSIONS` | `2` | concurrent re-encoding sessions, `1`–`8`; use `1` on a weak NAS |
+| `MIVO_TRANSCODE_MAX_SESSIONS` | `1` with at most 4 CPUs, else `2` | concurrent re-encoding sessions, `1`–`8`; a set value wins |
+| `MIVO_TRANSCODE_PRESET` | `veryfast` | x264 preset: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast` or `medium` |
+| `MIVO_TRANSCODE_THREADS` | `0` | encoder threads, `0`–`64`; `0` = auto |
+| `MIVO_TRANSCODE_PRIORITY` | `low` | OS priority of FFmpeg: `low` or `normal` |
+| `MIVO_TRANSCODE_THROTTLE_AHEAD_SECONDS` | `60` | pause FFmpeg this many seconds ahead of the player, `20`–`600`; `0` = off |
+| `MIVO_TRANSCODE_HWACCEL` | `auto` | `auto`, `off`, `vaapi`, `qsv`, `nvenc` or `amf` |
+| `MIVO_TRANSCODE_HWACCEL_DEVICE` | empty | absolute device path, e.g. `/dev/dri/renderD128` |
+| `MIVO_TRANSCODE_ALLOW_BURN_IN` | `true` | allow burning image subtitles into the video |
 | `MIVO_SERVER_PORT` | `8460` | port inside the container; change the `-p` mapping as well |
 | `MIVO_SERVER_LAN_ONLY` | `true` | refuse clients outside the local network (keep it) |
 | `MIVO_LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error` |

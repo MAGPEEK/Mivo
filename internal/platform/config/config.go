@@ -35,9 +35,6 @@ const DefaultLANOnly = true
 const (
 	DefaultFFmpeg  = "ffmpeg"
 	DefaultFFprobe = "ffprobe"
-	// DefaultTranscodeMaxSessions follows OD-4: two re-encoding sessions saturate a typical
-	// NAS CPU.
-	DefaultTranscodeMaxSessions = 2
 )
 
 // Defaults of the automatic scans (ADR 0027 §9, OD-M3-3 recommendation).
@@ -102,13 +99,6 @@ type Tools struct {
 	FFprobe string
 }
 
-// Transcode holds the limits of FFmpeg sessions (ADR 0024).
-type Transcode struct {
-	// MaxSessions limits concurrent playback sessions that re-encode a stream; remux
-	// sessions only count towards the fixed safety cap of the playback service.
-	MaxSessions int
-}
-
 // Server holds the HTTP listener settings.
 type Server struct {
 	// Host is the interface to listen on; empty means all interfaces.
@@ -144,6 +134,9 @@ type Options struct {
 	// PathExists reports whether a directory exists; it only selects the default browse
 	// roots. Nil probes the file system.
 	PathExists func(path string) bool
+	// NumCPU reports the number of logical CPUs; it only selects the default of
+	// transcode.max_sessions. Nil uses runtime.NumCPU.
+	NumCPU func() int
 }
 
 // Load builds the configuration from defaults, the optional config file and the
@@ -156,7 +149,7 @@ func Load(options Options) (Config, error) {
 
 	// A missing default is only fatal if neither the file nor the environment set the path.
 	defaults := paths.Defaults(options.Environment)
-	cfg := defaultConfig(configDir, defaults)
+	cfg := defaultConfig(configDir, defaults, cpuCount(options))
 
 	libraries, err := applyFile(&cfg, configDir)
 	if err != nil {
@@ -211,7 +204,7 @@ func resolveConfigDir(options Options) (string, error) {
 	return absolute, nil
 }
 
-func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
+func defaultConfig(configDir string, defaults paths.DefaultDirectories, cpuCount int) Config {
 	return Config{
 		ConfigDir: configDir,
 		Server:    Server{Host: "", Port: DefaultPort, LANOnly: DefaultLANOnly},
@@ -223,7 +216,7 @@ func defaultConfig(configDir string, defaults paths.DefaultDirectories) Config {
 		},
 		Libraries: []LibraryConfig{},
 		Tools:     Tools{FFmpeg: DefaultFFmpeg, FFprobe: DefaultFFprobe},
-		Transcode: Transcode{MaxSessions: DefaultTranscodeMaxSessions},
+		Transcode: defaultTranscode(cpuCount),
 		Scan:      Scan{Watch: DefaultScanWatch, Interval: DefaultScanInterval},
 		Install:   Install{Kind: InstallKindStandard},
 		Metadata:  defaultMetadata(),

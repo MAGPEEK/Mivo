@@ -310,7 +310,18 @@ home directory that exist elsewhere), and `install.kind` / `MIVO_INSTALL_KIND` i
 | `libraries` (list of `name`, `path`, `kind`) | `MIVO_LIBRARIES` (OS path list) | none | library folders imported once at the start (ADR 0028); `kind` is `movies` (default), `shows`, `music`, `audiobooks` or `photos`; add and change libraries in the web app (Settings > Libraries) |
 | `tools.ffmpeg` | `MIVO_TOOLS_FFMPEG` | `ffmpeg` | bare name looked up on `PATH`, or a path |
 | `tools.ffprobe` | `MIVO_TOOLS_FFPROBE` | `ffprobe` | as `tools.ffmpeg` |
-| `transcode.max_sessions` | `MIVO_TRANSCODE_MAX_SESSIONS` | `2` | concurrent re-encoding sessions, `1`–`8` |
+| `transcode.max_sessions` | `MIVO_TRANSCODE_MAX_SESSIONS` | `1` with at most 4 CPUs, else `2` | concurrent re-encoding sessions, `1`–`8`; an explicit value wins over the CPU-based default |
+| `transcode.preset` | `MIVO_TRANSCODE_PRESET` | `veryfast` | x264 preset: `ultrafast`, `superfast`, `veryfast`, `faster`, `fast` or `medium` |
+| `transcode.threads` | `MIVO_TRANSCODE_THREADS` | `0` | encoder threads, `0`–`64`; `0` = auto (half the CPUs, at least 1) |
+| `transcode.priority` | `MIVO_TRANSCODE_PRIORITY` | `low` | OS priority of FFmpeg: `low` (nice 10 / below normal) or `normal` |
+| `transcode.throttle_ahead_seconds` | `MIVO_TRANSCODE_THROTTLE_AHEAD_SECONDS` | `60` | pause FFmpeg when it is this many seconds ahead of the player, `20`–`600`; `0` = off (Linux only) |
+| `transcode.hwaccel` | `MIVO_TRANSCODE_HWACCEL` | `auto` | hardware acceleration: `auto`, `off`, `vaapi`, `qsv`, `nvenc` or `amf` |
+| `transcode.hwaccel_device` | `MIVO_TRANSCODE_HWACCEL_DEVICE` | empty | absolute device path for VAAPI, e.g. `/dev/dri/renderD128`; empty = default device |
+| `transcode.allow_burn_in` | `MIVO_TRANSCODE_ALLOW_BURN_IN` | `true` | allow burning image subtitles into a re-encoded video (`true` or `false`) |
+
+The transcoder keys other than `max_sessions` follow ADR 0030 and are validated at startup;
+the transcoder applies them as the milestone-4 tasks land. An invalid value stops the start
+with a message naming the key and the allowed values.
 
 `config.yaml` in the config directory, for example `%LOCALAPPDATA%\Mivo\config.yaml`:
 

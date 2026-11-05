@@ -69,7 +69,7 @@ shutdown that hangs; as PID 1 the server would otherwise ignore it.
 | `/transcode` | temporary output of remux and transcode sessions |
 | port `8460` | web app and REST API |
 | `MIVO_LIBRARIES` | optional: library folders to import once at the first start (see below) |
-| `MIVO_TRANSCODE_MAX_SESSIONS` | concurrent re-encoding sessions, default `2`, allowed `1`–`8` |
+| `MIVO_TRANSCODE_MAX_SESSIONS` | concurrent re-encoding sessions, default `2` (1 on hosts with 4 or fewer CPUs), allowed `1`–`8` |
 | `MIVO_*` | every setting of ADR 0018, e.g. `MIVO_LOG_LEVEL=debug` |
 | `TZ` | time zone, e.g. `TZ=Europe/Berlin` (tzdata is installed) |
 
@@ -109,9 +109,12 @@ when the player stops it, after 2 minutes without requests, at shutdown, and lef
 next start.
 
 - **Limit**: at most `MIVO_TRANSCODE_MAX_SESSIONS` sessions re-encode at the same time
-  (default `2`), and at most 8 sessions run FFmpeg at all, remuxing included. A request beyond
-  a limit gets `503` with problem code `session_limit_reached` and `Retry-After`. On a weak
-  NAS set `MIVO_TRANSCODE_MAX_SESSIONS=1`.
+  (default `2`, `1` on hosts with 4 or fewer CPUs; the CPU count ignores `--cpus` quotas, so
+  set it by hand in a CPU-limited container), and at most 8 sessions run FFmpeg at all,
+  remuxing included. A request beyond a limit gets `503` with problem code
+  `session_limit_reached` and `Retry-After`. Expert transcode settings (`MIVO_TRANSCODE_PRESET`,
+  `_THREADS`, `_PRIORITY`, `_THROTTLE_AHEAD_SECONDS`, `_HWACCEL`, `_HWACCEL_DEVICE`,
+  `_ALLOW_BURN_IN`) are described in `docs/development.md`.
 - **Space**: there is no throttling until milestone 4. FFmpeg processes the whole file as
   fast as it can, not as fast as the player watches, so one session can fill `/transcode` up
   to roughly the size of the film (remux) or of its 1080p H.264 version (transcode). Give

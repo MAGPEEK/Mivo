@@ -26,6 +26,12 @@ const (
 	envHome        = "HOME"
 )
 
+// fixtureCPUCount is the CPU count the fixture reports; it is above the small-machine
+// threshold, so the defaults do not depend on the test host.
+const fixtureCPUCount = 8
+
+func fixtureNumCPU() int { return fixtureCPUCount }
+
 // fixture is a config directory and a fake host environment for one test.
 type fixture struct {
 	configDir string
@@ -70,7 +76,7 @@ func writeConfigFile(t *testing.T, dir, content string) {
 }
 
 func (f fixture) load() (config.Config, error) {
-	return config.Load(config.Options{ConfigDirFlag: f.configDir, Environment: f.env})
+	return config.Load(config.Options{ConfigDirFlag: f.configDir, Environment: f.env, NumCPU: fixtureNumCPU})
 }
 
 func (f fixture) configFile() string {
@@ -102,6 +108,7 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 
 	got, err := config.Load(config.Options{
 		ConfigDirFlag: f.configDir, Environment: f.env, PathExists: func(string) bool { return false },
+		NumCPU: fixtureNumCPU,
 	})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
@@ -114,10 +121,13 @@ func TestLoadWithoutFileUsesDefaultsAndCreatesNoFile(t *testing.T) {
 		Paths:     config.Paths{Data: dirs.Data.Path, Cache: dirs.Cache.Path, Transcode: dirs.Transcode.Path},
 		Libraries: []config.LibraryConfig{},
 		Tools:     config.Tools{FFmpeg: "ffmpeg", FFprobe: "ffprobe"},
-		Transcode: config.Transcode{MaxSessions: 2},
-		Scan:      config.Scan{Watch: true, Interval: 12 * time.Hour},
-		Browse:    config.Browse{Roots: []string{}},
-		Install:   config.Install{Kind: config.InstallKindStandard},
+		Transcode: config.Transcode{
+			MaxSessions: 2, Preset: "veryfast", Threads: 0, Priority: "low", ThrottleAheadSeconds: 60,
+			HWAccel: "auto", HWAccelDevice: "", AllowBurnIn: true,
+		},
+		Scan:    config.Scan{Watch: true, Interval: 12 * time.Hour},
+		Browse:  config.Browse{Roots: []string{}},
+		Install: config.Install{Kind: config.InstallKindStandard},
 		Metadata: config.Metadata{
 			Online: true, TMDB: config.TMDB{Enabled: true}, MusicBrainz: config.MusicBrainz{Enabled: true},
 			Language: "en",
@@ -220,7 +230,7 @@ func precedenceCases() []precedenceCase {
 			defaultOf: func(dirs paths.DefaultDirectories) string { return dirs.Transcode.Path },
 			get:       func(cfg config.Config) string { return cfg.Paths.Transcode },
 		},
-	}, slices.Concat(toolAndTranscodeCases(), scanCases(), metadataCases())...)
+	}, slices.Concat(toolAndTranscodeCases(), transcodeCases(), scanCases(), metadataCases())...)
 }
 
 // scanCases cover the automatic scan keys of milestone 3 (ADR 0027 §9).

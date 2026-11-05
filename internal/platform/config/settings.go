@@ -17,19 +17,18 @@ import (
 // environment variable names. Multi-word keys use snake_case so the environment name stays
 // unambiguous (ADR 0022).
 const (
-	keyServerHost           = "server.host"
-	keyServerPort           = "server.port"
-	keyServerLANOnly        = "server.lan_only"
-	keyLogLevel             = "log.level"
-	keyLogFormat            = "log.format"
-	keyPathsData            = "paths.data"
-	keyPathsCache           = "paths.cache"
-	keyPathsTranscode       = "paths.transcode"
-	keyToolsFFmpeg          = "tools.ffmpeg"
-	keyToolsFFprobe         = "tools.ffprobe"
-	keyTranscodeMaxSessions = "transcode.max_sessions"
-	keyScanWatch            = "scan.watch"
-	keyScanInterval         = "scan.interval"
+	keyServerHost     = "server.host"
+	keyServerPort     = "server.port"
+	keyServerLANOnly  = "server.lan_only"
+	keyLogLevel       = "log.level"
+	keyLogFormat      = "log.format"
+	keyPathsData      = "paths.data"
+	keyPathsCache     = "paths.cache"
+	keyPathsTranscode = "paths.transcode"
+	keyToolsFFmpeg    = "tools.ffmpeg"
+	keyToolsFFprobe   = "tools.ffprobe"
+	keyScanWatch      = "scan.watch"
+	keyScanInterval   = "scan.interval"
 )
 
 // keySeparator separates the sections of a key path.
@@ -38,12 +37,6 @@ const keySeparator = "."
 const (
 	minPort = 0
 	maxPort = 65535
-
-	// The transcode limit counts re-encoding sessions only (ADR 0024, OD-4). Its maximum is
-	// the fixed safety cap of 8 FFmpeg sessions of ADR 0024: a higher limit could never be
-	// reached, so it would be silently ineffective.
-	minTranscodeSessions = 1
-	maxTranscodeSessions = 8
 )
 
 // errEmptyTool reports an empty program setting.
@@ -67,7 +60,7 @@ type setting struct {
 // settings returns every configurable scalar key in a stable order. The list setting
 // "libraries" has its own handler (libraries.go).
 func settings() []setting {
-	return append(coreSettings(), metadataSettings()...)
+	return slices.Concat(coreSettings(), transcodeSettings(), metadataSettings())
 }
 
 func coreSettings() []setting {
@@ -86,7 +79,6 @@ func coreSettings() []setting {
 		pathSetting(keyPathsTranscode, transcodeField, transcodeDefault),
 		{key: keyToolsFFmpeg, apply: applyTool(ffmpegField)},
 		{key: keyToolsFFprobe, apply: applyTool(ffprobeField)},
-		{key: keyTranscodeMaxSessions, apply: applyMaxSessions},
 		{key: keyScanWatch, apply: applyScanWatch},
 		{key: keyScanInterval, apply: applyScanInterval},
 		{key: keyInstallKind, apply: applyInstallKind},
@@ -157,17 +149,6 @@ func parseStrictBool(raw string) (bool, error) {
 	}
 
 	return value == strconv.FormatBool(true), nil
-}
-
-func applyMaxSessions(cfg *Config, raw, _ string) error {
-	sessions, err := parseIntInRange("re-encoding session limit", raw, minTranscodeSessions, maxTranscodeSessions)
-	if err != nil {
-		return fmt.Errorf("%w; the server runs at most %d FFmpeg sessions at once", err, maxTranscodeSessions)
-	}
-
-	cfg.Transcode.MaxSessions = sessions
-
-	return nil
 }
 
 // parseIntInRange parses a decimal integer between minimum and maximum inclusive; what
