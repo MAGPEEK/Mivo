@@ -36,6 +36,11 @@ Ziel ist ein **stabiler erster Entwurf**, der die Alpha-Phase verlässt. Definit
   Bibliotheksarten in der Web-App sichtbar sind. Grund: Der Owner fand die Oberfläche von alpha.4
   auf der DS925+ sehr eingeschränkt. Beim DS925+-Test von alpha.5 wird B6a (FFmpeg
   `9.0.2-static4`) mitgeprüft.
+- **Owner-Feedback zu alpha.5 (2026-11-05):** Ton passt bei gängigen Codecs nicht, und der Player
+  kann die Sprache nicht wechseln. Entscheidung (Orchestrator): Audio-Codec-Fehler sofort als
+  Bugfix (FIX-audio-codecs); die Tonspur-Auswahl aus Meilenstein 4 (M4-02a, M4-04a, M4-04c,
+  M4-13a, M4-16a/b) wird vor die restlichen M5-Screens gezogen. Ordner-Dialog: Auswahl-Knopf
+  muss bei langen Listen sichtbar bleiben (FIX-folder-select). Beides kommt mit alpha.6.
 - **Funktionsumfang für beta.1:** Meilenstein 3 (Bibliotheken inkl. Bibliotheksverwaltung in der
   App), 6 (TMDB-Metadaten, Bearbeiten-Dialog), 5 (komplette Web-UI nach `docs/design/ux-spec.md`),
   4 (Untertitel, Tonspur, Hardware-Beschleunigung) und 7 (Konten, PIN, Weiterschauen). Docker und
