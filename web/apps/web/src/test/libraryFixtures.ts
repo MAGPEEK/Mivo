@@ -149,7 +149,7 @@ export function itemsRoute(libraryId: string, items: readonly ItemSummary[]): Fa
       const limit = Number(url.searchParams.get("limit") ?? items.length);
       const start = Number(url.searchParams.get("cursor") ?? 0);
       const end = start + limit;
-      const page: ItemPage = { items: items.slice(start, end) };
+      const page: ItemPage = { items: items.slice(start, end), totalCount: items.length };
       return jsonResponse(end < items.length ? { ...page, nextCursor: String(end) } : page);
     },
   };

@@ -214,6 +214,35 @@ test("shows the placeholder for a movie without artwork", async ({ page }) => {
   await expect(bareCard.locator("img")).toHaveCount(0);
 });
 
+function cardTitles(grid: Locator): Promise<string[]> {
+  return grid.getByRole("listitem").getByRole("link").allInnerTexts();
+}
+
+test("sorts the movies from the toolbar and keeps the sort in the URL (M5-31)", async ({
+  page,
+}) => {
+  const movieCount = expectedLibrary("movies").items.length;
+  const grid = await openLibraryByName(page, moviesLibraryName);
+  const toolbar = page.getByRole("group", { name: "Browse options" });
+  await expect(toolbar.getByText(plural(movieCount, "movie", "movies"))).toBeVisible();
+  await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
+  const ascending = await cardTitles(grid);
+
+  await toolbar.getByRole("button", { name: "Sort direction: Ascending" }).click();
+
+  await expect(page).toHaveURL(/[?&]order=desc(&|$)/);
+  await expect.poll(() => cardTitles(grid)).toEqual([...ascending].reverse());
+  await page.reload();
+  await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
+  expect(await cardTitles(grid)).toEqual([...ascending].reverse());
+
+  await toolbar.getByRole("button", { name: "Sort: Title" }).click();
+  await page.getByRole("menuitemradio", { name: "Date added" }).click();
+  await expect(page).toHaveURL(/[?&]sort=dateAdded(&|$)/);
+  await expect(toolbar.getByRole("button", { name: "Sort: Date added" })).toBeVisible();
+  await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
+});
+
 test("answers a repeated image request from the cache or with 304", async ({ page }) => {
   const postered = expectedLibrary("movies").items.filter(
     (movie) => (movie.artwork ?? []).length > 0,

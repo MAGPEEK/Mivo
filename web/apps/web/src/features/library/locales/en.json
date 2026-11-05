@@ -39,7 +39,57 @@
       "title": "Everything is matched",
       "hint": "Every video of this library is matched with a provider entry."
     },
-    "filterNotSupported": "This server cannot filter by match state yet."
+    "filterNotSupported": "This server cannot sort or filter the list this way yet."
+  },
+  "browse": {
+    "label": "Browse options",
+    "sheetTitle": "Filter and sort",
+    "close": "Close",
+    "typeTrigger": "Show: {{type}}",
+    "sortTrigger": "Sort: {{sort}}",
+    "orderToggle": "Sort direction: {{order}}",
+    "order": {
+      "asc": "Ascending",
+      "desc": "Descending"
+    },
+    "type": {
+      "movie": "Movies",
+      "show": "Shows",
+      "artist": "Artists",
+      "album": "Albums",
+      "audiobook": "Audiobooks",
+      "photo_album": "Albums",
+      "photo": "All photos"
+    },
+    "sort": {
+      "title": "Title",
+      "year": "Year",
+      "releaseDate": "Release date",
+      "contentRating": "Content rating",
+      "duration": "Duration",
+      "dateAdded": "Date added",
+      "resolution": "Resolution",
+      "bitrate": "Bit rate",
+      "fileSize": "File size",
+      "takenAt": "Date taken",
+      "random": "Random"
+    },
+    "count": {
+      "movie_one": "{{count, number}} movie",
+      "movie_other": "{{count, number}} movies",
+      "show_one": "{{count, number}} show",
+      "show_other": "{{count, number}} shows",
+      "artist_one": "{{count, number}} artist",
+      "artist_other": "{{count, number}} artists",
+      "album_one": "{{count, number}} album",
+      "album_other": "{{count, number}} albums",
+      "audiobook_one": "{{count, number}} audiobook",
+      "audiobook_other": "{{count, number}} audiobooks",
+      "photo_album_one": "{{count, number}} album",
+      "photo_album_other": "{{count, number}} albums",
+      "photo_one": "{{count, number}} photo",
+      "photo_other": "{{count, number}} photos"
+    }
   },
   "filter": {
     "label": "Filter",

@@ -1,4 +1,6 @@
 export { LibraryPage, type LibraryPageProps } from "./components/LibraryPage";
+export { validateBrowseSearch, type BrowseSearch } from "./lib/browseQuery";
+export type { BrowseNavigation, BrowseSearchChange } from "./hooks/useBrowseState";
 export { LibraryKindIcon, type LibraryKindIconProps } from "./components/LibraryKindIcon";
 export { librariesQueryKey, libraryItemsQueryKey } from "./api/libraryQueries";
 export { useLibraries } from "./hooks/useLibraries";

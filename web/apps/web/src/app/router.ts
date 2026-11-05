@@ -12,7 +12,7 @@ import { createElement } from "react";
 
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
-import { LibraryPage } from "../features/library";
+import { LibraryPage, validateBrowseSearch } from "../features/library";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
 import {
   AboutSettingsPage,
@@ -37,9 +37,18 @@ function ShellNotFound() {
 
 // Route components hand route params and search to the feature pages as props, so features
 // stay independent of the route tree and its layout ids.
+// The Browse state (sort, type, filter) lives in the URL; a change starts at the top again.
 function LibraryRoute() {
   const { libraryId } = useParams({ from: "/shell/libraries/$libraryId" });
-  return createElement(LibraryPage, { libraryId });
+  const search = useSearch({ from: "/shell/libraries/$libraryId" });
+  const navigate = useNavigate({ from: "/libraries/$libraryId" });
+  return createElement(LibraryPage, {
+    libraryId,
+    search,
+    onSearchChange: (next, navigation) => {
+      void navigate({ search: next, replace: navigation?.replace === true, resetScroll: true });
+    },
+  });
 }
 
 function ItemRoute() {
@@ -103,6 +112,7 @@ function createRouteTree() {
     createRoute({
       getParentRoute: () => shellRoute,
       path: "/libraries/$libraryId",
+      validateSearch: validateBrowseSearch,
       component: LibraryRoute,
     }),
     createRoute({

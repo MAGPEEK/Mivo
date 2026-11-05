@@ -1,4 +1,4 @@
-import type { components } from "./generated/schema";
+import type { components, operations } from "./generated/schema";
 
 type Schemas = components["schemas"];
 
@@ -179,3 +179,12 @@ export type MatchState = Schemas["MatchState"];
 
 /** An online metadata provider. Later API versions may add values. */
 export type MetadataProvider = Schemas["MetadataProvider"];
+
+/** Sort key of a library listing. Later API versions may add values. */
+export type ItemSort = Schemas["ItemSort"];
+
+/** Quick filter of a library listing. Later API versions may add values. */
+export type ItemQuickFilter = Schemas["ItemQuickFilter"];
+
+/** Query parameters of `GET /api/v1/libraries/{libraryId}/items`: sort, filters and paging. */
+export type LibraryItemsQuery = NonNullable<operations["listLibraryItems"]["parameters"]["query"]>;

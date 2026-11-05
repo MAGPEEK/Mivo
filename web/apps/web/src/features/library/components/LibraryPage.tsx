@@ -3,7 +3,9 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { AlertIcon, Badge, Skeleton } from "../../../shared/ui";
+import type { BrowseSearchChange } from "../hooks/useBrowseState";
 import { useLibrary } from "../hooks/useLibrary";
+import type { BrowseSearch } from "../lib/browseQuery";
 import { errorCodeOf, errorKeyForCode } from "../lib/errorKeys";
 import { libraryNamespace } from "../locales";
 import { primaryButtonClass } from "./buttonClasses";
@@ -14,17 +16,27 @@ import { ScanControl } from "./ScanControl";
 export interface LibraryPageProps {
   /** Library from the route `/libraries/$libraryId`. */
   readonly libraryId: string;
+  /** Validated search of the route: sort, type and filter of the grid. */
+  readonly search: BrowseSearch;
+  readonly onSearchChange: BrowseSearchChange;
 }
 
 const headingClass = "text-3xl font-semibold";
 
 /** One library: name, item count, scan button and the poster grid of its videos. */
-export function LibraryPage({ libraryId }: LibraryPageProps) {
+export function LibraryPage({ libraryId, search, onSearchChange }: LibraryPageProps) {
   const { t } = useTranslation(libraryNamespace);
   const library = useLibrary(libraryId);
   if (library.status === "success") {
     // Keyed, so scan state and focus targets never carry over to another library.
-    return <LibraryContent key={libraryId} library={library.library} />;
+    return (
+      <LibraryContent
+        key={libraryId}
+        library={library.library}
+        search={search}
+        onSearchChange={onSearchChange}
+      />
+    );
   }
   if (library.status === "error") {
     return <LibraryLoadError error={library.error} onRetry={library.retry} />;
@@ -39,11 +51,11 @@ export function LibraryPage({ libraryId }: LibraryPageProps) {
   );
 }
 
-interface LibraryContentProps {
+interface LibraryContentProps extends Omit<LibraryPageProps, "libraryId"> {
   readonly library: Library;
 }
 
-function LibraryContent({ library }: LibraryContentProps) {
+function LibraryContent({ library, search, onSearchChange }: LibraryContentProps) {
   const { t } = useTranslation(libraryNamespace);
   return (
     <>
@@ -59,7 +71,12 @@ function LibraryContent({ library }: LibraryContentProps) {
         </div>
         <ScanControl library={library} />
       </div>
-      <LibraryItemGrid libraryId={library.id} />
+      <LibraryItemGrid
+        libraryId={library.id}
+        libraryKind={library.kind}
+        search={search}
+        onSearchChange={onSearchChange}
+      />
     </>
   );
 }

@@ -54,8 +54,9 @@ describe("LibraryPage unmatched filter", () => {
 
     await chooseUnmatched();
 
-    const list = await screen.findByRole("list", { name: "Videos" });
-    await within(list).findByText("Lost Film");
+    // The filter goes through the URL, so the old list stays until the navigation has run.
+    await screen.findByText("Lost Film");
+    const list = screen.getByRole("list", { name: "Videos" });
     expect(within(list).queryByText("Matched Film")).toBeNull();
     expect(within(list).getByText("Unmatched")).toBeTruthy();
     expect(filteredRequests(server).map((url) => url.searchParams.get("matchState"))).toEqual([
@@ -81,7 +82,7 @@ describe("LibraryPage unmatched filter", () => {
     await chooseUnmatched();
 
     expect((await screen.findByRole("alert")).textContent).toContain(
-      "This server cannot filter by match state yet.",
+      "This server cannot sort or filter the list this way yet.",
     );
     expect(filteredRequests(server)).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();

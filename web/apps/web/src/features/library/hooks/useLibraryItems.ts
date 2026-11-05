@@ -1,9 +1,13 @@
-import type { ItemSummary, MatchState } from "@mivo/api-client";
+import type { ItemSummary } from "@mivo/api-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { useApiClient } from "../../../shared/api";
-import { isNotImplemented, libraryItemsQueryOptions } from "../api/libraryQueries";
+import {
+  isNotImplemented,
+  libraryItemsQueryOptions,
+  type LibraryListQuery,
+} from "../api/libraryQueries";
 
 /** The loaded items of a library and the controls to load more. */
 export interface LibraryItems {
@@ -16,6 +20,8 @@ export interface LibraryItems {
   readonly notSupported: boolean;
   /** Every item of the pages loaded so far, in server order. */
   readonly items: readonly ItemSummary[];
+  /** Items matching the query across all pages; undefined while unknown or not counted. */
+  readonly totalCount: number | undefined;
   readonly hasMore: boolean;
   readonly loadingMore: boolean;
   /** The last "Load more" failed; calling {@link loadMore} again retries it. */
@@ -36,12 +42,12 @@ function itemsStatus(hasPages: boolean, isError: boolean): LibraryItems["status"
 }
 
 /**
- * Pages through the items of a library with the server's `nextCursor`; with `matchState` only
- * the items in that match state.
+ * Pages through the items of a library with the server's `nextCursor`, sorted and filtered by
+ * `listQuery`.
  */
-export function useLibraryItems(libraryId: string, matchState?: MatchState): LibraryItems {
+export function useLibraryItems(libraryId: string, listQuery?: LibraryListQuery): LibraryItems {
   const client = useApiClient();
-  const query = useInfiniteQuery(libraryItemsQueryOptions(client, libraryId, matchState));
+  const query = useInfiniteQuery(libraryItemsQueryOptions(client, libraryId, listQuery));
   const { data, fetchNextPage, refetch, isFetchingNextPage } = query;
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const loadMore = useCallback(() => {
@@ -57,6 +63,7 @@ export function useLibraryItems(libraryId: string, matchState?: MatchState): Lib
     status: itemsStatus(data !== undefined, query.isError),
     notSupported: isNotImplemented(query.error),
     items,
+    totalCount: data?.pages[0]?.totalCount,
     hasMore: query.hasNextPage,
     loadingMore: isFetchingNextPage,
     loadMoreFailed: query.isFetchNextPageError,

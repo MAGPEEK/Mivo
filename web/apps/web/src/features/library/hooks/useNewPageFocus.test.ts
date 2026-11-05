@@ -11,6 +11,7 @@ function itemsState(items: readonly ItemSummary[], overrides: Partial<LibraryIte
     status: "success",
     notSupported: false,
     items,
+    totalCount: undefined,
     hasMore: true,
     loadingMore: false,
     loadMoreFailed: false,

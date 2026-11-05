@@ -3,7 +3,7 @@ import {
   requestData,
   type ApiClient,
   type Library,
-  type MatchState,
+  type LibraryItemsQuery,
   type ScanStatus,
 } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -102,27 +102,31 @@ export function libraryQueryOptions(client: ApiClient, libraryId: string) {
   });
 }
 
+/** Sort and filters of a library listing; the paging parameters are added per page. */
+export type LibraryListQuery = Omit<LibraryItemsQuery, "limit" | "cursor">;
+
 /**
- * Infinite query options that page through a library's items with `nextCursor`; with
- * `matchState` only the items in that match state (the "Unmatched" filter).
+ * Infinite query options that page through a library's items with `nextCursor`, sorted and
+ * filtered by `listQuery`. Every page repeats the same query, as the contract requires; a new
+ * query is a new cache entry and so starts again without a cursor.
  */
 export function libraryItemsQueryOptions(
   client: ApiClient,
   libraryId: string,
-  matchState?: MatchState,
+  listQuery: LibraryListQuery = {},
 ) {
   return infiniteQueryOptions({
-    // Below the items key, so invalidating the library's items reaches every filter.
-    queryKey: [...libraryItemsQueryKey(libraryId), matchState ?? "all"] as const,
+    // Below the items key, so invalidating the library's items reaches every sort and filter.
+    queryKey: [...libraryItemsQueryKey(libraryId), listQuery] as const,
     queryFn: ({ pageParam, signal }) =>
       requestData(
         client.GET("/api/v1/libraries/{libraryId}/items", {
           params: {
             path: { libraryId },
             query: {
+              ...listQuery,
               limit: libraryItemsPageSize,
               ...(pageParam === undefined ? {} : { cursor: pageParam }),
-              ...(matchState === undefined ? {} : { matchState }),
             },
           },
           signal,

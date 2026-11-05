@@ -9,15 +9,15 @@ Shows/Seasons/Episodes/Folders entry), sort menu with direction toggle, and item
 LB-22, LB-23); all state lives in the URL.
 
 ## Acceptance criteria
-- [ ] Sort options match the server contract (rating/progress options hidden until M6/M7);
+- [x] Sort options match the server contract (rating/progress options hidden until M6/M7);
       direction toggle; "random" keeps its seed in the URL so reload is stable.
-- [ ] Type options depend on the library kind; counts shown as "367 movies" (plural forms en/de).
-- [ ] `browseQuery.ts` parses/serialises URL <-> API query (table tests: unknown values are
+- [x] Type options depend on the library kind; counts shown as "367 movies" (plural forms en/de).
+- [x] `browseQuery.ts` parses/serialises URL <-> API query (table tests: unknown values are
       dropped, defaults omitted from the URL).
-- [ ] Changing sort/type resets the cursor and scroll position.
-- [ ] Phone: same controls in a `Sheet`.
-- [ ] Tests: lib table tests, hook with fake API, toolbar keyboard test, axe clean.
-- [ ] Gates: `pnpm -C web lint`, `pnpm -C web test`, `pnpm -C web build`.
+- [x] Changing sort/type resets the cursor and scroll position.
+- [x] Phone: same controls in a `Sheet`.
+- [x] Tests: lib table tests, hook with fake API, toolbar keyboard test, axe clean.
+- [x] Gates: `pnpm -C web lint`, `pnpm -C web test`, `pnpm -C web build`.
 
 ## Notes
 This task defines the URL contract for M5-32...36 and M5-25 "See all"; keep names identical to

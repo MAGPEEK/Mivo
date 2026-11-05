@@ -39,7 +39,57 @@
       "title": "Alles zugeordnet",
       "hint": "Jedes Video dieser Bibliothek ist einem Eintrag des Anbieters zugeordnet."
     },
-    "filterNotSupported": "Dieser Server kann noch nicht nach Zuordnung filtern."
+    "filterNotSupported": "Dieser Server kann die Liste noch nicht so sortieren oder filtern."
+  },
+  "browse": {
+    "label": "Ansichtsoptionen",
+    "sheetTitle": "Filtern und sortieren",
+    "close": "Schließen",
+    "typeTrigger": "Zeigen: {{type}}",
+    "sortTrigger": "Sortieren: {{sort}}",
+    "orderToggle": "Sortierrichtung: {{order}}",
+    "order": {
+      "asc": "Aufsteigend",
+      "desc": "Absteigend"
+    },
+    "type": {
+      "movie": "Filme",
+      "show": "Serien",
+      "artist": "Interpreten",
+      "album": "Alben",
+      "audiobook": "Hörbücher",
+      "photo_album": "Alben",
+      "photo": "Alle Fotos"
+    },
+    "sort": {
+      "title": "Titel",
+      "year": "Jahr",
+      "releaseDate": "Erscheinungsdatum",
+      "contentRating": "Altersfreigabe",
+      "duration": "Dauer",
+      "dateAdded": "Hinzugefügt am",
+      "resolution": "Auflösung",
+      "bitrate": "Bitrate",
+      "fileSize": "Dateigröße",
+      "takenAt": "Aufnahmedatum",
+      "random": "Zufällig"
+    },
+    "count": {
+      "movie_one": "{{count, number}} Film",
+      "movie_other": "{{count, number}} Filme",
+      "show_one": "{{count, number}} Serie",
+      "show_other": "{{count, number}} Serien",
+      "artist_one": "{{count, number}} Interpret",
+      "artist_other": "{{count, number}} Interpreten",
+      "album_one": "{{count, number}} Album",
+      "album_other": "{{count, number}} Alben",
+      "audiobook_one": "{{count, number}} Hörbuch",
+      "audiobook_other": "{{count, number}} Hörbücher",
+      "photo_album_one": "{{count, number}} Album",
+      "photo_album_other": "{{count, number}} Alben",
+      "photo_one": "{{count, number}} Foto",
+      "photo_other": "{{count, number}} Fotos"
+    }
   },
   "filter": {
     "label": "Filter",

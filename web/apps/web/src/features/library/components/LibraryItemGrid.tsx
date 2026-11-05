@@ -1,11 +1,13 @@
-import type { MatchState } from "@mivo/api-client";
+import type { LibraryKind } from "@mivo/api-client";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState, LibraryIcon, SegmentedControl, Skeleton } from "../../../shared/ui";
-import { libraryItemFilters, useItemFilter, type ItemFilter } from "../hooks/useItemFilter";
+import { EmptyState, LibraryIcon, Skeleton } from "../../../shared/ui";
+import { useBrowseState, type BrowseSearchChange } from "../hooks/useBrowseState";
 import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
 import { useNewPageFocus } from "../hooks/useNewPageFocus";
+import type { BrowseSearch, LibraryItemFilter } from "../lib/browseQuery";
 import { libraryNamespace } from "../locales";
+import { BrowseToolbar } from "./BrowseToolbar";
 import { secondaryButtonClass } from "./buttonClasses";
 import { itemGridClass } from "./gridLayout";
 import { ItemCard } from "./ItemCard";
@@ -13,42 +15,37 @@ import { ItemCard } from "./ItemCard";
 /** Props of {@link LibraryItemGrid}. */
 export interface LibraryItemGridProps {
   readonly libraryId: string;
+  readonly libraryKind: LibraryKind;
+  /** Sort, type and filter from the URL. */
+  readonly search: BrowseSearch;
+  readonly onSearchChange: BrowseSearchChange;
 }
 
-/** The items of a library as a poster grid, page by page, with the quick filter above. */
-export function LibraryItemGrid({ libraryId }: LibraryItemGridProps) {
-  const filter = useItemFilter();
+/** The items of a library as a poster grid, page by page, with the Browse toolbar above. */
+export function LibraryItemGrid({
+  libraryId,
+  libraryKind,
+  search,
+  onSearchChange,
+}: LibraryItemGridProps) {
+  const browse = useBrowseState({ search, onSearchChange, libraryKind });
+  const items = useLibraryItems(libraryId, browse.query);
   return (
     <>
-      <FilterControl filter={filter} />
-      {/* Keyed, so focus targets and "load more" state never carry over to another filter. */}
-      <FilteredItems key={filter.filter} libraryId={libraryId} matchState={filter.matchState} />
+      <BrowseToolbar browse={browse} totalCount={items.totalCount} />
+      {/* Keyed, so focus targets and "load more" state never carry over to another query. */}
+      <BrowseItems key={JSON.stringify(browse.query)} items={items} filter={browse.filter} />
     </>
   );
 }
 
-function FilterControl({ filter }: { readonly filter: ItemFilter }) {
-  const { t } = useTranslation(libraryNamespace);
-  return (
-    <div className="mb-6">
-      <SegmentedControl
-        label={t("filter.label")}
-        options={libraryItemFilters.map((id) => ({ id, label: t(`filter.${id}`) }))}
-        value={filter.filter}
-        onChange={filter.select}
-      />
-    </div>
-  );
+interface BrowseItemsProps {
+  readonly items: LibraryItems;
+  readonly filter: LibraryItemFilter;
 }
 
-interface FilteredItemsProps {
-  readonly libraryId: string;
-  readonly matchState: MatchState | undefined;
-}
-
-function FilteredItems({ libraryId, matchState }: FilteredItemsProps) {
+function BrowseItems({ items, filter }: BrowseItemsProps) {
   const { t } = useTranslation(libraryNamespace);
-  const items = useLibraryItems(libraryId, matchState);
   if (items.status === "pending") {
     return (
       <div role="status" className="w-40">
@@ -60,7 +57,7 @@ function FilteredItems({ libraryId, matchState }: FilteredItemsProps) {
     return <ItemsLoadError items={items} />;
   }
   if (items.items.length === 0) {
-    const emptyKey = matchState === undefined ? "items.empty" : "items.emptyUnmatched";
+    const emptyKey = filter === "unmatched" ? "items.emptyUnmatched" : "items.empty";
     return (
       <EmptyState
         icon={<LibraryIcon className="size-10" />}
