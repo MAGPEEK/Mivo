@@ -7,7 +7,7 @@ Files/areas: `internal/adapters/sqlite/migrations/0000N_external_subtitles.sql`,
 External subtitles persist with their media file and are returned with the file's tracks (ADR 0030 §3).
 
 ## Acceptance criteria
-- [ ] Migration (next free number; check music/audiobook/photo migrations 00005..00007 first) creates `external_subtitles`
+- [ ] Migration (next free number; check music/audiobook/photo migrations 00005..00008 first) creates `external_subtitles`
       (`media_file_id` FK cascade, `track_id`, `relative_path`, `format`, `language`, `forced`, `sdh`, `is_default`).
 - [ ] `ReplaceExternalSubtitles` is transactional; the catalog reader returns the rows with the file.
 - [ ] Deleting a file or library cascades.

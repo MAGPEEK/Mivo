@@ -100,7 +100,7 @@ decisions OD-M3-6/7). UX ids: AD-40, LS-01, LS-02, LS-03 (M3 subset), SH-18 (ent
 Baseline for all: video slice (M3-04 domain v2, M3-05 migration `00003`, M3-05c reader v2,
 M3-10/10b scan v2, M3-11b wiring) and library management (M3-19b/h/i/k/l; kinds via
 `libraryKinds`; migration `00004`). Decisions OD-M3-4/5: [ADR 0029](../adr/0029-second-wave-tooling-photos-and-discs.md).
-Migrations: music `00005`, audiobooks `00006`, photos `00007`; discs none.
+Migrations: online metadata (M6-03) `00005`, music `00006`, audiobooks `00007`, photos `00008`; discs none. Always take the next free number at merge.
 
 | Chain | Tasks (in dependency order) | Owners |
 |---|---|---|

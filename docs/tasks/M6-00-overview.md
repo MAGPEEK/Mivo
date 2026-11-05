@@ -23,7 +23,7 @@ host is in ADR 0031 §1.
 |---|---|---|---|
 | M6-01 | API contract: identify, refresh, provider settings | mivo-backend | M3-02 |
 | M6-02 | Domain: matching, confidence, match state | mivo-backend | M3-04b |
-| M6-03 | SQLite: migration 00008 (00004 is library management; 00005 music, 00006 audiobooks, 00007 photos are reserved; take the next free number at merge), match state, cache, queue | mivo-backend | M3-05d, M6-02 |
+| M6-03 | SQLite: migration 00005 (as merged; music 00006, audiobooks 00007, photos 00008), match state, cache, queue | mivo-backend | M3-05d, M6-02 |
 | M6-04 | Outbound client: SSRF guard, limiter, backoff, breaker | mivo-backend | none |
 | M6-05 | Config: online switches, keys, build-time key | mivo-backend | none |
 | M6-06 | App: provider ports and enrichment of one item | mivo-backend | M6-02, M3-06 |
