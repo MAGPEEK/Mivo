@@ -80,17 +80,20 @@ interface ShellClasses {
 
 // On phones the bottom navigation (SH-17) replaces the sidebar. Its height, including the
 // safe-area inset, is published as --bottom-nav-height so the content, and later the mini
-// player and music bar (M5-67, M5-70), stay clear of it. Insets are 0 unless the page opts into
-// viewport-fit=cover.
+// player and music bar (M5-67, M5-70), stay clear of it. The page opts into viewport-fit=cover
+// (index.html), so every shell keeps clear of the left and right insets: a phone in landscape is
+// wide enough for the sidebar shell, and its notch would otherwise cover the sidebar.
+const inlineSafeArea = "pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)]";
+
 function shellClasses(phone: boolean): ShellClasses {
   if (!phone) {
     return {
-      root: "flex min-h-dvh",
+      root: `flex min-h-dvh ${inlineSafeArea}`,
       main: "flex-1 px-6 py-8 focus-visible:outline-none",
     };
   }
   return {
-    root: "flex min-h-dvh pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] [--bottom-nav-height:calc(var(--spacing)*16+env(safe-area-inset-bottom))]",
+    root: `flex min-h-dvh ${inlineSafeArea} [--bottom-nav-height:calc(var(--spacing)*16+env(safe-area-inset-bottom))]`,
     main: "flex-1 px-4 pt-6 pb-[calc(var(--bottom-nav-height)+var(--spacing)*6)] focus-visible:outline-none",
   };
 }

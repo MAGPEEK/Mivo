@@ -44,6 +44,17 @@ export {
   type IconProps,
 } from "./icons";
 export {
+  MinimiseIcon,
+  RepeatIcon,
+  RepeatOneIcon,
+  ShuffleIcon,
+  SkipBackwardIcon,
+  SkipForwardIcon,
+  SkipNextIcon,
+  SkipPreviousIcon,
+  StopIcon,
+} from "./mediaIcons";
+export {
   Sidebar,
   type LayoutAnnouncement,
   type SidebarLayoutControls,

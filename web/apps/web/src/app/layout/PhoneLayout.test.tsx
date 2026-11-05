@@ -13,6 +13,8 @@ import { renderApp } from "../../test/renderApp";
 const phoneWidth = 375;
 const tabletWidth = 700;
 const desktopWidth = 1280;
+// A phone turned sideways: wide enough for the sidebar shell, but with a notch at one side.
+const landscapePhoneWidth = 844;
 
 const movies = fakeLibrary({ id: "lib-movies", name: "Movies" });
 const shows = fakeLibrary({ id: "lib-shows", name: "Shows", kind: "shows" });
@@ -126,6 +128,17 @@ describe("Phone layout", () => {
       expect(control?.className).toContain("min-h-11");
       expect(control?.className).toContain("min-w-11");
     }
+  });
+
+  it("keeps the sidebar shell of a landscape phone clear of the side insets", async () => {
+    stubViewportWidth(landscapePhoneWidth);
+    renderApp("/", { fetch: createFakeServer([librariesRoute([movies])]).fetch });
+    await screen.findByRole("button", { name: "Toggle sidebar" });
+
+    const shell = screen.getByRole("main").closest(".min-h-dvh");
+
+    expect(shell?.className).toContain("pl-[env(safe-area-inset-left)]");
+    expect(shell?.className).toContain("pr-[env(safe-area-inset-right)]");
   });
 
   it("exposes the navigation height as a CSS variable and pads the content by it", async () => {

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { usePlayer } from "../hooks/usePlayer";
 import type { PlayerSearch } from "../lib/playerSearch";
 import { playerNamespace } from "../locales";
-import { PlayerControls } from "./PlayerControls";
+import { PlayerControls, type PlayerSlots } from "./PlayerControls";
 import { PlayerNotice } from "./PlayerNotice";
 import { PlayerTopBar } from "./PlayerTopBar";
 import { StreamInfoOverlay } from "./StreamInfoOverlay";
@@ -13,6 +13,8 @@ export interface PlayerPageProps {
   readonly itemId: string;
   /** The validated search: file to play and start position (`t`); both untrusted. */
   readonly search: PlayerSearch;
+  /** Controls later tasks add to the control bar (mode indicator, More, options, queue). */
+  readonly slots?: PlayerSlots;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface PlayerPageProps {
  * whole file and the stream-info overlay. Native `controls` stay off, because the `EVENT`
  * playlist of an HLS stream would show only its produced part (ADR 0024).
  */
-export function PlayerPage({ itemId, search }: PlayerPageProps) {
+export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
   const { t } = useTranslation(playerNamespace);
   // Destructured: the React compiler treats an object holding refs as a ref.
   const {
@@ -47,12 +49,13 @@ export function PlayerPage({ itemId, search }: PlayerPageProps) {
         playsInline
       />
       <PlayerNotice notice={view.notice} onRetry={actions.retry} onOpenItem={actions.openItem} />
-      <PlayerTopBar title={view.title} visible={view.controlsVisible} onExit={actions.exit} />
+      <PlayerTopBar view={view} actions={actions} />
       <PlayerControls
         view={view}
         actions={actions}
         playButtonRef={playButtonRef}
         streamInfoToggleRef={streamInfoToggleRef}
+        slots={slots}
       />
       {view.streamInfoOpen ? (
         <StreamInfoOverlay

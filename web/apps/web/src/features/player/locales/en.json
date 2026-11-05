@@ -4,6 +4,10 @@
   "back": "Back",
   "backToItem": "Back to the details",
   "retry": "Try again",
+  "title": {
+    "year": "{{year}}",
+    "episode": "{{code}} · {{title}}"
+  },
   "status": {
     "loading": "Loading the video…",
     "waitingForStream": "The server is preparing the stream…"
@@ -28,7 +32,22 @@
     "time": "{{position}} / {{duration}}",
     "enterFullscreen": "Full screen",
     "exitFullscreen": "Exit full screen",
-    "streamInfo": "Stream info"
+    "streamInfo": "Stream info",
+    "previous": "Previous",
+    "next": "Next",
+    "skipBackward": "Back 10 seconds",
+    "skipForward": "Forward 30 seconds",
+    "stop": "Stop",
+    "minimise": "Minimise",
+    "repeat": "Repeat",
+    "repeatState": {
+      "off": "Repeat off",
+      "all": "Repeat all",
+      "one": "Repeat one"
+    },
+    "shuffle": "Shuffle",
+    "shuffleOn": "Shuffle on",
+    "shuffleOff": "Shuffle off"
   },
   "overlay": {
     "heading": "Stream info",

@@ -1,3 +1,4 @@
+import { belowBreakpointQuery } from "@mivo/ui-tokens";
 import { useId, useRef, type ReactNode } from "react";
 
 import { secondaryButtonClass } from "./buttonClasses";
@@ -16,7 +17,7 @@ export interface SheetProps {
 }
 
 // Same width as the shell's narrow-screen switch (Tailwind `md`).
-const narrowScreenQuery = "(width < 48rem)";
+const narrowScreenQuery = belowBreakpointQuery("md");
 
 /**
  * Modal surface that is a bottom sheet on narrow screens and a centred dialog elsewhere. Render
@@ -30,7 +31,7 @@ export function Sheet({ title, closeLabel, onClose, children }: SheetProps) {
   useModalFocus(dialogRef, onClose);
   useScrollLock();
   const placement = narrow
-    ? "max-h-[85dvh] rounded-t-xl border-t transition-transform duration-200 starting:translate-y-full motion-reduce:transition-none"
+    ? "max-h-[85dvh] rounded-t-xl border-t pb-[max(calc(var(--spacing)*4),env(safe-area-inset-bottom))] transition-transform duration-200 starting:translate-y-full motion-reduce:transition-none"
     : "max-h-full max-w-lg rounded-lg border";
   return (
     // The scrim press is a pointer convenience; keyboard users have Escape and the close button.

@@ -356,7 +356,7 @@ describe("PlayerPage full screen", () => {
     const fullscreen = stubFullscreen();
     const { video } = await renderPlayer(playing);
 
-    fireEvent.click(within(controls()).getByRole("button", { name: "Full screen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Full screen" }));
     expect(fullscreen.requests).toEqual([video.parentElement]);
     expect(await screen.findByRole("button", { name: "Exit full screen" })).toBeTruthy();
     pressKey("f");

@@ -6,12 +6,14 @@ import type { ReactNode } from "react";
 const viewBox = "0 0 24 24";
 const strokeWidth = 1.75;
 
-interface IconFrameProps {
+/** Props of {@link IconFrame}. */
+export interface IconFrameProps {
   readonly className?: string | undefined;
   readonly children: ReactNode;
 }
 
-function IconFrame({ className, children }: IconFrameProps) {
+/** The 24-unit SVG frame every line icon draws in; decorative, hidden from assistive technology. */
+export function IconFrame({ className, children }: IconFrameProps) {
   return (
     <svg
       viewBox={viewBox}

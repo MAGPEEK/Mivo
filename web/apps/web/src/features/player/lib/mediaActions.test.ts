@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { setVolume, toggleMute, togglePlayback, type ControllableMedia } from "./mediaActions";
+import {
+  setVolume,
+  toggleMute,
+  togglePlayback,
+  unmuteVolume,
+  type ControllableMedia,
+} from "./mediaActions";
 
 interface FakeMedia extends ControllableMedia {
   readonly playCalls: () => number;
@@ -65,6 +71,15 @@ describe("toggleMute", () => {
     expect(media).toMatchObject({ muted: true, volume: 0.4 });
     toggleMute(media);
     expect(media).toMatchObject({ muted: false, volume: 0.4 });
+  });
+
+  it("unmutes an element at volume 0 with an audible volume", () => {
+    const media = fakeMedia();
+    setVolume(media, 0);
+
+    toggleMute(media);
+
+    expect(media).toMatchObject({ muted: false, volume: unmuteVolume });
   });
 });
 

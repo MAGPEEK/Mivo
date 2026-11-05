@@ -23,8 +23,17 @@ export function togglePlayback(media: ControllableMedia): void {
     .catch(() => undefined);
 }
 
-/** Mutes or unmutes the element, keeping its volume. */
+/** Volume an unmuted element gets when its volume was pulled to 0. */
+export const unmuteVolume = 1;
+
+/**
+ * Mutes or unmutes the element, keeping its volume. Unmuting an element at volume 0 (the slider
+ * pulled to the left) restores {@link unmuteVolume}, so the button never unmutes into silence.
+ */
 export function toggleMute(media: ControllableMedia): void {
+  if (media.muted && media.volume === 0) {
+    media.volume = unmuteVolume;
+  }
   media.muted = !media.muted;
 }
 

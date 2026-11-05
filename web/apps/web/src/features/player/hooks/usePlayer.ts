@@ -1,28 +1,24 @@
 import { knownDuration, streamInfo, type StreamInfo } from "@mivo/player-core";
-import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState, type RefObject } from "react";
 
-import { useApiClient } from "../../../shared/api";
-import { playerItemQueryOptions } from "../api/playerQueries";
 import type { MediaState } from "../lib/mediaState";
-import { seekStepSeconds } from "../lib/playerKeys";
 import { playbackNotice, type PlaybackNotice } from "../lib/playbackStatusText";
 import { useControlsVisibility, useKeyboardFocusInControls } from "./useControlsVisibility";
-import { useFullscreen } from "./useFullscreen";
-import { useMediaControls } from "./useMediaControls";
-import {
-  usePlaybackSession,
-  type PlaybackSessionView,
-  type PlaybackTarget,
-} from "./usePlaybackSession";
-import { usePlayerExit } from "./usePlayerExit";
-import { usePlayerKeyboard } from "./usePlayerKeyboard";
-import { useStreamInfoOverlay } from "./useStreamInfoOverlay";
+import { useFullscreen, type Fullscreen } from "./useFullscreen";
+import { usePlaybackSession, type PlaybackTarget } from "./usePlaybackSession";
+import { usePlayerItem, type PlayerItemInfo } from "./usePlayerItem";
+import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
+import type { PlayerQueueView } from "./usePlayerQueue";
+import { usePlayerShortcuts } from "./usePlayerShortcuts";
+import { usePlayerTransport, type TransportActions } from "./usePlayerTransport";
+import { useStreamInfoOverlay, type StreamInfoOverlay } from "./useStreamInfoOverlay";
 
 /** Everything the player page shows. */
 export interface PlayerView {
-  /** Title of the item; `undefined` until it has loaded. */
-  readonly title: string | undefined;
+  /** The item as the title block shows it. */
+  readonly item: PlayerItemInfo;
+  /** Previous, next, repeat and shuffle as the queue allows them. */
+  readonly queue: PlayerQueueView;
   readonly notice: PlaybackNotice;
   /** What the stream-info overlay shows; `undefined` before the first session. */
   readonly streamInfo: StreamInfo | undefined;
@@ -37,21 +33,17 @@ export interface PlayerView {
   readonly streamInfoOpen: boolean;
 }
 
-/** What the player page's controls do. */
-export interface PlayerActions {
-  readonly togglePlay: () => void;
+/**
+ * What the player page's controls do; the ways out and the transport come from
+ * {@link TransportActions}, play and sound from {@link MediaActions}.
+ */
+export interface PlayerActions extends TransportActions, MediaActions {
   /** Moves to a file position in seconds. */
   readonly seek: (position: number) => void;
-  readonly toggleMute: () => void;
-  readonly setVolume: (volume: number) => void;
   readonly toggleFullscreen: () => void;
   readonly toggleStreamInfo: () => void;
   readonly closeStreamInfo: () => void;
   readonly retry: () => void;
-  /** Back in the history, or to the item's page. */
-  readonly exit: () => void;
-  /** To the item's page. */
-  readonly openItem: () => void;
 }
 
 /** The player page's state, actions and the elements it needs. */
@@ -67,12 +59,6 @@ export interface Player {
   readonly streamInfoToggleRef: RefObject<HTMLButtonElement | null>;
   readonly streamInfoRegionRef: RefObject<HTMLElement | null>;
   readonly streamInfoHeadingRef: RefObject<HTMLHeadingElement | null>;
-}
-
-function usePlayerTitle(itemId: string): string | undefined {
-  const client = useApiClient();
-  // The engine loads the same query; this only reads its cache entry.
-  return useQuery(playerItemQueryOptions(client, itemId)).data?.title;
 }
 
 /**
@@ -118,58 +104,16 @@ function useAutoHidingControls(playingFreely: boolean): boolean {
   return useControlsVisibility(playingFreely && !keyboardFocusInControls);
 }
 
-/** What the control bar shows of the element and does with it. */
-interface PlayerMedia {
-  /** The element's sound and produced ranges; `paused` is what the play button shows. */
-  readonly media: MediaState;
-  readonly togglePlay: () => void;
-  readonly toggleMute: () => void;
-  readonly setVolume: (volume: number) => void;
-}
-
-/**
- * Play and pause always set the engine's intent, which plays or pauses an attached stream at
- * once: a recovery or a retry of a stream that was not ready then keeps a pause the user made
- * (ADR 0024 Notes M2-41). The element's own togglePlay is therefore not used. While a stream
- * plays, the button shows and toggles the element's state, which may differ from the intent
- * (the file ended, the browser refused to autoplay). Before that (loading, a restart, a wait
- * for the stream, an error) the element is empty, so the button shows the intent for the next
- * stream.
- */
-function usePlayerMedia(
-  video: HTMLVideoElement | null,
-  playback: Pick<PlaybackSessionView, "session" | "status" | "autoplay" | "setAutoplay">,
-): PlayerMedia {
-  const { paused, muted, volume, producedRanges, toggleMute, setVolume } = useMediaControls(
-    video,
-    playback.session,
-  );
-  const shownPaused = playback.status === "playing" ? paused : !playback.autoplay;
+/** What the full-screen button and the stream-info overlay do. */
+function panelActions(
+  fullscreen: Fullscreen,
+  overlay: Pick<StreamInfoOverlay, "toggle" | "close">,
+): Pick<PlayerActions, "toggleFullscreen" | "toggleStreamInfo" | "closeStreamInfo"> {
   return {
-    media: { paused: shownPaused, muted, volume, producedRanges },
-    togglePlay: () => {
-      playback.setAutoplay(shownPaused);
-    },
-    toggleMute,
-    setVolume,
+    toggleFullscreen: fullscreen.toggle,
+    toggleStreamInfo: overlay.toggle,
+    closeStreamInfo: overlay.close,
   };
-}
-
-/** The keyboard map (`playerKeys.ts`) on top of the page's actions. */
-function usePlayerShortcuts(actions: PlayerActions, position: number, escape: () => void): void {
-  usePlayerKeyboard({
-    togglePlay: actions.togglePlay,
-    seekBackward: () => {
-      actions.seek(Math.max(0, position - seekStepSeconds));
-    },
-    seekForward: () => {
-      actions.seek(position + seekStepSeconds);
-    },
-    toggleFullscreen: actions.toggleFullscreen,
-    toggleStreamInfo: actions.toggleStreamInfo,
-    toggleMute: actions.toggleMute,
-    escape,
-  });
 }
 
 /**
@@ -182,35 +126,33 @@ export function usePlayer(target: PlaybackTarget): Player {
   const [video, videoRef] = useVideoElement(attachVideo);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const { session } = playback;
-  const { media, togglePlay, toggleMute, setVolume } = usePlayerMedia(video, playback);
+  const { media, actions: mediaActions } = usePlayerMedia(video, playback);
   const fullscreen = useFullscreen(container);
   const overlay = useStreamInfoOverlay();
   const [playButtonRef, retryAndFocus] = useRetryWithFocus(retry);
-  const title = usePlayerTitle(target.itemId);
-  const { exit, openItem } = usePlayerExit(target.itemId);
+  const { itemId } = target;
+  const item = usePlayerItem(itemId);
+  const duration = session === undefined ? undefined : knownDuration(session);
+  const transport = usePlayerTransport({ itemId, position: playback.position, duration, seek });
   const controlsVisible = useAutoHidingControls(
     playback.status === "playing" && !media.paused && !overlay.open,
   );
   const actions: PlayerActions = {
-    togglePlay,
+    ...transport.actions,
+    ...mediaActions,
+    ...panelActions(fullscreen, { toggle: overlay.toggle, close: overlay.close }),
     seek,
-    toggleMute,
-    setVolume,
-    toggleFullscreen: fullscreen.toggle,
-    toggleStreamInfo: overlay.toggle,
-    closeStreamInfo: overlay.close,
     retry: retryAndFocus,
-    exit,
-    openItem,
   };
   usePlayerShortcuts(actions, playback.position, overlay.open ? overlay.close : fullscreen.exit);
   return {
     view: {
-      title,
+      item,
+      queue: transport.queue,
       notice: playbackNotice(playback),
       streamInfo: session === undefined ? undefined : streamInfo(session),
       position: playback.position,
-      duration: session === undefined ? undefined : knownDuration(session),
+      duration,
       media,
       fullscreenSupported: fullscreen.supported,
       fullscreenActive: fullscreen.active,
