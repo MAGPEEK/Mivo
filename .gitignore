@@ -47,3 +47,6 @@ Thumbs.db
 
 # Agent worktrees
 /.claude/worktrees/
+
+# stray coverage profiles from agents
+*.out
