@@ -129,8 +129,8 @@ func (filters listingFilters) validate() error {
 }
 
 // checkItemKind accepts the kinds some library kind lists at its top (movie, show, artist,
-// album, audiobook; library.IsTopLevelItemKind). Whether the kind belongs to the requested
-// library is the use case's check (applibrary.ErrItemKindMismatch).
+// album, audiobook, photo_album, photo; library.IsTopLevelItemKind). Whether the kind
+// belongs to the requested library is the use case's check (applibrary.ErrItemKindMismatch).
 func checkItemKind(kind *apigen.ItemKind) error {
 	if kind == nil {
 		return nil

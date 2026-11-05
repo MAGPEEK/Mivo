@@ -23,6 +23,16 @@ const (
 	standardInput = "pipe:0"
 	// maxOrientationFilters is the longest filter chain an orientation needs (upside down).
 	maxOrientationFilters = 2
+	// gridInputLabel names the first stream group of the input, the tile grid of a HEIF or
+	// AVIF photo, which FFmpeg assembles into one picture; gridOutputLabel the scaled result.
+	gridInputLabel  = "[0:g:0]"
+	gridOutputLabel = "[photo]"
+	// maxGridAllocationBytes bounds every single allocation of a tile grid render
+	// (-max_alloc). -max_pixels only bounds each decoded tile, not the canvas the tiles are
+	// assembled on, whose size the file declares (up to 65535 x 65535); this bound admits
+	// one 16-bit plane of a canvas at maxDecodedPixels and refuses a forged larger one. Grid
+	// tiles are separate small items, so no packet comes near it.
+	maxGridAllocationBytes = 2 * maxDecodedPixels
 )
 
 // EXIF orientations (photo.Info.Orientation) that need a transform; 1 and 0 are upright.
@@ -42,9 +52,14 @@ type photoInput int
 const (
 	// inputFileWithEXIF is an image file whose EXIF orientation Mivo applies.
 	inputFileWithEXIF photoInput = iota
-	// inputFileWithContainerRotation is a HEIF or AVIF file: FFmpeg applies the rotation
-	// and mirroring properties (irot, imir) of the container itself.
+	// inputFileWithContainerRotation is a HEIF or AVIF file with a single coded image:
+	// FFmpeg applies the rotation and mirroring properties (irot, imir) of the container
+	// itself.
 	inputFileWithContainerRotation
+	// inputTileGrid is a HEIF or AVIF file whose image is a grid of tiles (every iPhone
+	// photo): FFmpeg exposes it as a stream group and assembles it in a complex filter
+	// graph, which a simple -vf on the same output cannot follow.
+	inputTileGrid
 	// inputPreview is an embedded JPEG preview piped to standard input.
 	inputPreview
 )
@@ -80,21 +95,32 @@ func photoArguments(job photoJob) ([]string, error) {
 		"-hide_banner", "-nostdin", "-loglevel", "error",
 		"-max_pixels", strconv.Itoa(maxDecodedPixels),
 	}
-	arguments = append(arguments, input...)
-
-	// A HEIF grid image is a stream group that FFmpeg assembles only when it picks the
-	// video stream itself (the largest picture); mapping 0:v:0 would render one tile.
-	if job.input != inputFileWithContainerRotation {
-		arguments = append(arguments, "-map", firstVideoStream)
+	if job.input == inputTileGrid {
+		arguments = append(arguments, "-max_alloc", strconv.Itoa(maxGridAllocationBytes))
 	}
 
-	arguments = append(arguments,
-		"-frames:v", singleFrame, "-map_metadata", disabledMapping,
-		"-vf", photoFilter(job),
-	)
-	arguments = append(arguments, imageEncoding(job.format)...)
+	arguments = slices.Concat(arguments, input, photoFilterArguments(job),
+		[]string{"-frames:v", singleFrame, "-map_metadata", disabledMapping},
+		imageEncoding(job.format), []string{"-f", imagePipeMuxer, standardOutput})
 
-	return slices.Concat(arguments, []string{"-f", imagePipeMuxer, standardOutput}), nil
+	return arguments, nil
+}
+
+// photoFilterArguments selects the picture and scales it. A tile grid is scaled in the
+// complex graph that assembles it; a single HEIF or AVIF image is left to FFmpeg's own
+// stream choice, every other input maps its first video stream.
+func photoFilterArguments(job photoJob) []string {
+	switch job.input {
+	case inputTileGrid:
+		return []string{
+			"-filter_complex", gridInputLabel + photoFilter(job) + gridOutputLabel, "-map", gridOutputLabel,
+		}
+	case inputFileWithContainerRotation:
+		return []string{"-vf", photoFilter(job)}
+	case inputFileWithEXIF, inputPreview:
+	}
+
+	return []string{"-map", firstVideoStream, "-vf", photoFilter(job)}
 }
 
 // photoInputArguments returns the input part of the arguments of job.
@@ -128,7 +154,7 @@ func photoInputArguments(job photoJob) ([]string, error) {
 // the viewer sees.
 func photoFilter(job photoJob) string {
 	scale := imageFilter(job.width, job.format)
-	if job.input == inputFileWithContainerRotation {
+	if job.input == inputFileWithContainerRotation || job.input == inputTileGrid {
 		return scale
 	}
 

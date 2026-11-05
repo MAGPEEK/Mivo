@@ -25,7 +25,10 @@ while CI and Docker run Linux.
 - Known gaps (no FFmpeg encoder or text→bitmap path): PGS and VobSub/DVB subtitles, APE, DSD
   (DSF/DFF), HEIC, RealVideo 4, EXIF in photos. The manifest marks them as gaps. They are
   covered later by small, freely licensed sample files or other tools (for example exiftool),
-  each through its own task.
+  each through its own task. The library photo corpus (M3-15g, `testdata/library/photos`)
+  closes the EXIF and HEIC gaps in Go: the generator writes the EXIF blocks itself and wraps
+  FFmpeg's HEVC stills in HEIF boxes, including a tile grid; the media manifest still lists
+  them as gaps of the single-file corpus.
 
 ## Consequences
 

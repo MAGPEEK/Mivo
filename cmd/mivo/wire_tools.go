@@ -64,6 +64,8 @@ type externalTools struct {
 	ffmpeg       string
 	ffprobe      string
 	capabilities playback.ServerCapabilities
+	// photoDecoders says whether ffmpeg decodes HEIC and AVIF photos itself.
+	photoDecoders ffmpeg.PhotoDecoders
 }
 
 // prepareTools resolves both tools once at startup and detects the capabilities of ffmpeg.
@@ -90,7 +92,37 @@ func (app application) prepareTools(ctx context.Context) (externalTools, error) 
 		return externalTools{}, err
 	}
 
-	return externalTools{ffmpeg: ffmpegPath, ffprobe: ffprobe, capabilities: capabilities}, nil
+	photoDecoders, err := app.detectPhotoDecoders(ctx, ffmpegPath, ffmpegFound)
+	if err != nil {
+		return externalTools{}, err
+	}
+
+	return externalTools{
+		ffmpeg: ffmpegPath, ffprobe: ffprobe, capabilities: capabilities, photoDecoders: photoDecoders,
+	}, nil
+}
+
+// detectPhotoDecoders asks ffmpeg whether it decodes HEIC and AVIF photos. Without a usable
+// ffmpeg the answer stays "no", so those photos fall back to their embedded previews (ADR
+// 0029); like detectCapabilities only a shutdown and a wiring error fail the start.
+func (app application) detectPhotoDecoders(ctx context.Context, ffmpegPath string, found bool) (ffmpeg.PhotoDecoders, error) {
+	if !found {
+		return ffmpeg.PhotoDecoders{}, nil
+	}
+
+	// The adapter logs a failed detection itself.
+	decoders, err := ffmpeg.DetectPhotoDecoders(ctx, ffmpegPath, app.logger)
+	if err != nil && (ctx.Err() != nil || errors.Is(err, domain.ErrInvalid)) {
+		return ffmpeg.PhotoDecoders{}, fmt.Errorf("detect ffmpeg photo decoders: %w", err)
+	}
+
+	if err != nil {
+		return ffmpeg.PhotoDecoders{}, nil
+	}
+
+	app.logger.InfoContext(ctx, "ffmpeg photo decoders", slog.Bool("heic", decoders.HEIC), slog.Bool("avif", decoders.AVIF))
+
+	return decoders, nil
 }
 
 // resolveConfiguredTool returns the absolute path of a tool and true, or unavailableToolPath

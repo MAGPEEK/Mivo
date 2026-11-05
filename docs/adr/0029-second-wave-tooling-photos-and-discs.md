@@ -75,15 +75,30 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   on what an FFmpeg version does with EXIF. HEIC/AVIF are decoded directly only when the
   startup probe (`-decoders`, `-demuxers`) lists the `mov` demuxer and `hevc` (HEIC) or
   `libdav1d`/`libaom-av1` (AVIF; FFmpeg's own `av1` decoder needs hardware); FFmpeg then
-  applies the container's `irot`/`imir` itself and picks the (grid) picture without `-map`.
-  RAW files, undecodable HEIC/AVIF, files over 256 MiB and every direct decode that fails as
+  applies the container's `irot`/`imir` itself. A tile grid (every iPhone photo) is a stream
+  group that FFmpeg assembles in a complex filter graph, so it is scaled with
+  `-filter_complex "[0:g:0]scale…[photo]" -map "[photo]"` (M3-15h); a file with a single
+  image has no stream group and is retried with `-vf` – FFmpeg fails at once, before
+  decoding, on the arguments of the other shape. `-max_pixels` bounds each tile only, not the
+  canvas whose size the file declares, so a grid render also sets `-max_alloc` to one 16-bit
+  plane at the pixel limit (128 MB) and refuses a forged larger canvas. RAW files, undecodable HEIC/AVIF, files over 256 MiB and every direct decode that fails as
   unsupported fall back to the embedded JPEG preview piped to FFmpeg (`jpeg_pipe`, protocol
   `pipe` only); without a preview the render fails with `ErrPhotoUnsupported`
   (`domain.ErrUnsupported`). The image endpoint accepts a photo item ID (`app/images`
   `PhotoSource`), renders photos as JPEG, keys the cache with `artwork.PhotoTag` (path, size,
   mtime) and the width, shares the two-render limit with artwork and keeps current photo
-  thumbnails when purging. Wiring (`DetectPhotoDecoders`, `NewPhotoRenderer`, the sqlite
-  `PhotoSource`) follows in M3-15e/M3-15h.
+  thumbnails when purging. M3-15h wires it (`DetectPhotoDecoders` at startup next to the
+  capability probe, `NewPhotoRenderer`, the sqlite `PhotoSource`) together with the photo
+  scan ports and the `photos` library kind.
+- Photo API (M3-15h): photos and albums go through the generic item endpoints. The children
+  of an album come in album order (sub-albums, then photos by capture time; ascending only),
+  the listing `type=photo_album` holds the top-level albums and `type=photo` every photo of
+  the library. A summary carries `takenAt` and `thumbnailState`, the detail the EXIF block;
+  the tile is `square`: the photo itself for a still photo whose state is `ready`, the newest
+  such photo for an album. Videos in a photos library have no tile yet (the image endpoint
+  renders still images only), play like any video and carry `media`; still photos carry
+  none. The primary file of a photo is the one its details name (the JPEG of a RAW+JPEG
+  pair) in listings, the detail's `files` and the image endpoint alike.
 - FFmpeg input of folder discs (M3-16f, `internal/adapters/ffmpeg` `DiscInput`,
   `Prober.ProbeDisc`, `Job.Layout`/`Job.DiscTitle` in the producer). This adds to the
   M2-24b whitelist of ADR 0022; single files keep exactly that whitelist.

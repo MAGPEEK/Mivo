@@ -1,6 +1,7 @@
 package corpustest_test
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"math"
@@ -386,8 +387,13 @@ func (rendering photoRendering) assertThumbnail(t *testing.T, file string, row p
 		return
 	}
 
-	if reason, known := knownRenderFailures()[row.File]; known && err != nil {
+	reason, known := knownRenderFailures()[row.File]
+	if known && err != nil {
 		t.Skipf("known render failure: %s (%v)", reason, err)
+	}
+
+	if known {
+		t.Errorf("known render failure %q renders now: remove it from knownRenderFailures", reason)
 	}
 
 	if err != nil {
@@ -402,14 +408,10 @@ func (rendering photoRendering) assertThumbnail(t *testing.T, file string, row p
 }
 
 // knownRenderFailures are corpus files the renderer cannot show yet, with the reason. The
-// test still renders them, so a fix makes the check strict without touching this list;
-// remove an entry once its fix is in.
+// test still renders them and fails once one renders, so a fixed entry gets removed. The
+// HEIF grid (Phone/IMG_1002.heic) left the list with M3-15h.
 func knownRenderFailures() map[string]string {
-	return map[string]string{
-		// FFmpeg assembles a HEIF grid in a complex filtergraph of its own, and a -vf on the
-		// same output is rejected ("Simple and complex filtering cannot be used together").
-		"Phone/IMG_1002.heic": "HEIF grid images cannot be scaled with -vf (BACKLOG m3-15g findings)",
-	}
+	return map[string]string{}
 }
 
 func newPhotoRenderer(t *testing.T) (*ffmpeg.PhotoRenderer, ffmpeg.PhotoDecoders) {
@@ -457,7 +459,7 @@ func TestCorpusRAWPreviewsAreRenderableJPEGs(t *testing.T) {
 			continue
 		}
 
-		if !slices.Equal(preview[:len(jpegSignature())], jpegSignature()) {
+		if !bytes.HasPrefix(preview, jpegSignature()) {
 			t.Errorf("%s: the preview is no JPEG", row.File)
 		}
 	}

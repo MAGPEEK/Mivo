@@ -44,8 +44,11 @@ type ItemReader interface {
 // episodes by ascending number with episodes without a number last; equal numbers and
 // unnumbered items order by sort title, then by ID. The albums of an artist order by sort
 // title, then ID; the tracks of an album follow library.CompareTracks (disc, track number with
-// unnumbered tracks last, file name), then ID. Extras are never children. Descending
-// reverses the whole order, so specials and unnumbered episodes come first.
+// unnumbered tracks last, file name), then ID. The children of a photo album follow
+// PhotoReader.ListPhotoChildren, with the photo details and tiles in the summaries (see
+// ItemSummary). Extras are never children. Descending reverses the whole order, so specials
+// and unnumbered episodes come first; a photo album lists ascending only and wraps
+// domain.ErrInvalid for Descending.
 //
 // Error contract as ItemReader: an unknown item wraps domain.ErrNotFound, a cursor the reader
 // did not produce (or one issued for the other direction) wraps domain.ErrInvalid, a stored

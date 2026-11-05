@@ -32,6 +32,12 @@ SELECT *
 FROM photo_info
 WHERE item_id = ?;
 
+-- ListPhotoInfos returns the photo details of the listed items that have them.
+-- name: ListPhotoInfos :many
+SELECT *
+FROM photo_info
+WHERE item_id IN (sqlc.slice(item_ids));
+
 -- ListPhotoSubAlbums returns the sub-albums of an album after the key (after_sort_title,
 -- after_id) in keyset order, each with the number of its direct children as ListPhotoChildren
 -- lists them: sub-albums plus photos with photo details. The empty key lies
@@ -92,8 +98,9 @@ ORDER BY media_files.item_id, media_files.id IS NOT photo_info.primary_file_id, 
 
 -- GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums and the
 -- newest of them whose thumbnail can be rendered (latest capture time, ties by the last name
--- key and ID; empty without such a photo),
--- the album's tile. Albums nest as deep as the folder tree, usually a few levels.
+-- key and ID; empty without such a photo), the album's tile. A video counts as a photo but
+-- is no tile: the image endpoint renders still images only, which the scan saves with the
+-- container 'unknown'. Albums nest as deep as the folder tree, usually a few levels.
 -- name: GetPhotoAlbumTotals :one
 WITH RECURSIVE albums (id) AS (
     SELECT items.id FROM items WHERE items.id = sqlc.arg(album_id)
@@ -107,6 +114,9 @@ SELECT (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id IN (SELECT id
        CAST(ifnull((SELECT photo_info.item_id FROM photo_info
                     WHERE photo_info.parent_id IN (SELECT id FROM albums)
                       AND photo_info.thumbnail_state = 'ready'
+                      AND EXISTS (SELECT 1 FROM media_files
+                                  WHERE media_files.id = photo_info.primary_file_id
+                                    AND media_files.container = 'unknown')
                     ORDER BY photo_info.taken_at DESC, photo_info.name_key DESC, photo_info.item_id DESC
                     LIMIT 1), '') AS TEXT) AS cover_photo_id;
 

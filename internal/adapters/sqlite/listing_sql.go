@@ -95,15 +95,17 @@ const (
 // tracks of its albums, an album by its tracks, a photo album by its own photos (not those of
 // its sub-albums), everything else by itself.
 func memberPathOf(kind library.ItemKind) memberPath {
-	containers := map[library.ItemKind]memberPath{
-		library.ItemKindShow:       {depth: memberGrandchild, memberKind: library.ItemKindEpisode},
-		library.ItemKindArtist:     {depth: memberGrandchild, memberKind: library.ItemKindTrack},
-		library.ItemKindAlbum:      {depth: memberChild, memberKind: library.ItemKindTrack},
-		library.ItemKindPhotoAlbum: {depth: memberChild, memberKind: library.ItemKindPhoto},
-	}
-
-	if path, found := containers[kind]; found {
-		return path
+	switch kind {
+	case library.ItemKindShow:
+		return memberPath{depth: memberGrandchild, memberKind: library.ItemKindEpisode}
+	case library.ItemKindArtist:
+		return memberPath{depth: memberGrandchild, memberKind: library.ItemKindTrack}
+	case library.ItemKindAlbum:
+		return memberPath{depth: memberChild, memberKind: library.ItemKindTrack}
+	case library.ItemKindPhotoAlbum:
+		return memberPath{depth: memberChild, memberKind: library.ItemKindPhoto}
+	case library.ItemKindMovie, library.ItemKindSeason, library.ItemKindEpisode, library.ItemKindExtra,
+		library.ItemKindTrack, library.ItemKindAudiobook, library.ItemKindPhoto:
 	}
 
 	return memberPath{depth: memberSelf}
@@ -111,15 +113,25 @@ func memberPathOf(kind library.ItemKind) memberPath {
 
 // newListingScope binds the library. The base condition repeats the WHERE clause of the
 // partial index items_top_level (items_albums for albums, which lie below their artist), so
-// SQLite can use it as a covering index. Otherwise the kind adds no condition: the use case
-// only passes a top-level kind of the library, and every top-level item of a movies, shows or
-// audiobooks library has that kind (a kind test would cost a row lookup per item).
+// SQLite can use it as a covering index. Otherwise the kind adds no condition where every
+// top-level item of the library has the kind the use case passes (movies, shows, audiobooks;
+// a kind test would cost a row lookup per item). A photos library holds top-level albums and
+// loose photos side by side, so "photo_album" tests the kind, and "photo" lists every photo
+// of the library whatever album it is in (the timeline, ADR 0029).
 func newListingScope(builder *sqlBuilder, target listingTarget) listingScope {
 	libraryParameter := builder.arg(target.libraryID)
 
 	base := "items.library_id = " + libraryParameter + " AND items.parent_id IS NULL AND items.kind <> 'extra'"
-	if target.kind == library.ItemKindAlbum {
+
+	switch target.kind {
+	case library.ItemKindAlbum:
 		base = "items.library_id = " + libraryParameter + " AND items.kind = 'album'"
+	case library.ItemKindPhoto:
+		base = "items.library_id = " + libraryParameter + " AND items.kind = 'photo'"
+	case library.ItemKindPhotoAlbum:
+		base += " AND items.kind = 'photo_album'"
+	case library.ItemKindMovie, library.ItemKindShow, library.ItemKindSeason, library.ItemKindEpisode,
+		library.ItemKindExtra, library.ItemKindArtist, library.ItemKindTrack, library.ItemKindAudiobook:
 	}
 
 	return listingScope{builder: builder, base: base, members: memberPathOf(target.kind), kind: target.kind, multiFolder: target.multiFolder}

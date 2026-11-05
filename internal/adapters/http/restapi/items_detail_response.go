@@ -173,7 +173,7 @@ func itemDetailResponse(detail applibrary.ItemDetail) (apigen.ItemDetail, error)
 	applyMetadata(&response, detail.Metadata)
 
 	steps := []func(*apigen.ItemDetail, applibrary.ItemDetail) error{
-		applyFiles, applyNavigation, applyAncestors, applyArtwork, applyExtras, applyChapters,
+		applyFiles, applyNavigation, applyAncestors, applyArtwork, applyExtras, applyChapters, applyPhoto,
 	}
 
 	for _, step := range steps {

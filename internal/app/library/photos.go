@@ -8,7 +8,8 @@ import (
 )
 
 // PhotoReader reads photo albums and photos (ADR 0029). Implemented by adapters/sqlite
-// (M3-15e); the HTTP adapter serves it from M3-15h.
+// (M3-15e), whose ChildReader and ItemReader serve the same order and details through the
+// generic item endpoints (M3-15h); the port stays for photo-only views such as the timeline.
 //
 // Error contract as ChildReader: an unknown item wraps domain.ErrNotFound; an item of the
 // wrong kind, an invalid limit and a cursor the reader did not issue for this album wrap
@@ -39,8 +40,8 @@ type PhotoDetail struct {
 // detail. A photo is its own thumbnail, so the image endpoint takes Item.ID. For a
 // sub-album, ChildCount counts its direct children as ListPhotoChildren lists them
 // (sub-albums and photos), LeafCount the photos in it and all its sub-albums, and
-// CoverPhotoID names the newest of those photos whose thumbnail is ready, the album's tile
-// ("" when there is none).
+// CoverPhotoID names the newest of those photos that is a still image (no video) and whose
+// thumbnail is ready, the album's tile ("" when there is none).
 type PhotoChild struct {
 	Item         library.Item
 	ChildCount   int

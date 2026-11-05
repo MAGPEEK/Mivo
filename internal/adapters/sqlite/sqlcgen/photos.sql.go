@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const getPhotoAlbumTotals = `-- name: GetPhotoAlbumTotals :one
@@ -23,6 +24,9 @@ SELECT (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id IN (SELECT id
        CAST(ifnull((SELECT photo_info.item_id FROM photo_info
                     WHERE photo_info.parent_id IN (SELECT id FROM albums)
                       AND photo_info.thumbnail_state = 'ready'
+                      AND EXISTS (SELECT 1 FROM media_files
+                                  WHERE media_files.id = photo_info.primary_file_id
+                                    AND media_files.container = 'unknown')
                     ORDER BY photo_info.taken_at DESC, photo_info.name_key DESC, photo_info.item_id DESC
                     LIMIT 1), '') AS TEXT) AS cover_photo_id
 `
@@ -34,8 +38,9 @@ type GetPhotoAlbumTotalsRow struct {
 
 // GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums and the
 // newest of them whose thumbnail can be rendered (latest capture time, ties by the last name
-// key and ID; empty without such a photo),
-// the album's tile. Albums nest as deep as the folder tree, usually a few levels.
+// key and ID; empty without such a photo), the album's tile. A video counts as a photo but
+// is no tile: the image endpoint renders still images only, which the scan saves with the
+// container 'unknown'. Albums nest as deep as the folder tree, usually a few levels.
 func (q *Queries) GetPhotoAlbumTotals(ctx context.Context, albumID string) (GetPhotoAlbumTotalsRow, error) {
 	row := q.db.QueryRowContext(ctx, getPhotoAlbumTotals, albumID)
 	var i GetPhotoAlbumTotalsRow
@@ -296,6 +301,67 @@ func (q *Queries) ListLibraryPhotos(ctx context.Context, arg ListLibraryPhotosPa
 			&i.PhotoInfo.Width,
 			&i.PhotoInfo.Height,
 			&i.PhotoInfo.ThumbnailState,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPhotoInfos = `-- name: ListPhotoInfos :many
+SELECT item_id, library_id, parent_id, primary_file_id, name_key, taken_at, taken_at_source, make, model, lens, exposure, f_number, iso, focal_mm, orientation, lat, lon, width, height, thumbnail_state
+FROM photo_info
+WHERE item_id IN (/*SLICE:item_ids*/?)
+`
+
+// ListPhotoInfos returns the photo details of the listed items that have them.
+func (q *Queries) ListPhotoInfos(ctx context.Context, itemIds []string) ([]PhotoInfo, error) {
+	query := listPhotoInfos
+	var queryParams []interface{}
+	if len(itemIds) > 0 {
+		for _, v := range itemIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", strings.Repeat(",?", len(itemIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PhotoInfo{}
+	for rows.Next() {
+		var i PhotoInfo
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.LibraryID,
+			&i.ParentID,
+			&i.PrimaryFileID,
+			&i.NameKey,
+			&i.TakenAt,
+			&i.TakenAtSource,
+			&i.Make,
+			&i.Model,
+			&i.Lens,
+			&i.Exposure,
+			&i.FNumber,
+			&i.Iso,
+			&i.FocalMm,
+			&i.Orientation,
+			&i.Lat,
+			&i.Lon,
+			&i.Width,
+			&i.Height,
+			&i.ThumbnailState,
 		); err != nil {
 			return nil, err
 		}

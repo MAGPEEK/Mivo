@@ -150,6 +150,22 @@ func (r *PhotoRenderer) renderFile(ctx context.Context, request artwork.RenderRe
 		job.orientation = r.orientation(ctx, request.AbsolutePath)
 	}
 
+	if input != inputFileWithContainerRotation {
+		return r.run(ctx, job, nil)
+	}
+
+	// A HEIF or AVIF file holds a tile grid (every iPhone photo) or a single image, which
+	// need different arguments. FFmpeg tells them apart only by failing at once on the
+	// wrong ones, before decoding, so the grid is tried first and the single image after.
+	job.input = inputTileGrid
+
+	rendered, err := r.run(ctx, job, nil)
+	if err == nil || !errors.Is(err, domain.ErrUnsupported) {
+		return rendered, err
+	}
+
+	job.input = inputFileWithContainerRotation
+
 	return r.run(ctx, job, nil)
 }
 

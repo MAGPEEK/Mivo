@@ -93,14 +93,17 @@ SELECT *
 FROM items
 WHERE id = ?;
 
--- ListItemFiles returns an item's files, the primary file (first by part number, folder
--- position and relative path; ADR 0027 section 5) first.
+-- ListItemFiles returns an item's files, the primary file first: the file its photo details
+-- name (the JPEG of a RAW+JPEG pair, ADR 0029), else by part number, folder position and
+-- relative path (ADR 0027 section 5).
 -- name: ListItemFiles :many
 SELECT media_files.*
 FROM media_files
 JOIN library_roots ON library_roots.id = media_files.root_id
+LEFT JOIN photo_info ON photo_info.item_id = media_files.item_id
 WHERE media_files.item_id = ?
-ORDER BY media_files.part_number, library_roots.position, media_files.relative_path, media_files.id;
+ORDER BY media_files.id IS NOT photo_info.primary_file_id, media_files.part_number, library_roots.position,
+         media_files.relative_path, media_files.id;
 
 -- name: GetFileWithRoot :one
 SELECT sqlc.embed(media_files), library_roots.path AS root_path

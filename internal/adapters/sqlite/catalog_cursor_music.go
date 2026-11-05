@@ -36,17 +36,20 @@ func encodeTrackCursor(scope childCursorScope, position trackPosition) string {
 }
 
 // childrenCursor is the position a children cursor names: a child key for the children of a
-// show, season or artist, a track position for the tracks of an album. Which one is valid
-// depends on the parent's kind, which is known only after reading it.
+// show, season or artist, a track position for the tracks of an album, a photo position for
+// the children of a photo album. Which one is valid depends on the parent's kind, which is
+// known only after reading it.
 type childrenCursor struct {
 	child    childKey
 	hasChild bool
 	track    trackPosition
 	hasTrack bool
+	photo    photoPosition
+	hasPhoto bool
 }
 
 // decodeChildrenCursor accepts a child cursor or a track cursor issued for this item and
-// direction. Anything else wraps domain.ErrInvalid.
+// direction, or a photo cursor issued for this item. Anything else wraps domain.ErrInvalid.
 func decodeChildrenCursor(cursor string, scope childCursorScope) (childrenCursor, error) {
 	child, hasChild, childErr := decodeChildCursor(cursor, scope)
 	if childErr == nil {
@@ -56,6 +59,11 @@ func decodeChildrenCursor(cursor string, scope childCursorScope) (childrenCursor
 	track, hasTrack, trackErr := decodeTrackCursor(cursor, scope)
 	if trackErr == nil {
 		return childrenCursor{track: track, hasTrack: hasTrack}, nil
+	}
+
+	// An empty cursor never gets here: decodeChildCursor accepts it.
+	if position, photoErr := decodePhotoCursor(cursor, scope.parentID); photoErr == nil {
+		return childrenCursor{photo: position, hasPhoto: true}, nil
 	}
 
 	return childrenCursor{}, childErr

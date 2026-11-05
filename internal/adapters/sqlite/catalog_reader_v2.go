@@ -40,7 +40,8 @@ func (catalog *CatalogReader) ListChildren(ctx context.Context, itemID string, r
 
 		result, readErr = readChildrenPage(ctx, queries, childrenRequest{
 			scope: scope, after: cursor.child, hasAfter: cursor.hasChild,
-			afterTrack: cursor.track, hasAfterTrack: cursor.hasTrack, limit: limit,
+			afterTrack: cursor.track, hasAfterTrack: cursor.hasTrack,
+			afterPhoto: cursor.photo, hasAfterPhoto: cursor.hasPhoto, limit: limit,
 		})
 
 		return readErr
@@ -62,19 +63,23 @@ type listedItem struct {
 }
 
 // childrenRequest is one page of children after a child key (hasAfter) or, for the tracks
-// of an album, after a track position (hasAfterTrack).
+// of an album, after a track position (hasAfterTrack), or, for the children of a photo
+// album, after a photo position (hasAfterPhoto).
 type childrenRequest struct {
 	scope         childCursorScope
 	after         childKey
 	hasAfter      bool
 	afterTrack    trackPosition
 	hasAfterTrack bool
+	afterPhoto    photoPosition
+	hasAfterPhoto bool
 	limit         int
 }
 
 // readChildrenPage reads one row more than the limit, like readListingPage. The tracks of an
 // album follow track order, which needs the disc and the file name, so they are paged by
-// readTrackPage; a cursor of the other listing is not issued for these children.
+// readTrackPage, and the children of a photo album follow album order (photoChildrenPage); a
+// cursor of another listing is not issued for these children.
 func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request childrenRequest) (applibrary.ItemPage, error) {
 	parentID := request.scope.parentID
 
@@ -87,14 +92,18 @@ func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request chi
 		return applibrary.ItemPage{}, fmt.Errorf("read item: %w", err)
 	}
 
-	isAlbum := parent.Kind == library.ItemKindAlbum.String()
-	if (isAlbum && request.hasAfter) || (!isAlbum && request.hasAfterTrack) {
-		return applibrary.ItemPage{}, fmt.Errorf("cursor was not issued for these children: %w", domain.ErrInvalid)
+	if err := checkChildrenCursor(parent.Kind, request); err != nil {
+		return applibrary.ItemPage{}, err
 	}
 
-	if isAlbum {
+	switch parent.Kind {
+	case library.ItemKindAlbum.String():
 		return readTrackPage(ctx, queries, trackPageRequest{
 			scope: request.scope, after: request.afterTrack, hasAfter: request.hasAfterTrack, limit: request.limit,
+		})
+	case library.ItemKindPhotoAlbum.String():
+		return photoChildrenPage(ctx, queries, photoChildrenRequest{
+			albumID: parentID, after: request.afterPhoto, limit: request.limit,
 		})
 	}
 
@@ -114,6 +123,31 @@ func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request chi
 	return pageOf(ctx, queries, page, func(last listedItem) string {
 		return encodeChildCursor(request.scope, last.key)
 	})
+}
+
+// checkChildrenCursor rejects a cursor of another kind of children than parentKind has, and
+// the descending order for a photo album, whose children list in album order only.
+func checkChildrenCursor(parentKind string, request childrenRequest) error {
+	var issued bool
+
+	switch parentKind {
+	case library.ItemKindAlbum.String():
+		issued = !request.hasAfter && !request.hasAfterPhoto
+	case library.ItemKindPhotoAlbum.String():
+		if request.scope.descending {
+			return fmt.Errorf("children of a photo album list in ascending order only: %w", domain.ErrInvalid)
+		}
+
+		issued = !request.hasAfter && !request.hasAfterTrack
+	default:
+		issued = !request.hasAfterTrack && !request.hasAfterPhoto
+	}
+
+	if !issued {
+		return fmt.Errorf("cursor was not issued for these children: %w", domain.ErrInvalid)
+	}
+
+	return nil
 }
 
 // listChildren runs the child query of the requested direction.
@@ -232,6 +266,10 @@ func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedI
 			ChildCount: int(entry.childCount), LeafCount: int(entry.leafCount),
 			PartsDuration: partsDurations[item.ID],
 		})
+	}
+
+	if err := addPhotoSummaries(ctx, queries, summaries); err != nil {
+		return nil, err
 	}
 
 	return summaries, nil

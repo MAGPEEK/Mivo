@@ -35,7 +35,7 @@ func itemPageResponse(page applibrary.ItemPage) (apigen.ItemPage, error) {
 }
 
 // itemSummaryResponse maps a listing entry. Containers own no file and so send no media
-// summary; absent numbers, counts and artwork are omitted.
+// summary, nor does a still photo; absent numbers, counts and artwork are omitted.
 func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, error) {
 	item := summary.Item
 
@@ -60,11 +60,10 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 		LeafCount:      optionalInt32(summary.LeafCount),
 	}
 
-	if summary.HasPrimaryFile() {
-		response.Media = mediaSummaryResponse(summary.PrimaryFile)
-		if summary.PartsDuration > 0 {
-			response.Media.DurationSeconds = optionalDurationSeconds(summary.PartsDuration)
-		}
+	response.Media = itemMediaSummary(summary)
+
+	if err := applyPhotoSummary(&response, summary); err != nil {
+		return apigen.ItemSummary{}, err
 	}
 
 	poster, err := imageRefResponse(summary.Poster)
@@ -84,6 +83,21 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 	}
 
 	return response, nil
+}
+
+// itemMediaSummary describes the primary file of a listed item (see showsMediaSummary); an
+// audiobook reports the summed length of its parts.
+func itemMediaSummary(summary applibrary.ItemSummary) *apigen.MediaSummary {
+	if !showsMediaSummary(summary) {
+		return nil
+	}
+
+	media := mediaSummaryResponse(summary.PrimaryFile)
+	if summary.PartsDuration > 0 {
+		media.DurationSeconds = optionalDurationSeconds(summary.PartsDuration)
+	}
+
+	return media
 }
 
 // mediaSummaryResponse describes the primary file for list views. A file whose probe failed

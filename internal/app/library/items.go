@@ -27,6 +27,12 @@ import (
 // PartsDuration is the summed length of all part files of an audiobook, which the list shows
 // instead of the primary file's length (API MediaSummary.durationSeconds); zero for other
 // kinds, whose files are alternative versions rather than consecutive parts.
+//
+// Photo is the capture data and thumbnail state of a photo (see PhotoDetail); nil for other
+// kinds. A photo and a photo album carry their 1:1 tile in Poster, as albums and artists do:
+// the photo itself (Ref.ID is the photo's item ID) or, for an album, its newest photo whose
+// thumbnail is ready; nil when there is none or the photo cannot be rendered. LeafCount of a
+// photo album counts the photos in it and all its sub-albums.
 type ItemSummary struct {
 	Item          library.Item
 	PrimaryFile   media.File
@@ -35,6 +41,7 @@ type ItemSummary struct {
 	ChildCount    int
 	LeafCount     int
 	PartsDuration time.Duration
+	Photo         *PhotoDetail
 }
 
 // HasPrimaryFile reports whether the summary carries a primary file; containers have none.
@@ -91,6 +98,10 @@ type ItemFile struct {
 //   - ChildCount and LeafCount are counted as in ItemSummary.
 //   - Chapters are the chapters of an audiobook in playback order across its part files
 //     (see ItemChapter); empty for other kinds and for a book without chapters.
+//   - Photo is the capture data and thumbnail state of a photo, nil for other kinds. A
+//     photo and a photo album carry their tile in Artwork[artwork.KindPoster] as in
+//     ItemSummary; Files of a RAW+JPEG pair start with the JPEG. Play starts only a photo
+//     that is a video (PlayItemID).
 type ItemDetail struct {
 	Item       library.Item
 	Files      []media.File
@@ -105,6 +116,7 @@ type ItemDetail struct {
 	ChildCount int
 	LeafCount  int
 	Chapters   []ItemChapter
+	Photo      *PhotoDetail
 }
 
 // ListItems returns one page of a library's top-level items (movies and shows; seasons,

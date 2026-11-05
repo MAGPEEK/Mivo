@@ -8,6 +8,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
+	"github.com/magpeek/mivo/internal/adapters/photometa"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
 	appimages "github.com/magpeek/mivo/internal/app/images"
@@ -27,9 +28,12 @@ const closeScansStep = "close scan service"
 
 // enabledLibraryKinds are the library kinds the server can scan and serve end to end: the
 // library manager accepts them and SystemInfo.libraryKinds reports them. A kind joins the
-// list with the task that wires its scan pipeline (music: M3-13g, audiobooks: M3-14g).
+// list with the task that wires its scan pipeline (music: M3-13g, audiobooks: M3-14g,
+// photos: M3-15h).
 func enabledLibraryKinds() []library.Kind {
-	return []library.Kind{library.KindMovies, library.KindShows, library.KindMusic, library.KindAudiobooks}
+	return []library.Kind{
+		library.KindMovies, library.KindShows, library.KindMusic, library.KindAudiobooks, library.KindPhotos,
+	}
 }
 
 // libraryDefinitions converts the configured libraries into domain definitions (platform
@@ -135,6 +139,8 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		// ffprobe also reads the chapter markers; the catalog stores them per part file.
 		Audiobooks: appscan.AudiobookPorts{Tags: adapters.prober, Chapters: adapters.prober, Catalog: catalog},
 		Discs:      scanDiscPorts(adapters.files, adapters.prober),
+		// A photo without EXIF time sorts by its modification time on the server's wall clock.
+		Photos: appscan.PhotoPorts{Metadata: photometa.NewReader(), Catalog: catalog, Zone: time.Local},
 		Finished: func(ctx context.Context, _ string) {
 			app.purgeImageCache(ctx, adapters.images)
 		},

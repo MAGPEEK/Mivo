@@ -8,11 +8,12 @@ import (
 const firstDiscNumber = 1
 
 // showsSquareArtwork reports whether the kind carries its image in the 1:1 square slot of
-// the contract: the cover of an album and the image of an artist. The scan stores both as
-// poster artwork until artwork has a square kind (BACKLOG m3-13e notes), so the adapter
-// moves the poster into the square slot instead of sending a 2:3 poster the client would crop.
+// the contract: the cover of an album, the image of an artist and the tile of a photo or
+// photo album. The catalog hands all of them over as poster artwork until artwork has a
+// square kind (BACKLOG m3-13e notes), so the adapter moves the poster into the square slot
+// instead of sending a 2:3 poster the client would crop.
 func showsSquareArtwork(kind library.ItemKind) bool {
-	return kind == library.ItemKindAlbum || kind == library.ItemKindArtist
+	return kind == library.ItemKindAlbum || kind == library.ItemKindArtist || isPhotoKind(kind)
 }
 
 // discNumberResponse omits an unknown disc and a stored disc below 1, which the contract

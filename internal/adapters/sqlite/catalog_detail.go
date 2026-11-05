@@ -46,6 +46,7 @@ func readItemDetail(ctx context.Context, queries *sqlcgen.Queries, itemID string
 	steps := []func(context.Context, *sqlcgen.Queries, sqlcgen.Item, *applibrary.ItemDetail) error{
 		readDetailFiles, readDetailMetadata, readDetailAncestors, readDetailSiblings,
 		readDetailPlayTarget, readDetailArtwork, readDetailExtras, readDetailCounts, readDetailChapters,
+		readDetailPhoto,
 	}
 
 	for _, step := range steps {
