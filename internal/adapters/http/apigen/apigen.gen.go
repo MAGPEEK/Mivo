@@ -196,6 +196,27 @@ func (e LibraryKind) Valid() bool {
 	}
 }
 
+// Defines values for MatchState.
+const (
+	MatchStateDisabled  MatchState = "disabled"
+	MatchStateMatched   MatchState = "matched"
+	MatchStateUnmatched MatchState = "unmatched"
+)
+
+// Valid indicates whether the value is a known member of the MatchState enum.
+func (e MatchState) Valid() bool {
+	switch e {
+	case MatchStateDisabled:
+		return true
+	case MatchStateMatched:
+		return true
+	case MatchStateUnmatched:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MediaStreamKind.
 const (
 	MediaStreamKindAudio    MediaStreamKind = "audio"
@@ -214,6 +235,27 @@ func (e MediaStreamKind) Valid() bool {
 	case MediaStreamKindSubtitle:
 		return true
 	case MediaStreamKindVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MetadataProvider.
+const (
+	MetadataProviderCoverartarchive MetadataProvider = "coverartarchive"
+	MetadataProviderMusicbrainz     MetadataProvider = "musicbrainz"
+	MetadataProviderTmdb            MetadataProvider = "tmdb"
+)
+
+// Valid indicates whether the value is a known member of the MetadataProvider enum.
+func (e MetadataProvider) Valid() bool {
+	switch e {
+	case MetadataProviderCoverartarchive:
+		return true
+	case MetadataProviderMusicbrainz:
+		return true
+	case MetadataProviderTmdb:
 		return true
 	default:
 		return false
@@ -328,6 +370,51 @@ func (e PlaybackSessionState) Valid() bool {
 	case PlaybackSessionStateReady:
 		return true
 	case PlaybackSessionStateStarting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderKeyStatus.
+const (
+	ProviderKeyStatusBundled ProviderKeyStatus = "bundled"
+	ProviderKeyStatusNone    ProviderKeyStatus = "none"
+	ProviderKeyStatusOwn     ProviderKeyStatus = "own"
+)
+
+// Valid indicates whether the value is a known member of the ProviderKeyStatus enum.
+func (e ProviderKeyStatus) Valid() bool {
+	switch e {
+	case ProviderKeyStatusBundled:
+		return true
+	case ProviderKeyStatusNone:
+		return true
+	case ProviderKeyStatusOwn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderState.
+const (
+	ProviderStateDisabled    ProviderState = "disabled"
+	ProviderStateOffline     ProviderState = "offline"
+	ProviderStateOk          ProviderState = "ok"
+	ProviderStateRateLimited ProviderState = "rate_limited"
+)
+
+// Valid indicates whether the value is a known member of the ProviderState enum.
+func (e ProviderState) Valid() bool {
+	switch e {
+	case ProviderStateDisabled:
+		return true
+	case ProviderStateOffline:
+		return true
+	case ProviderStateOk:
+		return true
+	case ProviderStateRateLimited:
 		return true
 	default:
 		return false
@@ -632,6 +719,81 @@ type HlsProfile struct {
 	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
 }
 
+// IdentifyCandidate One provider entry the item may be matched with.
+type IdentifyCandidate struct {
+	// Confidence How well the entry fits the query, from 0 (not at all) to 1 (exact).
+	//
+	// Example: 0.92
+	Confidence float64 `json:"confidence"`
+
+	// ExternalID ID of the entry at the provider, not a Mivo ID. Send it unchanged to identifyItem.
+	//
+	// Example: 10378
+	ExternalID string `json:"externalId"`
+
+	// Overview Plot summary of the entry as plain text, shortened by the server.
+	//
+	// Example: A giant rabbit takes revenge on three bullying rodents.
+	Overview *string `json:"overview,omitempty"`
+
+	// PosterURL Server URL of a poster preview, relative to the API origin. It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
+	//
+	// Example: /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+	PosterURL *string `json:"posterUrl,omitempty"`
+
+	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
+	//
+	// Example: tmdb
+	Provider MetadataProvider `json:"provider"`
+
+	// Title Title of the entry.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+
+	// Year Release or first-air year of the entry.
+	//
+	// Example: 2008
+	Year *int32 `json:"year,omitempty"`
+}
+
+// IdentifyCandidateList Candidates of an identify search, best first.
+type IdentifyCandidateList struct {
+	// Candidates The candidates; at most 25.
+	Candidates []IdentifyCandidate `json:"candidates"`
+}
+
+// IdentifyRequest The candidate to match an item with.
+type IdentifyRequest struct {
+	// ExternalID ID of the entry at the provider (IdentifyCandidate.externalId).
+	//
+	// Example: 10378
+	ExternalID string `json:"externalId"`
+
+	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
+	//
+	// Example: tmdb
+	Provider MetadataProvider `json:"provider"`
+}
+
+// IdentifySearchRequest What to search candidates for: a title query and optionally a year. With providerId, a provider ID or provider URL pasted by the user, the server looks that entry up instead of searching by title.
+type IdentifySearchRequest struct {
+	// ProviderID Provider ID or provider URL pasted by the user, for example a TMDB movie URL. It is an ID in the namespace of the provider, not a Mivo ID.
+	//
+	// Example: https://www.themoviedb.org/movie/10378
+	ProviderID *string `json:"providerId,omitempty"`
+
+	// Query Title to search for.
+	//
+	// Example: Big Buck Bunny
+	Query string `json:"query"`
+
+	// Year Release year to narrow the search.
+	//
+	// Example: 2008
+	Year *int32 `json:"year,omitempty"`
+}
+
 // ImageRef Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 type ImageRef struct {
 	// ID ID of the image (getImage imageId).
@@ -726,6 +888,16 @@ type ItemDetail struct {
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID uuid.UUID `json:"libraryId"`
+
+	// MatchState Whether the item is matched with an online provider: "matched", "unmatched" (no confident match yet) or "disabled" (the match was removed on purpose and is not made again automatically). Clients must tolerate new values.
+	//
+	// Example: matched
+	MatchState *MatchState `json:"matchState,omitempty"`
+
+	// MetadataSources Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz"; omitted when unknown. Clients must tolerate new values.
+	//
+	// Example: ["nfo","tmdb"]
+	MetadataSources *MetadataSources `json:"metadataSources,omitempty"`
 
 	// NextID ID of the next sibling of a season or episode in ascending order; omitted for the last one and for other kinds.
 	//
@@ -865,8 +1037,18 @@ type ItemSummary struct {
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID uuid.UUID `json:"libraryId"`
 
+	// MatchState Whether the item is matched with an online provider: "matched", "unmatched" (no confident match yet) or "disabled" (the match was removed on purpose and is not made again automatically). Clients must tolerate new values.
+	//
+	// Example: matched
+	MatchState *MatchState `json:"matchState,omitempty"`
+
 	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
 	Media *MediaSummary `json:"media,omitempty"`
+
+	// MetadataSources Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz"; omitted when unknown. Clients must tolerate new values.
+	//
+	// Example: ["nfo","tmdb"]
+	MetadataSources *MetadataSources `json:"metadataSources,omitempty"`
 
 	// Number Season number of a season (0 for specials) or episode number of an episode.
 	//
@@ -1007,6 +1189,11 @@ type LibraryOptions struct {
 	// Example: true
 	LocalArtwork bool `json:"localArtwork"`
 
+	// OnlineMetadata Whether the items of this library are enriched from online metadata providers while the global switch is on (ADR 0031 section 2). Omitted means on. Responses always carry it; it is stored from task M6-03 on and reads as true until then.
+	//
+	// Example: true
+	OnlineMetadata *bool `json:"onlineMetadata,omitempty"`
+
 	// ReadNfo Whether NFO metadata files next to the media are read.
 	//
 	// Example: true
@@ -1036,6 +1223,11 @@ type LibraryUpdate struct {
 	// Options Per-library switches for scanning and metadata.
 	Options *LibraryOptions `json:"options,omitempty"`
 }
+
+// MatchState Whether the item is matched with an online provider: "matched", "unmatched" (no confident match yet) or "disabled" (the match was removed on purpose and is not made again automatically). Clients must tolerate new values.
+//
+// Example: matched
+type MatchState string
 
 // MediaFile One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only.
 type MediaFile struct {
@@ -1254,6 +1446,106 @@ type MediaSummary struct {
 	Width *int32 `json:"width,omitempty"`
 }
 
+// MetadataProvider An online metadata provider (ADR 0031). Clients must tolerate new values.
+//
+// Example: tmdb
+type MetadataProvider string
+
+// MetadataProviderSetting Settings and key status of one provider.
+type MetadataProviderSetting struct {
+	// Enabled Whether the provider may be contacted while online metadata is on.
+	//
+	// Example: true
+	Enabled bool `json:"enabled"`
+
+	// KeyStatus Which API key a provider uses: "none" (no key, the provider is off), "bundled" (the key shipped with the build) or "own" (the key the user entered). Clients must tolerate new values.
+	//
+	// Example: bundled
+	KeyStatus *ProviderKeyStatus `json:"keyStatus,omitempty"`
+
+	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
+	//
+	// Example: tmdb
+	Provider MetadataProvider `json:"provider"`
+}
+
+// MetadataProviderStatus Current state of one provider.
+type MetadataProviderStatus struct {
+	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
+	//
+	// Example: tmdb
+	Provider MetadataProvider `json:"provider"`
+
+	// State Health of a provider: "ok", "rate_limited" (the provider asked to slow down, will retry), "offline" (not reachable, stale data is used) or "disabled" (switched off). Clients must tolerate new values.
+	//
+	// Example: ok
+	State ProviderState `json:"state"`
+}
+
+// MetadataProviderToggle Switches one provider on or off.
+type MetadataProviderToggle struct {
+	// Enabled Whether the provider may be contacted.
+	//
+	// Example: false
+	Enabled bool `json:"enabled"`
+
+	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
+	//
+	// Example: tmdb
+	Provider MetadataProvider `json:"provider"`
+}
+
+// MetadataSettings Online metadata settings (ADR 0031). Keys are never part of it.
+type MetadataSettings struct {
+	// Language Metadata language as a BCP 47 tag.
+	//
+	// Example: de-DE
+	Language string `json:"language"`
+
+	// OnlineEnabled Global switch; off means no connection to any provider.
+	//
+	// Example: true
+	OnlineEnabled bool `json:"onlineEnabled"`
+
+	// Providers One entry per provider.
+	Providers []MetadataProviderSetting `json:"providers"`
+}
+
+// MetadataSettingsUpdate Changes to the online metadata settings; omitted properties stay as they are.
+type MetadataSettingsUpdate struct {
+	// Language Metadata language as a BCP 47 tag; an empty string resets it to the server default. A malformed tag answers 400 "language_invalid".
+	//
+	// Example: en-US
+	Language *string `json:"language,omitempty"`
+
+	// OnlineEnabled Global switch; off means no connection to any provider.
+	//
+	// Example: false
+	OnlineEnabled *bool `json:"onlineEnabled,omitempty"`
+
+	// Providers Providers to switch on or off; others stay as they are.
+	Providers *[]MetadataProviderToggle `json:"providers,omitempty"`
+
+	// TmdbAPIKey Own TMDB API key. It is never returned; an empty string removes it so the bundled key applies again.
+	TmdbAPIKey *string `json:"tmdbApiKey,omitempty"`
+}
+
+// MetadataSources Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz"; omitted when unknown. Clients must tolerate new values.
+//
+// Example: ["nfo","tmdb"]
+type MetadataSources = []string
+
+// MetadataStatus Queue length and provider states of the online metadata feature.
+type MetadataStatus struct {
+	// Providers One entry per provider.
+	Providers []MetadataProviderStatus `json:"providers"`
+
+	// QueueLength Number of items waiting for enrichment.
+	//
+	// Example: 12
+	QueueLength int32 `json:"queueLength"`
+}
+
 // PersonRole Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
 //
 // Example: actor
@@ -1392,7 +1684,7 @@ type PlaybackSessionState string
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be added; clients show a generic message for unknown codes.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -1412,6 +1704,11 @@ type Problem struct {
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID *uuid.UUID `json:"libraryId,omitempty"`
+
+	// RetryAfterSeconds For "provider_unavailable", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
+	//
+	// Example: 30
+	RetryAfterSeconds *int32 `json:"retryAfterSeconds,omitempty"`
 
 	// Status HTTP status code of this occurrence.
 	Status int32 `json:"status"`
@@ -1440,6 +1737,16 @@ type ProviderIds struct {
 	// Example: 81189
 	Tvdb *string `json:"tvdb,omitempty"`
 }
+
+// ProviderKeyStatus Which API key a provider uses: "none" (no key, the provider is off), "bundled" (the key shipped with the build) or "own" (the key the user entered). Clients must tolerate new values.
+//
+// Example: bundled
+type ProviderKeyStatus string
+
+// ProviderState Health of a provider: "ok", "rate_limited" (the provider asked to slow down, will retry), "offline" (not reachable, stale data is used) or "disabled" (switched off). Clients must tolerate new values.
+//
+// Example: ok
+type ProviderState string
 
 // ScanCounts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
 type ScanCounts struct {
@@ -1613,6 +1920,12 @@ type RootID = uuid.UUID
 // SessionID defines model for SessionId.
 type SessionID = uuid.UUID
 
+// OnlineDisabled Problem details (RFC 9457) with a machine-readable code that clients translate.
+type OnlineDisabled = Problem
+
+// ProviderUnavailable Problem details (RFC 9457) with a machine-readable code that clients translate.
+type ProviderUnavailable = Problem
+
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
 	// Path Folder to list, relative to the root and separated by "/", up to 4096 characters. Empty or omitted lists the root itself.
@@ -1638,7 +1951,16 @@ type ListLibraryItemsParams struct {
 
 	// Cursor Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// MatchState Only items in this match state, for example "unmatched" for the "not matched" filter (ADR 0031). Omitted lists every item.
+	MatchState *MatchState `form:"matchState,omitempty" json:"matchState,omitempty"`
 }
+
+// IdentifyItemJSONRequestBody defines body for IdentifyItem for application/json ContentType.
+type IdentifyItemJSONRequestBody = IdentifyRequest
+
+// SearchIdentifyCandidatesJSONRequestBody defines body for SearchIdentifyCandidates for application/json ContentType.
+type SearchIdentifyCandidatesJSONRequestBody = IdentifySearchRequest
 
 // CreateLibraryJSONRequestBody defines body for CreateLibrary for application/json ContentType.
 type CreateLibraryJSONRequestBody = LibraryCreate
@@ -1648,6 +1970,9 @@ type UpdateLibraryJSONRequestBody = LibraryUpdate
 
 // CreatePlaybackSessionJSONRequestBody defines body for CreatePlaybackSession for application/json ContentType.
 type CreatePlaybackSessionJSONRequestBody = PlaybackRequest
+
+// UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
+type UpdateMetadataSettingsJSONRequestBody = MetadataSettingsUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1666,6 +1991,18 @@ type ServerInterface interface {
 	// ListItemChildren Page through the children of an item
 	// (GET /api/v1/items/{itemId}/children)
 	ListItemChildren(w http.ResponseWriter, r *http.Request, itemID ItemID, params ListItemChildrenParams)
+	// IdentifyItem Match an item with a provider candidate
+	// (POST /api/v1/items/{itemId}/identify)
+	IdentifyItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// SearchIdentifyCandidates Search provider candidates to match an item with
+	// (POST /api/v1/items/{itemId}/identify/search)
+	SearchIdentifyCandidates(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// RemoveItemMatch Remove the online match of an item
+	// (DELETE /api/v1/items/{itemId}/match)
+	RemoveItemMatch(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// RefreshItemMetadata Queue a metadata refresh of an item
+	// (POST /api/v1/items/{itemId}/refresh)
+	RefreshItemMetadata(w http.ResponseWriter, r *http.Request, itemID ItemID)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
@@ -1684,9 +2021,15 @@ type ServerInterface interface {
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams)
+	// RefreshLibraryMetadata Queue a metadata refresh of a library
+	// (POST /api/v1/libraries/{libraryId}/refresh)
+	RefreshLibraryMetadata(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// GetMetadataStatus Report the state of the online metadata providers
+	// (GET /api/v1/metadata/status)
+	GetMetadataStatus(w http.ResponseWriter, r *http.Request)
 	// CreatePlaybackSession Start playing a media file
 	// (POST /api/v1/playback/sessions)
 	CreatePlaybackSession(w http.ResponseWriter, r *http.Request)
@@ -1696,6 +2039,12 @@ type ServerInterface interface {
 	// GetPlaybackSession Describe a playback session
 	// (GET /api/v1/playback/sessions/{sessionId})
 	GetPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID)
+	// GetMetadataSettings Read the online metadata settings
+	// (GET /api/v1/settings/metadata)
+	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
+	// UpdateMetadataSettings Change the online metadata settings
+	// (PUT /api/v1/settings/metadata)
+	UpdateMetadataSettings(w http.ResponseWriter, r *http.Request)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
@@ -1874,6 +2223,110 @@ func (siw *ServerInterfaceWrapper) ListItemChildren(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// IdentifyItem operation middleware
+func (siw *ServerInterfaceWrapper) IdentifyItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IdentifyItem(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchIdentifyCandidates operation middleware
+func (siw *ServerInterfaceWrapper) SearchIdentifyCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchIdentifyCandidates(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveItemMatch operation middleware
+func (siw *ServerInterfaceWrapper) RemoveItemMatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveItemMatch(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshItemMetadata operation middleware
+func (siw *ServerInterfaceWrapper) RefreshItemMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshItemMetadata(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListLibraries operation middleware
 func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.Request) {
 
@@ -2024,8 +2477,47 @@ func (siw *ServerInterfaceWrapper) ListLibraryItems(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "matchState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "matchState", r.URL.Query(), &params.MatchState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "matchState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "matchState", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraryItems(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshLibraryMetadata operation middleware
+func (siw *ServerInterfaceWrapper) RefreshLibraryMetadata(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshLibraryMetadata(w, r, libraryID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2052,6 +2544,20 @@ func (siw *ServerInterfaceWrapper) StartLibraryScan(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StartLibraryScan(w, r, libraryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMetadataStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMetadataStatus(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2118,6 +2624,34 @@ func (siw *ServerInterfaceWrapper) GetPlaybackSession(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPlaybackSession(w, r, sessionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMetadataSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMetadataSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateMetadataSettings operation middleware
+func (siw *ServerInterfaceWrapper) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateMetadataSettings(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2274,6 +2808,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/items", wrapper.ListLibraryItems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}/children", wrapper.ListItemChildren)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify/search", wrapper.SearchIdentifyCandidates)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify", wrapper.IdentifyItem)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/match", wrapper.RemoveItemMatch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/refresh", wrapper.RefreshItemMetadata)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/refresh", wrapper.RefreshLibraryMetadata)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.GetMetadataSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.UpdateMetadataSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/metadata/status", wrapper.GetMetadataStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.CreatePlaybackSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.StopPlaybackSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.GetPlaybackSession)
@@ -2281,7 +2823,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	return m
 }
 
+type OnlineDisabledApplicationProblemPlusJSONResponse Problem
+
 type ProblemApplicationProblemPlusJSONResponse Problem
+
+type ProviderUnavailableResponseHeaders struct {
+	RetryAfter *int32
+}
+type ProviderUnavailableApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers ProviderUnavailableResponseHeaders
+}
 
 type ListFolderRootsRequestObject struct {
 }
@@ -2481,6 +3034,244 @@ type ListItemChildrendefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListItemChildrendefaultApplicationProblemPlusJSONResponse) VisitListItemChildrenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IdentifyItemRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+	Body   *IdentifyItemJSONRequestBody
+}
+
+type IdentifyItemResponseObject interface {
+	VisitIdentifyItemResponse(w http.ResponseWriter) error
+}
+
+type IdentifyItem200JSONResponse ItemDetail
+
+func (response IdentifyItem200JSONResponse) VisitIdentifyItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IdentifyItem409ApplicationProblemPlusJSONResponse struct {
+	OnlineDisabledApplicationProblemPlusJSONResponse
+}
+
+func (response IdentifyItem409ApplicationProblemPlusJSONResponse) VisitIdentifyItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IdentifyItem503ApplicationProblemPlusJSONResponse struct {
+	ProviderUnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response IdentifyItem503ApplicationProblemPlusJSONResponse) VisitIdentifyItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type IdentifyItemdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response IdentifyItemdefaultApplicationProblemPlusJSONResponse) VisitIdentifyItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchIdentifyCandidatesRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+	Body   *SearchIdentifyCandidatesJSONRequestBody
+}
+
+type SearchIdentifyCandidatesResponseObject interface {
+	VisitSearchIdentifyCandidatesResponse(w http.ResponseWriter) error
+}
+
+type SearchIdentifyCandidates200JSONResponse IdentifyCandidateList
+
+func (response SearchIdentifyCandidates200JSONResponse) VisitSearchIdentifyCandidatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchIdentifyCandidates409ApplicationProblemPlusJSONResponse struct {
+	OnlineDisabledApplicationProblemPlusJSONResponse
+}
+
+func (response SearchIdentifyCandidates409ApplicationProblemPlusJSONResponse) VisitSearchIdentifyCandidatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchIdentifyCandidates503ApplicationProblemPlusJSONResponse struct {
+	ProviderUnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response SearchIdentifyCandidates503ApplicationProblemPlusJSONResponse) VisitSearchIdentifyCandidatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchIdentifyCandidatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchIdentifyCandidatesdefaultApplicationProblemPlusJSONResponse) VisitSearchIdentifyCandidatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveItemMatchRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type RemoveItemMatchResponseObject interface {
+	VisitRemoveItemMatchResponse(w http.ResponseWriter) error
+}
+
+type RemoveItemMatch200JSONResponse ItemDetail
+
+func (response RemoveItemMatch200JSONResponse) VisitRemoveItemMatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveItemMatchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveItemMatchdefaultApplicationProblemPlusJSONResponse) VisitRemoveItemMatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshItemMetadataRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type RefreshItemMetadataResponseObject interface {
+	VisitRefreshItemMetadataResponse(w http.ResponseWriter) error
+}
+
+type RefreshItemMetadata202Response struct {
+}
+
+func (response RefreshItemMetadata202Response) VisitRefreshItemMetadataResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RefreshItemMetadata409ApplicationProblemPlusJSONResponse struct {
+	OnlineDisabledApplicationProblemPlusJSONResponse
+}
+
+func (response RefreshItemMetadata409ApplicationProblemPlusJSONResponse) VisitRefreshItemMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshItemMetadatadefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RefreshItemMetadatadefaultApplicationProblemPlusJSONResponse) VisitRefreshItemMetadataResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2731,6 +3522,55 @@ func (response ListLibraryItemsdefaultApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type RefreshLibraryMetadataRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+}
+
+type RefreshLibraryMetadataResponseObject interface {
+	VisitRefreshLibraryMetadataResponse(w http.ResponseWriter) error
+}
+
+type RefreshLibraryMetadata202Response struct {
+}
+
+func (response RefreshLibraryMetadata202Response) VisitRefreshLibraryMetadataResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RefreshLibraryMetadata409ApplicationProblemPlusJSONResponse struct {
+	OnlineDisabledApplicationProblemPlusJSONResponse
+}
+
+func (response RefreshLibraryMetadata409ApplicationProblemPlusJSONResponse) VisitRefreshLibraryMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshLibraryMetadatadefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RefreshLibraryMetadatadefaultApplicationProblemPlusJSONResponse) VisitRefreshLibraryMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartLibraryScanRequestObject struct {
 	LibraryID LibraryID `json:"libraryId"`
 }
@@ -2759,6 +3599,44 @@ type StartLibraryScandefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response StartLibraryScandefaultApplicationProblemPlusJSONResponse) VisitStartLibraryScanResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMetadataStatusRequestObject struct {
+}
+
+type GetMetadataStatusResponseObject interface {
+	VisitGetMetadataStatusResponse(w http.ResponseWriter) error
+}
+
+type GetMetadataStatus200JSONResponse MetadataStatus
+
+func (response GetMetadataStatus200JSONResponse) VisitGetMetadataStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMetadataStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMetadataStatusdefaultApplicationProblemPlusJSONResponse) VisitGetMetadataStatusResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2915,6 +3793,83 @@ func (response GetPlaybackSessiondefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetMetadataSettingsRequestObject struct {
+}
+
+type GetMetadataSettingsResponseObject interface {
+	VisitGetMetadataSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetMetadataSettings200JSONResponse MetadataSettings
+
+func (response GetMetadataSettings200JSONResponse) VisitGetMetadataSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMetadataSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMetadataSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetMetadataSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMetadataSettingsRequestObject struct {
+	Body *UpdateMetadataSettingsJSONRequestBody
+}
+
+type UpdateMetadataSettingsResponseObject interface {
+	VisitUpdateMetadataSettingsResponse(w http.ResponseWriter) error
+}
+
+type UpdateMetadataSettings200JSONResponse MetadataSettings
+
+func (response UpdateMetadataSettings200JSONResponse) VisitUpdateMetadataSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateMetadataSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateMetadataSettingsdefaultApplicationProblemPlusJSONResponse) VisitUpdateMetadataSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSystemInfoRequestObject struct {
 }
 
@@ -2970,6 +3925,18 @@ type StrictServerInterface interface {
 	// ListItemChildren Page through the children of an item
 	// (GET /api/v1/items/{itemId}/children)
 	ListItemChildren(ctx context.Context, request ListItemChildrenRequestObject) (ListItemChildrenResponseObject, error)
+	// IdentifyItem Match an item with a provider candidate
+	// (POST /api/v1/items/{itemId}/identify)
+	IdentifyItem(ctx context.Context, request IdentifyItemRequestObject) (IdentifyItemResponseObject, error)
+	// SearchIdentifyCandidates Search provider candidates to match an item with
+	// (POST /api/v1/items/{itemId}/identify/search)
+	SearchIdentifyCandidates(ctx context.Context, request SearchIdentifyCandidatesRequestObject) (SearchIdentifyCandidatesResponseObject, error)
+	// RemoveItemMatch Remove the online match of an item
+	// (DELETE /api/v1/items/{itemId}/match)
+	RemoveItemMatch(ctx context.Context, request RemoveItemMatchRequestObject) (RemoveItemMatchResponseObject, error)
+	// RefreshItemMetadata Queue a metadata refresh of an item
+	// (POST /api/v1/items/{itemId}/refresh)
+	RefreshItemMetadata(ctx context.Context, request RefreshItemMetadataRequestObject) (RefreshItemMetadataResponseObject, error)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(ctx context.Context, request ListLibrariesRequestObject) (ListLibrariesResponseObject, error)
@@ -2988,9 +3955,15 @@ type StrictServerInterface interface {
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(ctx context.Context, request ListLibraryItemsRequestObject) (ListLibraryItemsResponseObject, error)
+	// RefreshLibraryMetadata Queue a metadata refresh of a library
+	// (POST /api/v1/libraries/{libraryId}/refresh)
+	RefreshLibraryMetadata(ctx context.Context, request RefreshLibraryMetadataRequestObject) (RefreshLibraryMetadataResponseObject, error)
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(ctx context.Context, request StartLibraryScanRequestObject) (StartLibraryScanResponseObject, error)
+	// GetMetadataStatus Report the state of the online metadata providers
+	// (GET /api/v1/metadata/status)
+	GetMetadataStatus(ctx context.Context, request GetMetadataStatusRequestObject) (GetMetadataStatusResponseObject, error)
 	// CreatePlaybackSession Start playing a media file
 	// (POST /api/v1/playback/sessions)
 	CreatePlaybackSession(ctx context.Context, request CreatePlaybackSessionRequestObject) (CreatePlaybackSessionResponseObject, error)
@@ -3000,6 +3973,12 @@ type StrictServerInterface interface {
 	// GetPlaybackSession Describe a playback session
 	// (GET /api/v1/playback/sessions/{sessionId})
 	GetPlaybackSession(ctx context.Context, request GetPlaybackSessionRequestObject) (GetPlaybackSessionResponseObject, error)
+	// GetMetadataSettings Read the online metadata settings
+	// (GET /api/v1/settings/metadata)
+	GetMetadataSettings(ctx context.Context, request GetMetadataSettingsRequestObject) (GetMetadataSettingsResponseObject, error)
+	// UpdateMetadataSettings Change the online metadata settings
+	// (PUT /api/v1/settings/metadata)
+	UpdateMetadataSettings(ctx context.Context, request UpdateMetadataSettingsRequestObject) (UpdateMetadataSettingsResponseObject, error)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(ctx context.Context, request GetSystemInfoRequestObject) (GetSystemInfoResponseObject, error)
@@ -3165,6 +4144,124 @@ func (sh *strictHandler) ListItemChildren(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListItemChildrenResponseObject); ok {
 		if err := validResponse.VisitListItemChildrenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// IdentifyItem operation middleware
+func (sh *strictHandler) IdentifyItem(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request IdentifyItemRequestObject
+
+	request.ItemID = itemID
+
+	var body IdentifyItemJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.IdentifyItem(ctx, request.(IdentifyItemRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "IdentifyItem")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(IdentifyItemResponseObject); ok {
+		if err := validResponse.VisitIdentifyItemResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SearchIdentifyCandidates operation middleware
+func (sh *strictHandler) SearchIdentifyCandidates(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request SearchIdentifyCandidatesRequestObject
+
+	request.ItemID = itemID
+
+	var body SearchIdentifyCandidatesJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SearchIdentifyCandidates(ctx, request.(SearchIdentifyCandidatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SearchIdentifyCandidates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchIdentifyCandidatesResponseObject); ok {
+		if err := validResponse.VisitSearchIdentifyCandidatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveItemMatch operation middleware
+func (sh *strictHandler) RemoveItemMatch(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request RemoveItemMatchRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveItemMatch(ctx, request.(RemoveItemMatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveItemMatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveItemMatchResponseObject); ok {
+		if err := validResponse.VisitRemoveItemMatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshItemMetadata operation middleware
+func (sh *strictHandler) RefreshItemMetadata(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request RefreshItemMetadataRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshItemMetadata(ctx, request.(RefreshItemMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshItemMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshItemMetadataResponseObject); ok {
+		if err := validResponse.VisitRefreshItemMetadataResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3339,6 +4436,32 @@ func (sh *strictHandler) ListLibraryItems(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// RefreshLibraryMetadata operation middleware
+func (sh *strictHandler) RefreshLibraryMetadata(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
+	var request RefreshLibraryMetadataRequestObject
+
+	request.LibraryID = libraryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshLibraryMetadata(ctx, request.(RefreshLibraryMetadataRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshLibraryMetadata")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshLibraryMetadataResponseObject); ok {
+		if err := validResponse.VisitRefreshLibraryMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // StartLibraryScan operation middleware
 func (sh *strictHandler) StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID) {
 	var request StartLibraryScanRequestObject
@@ -3358,6 +4481,30 @@ func (sh *strictHandler) StartLibraryScan(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartLibraryScanResponseObject); ok {
 		if err := validResponse.VisitStartLibraryScanResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMetadataStatus operation middleware
+func (sh *strictHandler) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetMetadataStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMetadataStatus(ctx, request.(GetMetadataStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMetadataStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMetadataStatusResponseObject); ok {
+		if err := validResponse.VisitGetMetadataStatusResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3441,6 +4588,61 @@ func (sh *strictHandler) GetPlaybackSession(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPlaybackSessionResponseObject); ok {
 		if err := validResponse.VisitGetPlaybackSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMetadataSettings operation middleware
+func (sh *strictHandler) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetMetadataSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMetadataSettings(ctx, request.(GetMetadataSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMetadataSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMetadataSettingsResponseObject); ok {
+		if err := validResponse.VisitGetMetadataSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateMetadataSettings operation middleware
+func (sh *strictHandler) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) {
+	var request UpdateMetadataSettingsRequestObject
+
+	var body UpdateMetadataSettingsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateMetadataSettings(ctx, request.(UpdateMetadataSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateMetadataSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateMetadataSettingsResponseObject); ok {
+		if err := validResponse.VisitUpdateMetadataSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

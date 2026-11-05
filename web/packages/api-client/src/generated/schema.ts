@@ -252,6 +252,180 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{itemId}/identify/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Search provider candidates to match an item with
+         * @description Searches the metadata providers for the item's kind by title and optional year, or looks up a pasted provider ID or URL (providerId), and returns the candidates best first. Management operation (ADR 0028): it is allowed for the administrator only once accounts exist. The search sends the query, year and metadata language to the provider and nothing else (ADR 0031). Candidate posters are Mivo URLs, so the browser never contacts a provider host. Problem codes: "not_found" (404, unknown item), "online_disabled" (409, online metadata is switched off), "invalid" (400) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+         */
+        post: operations["searchIdentifyCandidates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/identify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match an item with a provider candidate
+         * @description Stores the provider and its ID for the item, locks the provider IDs, sets the match state to "matched" and queues the enrichment of the item (for a show also its seasons and episodes); other field locks stay. The answer is the item as it is at once, before the enrichment ran. Management operation (ADR 0028). Problem codes: "not_found" (404, unknown item), "invalid" (400, for example an ID that does not fit the item's kind), "online_disabled" (409) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+         */
+        post: operations["identifyItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove the online match of an item
+         * @description Drops the online data and the provider artwork of the item and sets its match state to "disabled", so no automatic match happens again until the item is identified. Local data (NFO, local artwork, user edits) stays. It works offline. Management operation (ADR 0028). An unknown item answers 404 "not_found".
+         */
+        delete: operations["removeItemMatch"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a metadata refresh of an item
+         * @description Queues an online refresh of the item (and for a show its seasons and episodes) and returns at once; the result shows when the item is read again. Queuing works offline: the queue retries when the provider is reachable again. Management operation (ADR 0028). Problem codes: "not_found" (404, unknown item) and "online_disabled" (409).
+         */
+        post: operations["refreshItemMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue a metadata refresh of a library
+         * @description Queues an online refresh of every item of the library whose match state is not "disabled" (matched and unmatched items) and returns at once. Queuing works offline: the queue retries when the provider is reachable again. Management operation (ADR 0028). Problem codes: "not_found" (404, unknown library) and "online_disabled" (409, also when online metadata is off for this library).
+         */
+        post: operations["refreshLibraryMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the online metadata settings
+         * @description Returns the global online switch, the metadata language and the state of each provider. API keys are never returned, only their status. Management operation (ADR 0028).
+         */
+        get: operations["getMetadataSettings"];
+        /**
+         * Change the online metadata settings
+         * @description Changes the given settings; omitted properties stay as they are. The TMDB key is write-only: an empty string removes the own key. Management operation (ADR 0028). An empty language resets it to the server default (metadata.language of the configuration), as in updateLibrary. Problem codes: "language_invalid" (400 with field "language", a language that is no valid BCP 47 tag) and "invalid" (400 with field naming the entry, for example "providers[0]" for an unknown provider).
+         */
+        put: operations["updateMetadataSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metadata/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report the state of the online metadata providers
+         * @description Returns the length of the enrichment queue and the state of each provider, so the UI can show "TMDB is busy, will retry" or offline.
+         */
+        get: operations["getMetadataStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{imageId}": {
         parameters: {
             query?: never;
@@ -398,6 +572,175 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * @description Whether the item is matched with an online provider: "matched", "unmatched" (no confident match yet) or "disabled" (the match was removed on purpose and is not made again automatically). Clients must tolerate new values.
+         * @example matched
+         * @enum {string}
+         */
+        MatchState: "matched" | "unmatched" | "disabled";
+        /**
+         * @description Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz"; omitted when unknown. Clients must tolerate new values.
+         * @example [
+         *       "nfo",
+         *       "tmdb"
+         *     ]
+         */
+        MetadataSources: string[];
+        /**
+         * @description An online metadata provider (ADR 0031). Clients must tolerate new values.
+         * @example tmdb
+         * @enum {string}
+         */
+        MetadataProvider: "tmdb" | "musicbrainz" | "coverartarchive";
+        /**
+         * @description Which API key a provider uses: "none" (no key, the provider is off), "bundled" (the key shipped with the build) or "own" (the key the user entered). Clients must tolerate new values.
+         * @example bundled
+         * @enum {string}
+         */
+        ProviderKeyStatus: "none" | "bundled" | "own";
+        /**
+         * @description Health of a provider: "ok", "rate_limited" (the provider asked to slow down, will retry), "offline" (not reachable, stale data is used) or "disabled" (switched off). Clients must tolerate new values.
+         * @example ok
+         * @enum {string}
+         */
+        ProviderState: "ok" | "rate_limited" | "offline" | "disabled";
+        /** @description What to search candidates for: a title query and optionally a year. With providerId, a provider ID or provider URL pasted by the user, the server looks that entry up instead of searching by title. */
+        IdentifySearchRequest: {
+            /**
+             * @description Title to search for.
+             * @example Big Buck Bunny
+             */
+            query: string;
+            /**
+             * Format: int32
+             * @description Release year to narrow the search.
+             * @example 2008
+             */
+            year?: number;
+            /**
+             * @description Provider ID or provider URL pasted by the user, for example a TMDB movie URL. It is an ID in the namespace of the provider, not a Mivo ID.
+             * @example https://www.themoviedb.org/movie/10378
+             */
+            providerId?: string;
+        };
+        /** @description One provider entry the item may be matched with. */
+        IdentifyCandidate: {
+            provider: components["schemas"]["MetadataProvider"];
+            /**
+             * @description ID of the entry at the provider, not a Mivo ID. Send it unchanged to identifyItem.
+             * @example 10378
+             */
+            externalId: string;
+            /**
+             * @description Title of the entry.
+             * @example Big Buck Bunny
+             */
+            title: string;
+            /**
+             * Format: int32
+             * @description Release or first-air year of the entry.
+             * @example 2008
+             */
+            year?: number;
+            /**
+             * @description Plot summary of the entry as plain text, shortened by the server.
+             * @example A giant rabbit takes revenge on three bullying rodents.
+             */
+            overview?: string;
+            /**
+             * Format: uri-reference
+             * @description Server URL of a poster preview, relative to the API origin. It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
+             * @example /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+             */
+            posterUrl?: string;
+            /**
+             * Format: double
+             * @description How well the entry fits the query, from 0 (not at all) to 1 (exact).
+             * @example 0.92
+             */
+            confidence: number;
+        };
+        /** @description Candidates of an identify search, best first. */
+        IdentifyCandidateList: {
+            /** @description The candidates; at most 25. */
+            candidates: components["schemas"]["IdentifyCandidate"][];
+        };
+        /** @description The candidate to match an item with. */
+        IdentifyRequest: {
+            provider: components["schemas"]["MetadataProvider"];
+            /**
+             * @description ID of the entry at the provider (IdentifyCandidate.externalId).
+             * @example 10378
+             */
+            externalId: string;
+        };
+        /** @description Settings and key status of one provider. */
+        MetadataProviderSetting: {
+            provider: components["schemas"]["MetadataProvider"];
+            /**
+             * @description Whether the provider may be contacted while online metadata is on.
+             * @example true
+             */
+            enabled: boolean;
+            keyStatus?: components["schemas"]["ProviderKeyStatus"];
+        };
+        /** @description Online metadata settings (ADR 0031). Keys are never part of it. */
+        MetadataSettings: {
+            /**
+             * @description Global switch; off means no connection to any provider.
+             * @example true
+             */
+            onlineEnabled: boolean;
+            /**
+             * @description Metadata language as a BCP 47 tag.
+             * @example de-DE
+             */
+            language: string;
+            /** @description One entry per provider. */
+            providers: components["schemas"]["MetadataProviderSetting"][];
+        };
+        /** @description Switches one provider on or off. */
+        MetadataProviderToggle: {
+            provider: components["schemas"]["MetadataProvider"];
+            /**
+             * @description Whether the provider may be contacted.
+             * @example false
+             */
+            enabled: boolean;
+        };
+        /** @description Changes to the online metadata settings; omitted properties stay as they are. */
+        MetadataSettingsUpdate: {
+            /**
+             * @description Global switch; off means no connection to any provider.
+             * @example false
+             */
+            onlineEnabled?: boolean;
+            /**
+             * @description Metadata language as a BCP 47 tag; an empty string resets it to the server default. A malformed tag answers 400 "language_invalid".
+             * @example en-US
+             */
+            language?: string;
+            /** @description Providers to switch on or off; others stay as they are. */
+            providers?: components["schemas"]["MetadataProviderToggle"][];
+            /** @description Own TMDB API key. It is never returned; an empty string removes it so the bundled key applies again. */
+            tmdbApiKey?: string;
+        };
+        /** @description Current state of one provider. */
+        MetadataProviderStatus: {
+            provider: components["schemas"]["MetadataProvider"];
+            state: components["schemas"]["ProviderState"];
+        };
+        /** @description Queue length and provider states of the online metadata feature. */
+        MetadataStatus: {
+            /**
+             * Format: int32
+             * @description Number of items waiting for enrichment.
+             * @example 12
+             */
+            queueLength: number;
+            /** @description One entry per provider. */
+            providers: components["schemas"]["MetadataProviderStatus"][];
+        };
+        /**
          * @description State of the server as a whole or of one health check. Clients must tolerate values added in later versions.
          * @enum {string}
          */
@@ -538,6 +881,11 @@ export interface components {
              * @example true
              */
             localArtwork: boolean;
+            /**
+             * @description Whether the items of this library are enriched from online metadata providers while the global switch is on (ADR 0031 section 2). Omitted means on. Responses always carry it; it is stored from task M6-03 on and reads as true until then.
+             * @example true
+             */
+            onlineMetadata?: boolean;
         };
         /** @description Names one folder of a library: either folderId (keep an existing folder of this library) or rootId with path (a folder below a folder root). The server rejects any other combination with the problem code "invalid". */
         FolderRef: {
@@ -991,6 +1339,8 @@ export interface components {
             poster?: components["schemas"]["ImageRef"];
             thumb?: components["schemas"]["ImageRef"];
             media?: components["schemas"]["MediaSummary"];
+            matchState?: components["schemas"]["MatchState"];
+            metadataSources?: components["schemas"]["MetadataSources"];
         };
         /** @description One page of items. */
         ItemPage: {
@@ -1128,6 +1478,8 @@ export interface components {
             leafCount?: number;
             /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows and seasons have none. */
             files: components["schemas"]["MediaFile"][];
+            matchState?: components["schemas"]["MatchState"];
+            metadataSources?: components["schemas"]["MetadataSources"];
         };
         /** @description One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only. */
         MediaFile: {
@@ -1596,7 +1948,7 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be added; clients show a generic message for unknown codes.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
@@ -1611,12 +1963,37 @@ export interface components {
              * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
              */
             libraryId?: string;
+            /**
+             * Format: int32
+             * @description For "provider_unavailable", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
+             * @example 30
+             */
+            retryAfterSeconds?: number;
         };
     };
     responses: {
         /** @description The request failed; the body explains why. */
         Problem: {
             headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Online metadata is switched off globally or for the library ("online_disabled"). */
+        OnlineDisabled: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The provider cannot be reached or is rate limiting ("provider_unavailable"); retryAfterSeconds and Retry-After say when to try again. */
+        ProviderUnavailable: {
+            headers: {
+                "Retry-After": components["headers"]["RetryAfter"];
                 [name: string]: unknown;
             };
             content: {
@@ -1942,6 +2319,8 @@ export interface operations {
                 limit?: number;
                 /** @description Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it. */
                 cursor?: string;
+                /** @description Only items in this match state, for example "unmatched" for the "not matched" filter (ADR 0031). Omitted lists every item. */
+                matchState?: components["schemas"]["MatchState"];
             };
             header?: never;
             path: {
@@ -2023,6 +2402,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    searchIdentifyCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentifySearchRequest"];
+            };
+        };
+        responses: {
+            /** @description The candidates; an empty list when the provider knows none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentifyCandidateList"];
+                };
+            };
+            409: components["responses"]["OnlineDisabled"];
+            503: components["responses"]["ProviderUnavailable"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    identifyItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentifyRequest"];
+            };
+        };
+        responses: {
+            /** @description The matched item. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetail"];
+                };
+            };
+            409: components["responses"]["OnlineDisabled"];
+            503: components["responses"]["ProviderUnavailable"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    removeItemMatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The item without its match. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemDetail"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    refreshItemMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The refresh is queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["OnlineDisabled"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    refreshLibraryMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The refresh is queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["OnlineDisabled"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateMetadataSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataSettings"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMetadataStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataStatus"];
                 };
             };
             default: components["responses"]["Problem"];

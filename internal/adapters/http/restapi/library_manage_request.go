@@ -93,6 +93,9 @@ type (
 		ScanExtras   *bool `json:"scanExtras"`
 		ReadNfo      *bool `json:"readNfo"`
 		LocalArtwork *bool `json:"localArtwork"`
+		// OnlineMetadata is optional (ADR 0031 section 2, on when omitted). It is accepted
+		// but not persisted yet: storage arrives with task M6-03.
+		OnlineMetadata *bool `json:"onlineMetadata"`
 	}
 	strictCreate struct {
 		Kind             *string           `json:"kind"`

@@ -209,6 +209,30 @@ func TestUpdateLibraryPassesOnlyGivenProperties(t *testing.T) {
 	}
 }
 
+// TestLibraryOptionsAcceptOnlineMetadata: the optional per-library online switch of ADR 0031
+// section 2 passes the strict body check; it is persisted from M6-03 on, until then the
+// other switches are applied and responses report the default true.
+func TestLibraryOptionsAcceptOnlineMetadata(t *testing.T) {
+	t.Parallel()
+
+	const options = `"options":{"scanExtras":true,"readNfo":false,"localArtwork":true,"onlineMetadata":false}`
+
+	manager := &fakeManager{stored: storedMovies()}
+	handler, _ := newManagementHandler(t, managementOptions(manager, &fakeScanService{}))
+
+	got := serveRequest(t, handler, jsonRequest(t, http.MethodPatch, libraryPath, `{`+options+`}`))
+	assertJSONResponse(t, got, http.StatusOK)
+	assertBodyContains(t, got.body, `"onlineMetadata":true`)
+
+	want := library.Options{ScanExtras: true, LocalArtwork: true}
+	if patch := manager.patched[0]; patch.Options == nil || *patch.Options != want {
+		t.Errorf("patch options = %+v, want %+v", patch.Options, want)
+	}
+
+	create := `{"kind":"movies","name":"Movies","folders":[{"rootId":"` + testRootID + `","path":"Movies"}],` + options + `}`
+	assertJSONResponse(t, serveRequest(t, handler, jsonRequest(t, http.MethodPost, librariesPath, create)), http.StatusCreated)
+}
+
 func TestLibraryBodiesAreChecked(t *testing.T) {
 	t.Parallel()
 

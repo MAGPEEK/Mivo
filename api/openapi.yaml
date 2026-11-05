@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.3.0"
+  version: "1.4.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -45,6 +45,11 @@ tags:
     description: >-
       Artwork (posters, backdrops, thumbnails, logos, banners) rendered in a fixed set of
       widths (ADR 0027). Clients build image URLs only through the api-client helper.
+  - name: metadata
+    description: >-
+      Online metadata (ADR 0031): identify an item against TMDB or MusicBrainz, remove a
+      match, refresh metadata and the provider settings and status. Operations that change
+      data or settings are management operations (ADR 0028).
 paths:
   /api/v1/health:
     get:
@@ -315,6 +320,14 @@ paths:
           schema:
             type: string
             maxLength: 2048
+        - name: matchState
+          in: query
+          required: false
+          description: >-
+            Only items in this match state, for example "unmatched" for the "not matched"
+            filter (ADR 0031). Omitted lists every item.
+          schema:
+            $ref: "#/components/schemas/MatchState"
       responses:
         "200":
           description: One page of items.
@@ -394,6 +407,205 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ItemPage"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/identify/search:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      operationId: searchIdentifyCandidates
+      summary: Search provider candidates to match an item with
+      description: >-
+        Searches the metadata providers for the item's kind by title and optional year, or
+        looks up a pasted provider ID or URL (providerId), and returns the candidates best
+        first. Management operation (ADR 0028): it is allowed for the administrator only
+        once accounts exist. The search sends the query, year and metadata language to the
+        provider and nothing else (ADR 0031). Candidate posters are Mivo URLs, so the
+        browser never contacts a provider host. Problem codes: "not_found" (404, unknown
+        item), "online_disabled" (409, online metadata is switched off), "invalid" (400)
+        and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+      tags:
+        - metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentifySearchRequest"
+      responses:
+        "200":
+          description: The candidates; an empty list when the provider knows none.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentifyCandidateList"
+        "409":
+          $ref: "#/components/responses/OnlineDisabled"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/identify:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      operationId: identifyItem
+      summary: Match an item with a provider candidate
+      description: >-
+        Stores the provider and its ID for the item, locks the provider IDs, sets the match
+        state to "matched" and queues the enrichment of the item (for a show also its
+        seasons and episodes); other field locks stay. The answer is the item as it is at
+        once, before the enrichment ran. Management operation (ADR 0028). Problem codes:
+        "not_found" (404, unknown item), "invalid" (400, for example an ID that does not
+        fit the item's kind), "online_disabled" (409) and "provider_unavailable" (503 with
+        retryAfterSeconds and Retry-After).
+      tags:
+        - metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdentifyRequest"
+      responses:
+        "200":
+          description: The matched item.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemDetail"
+        "409":
+          $ref: "#/components/responses/OnlineDisabled"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/match:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    delete:
+      operationId: removeItemMatch
+      summary: Remove the online match of an item
+      description: >-
+        Drops the online data and the provider artwork of the item and sets its match state
+        to "disabled", so no automatic match happens again until the item is identified.
+        Local data (NFO, local artwork, user edits) stays. It works offline. Management
+        operation (ADR 0028). An unknown item answers 404 "not_found".
+      tags:
+        - metadata
+      responses:
+        "200":
+          description: The item without its match.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemDetail"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/refresh:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      operationId: refreshItemMetadata
+      summary: Queue a metadata refresh of an item
+      description: >-
+        Queues an online refresh of the item (and for a show its seasons and episodes) and
+        returns at once; the result shows when the item is read again. Queuing works
+        offline: the queue retries when the provider is reachable again. Management
+        operation (ADR 0028). Problem codes: "not_found" (404, unknown item) and
+        "online_disabled" (409).
+      tags:
+        - metadata
+      responses:
+        "202":
+          description: The refresh is queued.
+        "409":
+          $ref: "#/components/responses/OnlineDisabled"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/libraries/{libraryId}/refresh:
+    parameters:
+      - $ref: "#/components/parameters/LibraryId"
+    post:
+      operationId: refreshLibraryMetadata
+      summary: Queue a metadata refresh of a library
+      description: >-
+        Queues an online refresh of every item of the library whose match state is not
+        "disabled" (matched and unmatched items) and returns at once. Queuing works
+        offline: the queue retries when the provider is reachable again. Management
+        operation (ADR 0028). Problem codes: "not_found" (404, unknown library) and
+        "online_disabled" (409, also when online metadata is off for this library).
+      tags:
+        - metadata
+      responses:
+        "202":
+          description: The refresh is queued.
+        "409":
+          $ref: "#/components/responses/OnlineDisabled"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/settings/metadata:
+    get:
+      operationId: getMetadataSettings
+      summary: Read the online metadata settings
+      description: >-
+        Returns the global online switch, the metadata language and the state of each
+        provider. API keys are never returned, only their status. Management operation
+        (ADR 0028).
+      tags:
+        - metadata
+      responses:
+        "200":
+          description: The settings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: updateMetadataSettings
+      summary: Change the online metadata settings
+      description: >-
+        Changes the given settings; omitted properties stay as they are. The TMDB key is
+        write-only: an empty string removes the own key. Management operation (ADR 0028).
+        An empty language resets it to the server default (metadata.language of the
+        configuration), as in updateLibrary. Problem codes: "language_invalid" (400 with
+        field "language", a language that is no valid BCP 47 tag) and "invalid" (400 with
+        field naming the entry, for example "providers[0]" for an unknown provider).
+      tags:
+        - metadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetadataSettingsUpdate"
+      responses:
+        "200":
+          description: The settings after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataSettings"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/metadata/status:
+    get:
+      operationId: getMetadataStatus
+      summary: Report the state of the online metadata providers
+      description: >-
+        Returns the length of the enrichment queue and the state of each provider, so the UI
+        can show "TMDB is busy, will retry" or offline.
+      tags:
+        - metadata
+      responses:
+        "200":
+          description: The status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataStatus"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/images/{imageId}:
@@ -779,7 +991,300 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    OnlineDisabled:
+      description: >-
+        Online metadata is switched off globally or for the library ("online_disabled").
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ProviderUnavailable:
+      description: >-
+        The provider cannot be reached or is rate limiting ("provider_unavailable");
+        retryAfterSeconds and Retry-After say when to try again.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
   schemas:
+    MatchState:
+      type: string
+      description: >-
+        Whether the item is matched with an online provider: "matched", "unmatched" (no
+        confident match yet) or "disabled" (the match was removed on purpose and is not made
+        again automatically). Clients must tolerate new values.
+      enum:
+        - matched
+        - unmatched
+        - disabled
+      example: matched
+    MetadataSources:
+      type: array
+      description: >-
+        Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz";
+        omitted when unknown. Clients must tolerate new values.
+      maxItems: 16
+      items:
+        type: string
+        maxLength: 32
+        description: Name of one metadata source.
+      example:
+        - nfo
+        - tmdb
+    MetadataProvider:
+      type: string
+      description: >-
+        An online metadata provider (ADR 0031). Clients must tolerate new values.
+      enum:
+        - tmdb
+        - musicbrainz
+        - coverartarchive
+      example: tmdb
+    ProviderKeyStatus:
+      type: string
+      description: >-
+        Which API key a provider uses: "none" (no key, the provider is off), "bundled" (the
+        key shipped with the build) or "own" (the key the user entered). Clients must
+        tolerate new values.
+      enum:
+        - none
+        - bundled
+        - own
+      example: bundled
+    ProviderState:
+      type: string
+      description: >-
+        Health of a provider: "ok", "rate_limited" (the provider asked to slow down, will
+        retry), "offline" (not reachable, stale data is used) or "disabled" (switched off).
+        Clients must tolerate new values.
+      enum:
+        - ok
+        - rate_limited
+        - offline
+        - disabled
+      example: ok
+    IdentifySearchRequest:
+      type: object
+      description: >-
+        What to search candidates for: a title query and optionally a year. With providerId,
+        a provider ID or provider URL pasted by the user, the server looks that entry up
+        instead of searching by title.
+      additionalProperties: false
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Title to search for.
+          example: Big Buck Bunny
+        year:
+          type: integer
+          format: int32
+          minimum: 1800
+          maximum: 2200
+          description: Release year to narrow the search.
+          example: 2008
+        providerId:
+          type: string
+          maxLength: 512
+          description: >-
+            Provider ID or provider URL pasted by the user, for example a TMDB movie URL.
+            It is an ID in the namespace of the provider, not a Mivo ID.
+          example: https://www.themoviedb.org/movie/10378
+    IdentifyCandidate:
+      type: object
+      description: One provider entry the item may be matched with.
+      required:
+        - provider
+        - externalId
+        - title
+        - confidence
+      properties:
+        provider:
+          $ref: "#/components/schemas/MetadataProvider"
+        externalId:
+          type: string
+          maxLength: 128
+          description: >-
+            ID of the entry at the provider, not a Mivo ID. Send it unchanged to identifyItem.
+          example: "10378"
+        title:
+          type: string
+          description: Title of the entry.
+          example: Big Buck Bunny
+        year:
+          type: integer
+          format: int32
+          description: Release or first-air year of the entry.
+          example: 2008
+        overview:
+          type: string
+          description: Plot summary of the entry as plain text, shortened by the server.
+          example: A giant rabbit takes revenge on three bullying rodents.
+        posterUrl:
+          type: string
+          format: uri-reference
+          maxLength: 512
+          pattern: "^/api/v1/"
+          description: >-
+            Server URL of a poster preview, relative to the API origin. It never points at a
+            provider host, so the browser contacts no third party (ADR 0010); omitted when
+            the entry has no poster.
+          example: /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: How well the entry fits the query, from 0 (not at all) to 1 (exact).
+          example: 0.92
+    IdentifyCandidateList:
+      type: object
+      description: Candidates of an identify search, best first.
+      required:
+        - candidates
+      properties:
+        candidates:
+          type: array
+          description: The candidates; at most 25.
+          maxItems: 25
+          items:
+            $ref: "#/components/schemas/IdentifyCandidate"
+    IdentifyRequest:
+      type: object
+      description: The candidate to match an item with.
+      additionalProperties: false
+      required:
+        - provider
+        - externalId
+      properties:
+        provider:
+          $ref: "#/components/schemas/MetadataProvider"
+        externalId:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: ID of the entry at the provider (IdentifyCandidate.externalId).
+          example: "10378"
+    MetadataProviderSetting:
+      type: object
+      description: Settings and key status of one provider.
+      required:
+        - provider
+        - enabled
+      properties:
+        provider:
+          $ref: "#/components/schemas/MetadataProvider"
+        enabled:
+          type: boolean
+          description: Whether the provider may be contacted while online metadata is on.
+          example: true
+        keyStatus:
+          $ref: "#/components/schemas/ProviderKeyStatus"
+    MetadataSettings:
+      type: object
+      description: >-
+        Online metadata settings (ADR 0031). Keys are never part of it.
+      required:
+        - onlineEnabled
+        - language
+        - providers
+      properties:
+        onlineEnabled:
+          type: boolean
+          description: Global switch; off means no connection to any provider.
+          example: true
+        language:
+          type: string
+          maxLength: 35
+          description: Metadata language as a BCP 47 tag.
+          example: de-DE
+        providers:
+          type: array
+          description: One entry per provider.
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/MetadataProviderSetting"
+    MetadataProviderToggle:
+      type: object
+      description: Switches one provider on or off.
+      additionalProperties: false
+      required:
+        - provider
+        - enabled
+      properties:
+        provider:
+          $ref: "#/components/schemas/MetadataProvider"
+        enabled:
+          type: boolean
+          description: Whether the provider may be contacted.
+          example: false
+    MetadataSettingsUpdate:
+      type: object
+      description: >-
+        Changes to the online metadata settings; omitted properties stay as they are.
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        onlineEnabled:
+          type: boolean
+          description: Global switch; off means no connection to any provider.
+          example: false
+        language:
+          type: string
+          maxLength: 35
+          description: >-
+            Metadata language as a BCP 47 tag; an empty string resets it to the server
+            default. A malformed tag answers 400 "language_invalid".
+          example: en-US
+        providers:
+          type: array
+          description: Providers to switch on or off; others stay as they are.
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/MetadataProviderToggle"
+        tmdbApiKey:
+          type: string
+          writeOnly: true
+          maxLength: 128
+          description: >-
+            Own TMDB API key. It is never returned; an empty string removes it so the
+            bundled key applies again.
+    MetadataProviderStatus:
+      type: object
+      description: Current state of one provider.
+      required:
+        - provider
+        - state
+      properties:
+        provider:
+          $ref: "#/components/schemas/MetadataProvider"
+        state:
+          $ref: "#/components/schemas/ProviderState"
+    MetadataStatus:
+      type: object
+      description: Queue length and provider states of the online metadata feature.
+      required:
+        - queueLength
+        - providers
+      properties:
+        queueLength:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Number of items waiting for enrichment.
+          example: 12
+        providers:
+          type: array
+          description: One entry per provider.
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/MetadataProviderStatus"
     HealthStatus:
       type: string
       description: >-
@@ -985,6 +1490,13 @@ components:
         localArtwork:
           type: boolean
           description: Whether artwork files next to the media are used.
+          example: true
+        onlineMetadata:
+          type: boolean
+          description: >-
+            Whether the items of this library are enriched from online metadata providers
+            while the global switch is on (ADR 0031 section 2). Omitted means on. Responses
+            always carry it; it is stored from task M6-03 on and reads as true until then.
           example: true
     FolderRef:
       type: object
@@ -1609,6 +2121,10 @@ components:
           $ref: "#/components/schemas/ImageRef"
         media:
           $ref: "#/components/schemas/MediaSummary"
+        matchState:
+          $ref: "#/components/schemas/MatchState"
+        metadataSources:
+          $ref: "#/components/schemas/MetadataSources"
     ItemPage:
       type: object
       description: One page of items.
@@ -1785,6 +2301,10 @@ components:
             and seasons have none.
           items:
             $ref: "#/components/schemas/MediaFile"
+        matchState:
+          $ref: "#/components/schemas/MatchState"
+        metadataSources:
+          $ref: "#/components/schemas/MetadataSources"
     MediaFile:
       type: object
       description: >-
@@ -2414,7 +2934,10 @@ components:
             segment yet; see Retry-After). Library management adds "folder_not_found"
             (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved"
             (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid"
-            (400), "language_invalid" (400) and "too_many_folders" (400). New codes may be
+            (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata
+            adds "online_disabled" (409, the feature is switched off) and
+            "provider_unavailable" (503, the provider is offline or rate limiting; see
+            retryAfterSeconds). New codes may be
             added; clients show a generic message for unknown codes.
           example: not_found
         field:
@@ -2430,3 +2953,11 @@ components:
             For "folder_overlap", the library that already holds an overlapping folder;
             omitted when there is none.
           example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+        retryAfterSeconds:
+          type: integer
+          format: int32
+          minimum: 1
+          description: >-
+            For "provider_unavailable", the seconds after which a retry may succeed (the
+            Retry-After header carries the same value); omitted when unknown.
+          example: 30

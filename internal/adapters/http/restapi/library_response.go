@@ -66,9 +66,16 @@ func folderResponses(folders []applibrary.FolderOverview) ([]apigen.LibraryFolde
 	return responses, nil
 }
 
+// onlineMetadataDefault is the per-library online switch reported until it is stored
+// (ADR 0031 section 2: on by default; persisted from task M6-03 on).
+const onlineMetadataDefault = true
+
 func optionsResponse(options library.Options) apigen.LibraryOptions {
+	onlineMetadata := onlineMetadataDefault
+
 	return apigen.LibraryOptions{
 		ScanExtras: options.ScanExtras, ReadNfo: options.ReadNFO, LocalArtwork: options.LocalArtwork,
+		OnlineMetadata: &onlineMetadata,
 	}
 }
 

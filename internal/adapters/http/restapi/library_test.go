@@ -136,7 +136,7 @@ func TestListLibraries(t *testing.T) {
 	// Folders, language, options and the import flag come with every library; no array is null.
 	assertBodyContains(t, got.body,
 		`"folders":[{"available":true,"id":"`+testFolderID+`","path":"D:\\Media\\Movies"}]`,
-		`"metadataLanguage":"de"`, `"options":{"localArtwork":false,"readNfo":true,"scanExtras":true}`,
+		`"metadataLanguage":"de"`, `"options":{"localArtwork":false,"onlineMetadata":true,"readNfo":true,"scanExtras":true}`,
 		`"importedFromConfig":true`, `"importedFromConfig":false`)
 	assertBodyLacks(t, got.body, "null")
 }

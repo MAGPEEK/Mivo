@@ -35,6 +35,11 @@ const (
 	streamTag = "stream"
 	// imagesTag marks the image route, also a plain net/http handler (ADR 0027 section 8).
 	imagesTag = "images"
+	// metadataTag groups the online metadata operations of milestone 6 (ADR 0031).
+	metadataTag = "metadata"
+
+	// metadataSettingsPath is the route of the online metadata settings.
+	metadataSettingsPath = "/api/v1/settings/metadata"
 )
 
 // plainHandlerTags are the tags whose operations oapi-codegen must not generate: they
@@ -202,6 +207,7 @@ type operationCase struct {
 func operationCases() []operationCase {
 	const (
 		library  = "/api/v1/libraries/{libraryId}"
+		item     = "/api/v1/items/{itemId}"
 		sessions = "/api/v1/playback/sessions"
 		session  = sessions + "/{sessionId}"
 	)
@@ -231,6 +237,14 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/iso.segment", schema: "MediaBytes", unauthenticated: true},
 		{method: http.MethodHead, path: session + "/hls/{fileName}", operationID: "headPlaybackHlsFile", tag: streamTag, unauthenticated: true},
 		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem", unauthenticated: true},
+		{method: http.MethodPost, path: item + "/identify/search", operationID: "searchIdentifyCandidates", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "IdentifyCandidateList"},
+		{method: http.MethodPost, path: item + "/identify", operationID: "identifyItem", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
+		{method: http.MethodDelete, path: item + "/match", operationID: "removeItemMatch", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
+		{method: http.MethodPost, path: item + "/refresh", operationID: "refreshItemMetadata", tag: metadataTag},
+		{method: http.MethodPost, path: library + "/refresh", operationID: "refreshLibraryMetadata", tag: metadataTag},
+		{method: http.MethodGet, path: metadataSettingsPath, operationID: "getMetadataSettings", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataSettings"},
+		{method: http.MethodPut, path: metadataSettingsPath, operationID: "updateMetadataSettings", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataSettings"},
+		{method: http.MethodGet, path: "/api/v1/metadata/status", operationID: "getMetadataStatus", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataStatus"},
 	}
 }
 
@@ -422,6 +436,7 @@ func TestPublishedProblemCodesAreDocumented(t *testing.T) {
 		"folder_outside_roots": http.StatusBadRequest, "kind_unsupported": http.StatusBadRequest,
 		"name_invalid": http.StatusBadRequest, "language_invalid": http.StatusBadRequest,
 		"too_many_folders": http.StatusBadRequest,
+		"online_disabled":  http.StatusConflict, "provider_unavailable": http.StatusServiceUnavailable,
 	}
 
 	for code, status := range codes {
@@ -510,7 +525,7 @@ func TestIDsAreUUIDs(t *testing.T) {
 	for name, schema := range spec.Components.Schemas {
 		for propertyName, property := range schema.Value.Properties {
 			isID := propertyName == "id" || strings.HasSuffix(propertyName, "Id")
-			if isID && property.Value.Format != "uuid" {
+			if isID && property.Value.Format != "uuid" && !isProviderScopedID(name, propertyName) {
 				t.Errorf("%s.%s is not format uuid", name, propertyName)
 			}
 		}
@@ -819,7 +834,7 @@ func TestLibraryManagementContract(t *testing.T) {
 	shapes := map[string]schemaShape{
 		"Library":        {required: []string{"folders", "metadataLanguage", "options", "importedFromConfig"}},
 		"LibraryFolder":  {required: []string{"id", "path", "available"}},
-		"LibraryOptions": {required: []string{"scanExtras", "readNfo", "localArtwork"}},
+		"LibraryOptions": {required: []string{"scanExtras", "readNfo", "localArtwork"}, optional: []string{"onlineMetadata"}},
 		"LibraryCreate":  {required: []string{"kind", "name", "folders"}, optional: []string{"metadataLanguage", "options"}},
 		"LibraryUpdate":  {optional: []string{"name", "folders", "metadataLanguage", "options"}},
 		"FolderRef":      {optional: []string{"folderId", "rootId", "path"}},
@@ -848,6 +863,16 @@ func TestLibraryManagementContract(t *testing.T) {
 		if additional.Has == nil || *additional.Has {
 			t.Errorf("%s must set additionalProperties: false", name)
 		}
+	}
+
+	// Per-library online switch of ADR 0031 section 2: optional because create and update
+	// reuse LibraryOptions, and on when omitted. The default is stated in the description,
+	// not as a schema default: openapi-typescript would make a defaulted property required,
+	// which would force every client request to send it.
+	online := propertySchema(spec, "LibraryOptions.onlineMetadata")
+	if online == nil || online.Value.Default != nil || !strings.Contains(online.Value.Description, "ADR 0031") ||
+		!strings.Contains(online.Value.Description, "Omitted means on") {
+		t.Error("LibraryOptions.onlineMetadata must cite ADR 0031 and say that omitted means on, without a schema default")
 	}
 
 	if spec.Components.Schemas["LibraryUpdate"].Value.Properties["kind"] != nil {
@@ -1176,5 +1201,254 @@ func TestImageCachingContract(t *testing.T) {
 		if !strings.Contains(operation.Description, text) {
 			t.Errorf("getImage description does not mention %s", text)
 		}
+	}
+}
+
+// isProviderScopedID reports whether schema.property holds an ID in the namespace of an
+// external metadata provider (ADR 0031) instead of a Mivo UUID.
+func isProviderScopedID(schema, property string) bool {
+	switch schema + "." + property {
+	case "IdentifyCandidate.externalId", "IdentifyRequest.externalId", "IdentifySearchRequest.providerId":
+		return true
+	default:
+		return false
+	}
+}
+
+// specOperationKey names one operation by method and path.
+type specOperationKey struct{ method, path string }
+
+// TestMetadataContract pins the schemas of task M6-01 (ADR 0031).
+func TestMetadataContract(t *testing.T) {
+	spec := loadSpec(t)
+
+	shapes := map[string]schemaShape{
+		"IdentifySearchRequest":   {required: []string{"query"}, optional: []string{"year", "providerId"}},
+		"IdentifyCandidate":       {required: []string{"provider", "externalId", "title", "confidence"}, optional: []string{"year", "overview", "posterUrl"}},
+		"IdentifyCandidateList":   {required: []string{"candidates"}},
+		"IdentifyRequest":         {required: []string{"provider", "externalId"}},
+		"MetadataSettings":        {required: []string{"onlineEnabled", "language", "providers"}},
+		"MetadataProviderSetting": {required: []string{"provider", "enabled"}, optional: []string{"keyStatus"}},
+		"MetadataSettingsUpdate":  {optional: []string{"onlineEnabled", "language", "providers", "tmdbApiKey"}},
+		"MetadataProviderToggle":  {required: []string{"provider", "enabled"}},
+		"MetadataStatus":          {required: []string{"queueLength", "providers"}},
+		"MetadataProviderStatus":  {required: []string{"provider", "state"}},
+		"ItemSummary":             {optional: []string{"matchState", "metadataSources"}},
+		"ItemDetail":              {optional: []string{"matchState", "metadataSources"}},
+		"Problem":                 {optional: []string{"retryAfterSeconds"}},
+	}
+
+	for name, shape := range shapes {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		assertSchemaShape(t, name, schema.Value, shape)
+	}
+}
+
+func TestMetadataEnums(t *testing.T) {
+	spec := loadSpec(t)
+
+	tests := map[string][]any{
+		"MatchState":        {"matched", "unmatched", "disabled"},
+		"MetadataProvider":  {"tmdb", "musicbrainz", "coverartarchive"},
+		"ProviderKeyStatus": {"none", "bundled", "own"},
+		"ProviderState":     {"ok", "rate_limited", "offline", "disabled"},
+	}
+
+	for name, want := range tests {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		assertEnum(t, name, schema.Value, want)
+	}
+}
+
+func TestMetadataPropertyReferences(t *testing.T) {
+	spec := loadSpec(t)
+
+	references := map[string]string{
+		"ItemSummary.matchState": "MatchState", "ItemDetail.matchState": "MatchState",
+		"IdentifyCandidate.provider": "MetadataProvider", "IdentifyRequest.provider": "MetadataProvider",
+		"MetadataProviderSetting.provider": "MetadataProvider", "MetadataProviderSetting.keyStatus": "ProviderKeyStatus",
+		"MetadataProviderToggle.provider": "MetadataProvider", "MetadataProviderStatus.provider": "MetadataProvider",
+		"MetadataProviderStatus.state": "ProviderState",
+	}
+
+	for location, want := range references {
+		if property := propertySchema(spec, location); property == nil || property.Ref != "#/components/schemas/"+want {
+			t.Errorf("%s does not reference %s", location, want)
+		}
+	}
+
+	for _, location := range []string{"ItemSummary.metadataSources", "ItemDetail.metadataSources"} {
+		property := propertySchema(spec, location)
+		if property == nil || property.Value.Items == nil || !property.Value.Items.Value.Type.Is(openapi3.TypeString) || property.Value.MaxItems == nil {
+			t.Errorf("%s is not a bounded string array", location)
+		}
+	}
+}
+
+// TestMetadataKeyIsWriteOnly: the TMDB key is never returned (ADR 0031 section 3).
+func TestMetadataKeyIsWriteOnly(t *testing.T) {
+	spec := loadSpec(t)
+
+	key := propertySchema(spec, "MetadataSettingsUpdate.tmdbApiKey")
+	if key == nil || !key.Value.WriteOnly {
+		t.Error("MetadataSettingsUpdate.tmdbApiKey is not writeOnly")
+	}
+
+	for _, name := range []string{"MetadataSettings", "MetadataProviderSetting", "MetadataStatus", "IdentifyCandidate"} {
+		for property := range spec.Components.Schemas[name].Value.Properties {
+			if strings.Contains(strings.ToLower(property), "apikey") {
+				t.Errorf("%s.%s would return a key", name, property)
+			}
+		}
+	}
+
+	update := spec.Components.Schemas["MetadataSettingsUpdate"].Value
+	if update.AdditionalProperties.Has == nil || *update.AdditionalProperties.Has || update.MinProps < 1 {
+		t.Error("MetadataSettingsUpdate must set additionalProperties: false and minProperties 1")
+	}
+}
+
+// TestMetadataManagementOperationsNameTheGuard: every operation that changes metadata or
+// settings carries the ADR 0028 management guard note.
+func TestMetadataManagementOperationsNameTheGuard(t *testing.T) {
+	spec := loadSpec(t)
+
+	managed := []specOperationKey{
+		{http.MethodPost, "/api/v1/items/{itemId}/identify/search"},
+		{http.MethodPost, "/api/v1/items/{itemId}/identify"},
+		{http.MethodDelete, "/api/v1/items/{itemId}/match"},
+		{http.MethodPost, "/api/v1/items/{itemId}/refresh"},
+		{http.MethodPost, "/api/v1/libraries/{libraryId}/refresh"},
+		{http.MethodGet, metadataSettingsPath},
+		{http.MethodPut, metadataSettingsPath},
+	}
+
+	for _, key := range managed {
+		operation := getOperation(t, spec, key.method, key.path)
+		if !strings.Contains(operation.Description, "ADR 0028") {
+			t.Errorf("%s %s does not carry the ADR 0028 management guard note", key.method, key.path)
+		}
+	}
+}
+
+// TestMetadataErrorResponses pins the documented failures (task M6-01): every online
+// operation answers 409 when online metadata is off; the live provider calls also answer
+// 503 with Retry-After, while the refreshes only queue and so work offline.
+func TestMetadataErrorResponses(t *testing.T) {
+	spec := loadSpec(t)
+
+	queued := []specOperationKey{
+		{http.MethodPost, "/api/v1/items/{itemId}/refresh"}, {http.MethodPost, "/api/v1/libraries/{libraryId}/refresh"},
+	}
+	live := []specOperationKey{
+		{http.MethodPost, "/api/v1/items/{itemId}/identify/search"}, {http.MethodPost, "/api/v1/items/{itemId}/identify"},
+	}
+
+	for _, key := range slices.Concat(live, queued) {
+		operation := getOperation(t, spec, key.method, key.path)
+
+		assertResponseSchema(t, operation.Responses.Status(http.StatusConflict), problemMediaType, "Problem")
+
+		if !strings.Contains(operation.Description, `"not_found"`) {
+			t.Errorf("%s %s does not document 404 not_found", key.method, key.path)
+		}
+	}
+
+	for _, key := range live {
+		operation := getOperation(t, spec, key.method, key.path)
+
+		assertResponseSchema(t, operation.Responses.Status(http.StatusServiceUnavailable), problemMediaType, "Problem")
+
+		if operation.Responses.Status(http.StatusServiceUnavailable).Value.Headers["Retry-After"] == nil {
+			t.Errorf("%s %s: 503 has no Retry-After header", key.method, key.path)
+		}
+	}
+
+	for _, key := range queued {
+		operation := getOperation(t, spec, key.method, key.path)
+
+		if operation.Responses.Status(http.StatusAccepted) == nil {
+			t.Errorf("%s %s declares no 202", key.method, key.path)
+		}
+
+		if operation.Responses.Status(http.StatusServiceUnavailable) != nil || strings.Contains(operation.Description, "provider_unavailable") {
+			t.Errorf("%s %s only queues and must not fail with provider_unavailable", key.method, key.path)
+		}
+	}
+}
+
+// TestMetadataSettingsLanguage: a malformed language answers the existing language_invalid
+// code and an empty one means the server default, as in updateLibrary.
+func TestMetadataSettingsLanguage(t *testing.T) {
+	spec := loadSpec(t)
+
+	description := getOperation(t, spec, http.MethodPut, metadataSettingsPath).Description
+	for _, text := range []string{`"language_invalid"`, "empty language", "server default"} {
+		if !strings.Contains(description, text) {
+			t.Errorf("updateMetadataSettings description does not mention %s", text)
+		}
+	}
+}
+
+// TestUnmatchedFilterAndPosterProxy: the library listing filters by match state, and a
+// candidate poster is a Mivo URL, never a provider host (ADR 0010, ADR 0031).
+func TestUnmatchedFilterAndPosterProxy(t *testing.T) {
+	spec := loadSpec(t)
+
+	filter := getOperation(t, spec, http.MethodGet, "/api/v1/libraries/{libraryId}/items").Parameters.GetByInAndName("query", "matchState")
+	if filter == nil || filter.Required || filter.Schema.Ref != "#/components/schemas/MatchState" {
+		t.Error("optional query parameter matchState with schema MatchState is not declared on listLibraryItems")
+	}
+
+	poster := propertySchema(spec, "IdentifyCandidate.posterUrl")
+	if poster == nil || !strings.Contains(poster.Value.Description, "never") {
+		t.Fatal("IdentifyCandidate.posterUrl does not say it never points at a provider host")
+	}
+
+	posterPattern := regexp.MustCompile(poster.Value.Pattern)
+	posterTests := map[string]bool{
+		"/api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320": true,
+		"https://image.tmdb.org/t/p/w500/x.jpg":                         false,
+		"//image.tmdb.org/x.jpg":                                        false,
+		"api/v1/images/x":                                               false,
+	}
+
+	for value, want := range posterTests {
+		if got := posterPattern.MatchString(value); got != want {
+			t.Errorf("posterUrl pattern matches %q = %v, want %v", value, got, want)
+		}
+	}
+
+	retry := propertySchema(spec, "Problem.retryAfterSeconds")
+	if retry == nil || retry.Value.Min == nil || *retry.Value.Min < 1 {
+		t.Error("Problem.retryAfterSeconds is missing or unbounded below")
+	}
+}
+
+// TestSpecVersionCoversMetadata: the additive milestone-6 contract raised the minor version.
+func TestSpecVersionCoversMetadata(t *testing.T) {
+	spec := loadSpec(t)
+
+	const wantMajor, wantMinor = 1, 4
+
+	var major, minor, patch int
+	if _, err := fmt.Sscanf(spec.Info.Version, "%d.%d.%d", &major, &minor, &patch); err != nil {
+		t.Fatalf("info.version = %q is no semantic version: %v", spec.Info.Version, err)
+	}
+
+	if major != wantMajor || minor < wantMinor {
+		t.Errorf("info.version = %q, want %d.%d.x or a later minor", spec.Info.Version, wantMajor, wantMinor)
 	}
 }
