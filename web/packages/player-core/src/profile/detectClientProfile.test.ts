@@ -32,9 +32,9 @@ const safariDirectPlay = [
   {
     container: "mp4",
     videoCodecs: ["h264", "hevc"],
-    audioCodecs: ["aac", "mp3", "flac", "ac3", "eac3"],
+    audioCodecs: ["aac", "mp3", "flac"],
   },
-  { container: "mov", videoCodecs: ["h264", "hevc"], audioCodecs: ["aac", "mp3", "ac3", "eac3"] },
+  { container: "mov", videoCodecs: ["h264", "hevc"], audioCodecs: ["aac", "mp3"] },
   { container: "webm", videoCodecs: ["vp8", "vp9"], audioCodecs: ["opus", "vorbis"] },
   { container: "3gp", videoCodecs: ["h264"], audioCodecs: ["aac"] },
 ];
@@ -65,7 +65,7 @@ describe("detectClientProfile with reference browsers (ADR 0025)", () => {
       hls: {
         delivery: "native",
         videoCodecs: ["h264", "hevc"],
-        audioCodecs: ["aac", "mp3", "flac", "ac3", "eac3"],
+        audioCodecs: ["aac", "mp3", "flac"],
       },
       codecLimits: safariCodecLimits,
     });
@@ -78,7 +78,7 @@ describe("detectClientProfile with reference browsers (ADR 0025)", () => {
       hls: {
         delivery: "mse",
         videoCodecs: ["h264", "hevc"],
-        audioCodecs: ["aac", "mp3", "flac", "ac3", "eac3"],
+        audioCodecs: ["aac", "mp3", "flac"],
       },
       codecLimits: safariCodecLimits,
     });

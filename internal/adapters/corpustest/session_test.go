@@ -52,8 +52,8 @@ func playAndVerify(t *testing.T, run sessionRun) {
 
 	output := run.group.graph.probeOutput(t, run.group.service, session.ID)
 	assertOutput(t, run, session.StartPosition, output)
-	t.Logf("expected %s, observed %s; output: video %s, audio %s, %.2f s from %s",
-		run.want.Mode, session.Plan.Mode, output.videoCodec, output.audioCodec,
+	t.Logf("expected %s, observed %s; output: video %s, audio %s with %d channels, %.2f s from %s",
+		run.want.Mode, session.Plan.Mode, output.videoCodec, output.audioCodec, output.audioChannels,
 		output.duration.Seconds(), session.StartPosition)
 }
 

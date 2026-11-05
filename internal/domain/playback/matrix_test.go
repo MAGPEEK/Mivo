@@ -90,6 +90,38 @@ func corpusVideoRows() []matrixRow {
 	}
 }
 
+// corpusSurroundRows cover the audio of typical releases: Dolby, DTS and lossless surround
+// tracks the browsers cannot decode are re-encoded to AAC, and more than 5.1 channels are
+// never copied (see TestDecideAudioChannels).
+func corpusSurroundRows() []matrixRow {
+	matroskaAudio := transcode(copied, transcoded, containerReason(), audioCodecReason())
+
+	return []matrixRow{
+		both("video-mkv-h264-ac3-51", clip(media.ContainerMKV, h264High(0), surround(1, "ac3", surround51)),
+			matroskaAudio),
+		both("video-mkv-h264-eac3-51", clip(media.ContainerMKV, h264High(0), surround(1, "eac3", surround51)),
+			matroskaAudio),
+		both("video-mp4-h264-eac3-51", clip(media.ContainerMP4, h264High(0), surround(1, "eac3", surround51)),
+			transcode(copied, transcoded, audioCodecReason())),
+		both("video-mkv-h264-dts-51", clip(media.ContainerMKV, h264High(0), surround(1, "dts", surround51)),
+			matroskaAudio),
+		both("video-mkv-h264-truehd-51", clip(media.ContainerMKV, h264High(0), surround(1, "truehd", surround51)),
+			matroskaAudio),
+		both("video-mkv-h264-flac-71", clip(media.ContainerMKV, h264High(0), surround(1, "flac", surround71)),
+			transcode(copied, transcoded, containerReason(), audioChannelsReason())),
+		both("video-mkv-h264-opus-51", clip(media.ContainerMKV, h264High(0), surround(1, "opus", surround51)),
+			remux(containerReason())),
+		both("video-mkv-h264-pcm", clip(media.ContainerMKV, h264High(0), audio(1, "pcm_s16le")),
+			matroskaAudio),
+		both("video-mp4-h264-aac-51", clip(media.ContainerMP4, h264High(0), surround(1, "aac", surround51)),
+			directPlay()),
+		both("video-mp4-h264-aac-71", clip(media.ContainerMP4, h264High(0), surround(1, "aac", surround71)),
+			transcode(copied, transcoded, audioChannelsReason())),
+		both("video-mp4-h264-mp3", clip(media.ContainerMP4, h264High(0), audio(1, "mp3")),
+			directPlay()),
+	}
+}
+
 func corpusTrackRows() []matrixRow {
 	multiTrack := clip(media.ContainerMKV,
 		asDefault(h264High(0)), asDefault(audio(1, "aac")), audio(2, "aac"),
@@ -116,6 +148,14 @@ func corpusTrackRows() []matrixRow {
 			remux(containerReason()).withWarnings(subtitlesWarning())),
 		germanAudio,
 		englishAudio,
+		// A "German.DL" release: German DTS 5.1 first and default, English AC-3 2.0 second.
+		both("multitrack-mkv-dts-ac3-deu-eng", clip(media.ContainerMKV, asDefault(h264High(0)),
+			asDefault(surround(1, "dts", surround51)), audio(2, "ac3")),
+			transcode(copied, transcoded, containerReason(), audioCodecReason())),
+		// Browsers play the first track (AC-3, silent); the default AAC track is remuxed.
+		both("multitrack-mp4-ac3-aac-default-second", clip(media.ContainerMP4, asDefault(h264High(0)),
+			audio(1, "ac3"), asDefault(audio(2, "aac"))),
+			remux(audioTrackReason())),
 	}
 }
 
@@ -230,6 +270,7 @@ func TestDecideFormatMatrix(t *testing.T) {
 
 func matrixRows() []matrixRow {
 	rows := corpusVideoRows()
+	rows = append(rows, corpusSurroundRows()...)
 	rows = append(rows, corpusTrackRows()...)
 
 	return append(rows, syntheticRows()...)

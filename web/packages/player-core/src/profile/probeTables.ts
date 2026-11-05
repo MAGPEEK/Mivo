@@ -8,8 +8,13 @@
 export const videoCodecIds = ["h264", "hevc", "vp9", "av1", "vp8", "theora"] as const;
 export type VideoCodecId = (typeof videoCodecIds)[number];
 
-/** Audio codecs a client is probed for, as ffprobe names them. */
-export const audioCodecIds = ["aac", "mp3", "opus", "vorbis", "flac", "ac3", "eac3"] as const;
+/**
+ * Audio codecs a client is probed for, as ffprobe names them. AC-3 and E-AC-3 are never
+ * probed: a browser that answers yes may still play them silent (they depend on platform
+ * decoders the probe cannot check), while re-encoding the audio to AAC is cheap and always
+ * audible. DTS and TrueHD play in no browser at all.
+ */
+export const audioCodecIds = ["aac", "mp3", "opus", "vorbis", "flac"] as const;
 export type AudioCodecId = (typeof audioCodecIds)[number];
 
 /** One representative encoding of a codec, used as the `codecs` parameter of a probe. */
@@ -58,8 +63,6 @@ export const audioCodecVariants: Readonly<Record<AudioCodecId, readonly CodecVar
   opus: [{ codecString: "opus" }],
   vorbis: [{ codecString: "vorbis" }],
   flac: [{ codecString: "flac" }],
-  ac3: [{ codecString: "ac-3" }],
-  eac3: [{ codecString: "ec-3" }],
 };
 
 /** Where codecs are probed: MIME types plus the codecs that this context can carry. */
@@ -90,7 +93,7 @@ export const containerProbes: readonly ContainerProbe[] = [
     videoMimeType: "video/mp4",
     audioMimeType: "audio/mp4",
     videoCodecs: ["h264", "hevc", "av1", "vp9"],
-    audioCodecs: ["aac", "mp3", "opus", "flac", "ac3", "eac3"],
+    audioCodecs: ["aac", "mp3", "opus", "flac"],
   },
   {
     container: "mov",
@@ -98,7 +101,7 @@ export const containerProbes: readonly ContainerProbe[] = [
     // QuickTime has no registered audio MIME type; it shares the ISO BMFF audio decoders.
     audioMimeType: "audio/mp4",
     videoCodecs: ["h264", "hevc"],
-    audioCodecs: ["aac", "mp3", "ac3", "eac3"],
+    audioCodecs: ["aac", "mp3"],
   },
   {
     container: "webm",
@@ -112,7 +115,7 @@ export const containerProbes: readonly ContainerProbe[] = [
     videoMimeType: "video/x-matroska",
     audioMimeType: "audio/x-matroska",
     videoCodecs: ["h264", "hevc", "av1", "vp9", "vp8", "theora"],
-    audioCodecs: ["aac", "mp3", "opus", "vorbis", "flac", "ac3", "eac3"],
+    audioCodecs: ["aac", "mp3", "opus", "vorbis", "flac"],
   },
   {
     container: "ogg",
@@ -126,7 +129,7 @@ export const containerProbes: readonly ContainerProbe[] = [
     videoMimeType: "video/mp2t",
     audioMimeType: "audio/mp2t",
     videoCodecs: ["h264", "hevc"],
-    audioCodecs: ["aac", "mp3", "ac3", "eac3"],
+    audioCodecs: ["aac", "mp3"],
   },
   {
     container: "3gp",
@@ -145,5 +148,5 @@ export const hlsSegmentProbe: ProbeContext = {
   videoMimeType: "video/mp4",
   audioMimeType: "audio/mp4",
   videoCodecs: ["h264", "hevc", "av1", "vp9"],
-  audioCodecs: ["aac", "mp3", "opus", "flac", "ac3", "eac3"],
+  audioCodecs: ["aac", "mp3", "opus", "flac"],
 };

@@ -60,8 +60,12 @@ const (
 	ReasonVideoProfileNotSupported  ReasonCode = "video_profile_not_supported"
 	ReasonVideoBitDepthNotSupported ReasonCode = "video_bit_depth_not_supported"
 	ReasonAudioCodecNotSupported    ReasonCode = "audio_codec_not_supported"
-	ReasonAudioTrackNotDefault      ReasonCode = "audio_track_not_default"
-	ReasonDiscSource                ReasonCode = "disc_source"
+	// ReasonAudioChannelsNotSupported: the audio has more channels than MaxAudioChannels.
+	ReasonAudioChannelsNotSupported ReasonCode = "audio_channels_not_supported"
+	// ReasonAudioTrackNotFirst: the selected audio stream is not the first one, which is the
+	// one browsers play from the original file whatever the default flag says.
+	ReasonAudioTrackNotFirst ReasonCode = "audio_track_not_first"
+	ReasonDiscSource         ReasonCode = "disc_source"
 )
 
 // WarningCode describes a degraded result. Like reason codes, the values are stable.

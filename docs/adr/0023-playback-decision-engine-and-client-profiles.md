@@ -61,8 +61,8 @@ identifiers)
   `probably` and `maybe` both count as supported. Probe strings use representative RFC 6381
   codec strings (H.264 High 8-bit `avc1.640028`, HEVC Main 10 `hvc1.2.4.L120.B0`, AV1 8/10-bit
   `av01.0.08M.08`/`av01.0.08M.10`, VP9 profile 0/2 `vp09.00.40.08`/`vp09.02.40.10`, AAC LC
-  `mp4a.40.2`, MP3 `mp4a.6B`, Opus `opus`, FLAC `flac`, AC-3 `ac-3`, E-AC-3 `ec-3`); the
-  table lives in player-core with tests.
+  `mp4a.40.2`, MP3 `mp4a.6B`, Opus `opus`, FLAC `flac`); the table lives in player-core with
+  tests. AC-3 and E-AC-3 are not probed (Notes FIX-audio-codecs).
 
 **Stream selection**
 - Video: the first video stream that is not an attached picture (cover art in MKV/MP4 is a video
@@ -75,8 +75,8 @@ identifiers)
 **Modes, in order of preference** (the plan's three stages)
 1. `direct_play`: the source container has a direct-play key, the profile lists that key with the
    selected video and audio codecs, all codec limits hold, and the selected audio stream is the
-   one a browser plays by default (browsers cannot reliably switch tracks of a progressive
-   file). Delivery: the original file over HTTP with Range.
+   first audio stream of the file, the one browsers play whatever the default flag says
+   (browsers cannot switch tracks of a progressive file; Notes FIX-audio-codecs). Delivery: the original file over HTTP with Range.
 2. `remux`: all selected streams can be copied, i.e. the profile's `hls` lists their codecs and
    the limits hold. Delivery: HLS with fMP4 segments, every stream copied.
 3. `transcode`: at least one stream is re-encoded, even if only audio (the plan places DTS and
@@ -84,7 +84,8 @@ identifiers)
    otherwise re-encoded. The per-stream action is part of the plan and shown in the overlay,
    so an audio-only transcode is visibly cheap.
 - Transcode targets in milestone 2: video **H.264 High, 8-bit 4:2:0** (software `libx264`),
-  audio **AAC LC stereo** (OD for multichannel deferred to milestone 4). The output height is
+  audio **AAC LC**: mono and stereo keep their layout, every surround layout becomes 5.1, an
+  unknown layout stereo (Notes FIX-audio-codecs; was stereo only until 0.1.0-alpha.5). The output height is
   capped at 1080 (OD-5 B, decided 2026-10-30) and only ever scaled down, keeping the aspect ratio.
 - If transcoding is needed but the server lacks the encoder, or the client cannot play the
   target inside HLS, `Decide` fails with `transcode_unavailable` or `no_compatible_format`.
@@ -94,7 +95,7 @@ identifiers)
 - Reasons explain why a cheaper mode was not possible, each tagged with the stream it concerns
   (`container`, `video`, `audio`): `container_not_supported`, `video_codec_not_supported`,
   `video_profile_not_supported`, `video_bit_depth_not_supported`, `audio_codec_not_supported`,
-  `audio_track_not_default`.
+  `audio_channels_not_supported`, `audio_track_not_first`.
 - Warnings describe a degraded result: `hdr_not_tone_mapped` (HDR source transcoded without
   tone mapping until milestone 4), `subtitles_not_supported`, `video_downscaled`.
 - Errors: `no_compatible_format`, `transcode_unavailable`.
@@ -190,3 +191,36 @@ How `adapters/ffmpeg` detects the server capabilities at startup:
 - The version string is the token after `ffmpeg version`, cut to 64 bytes; a token with
   characters other than printable ASCII is shown as `unknown` (M2-32), while the capabilities
   still count.
+
+## Notes (FIX-audio-codecs)
+
+Owner report on 0.1.0-alpha.5: typical German releases (DTS-HD MA, TrueHD, E-AC-3, AC-3 5.1,
+AAC in MKV and MP4) partly played without sound. Measured on 2026-11-05 with headless Chrome
+156, Edge 156 and Firefox 159 on Windows 11 (Web Audio peak per channel, progressive and MSE):
+
+- All three answer `""`/`false` for `ac-3`, `ec-3`, `dtsc`, `dtsh`, `dtsx` and `mlpa` in every
+  probe; the engine already re-encodes those. Chrome, Edge and Firefox now answer `maybe` for
+  `video/x-matroska`, so MKV files are played directly when their codecs pass.
+- Chrome and Edge play the **first** audio track of a Matroska file, Firefox the first track of
+  Matroska and MP4 files, whatever the default flag says (Chrome and Edge follow the flag in MP4
+  only). The engine checked only the selected (default-flag) track: a file whose default track
+  was not the first one played the wrong, possibly undecodable track, i.e. silence. Direct play
+  now requires the selected audio stream to be the first one; otherwise
+  `audio_track_not_first` (called `audio_track_not_default` until 0.1.0-alpha.5) and the selected
+  stream is remuxed with `-map`.
+  The rule is intentionally global, also for clients that follow the default flag (Chrome and
+  Edge with MP4) or were not measured (Safari): a remux costs no quality, while a wrong guess
+  costs the sound. It becomes per-client once a profile can carry measured evidence.
+- Firefox fails on AAC 7.1 (`no decoder found for audio/mp4a-latm`, MSE: `Error creating
+  decoder`) although `canPlayType` answers `probably`; Chrome and Edge play it. Profiles cannot
+  express a channel count, so no audio with more than 5.1 channels is copied (reason
+  `audio_channels_not_supported`) and every surround source is re-encoded to AAC 5.1 (384 kb/s),
+  which all three browsers play; mono and stereo stay as they are (192 kb/s).
+- AC-3 and E-AC-3 are removed from the player-core probe tables. Platform decoders vary
+  (Edge with Dolby extensions, Safari), and a browser that answers yes but plays silent is
+  worse than a cheap audio re-encode to AAC. Safari therefore gets AAC 5.1 instead of Dolby.
+  This costs Dolby passthrough on clients that really decode it (Safari, later the webOS TV);
+  a per-client Dolby probe is a milestone 4 item (BACKLOG).
+- Milestone 4 (audio track switching, M4-02a/M4-04a/M4-13a/M4-16a/b) takes over: a channel
+  limit per client profile (the webOS TV decodes 7.1 and Dolby), track switching in the player
+  and the language preference for the default pick.

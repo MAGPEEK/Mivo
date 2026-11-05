@@ -7,14 +7,28 @@ import (
 )
 
 // Transcode targets of milestone 2 (ADR 0023, OD-11 A): H.264 High 8-bit 4:2:0 and AAC LC
-// stereo play in every supported browser. adapters/ffmpeg chooses the matching arguments.
+// play in every supported browser. adapters/ffmpeg chooses the matching arguments.
 const (
 	TranscodeVideoCodec    = "h264"
 	TranscodeVideoProfile  = "High"
 	TranscodeVideoBitDepth = 8
 	TranscodeAudioCodec    = "aac"
-	TranscodeAudioChannels = 2
+	// TranscodeStereoChannels is the target of stereo audio and of audio whose layout the
+	// probe could not tell; mono stays mono.
+	TranscodeStereoChannels = 2
+	// TranscodeSurroundChannels (5.1) is the target of every layout with more than two
+	// channels: Chrome, Edge and Firefox play AAC 5.1 and downmix it themselves.
+	TranscodeSurroundChannels = 6
 )
+
+// MaxAudioChannels is the most channels a client is sent (5.1). Firefox 159 cannot decode AAC
+// 7.1 ("no decoder found for audio/mp4a-latm") although canPlayType answers "probably", so
+// more channels are never copied; client profiles cannot express a channel limit yet
+// (milestone 4).
+const MaxAudioChannels = TranscodeSurroundChannels
+
+// unknownChannelCount is what ffprobe reports for an audio stream without a layout.
+const unknownChannelCount = 0
 
 // noHeightCap is the Policy value that keeps the source height.
 const noHeightCap = 0
@@ -70,8 +84,22 @@ func planAudio(stream media.Stream, input Input) (StreamDecision, []Reason, erro
 	return StreamDecision{
 		Kind: media.StreamKindAudio, SourceIndex: stream.Index, Action: ActionTranscode,
 		SourceCodec: stream.Codec, TargetCodec: TranscodeAudioCodec,
-		TargetChannels: TranscodeAudioChannels, Encoder: input.Capabilities.AACEncoder,
+		TargetChannels: transcodeChannels(stream.Channels), Encoder: input.Capabilities.AACEncoder,
 	}, reasons, nil
+}
+
+// transcodeChannels keeps mono and stereo, encodes every surround layout as 5.1 (7.1 is
+// downmixed, 3.0 to 5.0 are mapped onto 5.1) and an unknown layout as stereo, which every
+// source can be downmixed to.
+func transcodeChannels(sourceChannels int) int {
+	switch {
+	case sourceChannels == unknownChannelCount:
+		return TranscodeStereoChannels
+	case sourceChannels <= TranscodeStereoChannels:
+		return sourceChannels
+	default:
+		return TranscodeSurroundChannels
+	}
 }
 
 // videoTarget describes the transcoded video, so the client's limits can be checked on it.

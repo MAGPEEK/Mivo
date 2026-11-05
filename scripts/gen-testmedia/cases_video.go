@@ -47,6 +47,7 @@ func videoCases() []mediaCase {
 		legacyCases(),
 		realMediaCases(),
 		seekCases(),
+		surroundCases(),
 	)
 }
 

@@ -38,7 +38,14 @@ describe("probe tables (ADR 0023)", () => {
   it("lists the probed codecs as ffprobe names them", () => {
     // Also the order of the codec limits, aligned with the Go reference profiles.
     expect(videoCodecIds).toEqual(["h264", "hevc", "vp9", "av1", "vp8", "theora"]);
-    expect(audioCodecIds).toEqual(["aac", "mp3", "opus", "vorbis", "flac", "ac3", "eac3"]);
+    expect(audioCodecIds).toEqual(["aac", "mp3", "opus", "vorbis", "flac"]);
+  });
+
+  it("never offers Dolby or DTS audio for copying, which browsers may play silent", () => {
+    const surroundCodecs = ["ac3", "eac3", "dts", "truehd"];
+    for (const context of [...containerProbes, hlsSegmentProbe]) {
+      expect(context.audioCodecs.filter((codec) => surroundCodecs.includes(codec))).toEqual([]);
+    }
   });
 
   it.each([
@@ -70,8 +77,6 @@ describe("probe tables (ADR 0023)", () => {
     { codec: "opus", expected: "opus" },
     { codec: "vorbis", expected: "vorbis" },
     { codec: "flac", expected: "flac" },
-    { codec: "ac3", expected: "ac-3" },
-    { codec: "eac3", expected: "ec-3" },
   ] as const)("uses $expected for audio codec $codec", ({ codec, expected }) => {
     expect(codecStrings(audioCodecVariants[codec])).toEqual([expected]);
   });

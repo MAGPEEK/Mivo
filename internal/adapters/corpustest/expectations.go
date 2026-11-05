@@ -134,6 +134,7 @@ func SeekExpectations() []SeekExpectation {
 // expectations builds the table; every call returns new values, so callers may change them.
 func expectations() map[string]caseExpectation {
 	table := videoExpectations()
+	maps.Copy(table, surroundExpectations())
 	maps.Copy(table, trackExpectations())
 
 	return table
@@ -173,6 +174,28 @@ func videoExpectations() map[string]caseExpectation {
 	}
 }
 
+// surroundExpectations mirror corpusSurroundRows of the M2-09 format matrix: no browser
+// decodes Dolby, DTS or TrueHD, and no audio with more than 5.1 channels is copied.
+func surroundExpectations() map[string]caseExpectation {
+	channelsTranscode := func(reasons ...playback.Reason) Expectation {
+		return transcode(playback.ActionCopy, playback.ActionTranscode, append(reasons, audioChannelsReason())...)
+	}
+
+	return map[string]caseExpectation{
+		"video-mkv-h264-ac3-51":    both(transcodeAudioOnly()),
+		"video-mkv-h264-eac3-51":   both(transcodeAudioOnly()),
+		"video-mp4-h264-eac3-51":   both(transcode(playback.ActionCopy, playback.ActionTranscode, audioCodecReason())),
+		"video-mkv-h264-dts-51":    both(transcodeAudioOnly()),
+		"video-mkv-h264-truehd-51": both(transcodeAudioOnly()),
+		"video-mkv-h264-flac-71":   both(channelsTranscode(containerReason())),
+		"video-mkv-h264-opus-51":   both(remux(containerReason())),
+		"video-mkv-h264-pcm":       both(transcodeAudioOnly()),
+		"video-mp4-h264-aac-51":    both(directPlay()),
+		"video-mp4-h264-aac-71":    both(channelsTranscode()),
+		"video-mp4-h264-mp3":       both(directPlay()),
+	}
+}
+
 // trackExpectations mirror corpusTrackRows of the M2-09 format matrix: embedded subtitles
 // are ignored in milestone 2 with a warning, sidecar files are not part of the media file.
 func trackExpectations() map[string]caseExpectation {
@@ -181,6 +204,10 @@ func trackExpectations() map[string]caseExpectation {
 		"subtitle-mkv-srt-ass":         both(remux(containerReason()).withWarnings(subtitlesWarning())),
 		"subtitle-mp4-movtext":         both(directPlay(subtitlesWarning())),
 		"multitrack-mkv-eng-deu":       both(remux(containerReason()).withWarnings(subtitlesWarning())),
+		// German DTS is selected (default flag) and re-encoded; English AC-3 is not played.
+		"multitrack-mkv-dts-ac3-deu-eng": both(transcodeAudioOnly()),
+		// Browsers would play the first track (AC-3, silent), so the default AAC track is remuxed.
+		"multitrack-mp4-ac3-aac-default-second": both(remux(audioTrackReason())),
 	}
 }
 
@@ -246,6 +273,14 @@ func videoCodecReason() playback.Reason {
 
 func audioCodecReason() playback.Reason {
 	return playback.Reason{Code: playback.ReasonAudioCodecNotSupported, Scope: playback.ScopeAudio}
+}
+
+func audioChannelsReason() playback.Reason {
+	return playback.Reason{Code: playback.ReasonAudioChannelsNotSupported, Scope: playback.ScopeAudio}
+}
+
+func audioTrackReason() playback.Reason {
+	return playback.Reason{Code: playback.ReasonAudioTrackNotFirst, Scope: playback.ScopeAudio}
 }
 
 func hdrWarning() playback.Warning {

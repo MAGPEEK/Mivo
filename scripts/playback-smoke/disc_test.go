@@ -51,7 +51,7 @@ func TestDiscCasesPlayTheClearDVDOnlyWhenAsked(t *testing.T) {
 	want, _ := corpustest.ExpectedDisc(corpustest.DiscVideoTS, corpustest.FirefoxDesktop)
 
 	if disc.clip.fileName() != discFolderName || disc.clip.duration() != 6*time.Second ||
-		disc.clip.defaultAudioCodec() != "ac3" || disc.want.Mode != want.Mode || len(disc.want.Reasons) != len(want.Reasons) {
+		disc.clip.selectedAudio().Codec != "ac3" || disc.want.Mode != want.Mode || len(disc.want.Reasons) != len(want.Reasons) {
 		t.Errorf("disc case = %+v, want %q lasting 6 s with AC-3 and the plan %+v", disc, discFolderName, want)
 	}
 

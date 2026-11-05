@@ -41,7 +41,10 @@ type outputSummary struct {
 	videoProfile string
 	pixelFormat  string
 	audioCodec   string
-	duration     time.Duration
+	// audioChannels is the channel count of the audio stream; a stream with channels is
+	// audible, while a missing or empty one would play silent.
+	audioChannels int
+	duration      time.Duration
 }
 
 // probeOutput reads the finished output of a session through the stream access the
@@ -75,7 +78,7 @@ func (graph *corpusGraph) probeOutput(t *testing.T, service *appplayback.Service
 	}
 
 	if audio, found := description.DefaultAudio(); found {
-		summary.audioCodec = audio.Codec
+		summary.audioCodec, summary.audioChannels = audio.Codec, audio.Channels
 	}
 
 	return summary
@@ -162,11 +165,12 @@ func joinOutput(t *testing.T, directory string, segments []string) string {
 }
 
 // assertOutput checks the probed output against the plan: the target codecs of re-encoded
-// streams, the source codecs of copied ones, and the length of the clip after the start.
+// streams, the source codecs of copied ones, an audible audio stream and the length of the
+// clip after the start.
 func assertOutput(t *testing.T, run sessionRun, start time.Duration, output outputSummary) {
 	t.Helper()
 
-	wantVideo, wantAudio := run.video.clip.Expected.Video.Codec, run.video.clip.defaultAudioCodec()
+	wantVideo := run.video.clip.Expected.Video.Codec
 
 	if run.want.Video == playback.ActionTranscode {
 		wantVideo = transcodedVideoCodec
@@ -177,17 +181,45 @@ func assertOutput(t *testing.T, run sessionRun, start time.Duration, output outp
 		}
 	}
 
-	if run.want.Audio == playback.ActionTranscode {
-		wantAudio = transcodedAudioCodec
+	if output.videoCodec != wantVideo {
+		t.Errorf("output video codec = %q, want %q", output.videoCodec, wantVideo)
 	}
 
-	if output.videoCodec != wantVideo || output.audioCodec != wantAudio {
-		t.Errorf("output codecs = video %q, audio %q; want video %q, audio %q",
-			output.videoCodec, output.audioCodec, wantVideo, wantAudio)
-	}
+	assertAudioOutput(t, run, output)
 
 	if wantDuration := run.video.clip.duration() - start; (output.duration - wantDuration).Abs() > corpustest.DurationTolerance {
 		t.Errorf("output duration = %s, want %s (±%s): the clip lasts %s and the session starts at %s",
 			output.duration, wantDuration, corpustest.DurationTolerance, run.video.clip.duration(), start)
+	}
+}
+
+// assertAudioOutput checks that the selected audio stream arrives with sound: copied with its
+// codec and channels, or re-encoded to AAC with the promised layout.
+func assertAudioOutput(t *testing.T, run sessionRun, output outputSummary) {
+	t.Helper()
+
+	source := run.video.clip.selectedAudio()
+	wantCodec, wantChannels := source.Codec, source.Channels
+
+	if run.want.Audio == playback.ActionTranscode {
+		wantCodec, wantChannels = transcodedAudioCodec, transcodedChannels(source.Channels)
+	}
+
+	if output.audioCodec != wantCodec || output.audioChannels != wantChannels || output.audioChannels <= 0 {
+		t.Errorf("output audio = %q with %d channels, want %q with %d (source %q with %d)",
+			output.audioCodec, output.audioChannels, wantCodec, wantChannels, source.Codec, source.Channels)
+	}
+}
+
+// transcodedChannels is the layout a re-encode promises (ADR 0023): mono and stereo stay,
+// every surround layout becomes 5.1 and an unknown layout (0) stereo.
+func transcodedChannels(source int) int {
+	switch {
+	case source == 0:
+		return playback.TranscodeStereoChannels
+	case source <= playback.TranscodeStereoChannels:
+		return source
+	default:
+		return playback.TranscodeSurroundChannels
 	}
 }

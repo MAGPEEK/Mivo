@@ -86,7 +86,7 @@ func TestDecidePlanShapes(t *testing.T) {
 				{
 					Kind: media.StreamKindAudio, SourceIndex: 1, Action: playback.ActionTranscode,
 					SourceCodec: "mp2", TargetCodec: playback.TranscodeAudioCodec,
-					TargetChannels: playback.TranscodeAudioChannels, Encoder: playback.EncoderAAC,
+					TargetChannels: playback.TranscodeStereoChannels, Encoder: playback.EncoderAAC,
 				},
 			},
 		},

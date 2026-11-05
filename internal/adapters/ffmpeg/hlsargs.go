@@ -34,7 +34,7 @@ const (
 )
 
 // Software transcode targets of milestone 2 (ADR 0023): H.264 High 8-bit 4:2:0 with libx264
-// and AAC LC stereo with FFmpeg's native encoder.
+// and AAC LC (mono, stereo or 5.1, as planned) with FFmpeg's native encoder.
 const (
 	x264Preset = "veryfast"
 	// x264ConstantRateFactor is libx264's default quality; the bit rate follows the content
@@ -45,7 +45,10 @@ const (
 	// disabledSceneCutThreshold stops libx264 from inserting extra keyframes at scene cuts,
 	// so the forced keyframes alone decide where segments start.
 	disabledSceneCutThreshold = "0"
-	aacBitRate                = "192k"
+	// aacStereoBitRate is the bit rate of mono and stereo AAC; surround AAC (5.1) gets
+	// aacSurroundBitRate, twice as much, so each channel pair keeps the stereo quality.
+	aacStereoBitRate   = "192k"
+	aacSurroundBitRate = "384k"
 	// scaleKeepAspect makes FFmpeg derive an unknown dimension from the other one, keeping
 	// the aspect ratio and rounding to an even number. A 0 would mean "the input size".
 	scaleKeepAspect = -2
@@ -361,6 +364,15 @@ func audioArguments(decision playback.StreamDecision) ([]string, error) {
 	}
 
 	return []string{
-		"-c:a", playback.EncoderAAC, "-ac", strconv.Itoa(decision.TargetChannels), "-b:a", aacBitRate,
+		"-c:a", playback.EncoderAAC, "-ac", strconv.Itoa(decision.TargetChannels), "-b:a", aacBitRate(decision.TargetChannels),
 	}, nil
+}
+
+// aacBitRate scales with the layout: 5.1 at the stereo rate would starve every channel.
+func aacBitRate(channels int) string {
+	if channels > playback.TranscodeStereoChannels {
+		return aacSurroundBitRate
+	}
+
+	return aacStereoBitRate
 }

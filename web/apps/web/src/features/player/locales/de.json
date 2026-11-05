@@ -73,7 +73,8 @@
       "video_profile_not_supported": "Videoprofil von {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
       "video_bit_depth_not_supported": "Farbtiefe von {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
       "audio_codec_not_supported": "Audio {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
-      "audio_track_not_default": "Die gewählte Audiospur ist nicht die Standardspur, und Browser können die Spuren einer Datei nicht wechseln",
+      "audio_channels_not_supported": "Audio mit mehr als 5.1 Kanälen → {{targetCodec}} 5.1",
+      "audio_track_not_first": "Die gewählte Audiospur ist nicht die erste, und Browser spielen nur die erste Spur einer Datei",
       "disc_source": "DVDs und Blu-rays werden nie direkt abgespielt → {{targetContainer}}",
       "unknown": "Anderer Grund ({{code}})"
     },

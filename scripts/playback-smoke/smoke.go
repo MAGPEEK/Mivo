@@ -192,9 +192,14 @@ func describeOutput(session apigen.PlaybackSession, start time.Duration, output 
 		source = "original file, range 206"
 	}
 
+	audio := output.audioCodec
+	if output.audioChannels > 0 {
+		audio += fmt.Sprintf(" %dch", output.audioChannels)
+	}
+
 	detail := fmt.Sprintf("video %s %s, audio %s %s, %.2f s, %s",
 		streamAction(session, apigen.MediaStreamKindVideo), output.videoCodec,
-		streamAction(session, apigen.MediaStreamKindAudio), output.audioCodec,
+		streamAction(session, apigen.MediaStreamKindAudio), audio,
 		output.duration.Seconds(), source)
 
 	if start > 0 {

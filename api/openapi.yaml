@@ -4129,8 +4129,10 @@ components:
           description: >-
             Reasons: "container_not_supported", "video_codec_not_supported",
             "video_profile_not_supported", "video_bit_depth_not_supported",
-            "audio_codec_not_supported", "audio_track_not_default", "disc_source" (a DVD or
-            Blu-ray disc is never played directly). Warnings:
+            "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1
+            channels), "audio_track_not_first" (the selected audio track is not the first one,
+            which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is
+            never played directly). Warnings:
             "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes
             may be added within API v1.
           example: audio_codec_not_supported

@@ -28,7 +28,9 @@ type outputSummary struct {
 	videoProfile string
 	pixelFormat  string
 	audioCodec   string
-	duration     time.Duration
+	// audioChannels is the channel count of the audio stream; 0 when ffprobe reports none.
+	audioChannels int
+	duration      time.Duration
 }
 
 // prober describes a downloaded stream.
@@ -82,6 +84,7 @@ type probeStream struct {
 	CodecName   string `json:"codec_name"`
 	Profile     string `json:"profile"`
 	PixelFormat string `json:"pix_fmt"`
+	Channels    int    `json:"channels"`
 	Disposition struct {
 		Default         int `json:"default"`
 		AttachedPicture int `json:"attached_pic"`
@@ -113,7 +116,7 @@ func parseProbe(data []byte) (outputSummary, error) {
 	}
 
 	if found {
-		summary.audioCodec = audio.CodecName
+		summary.audioCodec, summary.audioChannels = audio.CodecName, audio.Channels
 	}
 
 	return summary, nil

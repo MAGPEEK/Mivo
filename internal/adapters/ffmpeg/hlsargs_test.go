@@ -363,6 +363,38 @@ func TestHLSArgumentsScaleTheSizeTheEngineDecided(t *testing.T) {
 	}
 }
 
+// TestHLSArgumentsEncodeAACWithThePlannedChannels: the engine plans mono, stereo or 5.1; a
+// 5.1 stream gets twice the stereo bit rate, so each channel pair keeps the stereo quality.
+func TestHLSArgumentsEncodeAACWithThePlannedChannels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		channels int
+		want     []string
+	}{
+		{channels: 1, want: []string{"-c:a", "aac", "-ac", "1", "-b:a", "192k"}},
+		{channels: 2, want: []string{"-c:a", "aac", "-ac", "2", "-b:a", "192k"}},
+		{channels: 6, want: []string{"-c:a", "aac", "-ac", "6", "-b:a", "384k"}},
+	}
+
+	for _, test := range tests {
+		audio := hlsTranscodeAudio(1)
+		audio.TargetChannels = test.channels
+
+		got, err := ffmpeg.HLSArguments(ffmpeg.HLSJob{
+			Plan:      hlsPlan(playback.ModeTranscode, hlsCopyVideo(0, "h264"), audio),
+			InputPath: hlsAbsolutePath(t, "media", "film.mkv"), OutputDirectory: hlsAbsolutePath(t, "session"),
+		})
+		if err != nil {
+			t.Fatalf("HLSArguments with %d channels: %v", test.channels, err)
+		}
+
+		if index := slices.Index(got, "-c:a"); index < 0 || !slices.Equal(got[index:index+len(test.want)], test.want) {
+			t.Errorf("audio arguments for %d channels in %q, want %q", test.channels, got, test.want)
+		}
+	}
+}
+
 // hlsDecideMPEG4 decides an AVI with MPEG-4 Part 2 video, which every browser profile
 // transcodes.
 func hlsDecideMPEG4(t *testing.T, width, height, maxHeight int) playback.Plan {

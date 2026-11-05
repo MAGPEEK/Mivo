@@ -311,7 +311,12 @@ func (c mediaCase) expectedAudio() []audioExpectation {
 
 	for index := range audio {
 		audio[index].SampleRate = c.Source.SampleRate
-		audio[index].Channels = c.Source.Channels
+
+		// A track that declares its channels was downmixed by the case (-ac:a:N).
+		if audio[index].Channels == 0 {
+			audio[index].Channels = c.Source.Channels
+		}
+
 		audio[index].Track = cloneTrack(audio[index].Track)
 	}
 

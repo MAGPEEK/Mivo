@@ -29,8 +29,8 @@ func directPlayReasons(chosen selection, container media.Container, profile Clie
 		reasons = append(reasons, Reason{Code: ReasonContainerNotSupported, Scope: ScopeContainer})
 	}
 
-	if !chosen.audioIsDefault {
-		reasons = append(reasons, Reason{Code: ReasonAudioTrackNotDefault, Scope: ScopeAudio})
+	if !chosen.audioIsFirst {
+		reasons = append(reasons, Reason{Code: ReasonAudioTrackNotFirst, Scope: ScopeAudio})
 	}
 
 	return reasons
@@ -90,11 +90,17 @@ func videoReasons(stream media.Stream, codecs []string, limits []CodecLimit) []R
 }
 
 // audioReasons returns why the client cannot decode the audio stream. Codec limits are not
-// applied to audio: ADR 0023 defines no audio limit reasons and media.Stream carries no
-// audio sample depth.
+// applied to audio (media.Stream carries no audio sample depth); the channel count is capped
+// for every client, because no profile can express it and browsers fail on more than 5.1
+// although their probes accept the codec (MaxAudioChannels). An unknown count passes, like
+// an unknown profile: it is a probe quirk, not a layout.
 func audioReasons(stream media.Stream, codecs []string) []Reason {
 	if !slices.Contains(codecs, stream.Codec) {
 		return []Reason{{Code: ReasonAudioCodecNotSupported, Scope: ScopeAudio}}
+	}
+
+	if stream.Channels > MaxAudioChannels {
+		return []Reason{{Code: ReasonAudioChannelsNotSupported, Scope: ScopeAudio}}
 	}
 
 	return nil

@@ -86,10 +86,20 @@ func TestSmokeCasesFailForAVideoWithoutExpectation(t *testing.T) {
 	}
 }
 
-func TestDefaultAudioCodecOfAClipWithoutAudio(t *testing.T) {
+func TestSelectedAudio(t *testing.T) {
 	t.Parallel()
 
-	if codec := (corpusCase{}).defaultAudioCodec(); codec != "" {
-		t.Errorf("defaultAudioCodec = %q, want empty", codec)
+	if codec := (corpusCase{}).selectedAudio().Codec; codec != "" {
+		t.Errorf("selectedAudio of a clip without audio = %q, want empty", codec)
+	}
+
+	first, second := streamProperties{Codec: "ac3"}, streamProperties{Codec: "aac", Track: &trackProperties{Default: true}}
+
+	if codec := (corpusCase{Expected: caseProperties{Audio: []streamProperties{first, second}}}).selectedAudio().Codec; codec != "aac" {
+		t.Errorf("selectedAudio with a default second track = %q, want aac", codec)
+	}
+
+	if codec := (corpusCase{Expected: caseProperties{Audio: []streamProperties{first, {Codec: "dts"}}}}).selectedAudio().Codec; codec != "ac3" {
+		t.Errorf("selectedAudio without a default track = %q, want the first, ac3", codec)
 	}
 }

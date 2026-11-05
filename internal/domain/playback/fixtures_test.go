@@ -85,7 +85,7 @@ func audioCodecReason() playback.Reason {
 }
 
 func audioTrackReason() playback.Reason {
-	return playback.Reason{Code: playback.ReasonAudioTrackNotDefault, Scope: playback.ScopeAudio}
+	return playback.Reason{Code: playback.ReasonAudioTrackNotFirst, Scope: playback.ScopeAudio}
 }
 
 func hdrWarning() playback.Warning {

@@ -2301,7 +2301,7 @@ type PlaybackMode string
 
 // PlaybackReason A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes.
 type PlaybackReason struct {
-	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_track_not_default", "disc_source" (a DVD or Blu-ray disc is never played directly). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
+	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
 	//
 	// Example: audio_codec_not_supported
 	Code string `json:"code"`

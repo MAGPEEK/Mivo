@@ -107,7 +107,7 @@ func startMismatch(session apigen.PlaybackSession, smoke smokeCase) (string, boo
 func outputMismatches(smoke smokeCase, start time.Duration, output outputSummary) []string {
 	var mismatches []string
 
-	wantVideo, wantAudio := smoke.clip.Expected.Video.Codec, smoke.clip.defaultAudioCodec()
+	wantVideo, wantAudio := smoke.clip.Expected.Video.Codec, smoke.clip.selectedAudio().Codec
 
 	if smoke.want.Video == playback.ActionTranscode {
 		wantVideo = transcodedVideoCodec
@@ -127,6 +127,10 @@ func outputMismatches(smoke smokeCase, start time.Duration, output outputSummary
 			output.videoCodec, output.audioCodec, wantVideo, wantAudio))
 	}
 
+	if mismatch, found := channelMismatch(smoke, output); found {
+		mismatches = append(mismatches, mismatch)
+	}
+
 	wantDuration := smoke.clip.duration() - start
 	if (output.duration - wantDuration).Abs() > corpustest.DurationTolerance {
 		mismatches = append(mismatches, fmt.Sprintf("output duration = %s, want %s (±%s)",
@@ -134,6 +138,27 @@ func outputMismatches(smoke smokeCase, start time.Duration, output outputSummary
 	}
 
 	return mismatches
+}
+
+// channelMismatch checks that the audio is audible with the promised layout: the source
+// channels when copied, mono, stereo or 5.1 when re-encoded. Manifests without channel counts
+// (older corpora) only get the codec check.
+func channelMismatch(smoke smokeCase, output outputSummary) (string, bool) {
+	source := smoke.clip.selectedAudio()
+	if source.Channels <= 0 {
+		return "", false
+	}
+
+	want := source.Channels
+	if smoke.want.Audio == playback.ActionTranscode && want > playback.TranscodeStereoChannels {
+		want = playback.TranscodeSurroundChannels
+	}
+
+	if output.audioChannels == want {
+		return "", false
+	}
+
+	return fmt.Sprintf("output audio channels = %d, want %d (source %d)", output.audioChannels, want, source.Channels), true
 }
 
 func seconds(value float64) time.Duration {

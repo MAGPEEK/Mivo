@@ -45,7 +45,14 @@ type caseProperties struct {
 }
 
 type streamProperties struct {
-	Codec string `json:"codec"`
+	Codec    string           `json:"codec"`
+	Channels int              `json:"channels"`
+	Track    *trackProperties `json:"track"`
+}
+
+// trackProperties are the dispositions of a stream whose case sets them.
+type trackProperties struct {
+	Default bool `json:"default"`
 }
 
 // videoCategories are the manifest categories whose files are library videos (ADR 0025);
@@ -67,14 +74,20 @@ func (c corpusCase) duration() time.Duration {
 	return time.Duration(c.Expected.DurationSeconds * float64(time.Second))
 }
 
-// defaultAudioCodec is the codec of the first audio stream, the default track of every
-// corpus case.
-func (c corpusCase) defaultAudioCodec() string {
-	if len(c.Expected.Audio) == 0 {
-		return ""
+// selectedAudio is the audio stream a session plays without a request, like
+// media.Description.DefaultAudio: the first one flagged default, else the first one.
+func (c corpusCase) selectedAudio() streamProperties {
+	for _, stream := range c.Expected.Audio {
+		if stream.Track != nil && stream.Track.Default {
+			return stream
+		}
 	}
 
-	return c.Expected.Audio[0].Codec
+	if len(c.Expected.Audio) == 0 {
+		return streamProperties{}
+	}
+
+	return c.Expected.Audio[0]
 }
 
 // readManifest reads and decodes the corpus manifest.

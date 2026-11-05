@@ -23,7 +23,8 @@ export const knownReasonCodes = [
   "video_profile_not_supported",
   "video_bit_depth_not_supported",
   "audio_codec_not_supported",
-  "audio_track_not_default",
+  "audio_channels_not_supported",
+  "audio_track_not_first",
   "disc_source",
 ] as const;
 
