@@ -29,6 +29,7 @@ type API struct {
 	system    SystemService
 	libraries LibraryCatalog
 	items     ItemCatalog
+	rows      RowsService
 	scan      ScanService
 	playback  PlaybackService
 	manager   LibraryManager
@@ -54,6 +55,7 @@ func NewAPI(options Options) (*API, error) {
 		system:    options.System,
 		libraries: options.Libraries,
 		items:     options.Items,
+		rows:      options.Rows,
 		scan:      options.Scan,
 		playback:  options.Playback,
 		manager:   options.Manager,

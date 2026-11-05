@@ -13,8 +13,10 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/server"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
 	"github.com/magpeek/mivo/internal/adapters/http/webui"
+	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
+	approws "github.com/magpeek/mivo/internal/app/rows"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -35,6 +37,10 @@ type catalogServices struct {
 	trigger runner
 	// management creates, changes and removes libraries and browses folders.
 	management management
+	// store is the one library store (newLibraryStore); rows serves the Home and Overview
+	// rows and is built from the others by serveWithPlayback.
+	store *sqlite.ManagedLibraryStore
+	rows  *approws.Service
 }
 
 // wiredServices is everything the HTTP adapter serves.
@@ -112,6 +118,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		System:    services.system,
 		Libraries: services.managed,
 		Items:     services.libraries,
+		Rows:      services.rowsService(),
 		Scan:      services.scans,
 		Playback:  services.playback,
 		// The manager also serves the folder browser: it marks the folders that cannot be chosen.
@@ -132,6 +139,16 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 	}
 
 	return httpHandlers{api: apiHandler, webUI: webUIHandler}, nil
+}
+
+// rowsService returns the rows service as the API option. A nil *approws.Service must not
+// become a non-nil interface, or the API would call it instead of answering 501.
+func (services wiredServices) rowsService() restapi.RowsService {
+	if services.rows == nil {
+		return nil
+	}
+
+	return services.rows
 }
 
 // newWebUIHandler serves the web app embedded with the webui build tag, or the page that

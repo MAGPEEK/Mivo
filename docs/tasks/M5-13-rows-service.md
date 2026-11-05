@@ -19,3 +19,7 @@ Home and Overview rows are generated on the server per M5-12.
 ## Notes
 Only libraries the (future) profile may see: take a `visibleLibraries` port now (all libraries)
 so M7 plugs access control in without changing handlers. The clock is a port.
+
+Implementation note: the "recently added" window of the episode grouping (rows.RecentEpisodeWindow,
+7 days before the show's newest episode) is applied in SQL by the row reader; the domain
+function GroupEpisodes turns the windowed per-season counts into show or season cards.

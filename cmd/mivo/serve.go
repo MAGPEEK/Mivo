@@ -234,7 +234,7 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 	stopPurge := app.purgeImageCacheInBackground(ctx, images.service)
 	catalog := catalogServices{
 		system: system, libraries: libraries, managed: managed, scans: scanning.scans, images: images,
-		trigger: scanning.trigger, management: scanning.management,
+		trigger: scanning.trigger, management: scanning.management, store: store,
 	}
 	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
 	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scanning.scans))
@@ -246,8 +246,16 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 }
 
 // serveWithPlayback starts the playback service and serves; the playback sessions are stopped
-// after the HTTP server, so no request can start one meanwhile.
+// after the HTTP server, so no request can start one meanwhile. The rows service is built
+// here, where the catalog services it reads are complete.
 func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, catalog catalogServices, adapters playbackAdapters) error {
+	rows, err := newRowsService(db, catalog)
+	if err != nil {
+		return err
+	}
+
+	catalog.rows = rows
+
 	workspace, err := app.newWorkspace()
 	if err != nil {
 		return err

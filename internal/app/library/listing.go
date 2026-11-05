@@ -174,15 +174,15 @@ func (service *Service) prepareFilter(ctx context.Context, libraryID string, fil
 	}
 
 	if filter.Quick == library.QuickUnavailable {
-		filter.OfflineRootIDs = service.offlineFolders(ctx, managed.Folders)
+		filter.OfflineRootIDs = service.OfflineFolders(ctx, managed.Folders)
 	}
 
 	return filter, nil
 }
 
-// offlineFolders returns the IDs of the folders that cannot be reached now; none without a
-// RootChecker.
-func (service *Service) offlineFolders(ctx context.Context, folders []library.Folder) []string {
+// OfflineFolders returns the IDs of the folders that cannot be reached now; none without a
+// RootChecker. The rows use case leaves the items in them out (M5-13).
+func (service *Service) OfflineFolders(ctx context.Context, folders []library.Folder) []string {
 	if service.roots == nil {
 		return nil
 	}

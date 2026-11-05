@@ -8,8 +8,8 @@ import (
 )
 
 // CodeNotImplemented is the problem code of operations or parameter values whose contract
-// exists but whose handler is not built yet (online metadata until M6-13, Browse sorting,
-// filters, facets, letters and folders until M5-11). It is published since API 1.5.0 so
+// exists but whose handler is not built yet (online metadata until M6-13; the rows endpoints of
+// an API wired without a rows service). It is published since API 1.5.0 so
 // clients can show "not available on this server" instead of a generic error.
 const CodeNotImplemented = "not_implemented"
 
