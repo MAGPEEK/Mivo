@@ -43,8 +43,18 @@ type fakeLibraryService struct {
 	children    applibrary.ItemPage
 	childrenErr error
 
+	// facets, letters and folder answer the browse methods; browseErr fails them.
+	facets    []applibrary.Facet
+	letters   applibrary.LetterIndex
+	folder    applibrary.FolderView
+	browseErr error
+
 	requestedLibraries []string
 	requestedPages     []library.PageRequest
+	requestedQueries   []library.ListingQuery
+	requestedFacets    []applibrary.FacetRequest
+	requestedLetters   []applibrary.LetterRequest
+	requestedFolders   []library.FolderPath
 	requestedItems     []string
 	requestedChildren  []applibrary.ChildPageRequest
 }
@@ -87,14 +97,48 @@ func (service *fakeLibraryService) Describe(_ context.Context, managed library.M
 	return overview, nil
 }
 
-func (service *fakeLibraryService) ListItems(_ context.Context, libraryID string, page library.PageRequest) (applibrary.ItemPage, error) {
+func (service *fakeLibraryService) ListItems(_ context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (applibrary.ItemPage, error) {
 	service.record(&service.requestedLibraries, libraryID)
 
 	service.mutex.Lock()
 	service.requestedPages = append(service.requestedPages, page)
+	service.requestedQueries = append(service.requestedQueries, query)
 	service.mutex.Unlock()
 
 	return service.page, service.pageErr
+}
+
+func (service *fakeLibraryService) ListFacets(_ context.Context, libraryID string, request applibrary.FacetRequest) ([]applibrary.Facet, error) {
+	service.record(&service.requestedLibraries, libraryID)
+
+	service.mutex.Lock()
+	service.requestedFacets = append(service.requestedFacets, request)
+	service.mutex.Unlock()
+
+	return service.facets, service.browseErr
+}
+
+func (service *fakeLibraryService) ListLetters(_ context.Context, libraryID string, request applibrary.LetterRequest) (applibrary.LetterIndex, error) {
+	service.record(&service.requestedLibraries, libraryID)
+
+	service.mutex.Lock()
+	service.requestedLetters = append(service.requestedLetters, request)
+	service.mutex.Unlock()
+
+	return service.letters, service.browseErr
+}
+
+func (service *fakeLibraryService) ListFolder(_ context.Context, libraryID string, path library.FolderPath, _ library.PageRequest) (applibrary.FolderView, error) {
+	service.record(&service.requestedLibraries, libraryID)
+
+	service.mutex.Lock()
+	service.requestedFolders = append(service.requestedFolders, path)
+	service.mutex.Unlock()
+
+	listing := service.folder
+	listing.Path = path
+
+	return listing, service.browseErr
 }
 
 func (service *fakeLibraryService) GetItem(_ context.Context, itemID string) (applibrary.ItemDetail, error) {

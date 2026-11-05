@@ -42,3 +42,12 @@ cgo for amd64, arm64, armv7 and windows/amd64.
   second server on the same data directory is refused. The file may stay in place; the OS drops
   the lock when the process dies. Keep the data directory on local storage – SMB/NFS may not
   honour the lock.
+
+## Notes (M5-11)
+
+- Reader-pool connections also set `temp_store=memory` and `cache_size=-16384` (a 16 MiB page
+  cache that grows only as pages are read). The library listing (sort, filters, facets)
+  materialises per-item file data; in temporary files and with the 2 MiB default cache every
+  page read was a system call in the pure-Go driver, which made 50,000-item facet counts several
+  times slower. The writer keeps the defaults. Memory bound: 16 MiB per reader connection
+  (one per GOMAXPROCS).

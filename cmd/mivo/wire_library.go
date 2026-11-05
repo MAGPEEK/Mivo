@@ -68,7 +68,10 @@ func newLibraryServices(db *sqlite.DB, store *sqlite.ManagedLibraryStore, files 
 ) (*applibrary.Service, *applibrary.ManagedCatalog, error) {
 	reader := sqlite.NewCatalogReader(db)
 
-	service, err := applibrary.NewService(applibrary.Dependencies{Libraries: store, Items: reader, Children: reader})
+	service, err := applibrary.NewService(applibrary.Dependencies{
+		Libraries: store, Items: reader, Children: reader, Listings: reader,
+		FolderItems: reader, Directories: files, Roots: files,
+	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create library service: %w", err)
 	}

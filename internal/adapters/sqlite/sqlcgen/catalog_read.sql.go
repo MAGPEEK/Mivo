@@ -92,7 +92,7 @@ type GetItemCountsRow struct {
 	LeafCount  int64
 }
 
-// GetItemCounts returns the counts of ListTopLevelItems for one item.
+// GetItemCounts returns the counts of ListItemsWithCounts for one item.
 func (q *Queries) GetItemCounts(ctx context.Context, id string) (GetItemCountsRow, error) {
 	row := q.db.QueryRowContext(ctx, getItemCounts, id)
 	var i GetItemCountsRow
@@ -525,6 +525,91 @@ func (q *Queries) ListItemTags(ctx context.Context, itemID string) ([]ListItemTa
 	return items, nil
 }
 
+const listItemsWithCounts = `-- name: ListItemsWithCounts :many
+
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at,
+       (SELECT COUNT(*) FROM items AS children
+        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+       (SELECT COUNT(*) FROM items AS seasons
+        JOIN items AS episodes ON episodes.parent_id = seasons.id
+        WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
+          AND episodes.kind = 'episode') AS leaf_count
+FROM items
+WHERE items.id IN (/*SLICE:item_ids*/?)
+`
+
+type ListItemsWithCountsRow struct {
+	Item       Item
+	ChildCount int64
+	LeafCount  int64
+}
+
+// Read side of the library model v2 (ADR 0027): listings, children, details and artwork.
+//
+// Every listing returns child_count (seasons of a show, episodes of a season) and leaf_count
+// (episodes of a show; 0 for everything else) from correlated subqueries. They cost one
+// lookup per page row into items_children plus a row fetch for the kind test; a page holds at
+// most library.MaxPageLimit rows, so the cost does not grow with the library.
+// ListItemsWithCounts returns the listed items with their counts. The library listing finds
+// the IDs of a page with a query built at run time (listing_query.go: sort and filters) and
+// reads the rows here, so the column mapping stays generated.
+func (q *Queries) ListItemsWithCounts(ctx context.Context, itemIds []string) ([]ListItemsWithCountsRow, error) {
+	query := listItemsWithCounts
+	var queryParams []interface{}
+	if len(itemIds) > 0 {
+		for _, v := range itemIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", strings.Repeat(",?", len(itemIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemsWithCountsRow{}
+	for rows.Next() {
+		var i ListItemsWithCountsRow
+		if err := rows.Scan(
+			&i.Item.ID,
+			&i.Item.LibraryID,
+			&i.Item.ParentID,
+			&i.Item.Kind,
+			&i.Item.MatchKey,
+			&i.Item.Title,
+			&i.Item.SortTitle,
+			&i.Item.OriginalTitle,
+			&i.Item.Year,
+			&i.Item.ReleaseDate,
+			&i.Item.Summary,
+			&i.Item.Tagline,
+			&i.Item.ContentRating,
+			&i.Item.Number,
+			&i.Item.NumberEnd,
+			&i.Item.AbsoluteNumber,
+			&i.Item.DiscNumber,
+			&i.Item.ExtraType,
+			&i.Item.MetadataLanguage,
+			&i.Item.CreatedAt,
+			&i.Item.UpdatedAt,
+			&i.ChildCount,
+			&i.LeafCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPrimaryFiles = `-- name: ListPrimaryFiles :many
 SELECT media_files.id, media_files.item_id, media_files.library_id, media_files.root_id, media_files.relative_path, media_files.size_bytes, media_files.modified_at, media_files.container, media_files.format_name, media_files.duration_ms, media_files.bit_rate, media_files.probed_at, media_files.probe_error, media_files.version_label, media_files.part_number, media_files.layout
 FROM items
@@ -634,101 +719,6 @@ func (q *Queries) ListSelectedArtwork(ctx context.Context, itemIds []string) ([]
 			&i.ID,
 			&i.Kind,
 			&i.Tag,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listTopLevelItems = `-- name: ListTopLevelItems :many
-
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at,
-       (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
-       (SELECT COUNT(*) FROM items AS seasons
-        JOIN items AS episodes ON episodes.parent_id = seasons.id
-        WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
-FROM items
-WHERE items.library_id = ?1
-  AND items.parent_id IS NULL
-  AND items.kind <> 'extra'
-  AND items.sort_title >= ?2
-  AND (items.sort_title > ?2 OR items.id > ?3)
-ORDER BY items.sort_title, items.id
-LIMIT ?4
-`
-
-type ListTopLevelItemsParams struct {
-	LibraryID      string
-	AfterSortTitle string
-	AfterID        string
-	RowLimit       int64
-}
-
-type ListTopLevelItemsRow struct {
-	Item       Item
-	ChildCount int64
-	LeafCount  int64
-}
-
-// Read side of the library model v2 (ADR 0027): listings, children, details and artwork.
-//
-// Every listing returns child_count (seasons of a show, episodes of a season) and leaf_count
-// (episodes of a show; 0 for everything else) from correlated subqueries. They cost one
-// lookup per page row into items_children plus a row fetch for the kind test; a page holds at
-// most library.MaxPageLimit rows, so the cost does not grow with the library.
-// ListTopLevelItems returns a library's movies and shows after the key (after_sort_title,
-// after_id) in keyset order. A key of two empty strings lies before every item, because IDs
-// are never empty. The conditions on parent_id and kind repeat the WHERE clause of the
-// partial index items_top_level, so SQLite can use it; the two conditions on sort_title let
-// it scan that index as a range instead of filtering the whole library.
-func (q *Queries) ListTopLevelItems(ctx context.Context, arg ListTopLevelItemsParams) ([]ListTopLevelItemsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTopLevelItems,
-		arg.LibraryID,
-		arg.AfterSortTitle,
-		arg.AfterID,
-		arg.RowLimit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListTopLevelItemsRow{}
-	for rows.Next() {
-		var i ListTopLevelItemsRow
-		if err := rows.Scan(
-			&i.Item.ID,
-			&i.Item.LibraryID,
-			&i.Item.ParentID,
-			&i.Item.Kind,
-			&i.Item.MatchKey,
-			&i.Item.Title,
-			&i.Item.SortTitle,
-			&i.Item.OriginalTitle,
-			&i.Item.Year,
-			&i.Item.ReleaseDate,
-			&i.Item.Summary,
-			&i.Item.Tagline,
-			&i.Item.ContentRating,
-			&i.Item.Number,
-			&i.Item.NumberEnd,
-			&i.Item.AbsoluteNumber,
-			&i.Item.DiscNumber,
-			&i.Item.ExtraType,
-			&i.Item.MetadataLanguage,
-			&i.Item.CreatedAt,
-			&i.Item.UpdatedAt,
-			&i.ChildCount,
-			&i.LeafCount,
 		); err != nil {
 			return nil, err
 		}

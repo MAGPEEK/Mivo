@@ -11,7 +11,6 @@ import (
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
@@ -38,40 +37,6 @@ type CatalogReader struct {
 // NewCatalogReader returns a reader on db. db must be migrated before the first call.
 func NewCatalogReader(db *DB) *CatalogReader {
 	return &CatalogReader{reader: db.reader}
-}
-
-// ListItems returns one page of a library's top-level items (movies and shows) ordered by
-// (sort title, ID), each with its summary data (see summariesOf). page.Limit is normalised by
-// library.NormalizeLimit. page.Cursor is empty for the first page and otherwise the
-// NextCursor of the previous page.
-//
-// An invalid limit or a cursor this reader did not issue wraps domain.ErrInvalid, an unknown
-// library domain.ErrNotFound.
-func (catalog *CatalogReader) ListItems(ctx context.Context, libraryID string, page library.PageRequest) (applibrary.ItemPage, error) {
-	limit, err := library.NormalizeLimit(page.Limit)
-	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
-	}
-
-	after, err := decodeCursor(page.Cursor)
-	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
-	}
-
-	var result applibrary.ItemPage
-
-	err = inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
-		var readErr error
-
-		result, readErr = readTopLevelPage(ctx, queries, topLevelRequest{libraryID: libraryID, after: after, limit: limit})
-
-		return readErr
-	})
-	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
-	}
-
-	return result, nil
 }
 
 // GetItem returns an item with its detail: files and streams (the primary file first),

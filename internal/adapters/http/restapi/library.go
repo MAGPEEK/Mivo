@@ -33,15 +33,30 @@ type LibraryCatalog interface {
 
 // ItemCatalog is the port of the item endpoints, the item part of app/library.Service.
 type ItemCatalog interface {
-	// ListItems returns one page of a library's items. A bad limit or cursor wraps
-	// domain.ErrInvalid, an unknown library domain.ErrNotFound.
-	ListItems(ctx context.Context, libraryID string, page library.PageRequest) (applibrary.ItemPage, error)
+	// ListItems returns one page of a library's items in the order and under the filter of
+	// the query, with the total count. A bad limit or cursor wraps domain.ErrInvalid, a kind
+	// other than the library's top-level kind applibrary.ErrItemKindMismatch, an unknown
+	// library domain.ErrNotFound.
+	ListItems(ctx context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (applibrary.ItemPage, error)
 	// GetItem returns an item with its files and streams; an unknown ID wraps
 	// domain.ErrNotFound.
 	GetItem(ctx context.Context, itemID string) (applibrary.ItemDetail, error)
 	// ListChildren returns one page of the seasons of a show or the episodes of a season. A
 	// bad limit or cursor wraps domain.ErrInvalid, an unknown item domain.ErrNotFound.
 	ListChildren(ctx context.Context, itemID string, request applibrary.ChildPageRequest) (applibrary.ItemPage, error)
+	ItemBrowsing
+}
+
+// ItemBrowsing is the part of ItemCatalog behind the filter menu, the A–Z bar and the folder
+// view (task M5-11), implemented by app/library.Service. Errors as ListItems; ListFolder also
+// answers a missing folder or one outside the library folder with domain.ErrNotFound.
+type ItemBrowsing interface {
+	// ListFacets returns the facet counts of a library listing.
+	ListFacets(ctx context.Context, libraryID string, request applibrary.FacetRequest) ([]applibrary.Facet, error)
+	// ListLetters returns where each first letter starts in the title-sorted listing.
+	ListLetters(ctx context.Context, libraryID string, request applibrary.LetterRequest) (applibrary.LetterIndex, error)
+	// ListFolder returns one page of the children of a library folder.
+	ListFolder(ctx context.Context, libraryID string, path library.FolderPath, page library.PageRequest) (applibrary.FolderView, error)
 }
 
 // ScanService is the port of the scan endpoint and the scan status of a library,

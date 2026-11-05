@@ -59,43 +59,6 @@ type listedItem struct {
 	key        childKey
 }
 
-type topLevelRequest struct {
-	libraryID string
-	after     itemKey
-	limit     int
-}
-
-// readTopLevelPage reads one row more than the limit to learn whether another page follows.
-func readTopLevelPage(ctx context.Context, queries *sqlcgen.Queries, request topLevelRequest) (applibrary.ItemPage, error) {
-	found, err := queries.LibraryExists(ctx, request.libraryID)
-	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("read library: %w", err)
-	}
-
-	if !found {
-		return applibrary.ItemPage{}, domain.ErrNotFound
-	}
-
-	rows, err := queries.ListTopLevelItems(ctx, sqlcgen.ListTopLevelItemsParams{
-		LibraryID:      request.libraryID,
-		AfterSortTitle: request.after.sortTitle,
-		AfterID:        request.after.id,
-		RowLimit:       int64(request.limit) + 1,
-	})
-	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("read items: %w", err)
-	}
-
-	listed := make([]listedItem, 0, len(rows))
-	for _, row := range rows {
-		listed = append(listed, listedItem{item: row.Item, childCount: row.ChildCount, leafCount: row.LeafCount})
-	}
-
-	return pageOf(ctx, queries, pageSource{rows: listed, limit: request.limit}, func(last listedItem) string {
-		return encodeCursor(itemKey{sortTitle: last.item.SortTitle, id: last.item.ID})
-	})
-}
-
 type childrenRequest struct {
 	scope    childCursorScope
 	after    childKey
@@ -103,7 +66,7 @@ type childrenRequest struct {
 	limit    int
 }
 
-// readChildrenPage reads one row more than the limit, like readTopLevelPage.
+// readChildrenPage reads one row more than the limit, like readListingPage.
 func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request childrenRequest) (applibrary.ItemPage, error) {
 	parentID := request.scope.parentID
 

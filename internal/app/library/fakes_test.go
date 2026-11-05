@@ -65,7 +65,8 @@ type memoryItemReader struct {
 	// listErr and getErr, when set, are returned by the matching method.
 	listErr error
 	getErr  error
-	// requests records every ListItems call.
+	// requests and queries record every ListItems call.
+	queries  []library.ListingQuery
 	requests []listRequest
 }
 
@@ -83,12 +84,13 @@ func newMemoryItemReader() *memoryItemReader {
 }
 
 func (reader *memoryItemReader) ListItems(_ context.Context, libraryID string,
-	page library.PageRequest,
+	page library.PageRequest, query library.ListingQuery,
 ) (applibrary.ItemPage, error) {
 	reader.mutex.Lock()
 	defer reader.mutex.Unlock()
 
 	reader.requests = append(reader.requests, listRequest{libraryID: libraryID, page: page})
+	reader.queries = append(reader.queries, query)
 
 	if reader.listErr != nil {
 		return applibrary.ItemPage{}, reader.listErr

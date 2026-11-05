@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -49,6 +50,37 @@ func (kind Kind) IsValid() bool {
 // String returns the text value of the kind.
 func (kind Kind) String() string {
 	return string(kind)
+}
+
+// TopLevelItemKinds returns the item kinds a library of this kind can list (API type
+// parameter), the default first: movie in a movies library, show in a shows library, artist
+// or album in a music library, audiobook in an audiobooks library. A photos library has none.
+func (kind Kind) TopLevelItemKinds() []ItemKind {
+	switch kind {
+	case KindMovies:
+		return []ItemKind{ItemKindMovie}
+	case KindShows:
+		return []ItemKind{ItemKindShow}
+	case KindMusic:
+		return []ItemKind{ItemKindArtist, ItemKindAlbum}
+	case KindAudiobooks:
+		return []ItemKind{ItemKindAudiobook}
+	case KindPhotos:
+		return nil
+	default:
+		return nil
+	}
+}
+
+// IsTopLevelItemKind reports whether some library kind lists items of this kind at its top.
+func IsTopLevelItemKind(itemKind ItemKind) bool {
+	for _, kind := range []Kind{KindMovies, KindShows, KindMusic, KindAudiobooks, KindPhotos} {
+		if slices.Contains(kind.TopLevelItemKinds(), itemKind) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Definition is a library as the operator configures it. Its identity is the root path:

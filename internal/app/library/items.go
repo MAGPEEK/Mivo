@@ -38,9 +38,13 @@ func (summary ItemSummary) HasPrimaryFile() bool {
 
 // ItemPage is one page of items in the order of the listing that produced it. NextCursor is
 // empty on the last page; otherwise it is passed unchanged as the cursor of the next request.
+// TotalCount is the number of items the listing matches across all pages; it is only set
+// when Counted is true (library listings count, children listings do not).
 type ItemPage struct {
 	Items      []ItemSummary
 	NextCursor string
+	TotalCount int64
+	Counted    bool
 }
 
 // ItemRef names an ancestor of an item for the breadcrumb and the episode header
@@ -95,22 +99,31 @@ type ItemDetail struct {
 }
 
 // ListItems returns one page of a library's top-level items (movies and shows; seasons,
-// episodes and extras are reached through ListChildren and GetItem). A limit of 0 means the
-// default; a limit outside 1 to library.MaxPageLimit and a cursor the catalog did not produce
-// wrap domain.ErrInvalid, an unknown library wraps domain.ErrNotFound. Broken stored library
-// data is reported as a plain error, never as domain.ErrInvalid.
-func (service *Service) ListItems(ctx context.Context, libraryID string, page library.PageRequest) (ItemPage, error) {
+// episodes and extras are reached through ListChildren and GetItem) in the order of the query
+// and narrowed by its filter (see prepareFilter), with the total count. A limit of 0 means the
+// default; a limit outside 1 to library.MaxPageLimit, a cursor the catalog did not produce and
+// a kind other than the library's top-level kind wrap domain.ErrInvalid (the kind mismatch
+// also ErrItemKindMismatch), an unknown library wraps domain.ErrNotFound. Broken stored
+// library data is reported as a plain error, never as domain.ErrInvalid.
+//
+// Sort "random" without a seed gets a fresh seed on the first page; the reader keeps it in
+// the cursor, so later pages repeat the order.
+func (service *Service) ListItems(ctx context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (ItemPage, error) {
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
 	}
 
-	// The reader cannot tell an unknown library from an empty one.
-	if _, err := service.libraries.GetManaged(ctx, libraryID); err != nil {
-		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, storedDataError(err))
+	query.Filter, err = service.prepareFilter(ctx, libraryID, query.Filter)
+	if err != nil {
+		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
 	}
 
-	items, err := service.items.ListItems(ctx, libraryID, library.PageRequest{Limit: limit, Cursor: page.Cursor})
+	if query.Order.Key() == library.SortByRandom && !query.Order.HasSeed && page.Cursor == "" {
+		query.Order.Seed, query.Order.HasSeed = service.randomSeed(), true
+	}
+
+	items, err := service.items.ListItems(ctx, libraryID, library.PageRequest{Limit: limit, Cursor: page.Cursor}, query)
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
 	}

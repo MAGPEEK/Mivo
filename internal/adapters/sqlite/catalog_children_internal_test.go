@@ -9,6 +9,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 func TestChildCursorRoundTripIsBoundToItemAndDirection(t *testing.T) {
@@ -101,11 +102,12 @@ func TestListingQueriesUseTheCatalogIndexes(t *testing.T) {
 
 	recordings := map[string]func() error{
 		"top level": func() error {
-			_, err := queries.ListTopLevelItems(t.Context(), sqlcgen.ListTopLevelItemsParams{
-				LibraryID: "library", AfterSortTitle: "title", AfterID: "item", RowLimit: 101,
+			recorder.query, recorder.args, _ = pageQuery(listingRequest{
+				target: listingTarget{libraryID: "library", kind: library.ItemKindMovie}, query: library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindMovie}},
+				after: listingKey{sortTitle: "title", id: "item"}, hasAfter: true, rowLimit: 101,
 			})
 
-			return err
+			return errQueryRecorded
 		},
 		"children ascending": func() error {
 			_, err := queries.ListChildrenAscending(t.Context(), childParams)

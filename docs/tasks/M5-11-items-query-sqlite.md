@@ -21,3 +21,14 @@ The endpoints of M5-10 return real data for libraries of 50,000+ items quickly.
 ## Notes
 New migration only for indexes/columns that are needed (resolution, bitrate, size, added
 time); keep functions <= 50 lines by building queries per filter in small functions.
+
+## Result (implementation notes)
+- No migration. Listing SQL is built at run time with named parameters
+  (`internal/adapters/sqlite/listing_*.go`); rows are read through the sqlc query
+  `ListItemsWithCounts`. `ListTopLevelItems` is gone.
+- Reader connections now use `temp_store=memory` and a 16 MiB page cache (`dsn.go`).
+- Benchmark `BenchmarkListingFirstPageAndFacets` (`go test -run '^$' -bench
+  BenchmarkListingFirstPageAndFacets -benchtime 5x ./internal/adapters/sqlite/`), 50,000 movies,
+  Intel Core Ultra 7 265K, Windows, shared with other test runs (noisy): default title page
+  10–20 ms; genre+container filter sorted by year 1.0–3.7 s; all ten facets 1.2–3.6 s.
+  The < 300 ms target is not met; follow-up in BACKLOG ("m5-11 notes").

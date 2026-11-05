@@ -16,6 +16,16 @@ const (
 	synchronousNormal       = "NORMAL"
 	pragmaEnabled           = "1"
 	transactionLockMode     = "immediate"
+	// tempStoreMemory keeps the temporary tables of the reader pool in memory: the library
+	// listing materialises the files of every top-level item (task M5-11), and in temporary
+	// files every page of that work is a system call, which made a 50,000-item facet count
+	// several times slower.
+	tempStoreMemory = "temp_store(memory)"
+	// readerCacheSize raises the page cache of a reader connection from SQLite's 2 MiB to at
+	// most 16 MiB (negative: KiB). The cache grows only as pages are read, so an idle
+	// connection costs nothing; a large library listing re-reads the same item, file and
+	// stream pages, and with the default cache every re-read is a system call (task M5-11).
+	readerCacheSize = "cache_size(-16384)"
 )
 
 // DSN parameter names understood by modernc.org/sqlite. The driver validates their values
@@ -28,6 +38,7 @@ const (
 	parameterSynchronous = "_synchronous"
 	parameterQueryOnly   = "_query_only"
 	parameterTxLock      = "_txlock"
+	parameterPragma      = "_pragma"
 )
 
 const fileURIScheme = "file"
@@ -77,6 +88,8 @@ func connectionParameters(role poolRole) url.Values {
 		parameters.Set(parameterTxLock, transactionLockMode)
 	case readerRole:
 		parameters.Set(parameterQueryOnly, pragmaEnabled)
+		parameters.Set(parameterPragma, tempStoreMemory)
+		parameters.Add(parameterPragma, readerCacheSize)
 	}
 
 	return parameters

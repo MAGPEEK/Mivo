@@ -128,6 +128,10 @@ func InternalProblem() apigen.Problem {
 // ErrUnavailable 503 and anything else 500. Only this adapter maps domain errors to HTTP
 // (ADR 0017). A session_limit_reached answer also needs Retry-After, which the caller sets.
 func ProblemForError(err error) apigen.Problem {
+	if problem, ok := queryProblem(err); ok {
+		return problem
+	}
+
 	if problem, ok := libraryProblem(err); ok {
 		return problem
 	}

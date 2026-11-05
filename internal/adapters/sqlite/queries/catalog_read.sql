@@ -5,12 +5,10 @@
 -- lookup per page row into items_children plus a row fetch for the kind test; a page holds at
 -- most library.MaxPageLimit rows, so the cost does not grow with the library.
 
--- ListTopLevelItems returns a library's movies and shows after the key (after_sort_title,
--- after_id) in keyset order. A key of two empty strings lies before every item, because IDs
--- are never empty. The conditions on parent_id and kind repeat the WHERE clause of the
--- partial index items_top_level, so SQLite can use it; the two conditions on sort_title let
--- it scan that index as a range instead of filtering the whole library.
--- name: ListTopLevelItems :many
+-- ListItemsWithCounts returns the listed items with their counts. The library listing finds
+-- the IDs of a page with a query built at run time (listing_query.go: sort and filters) and
+-- reads the rows here, so the column mapping stays generated.
+-- name: ListItemsWithCounts :many
 SELECT sqlc.embed(items),
        (SELECT COUNT(*) FROM items AS children
         WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
@@ -19,13 +17,7 @@ SELECT sqlc.embed(items),
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
           AND episodes.kind = 'episode') AS leaf_count
 FROM items
-WHERE items.library_id = sqlc.arg(library_id)
-  AND items.parent_id IS NULL
-  AND items.kind <> 'extra'
-  AND items.sort_title >= sqlc.arg(after_sort_title)
-  AND (items.sort_title > sqlc.arg(after_sort_title) OR items.id > sqlc.arg(after_id))
-ORDER BY items.sort_title, items.id
-LIMIT sqlc.arg(row_limit);
+WHERE items.id IN (sqlc.slice(item_ids));
 
 -- ListChildrenAscending and ListChildrenDescending return the children of an item in child
 -- order (ChildReader): order_group 0 holds the numbered children and 1 the specials (season
@@ -81,7 +73,7 @@ WHERE items.parent_id = sqlc.arg(parent_id)
 ORDER BY order_group DESC, order_number DESC, items.sort_title DESC, items.id DESC
 LIMIT sqlc.arg(row_limit);
 
--- GetItemCounts returns the counts of ListTopLevelItems for one item.
+-- GetItemCounts returns the counts of ListItemsWithCounts for one item.
 -- name: GetItemCounts :one
 SELECT (SELECT COUNT(*) FROM items AS children
         WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,

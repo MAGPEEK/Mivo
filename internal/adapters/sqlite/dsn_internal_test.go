@@ -93,6 +93,7 @@ func TestDataSourceNameSetsRoleSpecificParameters(t *testing.T) {
 	}{
 		{name: "writer", role: writerRole, want: map[string]string{parameterTxLock: "immediate"}, wantNot: parameterQueryOnly},
 		{name: "reader", role: readerRole, want: map[string]string{parameterQueryOnly: "1"}, wantNot: parameterTxLock},
+		{name: "reader pragmas", role: readerRole, want: map[string]string{parameterPragma: tempStoreMemory}, wantNot: parameterTxLock},
 	}
 
 	for _, test := range tests {

@@ -58,7 +58,7 @@ func TestListItemsNormalisesTheLimit(t *testing.T) {
 			environment.storedMoviesAndShows()
 			all := environment.putItems(library.MaxPageLimit + 1)
 
-			page, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{Limit: test.limit})
+			page, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{Limit: test.limit}, library.ListingQuery{})
 			if err != nil {
 				t.Fatalf("ListItems error = %v", err)
 			}
@@ -89,7 +89,7 @@ func TestListItemsRejectsALimitOutOfRangeWithoutReading(t *testing.T) {
 			environment := newTestEnvironment()
 			environment.storedMoviesAndShows()
 
-			page, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{Limit: limit})
+			page, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{Limit: limit}, library.ListingQuery{})
 			assertWrappedError(t, err, domain.ErrInvalid, "list items of library")
 
 			if page.Items != nil || page.NextCursor != "" {
@@ -111,7 +111,7 @@ func TestListItemsOfAnUnknownLibraryReturnsNotFound(t *testing.T) {
 	environment := newTestEnvironment()
 	environment.storedMoviesAndShows()
 
-	_, err := environment.service(t).ListItems(t.Context(), unknownID, library.PageRequest{})
+	_, err := environment.service(t).ListItems(t.Context(), unknownID, library.PageRequest{}, library.ListingQuery{})
 	assertWrappedError(t, err, domain.ErrNotFound, "list items of library")
 
 	if requests := environment.items.recordedRequests(); len(requests) != 0 {
@@ -137,7 +137,7 @@ func TestListItemsFollowsTheCursorToTheLastPage(t *testing.T) {
 	request := library.PageRequest{Limit: pageLimit}
 
 	for pages := 1; ; pages++ {
-		page, err := service.ListItems(t.Context(), moviesID, request)
+		page, err := service.ListItems(t.Context(), moviesID, request, library.ListingQuery{})
 		if err != nil {
 			t.Fatalf("ListItems page %d error = %v", pages, err)
 		}
@@ -202,7 +202,7 @@ func TestListItemsWrapsReaderAndStoreErrors(t *testing.T) {
 			test.configure(environment)
 
 			page, err := environment.service(t).ListItems(t.Context(), moviesID,
-				library.PageRequest{Cursor: test.cursor})
+				library.PageRequest{Cursor: test.cursor}, library.ListingQuery{})
 			assertWrappedError(t, err, test.wantErr, "list items of library")
 
 			if page.Items != nil || page.NextCursor != "" {

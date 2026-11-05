@@ -3,10 +3,11 @@ package restapi
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -32,8 +33,6 @@ const (
 	maxFilterDecade = 9990
 	// decadeLength is the number of years in a decade; a decade value is its first year.
 	decadeLength = 10
-	// maxLibraryPathLength is the maxLength of the library-relative folder path.
-	maxLibraryPathLength = 4096
 )
 
 // Query parameter names a Browse problem points at (Problem.field).
@@ -57,9 +56,6 @@ const (
 	fieldPath             = "path"
 )
 
-// libraryPathSeparator separates the segments of a library-relative folder path.
-const libraryPathSeparator = "/"
-
 // listingFilters are the filters listLibraryItems, listLibraryFacets and listLibraryLetters
 // share, so "the current filter" is checked the same way on all three.
 type listingFilters struct {
@@ -77,10 +73,41 @@ type listingFilters struct {
 	subtitleLanguage *[]string
 }
 
-// invalidParameter reports a query parameter value outside the contract. A library
-// FieldError maps to 400 "invalid" with Problem.field set to the parameter name.
+// invalidQueryError reports a query parameter value outside the contract: 400 "invalid" with
+// Problem.field naming the parameter (see queryProblem). It is local to this adapter, so the
+// field names of library management (name, kind, folders) cannot turn it into their codes.
+type invalidQueryError struct {
+	field  string
+	reason string
+}
+
+func (err *invalidQueryError) Error() string {
+	return fmt.Sprintf("query parameter %s: %s", err.field, err.reason)
+}
+
+// Unwrap lets errors.Is find domain.ErrInvalid, like every other client mistake.
+func (err *invalidQueryError) Unwrap() error {
+	return domain.ErrInvalid
+}
+
 func invalidParameter(field, reason string) error {
-	return &library.FieldError{Field: library.Field(field), Reason: reason}
+	return &invalidQueryError{field: field, reason: reason}
+}
+
+// queryProblem maps an invalid query parameter, and a type that is not the library's
+// top-level kind, to 400 "invalid" with the parameter as Problem.field. It reports false for
+// every other error.
+func queryProblem(err error) (apigen.Problem, bool) {
+	var queryErr *invalidQueryError
+	if errors.As(err, &queryErr) {
+		return fieldRequestProblem(CodeInvalid, queryErr.field, "The value is not valid."), true
+	}
+
+	if errors.Is(err, applibrary.ErrItemKindMismatch) {
+		return fieldRequestProblem(CodeInvalid, fieldType, "The type is not the top-level kind of this library."), true
+	}
+
+	return apigen.Problem{}, false
 }
 
 // validate checks every filter against the contract; the first violation wins.
@@ -101,24 +128,15 @@ func (filters listingFilters) validate() error {
 	)
 }
 
-// active reports whether any filter narrows the list; quick "all" and absent filters do not.
-func (filters listingFilters) active() bool {
-	quickFilters := filters.quick != nil && *filters.quick != apigen.ItemQuickFilterAll
-
-	return quickFilters || filters.kind != nil || filters.genre != nil || filters.year != nil ||
-		filters.decade != nil || filters.contentRating != nil || filters.resolution != nil ||
-		filters.videoCodec != nil || filters.audioCodec != nil || filters.container != nil ||
-		filters.audioLanguage != nil || filters.subtitleLanguage != nil
-}
-
-// checkItemKind accepts only the top-level kinds a library lists. Whether the kind is the
-// one of the requested library is the use case's check (M5-11).
+// checkItemKind accepts the kinds some library kind lists at its top (movie, show, artist,
+// album, audiobook; library.IsTopLevelItemKind). Whether the kind belongs to the requested
+// library is the use case's check (applibrary.ErrItemKindMismatch).
 func checkItemKind(kind *apigen.ItemKind) error {
 	if kind == nil {
 		return nil
 	}
 
-	if *kind != apigen.ItemKindMovie && *kind != apigen.ItemKindShow {
+	if !library.IsTopLevelItemKind(library.ItemKind(*kind)) {
 		return invalidParameter(fieldType, "not a top-level item kind")
 	}
 
@@ -198,27 +216,66 @@ func checkSortOrder(order *apigen.SortOrder) error {
 	return checkEnum(fieldOrder, order)
 }
 
-// checkLibraryPath rejects every library-relative path that could leave its folder or is
-// not in the documented form: absolute, with a backslash, or with an empty, "." or ".."
-// segment. The empty path (the top) is valid.
-func checkLibraryPath(path *string) error {
-	if path == nil || *path == "" {
+// libraryPathOf parses the library-relative folder path (library.ParseFolderPath): every
+// path that could leave its folder or is not in the documented form answers 400 "invalid"
+// with field "path". Omitted and empty mean the top.
+func libraryPathOf(path *string) (library.FolderPath, error) {
+	if path == nil {
+		return library.FolderPath{}, nil
+	}
+
+	parsed, err := library.ParseFolderPath(*path)
+	if err != nil {
+		return library.FolderPath{}, invalidParameter(fieldPath, err.Error())
+	}
+
+	return parsed, nil
+}
+
+// domainFilter converts checked filters to the use case's filter.
+func (filters listingFilters) domainFilter() library.ListingFilter {
+	var filter library.ListingFilter
+
+	if filters.kind != nil {
+		filter.Kind = library.ItemKind(*filters.kind)
+	}
+
+	if filters.quick != nil {
+		filter.Quick = library.QuickFilter(*filters.quick)
+	}
+
+	filter.Genres = values(filters.genre)
+	filter.Years = numbers(filters.year)
+	filter.Decades = numbers(filters.decade)
+	filter.ContentRatings = values(filters.contentRating)
+	filter.Resolutions = convertAll(filters.resolution, func(value apigen.VideoResolution) library.Resolution { return library.Resolution(value) })
+	filter.VideoCodecs = values(filters.videoCodec)
+	filter.AudioCodecs = values(filters.audioCodec)
+	filter.Containers = values(filters.container)
+	filter.AudioLanguages = values(filters.audioLanguage)
+	filter.SubtitleLanguages = values(filters.subtitleLanguage)
+
+	return filter
+}
+
+func values(texts *[]string) []string {
+	return convertAll(texts, func(text string) string { return text })
+}
+
+func numbers(years *[]int32) []int {
+	return convertAll(years, func(year int32) int { return int(year) })
+}
+
+// convertAll converts an optional parameter list; omitted gives nil.
+func convertAll[From, To any](values *[]From, convert func(From) To) []To {
+	if values == nil {
 		return nil
 	}
 
-	if utf8.RuneCountInString(*path) > maxLibraryPathLength {
-		return invalidParameter(fieldPath, "path too long")
+	converted := make([]To, 0, len(*values))
+	for _, value := range *values {
+		converted = append(converted, convert(value))
 	}
 
-	if strings.Contains(*path, `\`) {
-		return invalidParameter(fieldPath, "path contains a backslash")
-	}
-
-	for segment := range strings.SplitSeq(*path, libraryPathSeparator) {
-		if segment == "" || segment == "." || segment == ".." {
-			return invalidParameter(fieldPath, fmt.Sprintf("path segment %q not allowed", segment))
-		}
-	}
-
-	return nil
+	return converted
 }

@@ -19,12 +19,16 @@ import (
 // on unchanged, and the HTTP adapter answers ErrInvalid with 400.
 type ItemReader interface {
 	// ListItems returns one page of a library's top-level items (movies and shows, never
-	// seasons, episodes or extras) ordered by sort title, each with its primary file and
-	// streams (none for a show). page.Limit is already normalised (1 to
-	// library.MaxPageLimit). A cursor the reader did not produce wraps domain.ErrInvalid.
-	// The service checks that the library exists, so an unknown library may simply yield an
-	// empty page.
-	ListItems(ctx context.Context, libraryID string, page library.PageRequest) (ItemPage, error)
+	// seasons, episodes or extras) in the order of query.Order (ties by sort title, then
+	// ID; items without a value for the key last in both directions) and narrowed by
+	// query.Filter, each with its primary file and streams (none for a show), plus the total
+	// count (Counted true). page.Limit is already normalised (1 to library.MaxPageLimit);
+	// query.Filter.Kind is the library's top-level kind or empty for libraries without one.
+	// A cursor the reader did not produce, or one issued for another sort, direction or
+	// seed, wraps domain.ErrInvalid. Sort "random" without HasSeed takes the seed from the
+	// cursor. The service checks that the library exists, so an unknown library may simply
+	// yield an empty page.
+	ListItems(ctx context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (ItemPage, error)
 	// GetItem returns an item with its detail (ItemDetail), the primary file first. An
 	// unknown ID wraps domain.ErrNotFound.
 	GetItem(ctx context.Context, itemID string) (ItemDetail, error)
@@ -58,4 +62,40 @@ type RootChecker interface {
 	// the service stops waiting at its timeout either way, because a stat on a hung network
 	// mount may ignore cancellation.
 	RootAvailable(ctx context.Context, root string) bool
+}
+
+// ListingReader counts what the filter menu and the A–Z bar of a library listing show.
+// Implemented by adapters/sqlite (M5-11). Errors follow the ItemReader contract; the filter
+// is complete (see Service.prepareFilter) and the library exists.
+type ListingReader interface {
+	// CountFacets returns one Facet per requested field, in the order of request.Fields;
+	// each field is counted under request.Filter without that field's own values.
+	CountFacets(ctx context.Context, libraryID string, request FacetRequest) ([]Facet, error)
+	// CountFirstCharacters returns, in the order of the title-sorted listing narrowed by
+	// request.Filter (descending when request.Descending), each first character of the sort
+	// titles with the number of items starting with it.
+	CountFirstCharacters(ctx context.Context, libraryID string, request LetterRequest) ([]CharacterCount, error)
+}
+
+// FolderItemReader reads the catalog side of the folder view. Implemented by adapters/sqlite
+// (M5-11).
+type FolderItemReader interface {
+	// ListFolderItems returns the items (never extras) that own a file directly in the
+	// directory of the library folder; directory is "/"-separated and empty for the folder
+	// itself. Each item appears once, named after its first file there.
+	ListFolderItems(ctx context.Context, rootID, directory string) ([]FolderItem, error)
+	// ItemSummaries returns the summaries of the given items as listings carry them; unknown
+	// IDs are left out.
+	ItemSummaries(ctx context.Context, itemIDs []string) ([]ItemSummary, error)
+}
+
+// DirectoryLister lists directories inside a library folder. Implemented by
+// adapters/fs/libraryfs (M5-11).
+type DirectoryLister interface {
+	// ListDirectories returns the names of the sub-directories of directory ("/"-separated,
+	// empty for the library folder itself) below root, unordered. Symlinks are followed only
+	// while they stay inside root; one that leaves it is left out, and a directory reached
+	// only through one wraps domain.ErrForbidden. A missing directory wraps
+	// domain.ErrNotFound, an unreachable root domain.ErrUnavailable.
+	ListDirectories(ctx context.Context, root, directory string) ([]string, error)
 }

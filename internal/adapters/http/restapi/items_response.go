@@ -25,7 +25,13 @@ func itemPageResponse(page applibrary.ItemPage) (apigen.ItemPage, error) {
 		items = append(items, item)
 	}
 
-	return apigen.ItemPage{Items: items, NextCursor: optionalString(page.NextCursor)}, nil
+	response := apigen.ItemPage{Items: items, NextCursor: optionalString(page.NextCursor)}
+	if page.Counted {
+		total := page.TotalCount
+		response.TotalCount = &total
+	}
+
+	return response, nil
 }
 
 // itemSummaryResponse maps a listing entry. Containers own no file and so send no media
