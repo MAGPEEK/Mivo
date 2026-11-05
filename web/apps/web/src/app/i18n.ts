@@ -1,5 +1,6 @@
 import type { i18n as I18n } from "i18next";
 
+import { identifyLocales, identifyNamespace } from "../features/identify";
 import { itemLocales, itemNamespace } from "../features/item";
 import { libraryLocales, libraryNamespace } from "../features/library";
 import { playerLocales, playerNamespace } from "../features/player";
@@ -15,6 +16,7 @@ export const featureNamespaces = {
   [itemNamespace]: itemLocales,
   [playerNamespace]: playerLocales,
   [settingsNamespace]: settingsLocales,
+  [identifyNamespace]: identifyLocales,
 } as const;
 
 /** Type of {@link featureNamespaces}; `i18next.d.ts` types `t()` keys with it. */

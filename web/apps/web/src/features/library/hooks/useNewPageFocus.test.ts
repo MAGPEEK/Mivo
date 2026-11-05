@@ -9,6 +9,7 @@ import { useNewPageFocus } from "./useNewPageFocus";
 function itemsState(items: readonly ItemSummary[], overrides: Partial<LibraryItems> = {}) {
   return {
     status: "success",
+    notSupported: false,
     items,
     hasMore: true,
     loadingMore: false,

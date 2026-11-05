@@ -25,6 +25,8 @@ export interface ItemCardModel {
   readonly chip: string;
   /** False when the file could not be probed or no media summary exists; true for shows. */
   readonly available: boolean;
+  /** True when the item could not be matched with a provider entry (subtle badge). */
+  readonly unmatched: boolean;
 }
 
 /** The image and box shape of a card in one format. */
@@ -77,5 +79,6 @@ export function toItemCardModel(item: ItemSummary): ItemCardModel {
     chip: mediaChipLabel(media),
     // A show is a container without a file of its own (API contract: `ItemSummary.media`).
     available: isShow || (media?.available ?? false),
+    unmatched: item.matchState === "unmatched",
   };
 }

@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { useSiblingLinks } from "../hooks/useSiblingLinks";
 import type { ChildOrder } from "../lib/itemSearch";
@@ -15,11 +15,17 @@ export interface ContainerPageProps {
   readonly item: ItemView;
 }
 
+/** Props of {@link ShowPage}. */
+export interface ShowPageProps extends ContainerPageProps {
+  /** Shown next to Play, e.g. the overflow menu with the match actions. */
+  readonly actions?: ReactNode;
+}
+
 /** A show: poster, title, summary, Play and its seasons, specials last. */
-export function ShowPage({ headingRef, itemId, item }: ContainerPageProps) {
+export function ShowPage({ headingRef, itemId, item, actions }: ShowPageProps) {
   return (
     <article>
-      <ItemHeader headingRef={headingRef} item={item} aspect="poster" />
+      <ItemHeader headingRef={headingRef} item={item} aspect="poster" actions={actions} />
       <ChildrenList itemId={itemId} childKind="season" order="asc" />
     </article>
   );

@@ -167,3 +167,15 @@ export type PlaybackReason = Schemas["PlaybackReason"];
 
 /** Part of the file a reason concerns. Later API versions may add values. */
 export type PlaybackReasonScope = Schemas["PlaybackReasonScope"];
+
+/** One provider entry an item may be matched with; the result of an identify search. */
+export type IdentifyCandidate = Schemas["IdentifyCandidate"];
+
+/** Body of `POST /api/v1/items/{itemId}/identify/search`. */
+export type IdentifySearchRequest = Schemas["IdentifySearchRequest"];
+
+/** Whether an item is matched with an online provider. Later API versions may add values. */
+export type MatchState = Schemas["MatchState"];
+
+/** An online metadata provider. Later API versions may add values. */
+export type MetadataProvider = Schemas["MetadataProvider"];

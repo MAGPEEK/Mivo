@@ -1,0 +1,49 @@
+{
+  "menu": {
+    "label": "More actions",
+    "identify": "Correct match…",
+    "removeMatch": "Remove match",
+    "refresh": "Refresh metadata"
+  },
+  "dialog": {
+    "title": "Correct match",
+    "close": "Close",
+    "query": "Title, or a TMDB or MusicBrainz link or ID",
+    "queryHint": "Paste a provider link or ID to look up exactly that entry.",
+    "year": "Year",
+    "search": "Search",
+    "searching": "Searching…",
+    "results": "Results",
+    "noResults": "No results. Try another title or leave the year empty.",
+    "retry": "Try again",
+    "cancel": "Cancel"
+  },
+  "candidate": {
+    "apply": "Apply",
+    "applyLabel": "Apply {{title}}",
+    "applying": "Applying…",
+    "applyingStatus": "Applying the match…"
+  },
+  "remove": {
+    "title": "Remove match?",
+    "description": "The online metadata and the provider artwork of “{{title}}” are removed and it is no longer matched automatically. Local data stays: NFO files, local artwork and your edits.",
+    "confirm": "Remove match",
+    "cancel": "Cancel"
+  },
+  "status": {
+    "applied": "Match applied. The metadata is being updated.",
+    "removed": "Match removed. Local data was kept.",
+    "refreshQueued": "Metadata refresh queued.",
+    "refreshFailed": "The metadata could not be refreshed: {{reason}}"
+  },
+  "errors": {
+    "providerOffline": "Provider offline, try again later.",
+    "onlineDisabled": "Online metadata is switched off – Settings › Metadata.",
+    "notSupported": "This server does not support online metadata yet.",
+    "forbidden": "Only a device on the server's local network can change metadata.",
+    "invalid": "This ID or link does not fit this item.",
+    "notFound": "This item no longer exists.",
+    "networkError": "The server cannot be reached.",
+    "generic": "Something went wrong. Try again later."
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "menu": {
+    "label": "Weitere Aktionen",
+    "identify": "Zuordnung korrigieren…",
+    "removeMatch": "Zuordnung entfernen",
+    "refresh": "Metadaten aktualisieren"
+  },
+  "dialog": {
+    "title": "Zuordnung korrigieren",
+    "close": "Schließen",
+    "query": "Titel oder ein TMDB- bzw. MusicBrainz-Link oder -ID",
+    "queryHint": "Füge einen Link oder eine ID des Anbieters ein, um genau diesen Eintrag zu finden.",
+    "year": "Jahr",
+    "search": "Suchen",
+    "searching": "Suche läuft…",
+    "results": "Ergebnisse",
+    "noResults": "Keine Treffer. Versuche einen anderen Titel oder lass das Jahr leer.",
+    "retry": "Erneut versuchen",
+    "cancel": "Abbrechen"
+  },
+  "candidate": {
+    "apply": "Übernehmen",
+    "applyLabel": "{{title}} übernehmen",
+    "applying": "Wird übernommen…",
+    "applyingStatus": "Zuordnung wird übernommen…"
+  },
+  "remove": {
+    "title": "Zuordnung entfernen?",
+    "description": "Die Online-Metadaten und das Artwork des Anbieters für „{{title}}“ werden entfernt, und der Titel wird nicht mehr automatisch zugeordnet. Lokale Daten bleiben erhalten: NFO-Dateien, lokales Artwork und deine Änderungen.",
+    "confirm": "Zuordnung entfernen",
+    "cancel": "Abbrechen"
+  },
+  "status": {
+    "applied": "Zuordnung übernommen. Die Metadaten werden aktualisiert.",
+    "removed": "Zuordnung entfernt. Lokale Daten wurden behalten.",
+    "refreshQueued": "Aktualisierung der Metadaten eingeplant.",
+    "refreshFailed": "Die Metadaten konnten nicht aktualisiert werden: {{reason}}"
+  },
+  "errors": {
+    "providerOffline": "Anbieter nicht erreichbar, versuche es später erneut.",
+    "onlineDisabled": "Online-Metadaten sind ausgeschaltet – Einstellungen › Metadaten.",
+    "notSupported": "Dieser Server unterstützt Online-Metadaten noch nicht.",
+    "forbidden": "Metadaten kann nur ein Gerät im lokalen Netzwerk des Servers ändern.",
+    "invalid": "Diese ID bzw. dieser Link passt nicht zu diesem Titel.",
+    "notFound": "Diesen Titel gibt es nicht mehr.",
+    "networkError": "Der Server ist nicht erreichbar.",
+    "generic": "Etwas ist schiefgelaufen. Versuche es später erneut."
+  }
+}

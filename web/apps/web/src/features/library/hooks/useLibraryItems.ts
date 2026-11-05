@@ -1,9 +1,9 @@
-import type { ItemSummary } from "@mivo/api-client";
+import type { ItemSummary, MatchState } from "@mivo/api-client";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { useApiClient } from "../../../shared/api";
-import { libraryItemsQueryOptions } from "../api/libraryQueries";
+import { isNotImplemented, libraryItemsQueryOptions } from "../api/libraryQueries";
 
 /** The loaded items of a library and the controls to load more. */
 export interface LibraryItems {
@@ -12,6 +12,8 @@ export interface LibraryItems {
    * failed next page is {@link loadMoreFailed}, a failed background refresh keeps the pages.
    */
   readonly status: "pending" | "error" | "success";
+  /** With status `error`: the server does not support the requested filter yet (501). */
+  readonly notSupported: boolean;
   /** Every item of the pages loaded so far, in server order. */
   readonly items: readonly ItemSummary[];
   readonly hasMore: boolean;
@@ -33,10 +35,13 @@ function itemsStatus(hasPages: boolean, isError: boolean): LibraryItems["status"
   return isError ? "error" : "pending";
 }
 
-/** Pages through the items of a library with the server's `nextCursor`. */
-export function useLibraryItems(libraryId: string): LibraryItems {
+/**
+ * Pages through the items of a library with the server's `nextCursor`; with `matchState` only
+ * the items in that match state.
+ */
+export function useLibraryItems(libraryId: string, matchState?: MatchState): LibraryItems {
   const client = useApiClient();
-  const query = useInfiniteQuery(libraryItemsQueryOptions(client, libraryId));
+  const query = useInfiniteQuery(libraryItemsQueryOptions(client, libraryId, matchState));
   const { data, fetchNextPage, refetch, isFetchingNextPage } = query;
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const loadMore = useCallback(() => {
@@ -50,6 +55,7 @@ export function useLibraryItems(libraryId: string): LibraryItems {
   }, [refetch]);
   return {
     status: itemsStatus(data !== undefined, query.isError),
+    notSupported: isNotImplemented(query.error),
     items,
     hasMore: query.hasNextPage,
     loadingMore: isFetchingNextPage,

@@ -3,6 +3,7 @@ import {
   requestData,
   type ApiClient,
   type Library,
+  type MatchState,
   type ScanStatus,
 } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ export const libraryItemsPageSize = 60;
 const libraryRetries = 1;
 const clientErrorStatusMin = 400;
 const serverErrorStatusMin = 500;
+const notImplementedStatus = 501;
 
 /**
  * Whether the server rejected the request itself (4xx: unknown library, invalid cursor). The
@@ -49,9 +51,17 @@ export function isClientError(error: unknown): boolean {
   );
 }
 
+/**
+ * Whether the server does not support the request yet (501), for example a filter of a later
+ * milestone. Asking again gets the same answer.
+ */
+export function isNotImplemented(error: unknown): boolean {
+  return error instanceof ApiError && error.status === notImplementedStatus;
+}
+
 /** Retry policy of every library query: network and server errors are retried, once. */
 export function shouldRetryLibraryQuery(failureCount: number, error: Error): boolean {
-  return !isClientError(error) && failureCount < libraryRetries;
+  return !isClientError(error) && !isNotImplemented(error) && failureCount < libraryRetries;
 }
 
 /** Whether `scan` is still running. */
@@ -92,10 +102,18 @@ export function libraryQueryOptions(client: ApiClient, libraryId: string) {
   });
 }
 
-/** Infinite query options that page through a library's items with `nextCursor`. */
-export function libraryItemsQueryOptions(client: ApiClient, libraryId: string) {
+/**
+ * Infinite query options that page through a library's items with `nextCursor`; with
+ * `matchState` only the items in that match state (the "Unmatched" filter).
+ */
+export function libraryItemsQueryOptions(
+  client: ApiClient,
+  libraryId: string,
+  matchState?: MatchState,
+) {
   return infiniteQueryOptions({
-    queryKey: libraryItemsQueryKey(libraryId),
+    // Below the items key, so invalidating the library's items reaches every filter.
+    queryKey: [...libraryItemsQueryKey(libraryId), matchState ?? "all"] as const,
     queryFn: ({ pageParam, signal }) =>
       requestData(
         client.GET("/api/v1/libraries/{libraryId}/items", {
@@ -104,6 +122,7 @@ export function libraryItemsQueryOptions(client: ApiClient, libraryId: string) {
             query: {
               limit: libraryItemsPageSize,
               ...(pageParam === undefined ? {} : { cursor: pageParam }),
+              ...(matchState === undefined ? {} : { matchState }),
             },
           },
           signal,

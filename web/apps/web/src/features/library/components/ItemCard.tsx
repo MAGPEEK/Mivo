@@ -118,6 +118,7 @@ function CardDetails({ card, episodeCode }: CardDetailsProps) {
           )}
         </>
       )}
+      {card.unmatched && <Badge>{t("items.unmatched")}</Badge>}
     </>
   );
 }

@@ -1,6 +1,8 @@
+import type { MatchState } from "@mivo/api-client";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState, LibraryIcon, Skeleton } from "../../../shared/ui";
+import { EmptyState, LibraryIcon, SegmentedControl, Skeleton } from "../../../shared/ui";
+import { libraryItemFilters, useItemFilter, type ItemFilter } from "../hooks/useItemFilter";
 import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
 import { useNewPageFocus } from "../hooks/useNewPageFocus";
 import { libraryNamespace } from "../locales";
@@ -13,10 +15,40 @@ export interface LibraryItemGridProps {
   readonly libraryId: string;
 }
 
-/** The items of a library as a poster grid, page by page. */
+/** The items of a library as a poster grid, page by page, with the quick filter above. */
 export function LibraryItemGrid({ libraryId }: LibraryItemGridProps) {
+  const filter = useItemFilter();
+  return (
+    <>
+      <FilterControl filter={filter} />
+      {/* Keyed, so focus targets and "load more" state never carry over to another filter. */}
+      <FilteredItems key={filter.filter} libraryId={libraryId} matchState={filter.matchState} />
+    </>
+  );
+}
+
+function FilterControl({ filter }: { readonly filter: ItemFilter }) {
   const { t } = useTranslation(libraryNamespace);
-  const items = useLibraryItems(libraryId);
+  return (
+    <div className="mb-6">
+      <SegmentedControl
+        label={t("filter.label")}
+        options={libraryItemFilters.map((id) => ({ id, label: t(`filter.${id}`) }))}
+        value={filter.filter}
+        onChange={filter.select}
+      />
+    </div>
+  );
+}
+
+interface FilteredItemsProps {
+  readonly libraryId: string;
+  readonly matchState: MatchState | undefined;
+}
+
+function FilteredItems({ libraryId, matchState }: FilteredItemsProps) {
+  const { t } = useTranslation(libraryNamespace);
+  const items = useLibraryItems(libraryId, matchState);
   if (items.status === "pending") {
     return (
       <div role="status" className="w-40">
@@ -25,27 +57,40 @@ export function LibraryItemGrid({ libraryId }: LibraryItemGridProps) {
     );
   }
   if (items.status === "error") {
-    return (
-      <div className="flex flex-wrap items-center gap-4">
-        <p role="alert" className="text-text-muted">
-          {t("items.loadFailed")}
-        </p>
-        <button type="button" onClick={items.retry} className={secondaryButtonClass}>
-          {t("retry")}
-        </button>
-      </div>
-    );
+    return <ItemsLoadError items={items} />;
   }
   if (items.items.length === 0) {
+    const emptyKey = matchState === undefined ? "items.empty" : "items.emptyUnmatched";
     return (
       <EmptyState
         icon={<LibraryIcon className="size-10" />}
-        title={t("items.empty.title")}
-        description={t("items.empty.hint")}
+        title={t(`${emptyKey}.title`)}
+        description={t(`${emptyKey}.hint`)}
       />
     );
   }
   return <ItemList items={items} />;
+}
+
+function ItemsLoadError({ items }: { readonly items: LibraryItems }) {
+  const { t } = useTranslation(libraryNamespace);
+  if (items.notSupported) {
+    return (
+      <p role="alert" className="text-text-muted">
+        {t("items.filterNotSupported")}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <p role="alert" className="text-text-muted">
+        {t("items.loadFailed")}
+      </p>
+      <button type="button" onClick={items.retry} className={secondaryButtonClass}>
+        {t("retry")}
+      </button>
+    </div>
+  );
 }
 
 interface ItemListProps {

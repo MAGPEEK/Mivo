@@ -1,5 +1,7 @@
+import { ItemMatchMenu } from "../../identify";
 import { useHeadingFocusAfterNavigation } from "../hooks/useHeadingFocusAfterNavigation";
 import { useHeadingFocusAfterRetry } from "../hooks/useHeadingFocusAfterRetry";
+import { useItemChanged } from "../hooks/useItemChanged";
 import { useItemDetails } from "../hooks/useItemDetails";
 import { childOrder, type ItemSearch } from "../lib/itemSearch";
 import type { ItemView } from "../lib/itemView";
@@ -54,9 +56,21 @@ interface ItemByKindProps {
 }
 
 function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
+  const onItemChanged = useItemChanged(itemId);
+  // The menu decides by kind itself: it renders nothing for kinds that follow their parent
+  // (seasons, episodes, extras, tracks).
+  const matchMenu = (
+    <ItemMatchMenu
+      itemId={itemId}
+      kind={item.kind}
+      title={item.title}
+      year={item.year}
+      onItemChanged={onItemChanged}
+    />
+  );
   switch (item.kind) {
     case "show":
-      return <ShowPage headingRef={headingRef} itemId={itemId} item={item} />;
+      return <ShowPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
     case "season":
       return (
         <SeasonPage
@@ -76,6 +90,6 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
     case "album":
     case "track":
     default:
-      return <ItemDetails headingRef={headingRef} item={item} />;
+      return <ItemDetails headingRef={headingRef} item={item} actions={matchMenu} />;
   }
 }

@@ -28,12 +28,23 @@
     "loadingMore": "Weitere Videos werden geladen",
     "loadMoreFailed": "Weitere Videos konnten nicht geladen werden.",
     "unavailable": "Nicht verfügbar",
+    "unmatched": "Nicht zugeordnet",
     "seasons_one": "{{count, number}} Staffel",
     "seasons_other": "{{count, number}} Staffeln",
     "empty": {
       "title": "Noch keine Videos",
       "hint": "Starte einen Scan, um die Videos im Ordner dieser Bibliothek zu finden."
-    }
+    },
+    "emptyUnmatched": {
+      "title": "Alles zugeordnet",
+      "hint": "Jedes Video dieser Bibliothek ist einem Eintrag des Anbieters zugeordnet."
+    },
+    "filterNotSupported": "Dieser Server kann noch nicht nach Zuordnung filtern."
+  },
+  "filter": {
+    "label": "Filter",
+    "all": "Alle",
+    "unmatched": "Nicht zugeordnet"
   },
   "errors": {
     "rootUnavailable": "Der Bibliotheksordner fehlt oder kann nicht gelesen werden.",

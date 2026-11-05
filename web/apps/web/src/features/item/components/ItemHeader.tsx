@@ -19,6 +19,8 @@ export interface ItemHeaderProps {
   readonly leadFacts?: readonly string[];
   /** Shown between the summary and Play, e.g. the technical chips. */
   readonly children?: ReactNode;
+  /** Shown next to Play, e.g. the overflow menu with the match actions. */
+  readonly actions?: ReactNode;
 }
 
 const factSeparator = " · ";
@@ -42,8 +44,8 @@ export function ItemHeader({
   above,
   leadFacts = [],
   children,
+  actions,
 }: ItemHeaderProps) {
-  const { t } = useTranslation(itemNamespace);
   const facts = [...leadFacts, ...item.facts];
   const box = artworkBoxes[aspect];
   return (
@@ -70,18 +72,29 @@ export function ItemHeader({
             {item.title}
           </h1>
           {facts.length > 0 && <p className="text-text-muted">{facts.join(factSeparator)}</p>}
-          {item.genres.length > 0 && (
-            <ul aria-label={t("genres")} className="flex flex-wrap gap-2 text-sm text-text-muted">
-              {item.genres.map((genre) => (
-                <li key={genre}>{genre}</li>
-              ))}
-            </ul>
-          )}
+          <Genres genres={item.genres} />
           {item.summary !== undefined && <p className="max-w-prose">{item.summary}</p>}
           {children}
-          <PlayAction play={item.play} />
+          <div className="flex flex-wrap items-start gap-3">
+            <PlayAction play={item.play} />
+            {actions}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function Genres({ genres }: { readonly genres: readonly string[] }) {
+  const { t } = useTranslation(itemNamespace);
+  if (genres.length === 0) {
+    return null;
+  }
+  return (
+    <ul aria-label={t("genres")} className="flex flex-wrap gap-2 text-sm text-text-muted">
+      {genres.map((genre) => (
+        <li key={genre}>{genre}</li>
+      ))}
+    </ul>
   );
 }

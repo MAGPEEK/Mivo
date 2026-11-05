@@ -15,6 +15,8 @@ export interface ItemDetailsProps {
   readonly above?: ReactNode;
   /** Facts before the item's own, e.g. the `S1 · E3` label of an episode. */
   readonly leadFacts?: readonly string[];
+  /** Shown next to Play, e.g. the overflow menu with the match actions. */
+  readonly actions?: ReactNode;
 }
 
 /**
@@ -22,7 +24,7 @@ export interface ItemDetailsProps {
  * lists and the file. Episodes and extras show a 16:9 still, a movie a poster; either falls
  * back to a neutral placeholder.
  */
-export function ItemDetails({ headingRef, item, above, leadFacts }: ItemDetailsProps) {
+export function ItemDetails({ headingRef, item, above, leadFacts, actions }: ItemDetailsProps) {
   const { t } = useTranslation(itemNamespace);
   const aspect = item.kind === "movie" ? "poster" : "still";
   return (
@@ -33,6 +35,7 @@ export function ItemDetails({ headingRef, item, above, leadFacts }: ItemDetailsP
         aspect={aspect}
         {...(above === undefined ? {} : { above })}
         {...(leadFacts === undefined ? {} : { leadFacts })}
+        actions={actions}
       >
         {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
       </ItemHeader>

@@ -28,12 +28,23 @@
     "loadingMore": "Loading more videos",
     "loadMoreFailed": "More videos could not be loaded.",
     "unavailable": "Unavailable",
+    "unmatched": "Unmatched",
     "seasons_one": "{{count, number}} season",
     "seasons_other": "{{count, number}} seasons",
     "empty": {
       "title": "No videos yet",
       "hint": "Run a scan to find the videos in this library's folder."
-    }
+    },
+    "emptyUnmatched": {
+      "title": "Everything is matched",
+      "hint": "Every video of this library is matched with a provider entry."
+    },
+    "filterNotSupported": "This server cannot filter by match state yet."
+  },
+  "filter": {
+    "label": "Filter",
+    "all": "All",
+    "unmatched": "Unmatched"
   },
   "errors": {
     "rootUnavailable": "The library folder is missing or cannot be read.",

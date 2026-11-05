@@ -62,7 +62,16 @@ describe("toItemCardModel", () => {
       duration: "9:56",
       chip: "MKV · H.264 · AAC",
       available: true,
+      unmatched: false,
     });
+  });
+
+  it.each([
+    ["unmatched", true],
+    ["matched", false],
+    ["disabled", false],
+  ] as const)("flags match state %s as unmatched: %s", (matchState, unmatched) => {
+    expect(toItemCardModel(fakeItem({ matchState })).unmatched).toBe(unmatched);
   });
 
   it("gives a show its season count and keeps it available without media", () => {
