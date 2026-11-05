@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -54,24 +55,22 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 		t.Errorf("manifest header = %d %q", result.SchemaVersion, result.FFmpegVersion)
 	}
 
-	if !reflect.DeepEqual(result.Libraries, libraryCatalog()) {
-		t.Error("the manifest catalog differs from libraryCatalog()")
+	if !reflect.DeepEqual(result.Libraries, libraryCatalog()) || !reflect.DeepEqual(result.Music, musicCatalog()) {
+		t.Error("the manifest catalog differs from libraryCatalog() or musicCatalog()")
 	}
 
 	if len(result.Cases) != len(libraryCases()) || result.count(statusGenerated) != len(result.Cases) {
 		t.Errorf("cases = %+v, want every library case generated", result.Cases)
 	}
 
-	checkCatalogFilesExist(t, opts.libraryDir, result.Libraries)
+	checkCatalogFilesExist(t, opts.libraryDir, result)
 
-	// One run per case; the cover runs read the poster image as input.
+	// One run per case; the cover runs read the poster or the album cover image as input.
 	if encodes := len(ffmpeg.encodedOutputs()); encodes != len(libraryCases()) {
 		t.Errorf("%d FFmpeg runs, want %d", encodes, len(libraryCases()))
 	}
 
-	if inputs := ffmpeg.textInputs(); len(inputs) != 1 || filepath.Base(inputs[0].path) != "poster.jpg" {
-		t.Errorf("file inputs = %+v, want the poster for the MP4 cover", inputs)
-	}
+	checkCoverInputs(t, ffmpeg.textInputs())
 
 	if got := readOutput(t, opts.libraryDir, "shows/Dragon Ball Super/Dragon Ball Super - 131.mkv"); got != fakeMediaContent {
 		t.Errorf("episode 131 = %q, want a copy of episode 001", got)
@@ -82,18 +81,40 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 	}
 
 	checkSummaryLines(t, stdout,
-		"library\n", "  artwork  3 generated", "  shows    4 generated", "  movies/ (13 movies)\n",
+		"library\n", "  artwork  4 generated", "  music    14 generated", "  shows    4 generated", "  movies/ (13 movies)\n",
 		"    show  Dragon Ball Super: 1 season, 131 episodes\n",
 		"    movie Big Buck Bunny (2008): 2 versions, 2 extras, artwork poster backdrop logo\n",
 		"    movie Caminandes (2013): 1 version, nfo malformed\n",
 		"    movie Glass Half (2015): 1 version, artwork poster(embedded)\n",
+		"  music/ (5 albums)\n",
+		"    album Generated Orchestra - Two Disc Symphony (2019): 4 flac tracks on 2 discs, cover embedded\n",
+		"    album Various Artists - Generated Hits (2024): 3 mp3 tracks, compilation, cover none\n",
+		"    album Folder Artist - Folder Album: 2 flac tracks, untagged, cover none\n",
 	)
 }
 
-func checkCatalogFilesExist(t *testing.T, dir string, catalog []expectedLibrary) {
+// checkCoverInputs expects the poster for the MP4 cover and the album cover for each FLAC
+// track with an embedded cover.
+func checkCoverInputs(t *testing.T, inputs []seenInput) {
 	t.Helper()
 
-	for _, file := range catalogFiles(catalog) {
+	names := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		names = append(names, filepath.Base(input.path))
+	}
+
+	slices.Sort(names)
+
+	want := []string{folderCoverName, folderCoverName, folderCoverName, folderCoverName, "poster.jpg"}
+	if !slices.Equal(names, want) {
+		t.Errorf("file inputs = %v, want %v", names, want)
+	}
+}
+
+func checkCatalogFilesExist(t *testing.T, dir string, result libraryManifest) {
+	t.Helper()
+
+	for _, file := range catalogFiles(result.Libraries, result.Music) {
 		if _, err := fs.Stat(os.DirFS(dir), file); err != nil {
 			t.Errorf("catalog file missing on disk: %v", err)
 		}

@@ -14,13 +14,30 @@ import (
 
 // catalogFiles lists every file the catalog names, relative to the -library directory. It
 // walks the catalog independently of contentOf, so the tests do not trust the derivation.
-func catalogFiles(catalog []expectedLibrary) []string {
+func catalogFiles(catalog []expectedLibrary, music expectedMusic) []string {
 	var files []string
 
 	for _, library := range catalog {
 		for _, item := range library.Items {
 			for _, file := range itemCatalogFiles(item) {
 				files = append(files, path.Join(library.Path, file))
+			}
+		}
+	}
+
+	return append(files, musicCatalogFiles(music)...)
+}
+
+// musicCatalogFiles lists the tracks and the folder covers (once per album).
+func musicCatalogFiles(music expectedMusic) []string {
+	var files []string
+
+	for _, album := range music.Albums {
+		for index, track := range album.Tracks {
+			files = append(files, path.Join(music.Path, track.File))
+
+			if index == 0 && track.CoverSource == coverSourceFolder {
+				files = append(files, path.Join(music.Path, track.CoverFile))
 			}
 		}
 	}
@@ -152,7 +169,7 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 			t.Errorf("%s: library cases need the prefix, a muxer and encoders and are never gaps", c.Name)
 		}
 
-		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows}, c.Category) {
+		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic}, c.Category) {
 			t.Errorf("%s: unexpected category %q", c.Name, c.Category)
 		}
 
@@ -171,9 +188,11 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 func checkLibraryPath(t *testing.T, name, file string) {
 	t.Helper()
 
-	inLibrary := strings.HasPrefix(file, moviesLibraryPath+"/") || strings.HasPrefix(file, showsLibraryPath+"/")
+	inLibrary := slices.ContainsFunc([]string{moviesLibraryPath, showsLibraryPath, musicLibraryPath}, func(root string) bool {
+		return strings.HasPrefix(file, root+"/")
+	})
 	if !inLibrary || path.Clean(file) != file || strings.Contains(file, `\`) || path.Ext(file) == "" {
-		t.Errorf("%s: %q must be a clean movies/ or shows/ path with forward slashes and an extension", name, file)
+		t.Errorf("%s: %q must be a clean movies/, shows/ or music/ path with forward slashes and an extension", name, file)
 	}
 }
 
@@ -192,7 +211,7 @@ func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 
 	described := map[string]bool{}
 
-	for _, file := range catalogFiles(libraryCatalog()) {
+	for _, file := range catalogFiles(libraryCatalog(), musicCatalog()) {
 		if described[file] {
 			t.Errorf("the catalog names %s twice", file)
 		}
@@ -234,8 +253,9 @@ func TestLibraryCopiesShareOneFFmpegRunPerItem(t *testing.T) {
 	}
 
 	// One run per artwork shape (3), movie (13, two of them embed covers) and show (4) builds
-	// 8 images, 19 movie files and 138 episode files.
-	const wantRuns, wantFiles = 20, 165
+	// 8 images, 19 movie files and 138 episode files; the music tree adds one run for the
+	// album cover and one per track (14), because every track carries its own tags.
+	const wantRuns, wantFiles = 35, 180
 	if len(cases) != wantRuns || files != wantFiles {
 		t.Errorf("%d FFmpeg runs for %d media files, want %d runs for %d files", len(cases), files, wantRuns, wantFiles)
 	}

@@ -30,6 +30,8 @@ const (
 	coverFormatPNG           = "png"
 	noCoverFormat            = ""
 	fixtureGenerateMax       = 30 * time.Second
+	// notOnWhitelistMessage is how FFmpeg reports a demuxer outside -format_whitelist.
+	notOnWhitelistMessage = "not on whitelist"
 )
 
 // musicFixture is one generated audio file and what reading it must return.
@@ -244,8 +246,24 @@ func TestAudioReadersRefuseADemuxerOutsideTheWhitelist(t *testing.T) {
 		t.Fatalf("write list: %v", err)
 	}
 
-	if _, _, err := tools.prober.ReadAudioTags(t.Context(), list); !errors.Is(err, domain.ErrUnsupported) {
+	// The debug log carries ffprobe's error output, which names the refusal as the cause, so
+	// the test cannot pass because ffprobe failed for another reason.
+	var debugLog bytes.Buffer
+
+	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{
+		FFprobePath: requireFFprobe(t),
+		Logger:      slog.New(slog.NewTextHandler(&debugLog, &slog.HandlerOptions{Level: slog.LevelDebug})),
+	})
+	if err != nil {
+		t.Fatalf("NewProber: %v", err)
+	}
+
+	if _, _, err := prober.ReadAudioTags(t.Context(), list); !errors.Is(err, domain.ErrUnsupported) {
 		t.Errorf("ReadAudioTags error = %v, want domain.ErrUnsupported", err)
+	}
+
+	if !bytes.Contains(debugLog.Bytes(), []byte(notOnWhitelistMessage)) {
+		t.Errorf("debug log does not name the whitelist refusal %q:\n%s", notOnWhitelistMessage, debugLog.String())
 	}
 
 	if _, err := tools.extractor.ExtractCover(t.Context(), list); !errors.Is(err, domain.ErrUnsupported) {

@@ -20,8 +20,10 @@ const (
 	readTagsOperation = "read audio tags"
 	// ordinalSeparator splits "track/total" and "disc/total" values.
 	ordinalSeparator = "/"
-	// yearDigits is the length of a year in a date tag.
-	yearDigits = 4
+	// yearDigits is the length of a year in a date tag; compactDateDigits the length of a
+	// "YYYYMMDD" date. Digit runs of other lengths are no year.
+	yearDigits        = 4
+	compactDateDigits = 8
 	// uuidGroupSeparator and lowerHexDigits make up a MusicBrainz ID, a lower-case UUID.
 	uuidGroupSeparator = "-"
 	lowerHexDigits     = "0123456789abcdef"
@@ -97,9 +99,17 @@ type audioProbeFormat struct {
 	Tags     map[string]string `json:"tags"`
 }
 
+// audioProbeStream adds the stream duration, which raw streams such as ADTS AAC may report
+// when the format section has none.
+type audioProbeStream struct {
+	probeStream
+
+	Duration string `json:"duration"`
+}
+
 type audioProbeOutput struct {
-	Streams []probeStream     `json:"streams"`
-	Format  *audioProbeFormat `json:"format"`
+	Streams []audioProbeStream `json:"streams"`
+	Format  *audioProbeFormat  `json:"format"`
 }
 
 // describeAudioTags maps ffprobe's -show_format -show_streams JSON to the tags and the
@@ -114,28 +124,49 @@ func describeAudioTags(output []byte) (media.AudioTags, time.Duration, error) {
 		return media.AudioTags{}, 0, fmt.Errorf("ffprobe output has no format section: %w", domain.ErrUnsupported)
 	}
 
-	audioIndex := slices.IndexFunc(parsed.Streams, func(stream probeStream) bool {
+	audioIndex := slices.IndexFunc(parsed.Streams, func(stream audioProbeStream) bool {
 		return streamKind(stream.CodecType) == media.StreamKindAudio
 	})
 	if audioIndex < 0 {
 		return media.AudioTags{}, 0, fmt.Errorf("file has no audio stream: %w", domain.ErrUnsupported)
 	}
 
-	duration, _ := parseSeconds(parsed.Format.Duration)
-	tags := mergedTags(parsed.Format.Tags, parsed.Streams[audioIndex].Tags)
+	audio := parsed.Streams[audioIndex]
+	tags := mergedTags(parsed.Format.Tags, audio.Tags)
 
-	return audioTags(tags), max(duration, 0), nil
+	return audioTags(tags), audioDuration(parsed.Format.Duration, audio.Duration), nil
 }
 
-// mergedTags combines the container tags with those of the audio stream. Ogg keeps its
-// Vorbis comments on the stream, other containers on the format; a container tag wins
-// over a stream tag of the same key.
+// audioDuration prefers the container duration and falls back to the stream's, which raw
+// streams may report alone; an unknown or negative duration is 0.
+func audioDuration(formatDuration, streamDuration string) time.Duration {
+	if duration, ok := parseSeconds(formatDuration); ok && duration > 0 {
+		return duration
+	}
+
+	duration, _ := parseSeconds(streamDuration)
+
+	return max(duration, 0)
+}
+
+// mergedTags combines the container tags with those of the audio stream under lower-case
+// keys. Ogg keeps its Vorbis comments on the stream, other containers on the format; a
+// container tag wins over a stream tag of the same key in any spelling (Matroska TITLE
+// over the stream's title).
 func mergedTags(formatTags, streamTags map[string]string) map[string]string {
 	merged := make(map[string]string, len(formatTags)+len(streamTags))
-	maps.Copy(merged, streamTags)
-	maps.Copy(merged, formatTags)
+	copyLowerCase(merged, streamTags)
+	copyLowerCase(merged, formatTags)
 
 	return merged
+}
+
+// copyLowerCase copies tags under lower-case keys. Case variants within one map are visited
+// in descending key order, so the smallest spelling wins, as in tag.
+func copyLowerCase(target, tags map[string]string) {
+	for _, key := range slices.Backward(slices.Sorted(maps.Keys(tags))) {
+		target[strings.ToLower(key)] = tags[key]
+	}
 }
 
 func audioTags(tags map[string]string) media.AudioTags {
@@ -174,11 +205,12 @@ func parseOrdinal(text string) int {
 	return parseSmallCount(number)
 }
 
-// parseYear returns the first run of at least four digits as a year: "2001", "2001-05-03",
-// "20010503" and "03.05.2001" all yield 2001. Year 0 and texts without a year yield 0.
+// parseYear returns the year of the first run of four digits or of an eight-digit
+// "YYYYMMDD" date: "2001", "2001-05-03", "20010503" and "03.05.2001" all yield 2001. Year 0
+// and texts without such a run yield 0; "12345" is no year.
 func parseYear(text string) int {
 	for run := range strings.FieldsFuncSeq(text, isNotDigit) {
-		if len(run) >= yearDigits {
+		if len(run) == yearDigits || len(run) == compactDateDigits {
 			year, _ := strconv.Atoi(run[:yearDigits])
 
 			return year

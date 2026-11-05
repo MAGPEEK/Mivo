@@ -17,8 +17,12 @@
 // files, absolutely numbered episodes (UX DT-24: "Dragon Ball Super - 001" … "- 131"), Kodi
 // NFO files (UTF-8, ISO-8859-1, URL-only, malformed) and local and embedded artwork. Names of
 // real movies and shows are only file names; all content is generated. Every video is the
-// same 2 s H.264/AAC clip; files of one item share one FFmpeg run and are byte copies. Library
-// case names start with "library-", so -only 'library-*' builds the tree alone.
+// same 2 s H.264/AAC clip; files of one item share one FFmpeg run and are byte copies.
+// <library>/music (task M3-13f) holds a tagged two-disc FLAC album with embedded covers, a
+// tagged MP3 album, an M4A album with cover.jpg in its folder, a "Various Artists"
+// compilation and an untagged FLAC album; every track is a 2 s sine tone with its own tags,
+// all names are invented. Library case names start with "library-", so -only 'library-*'
+// builds the tree alone.
 //
 // <library>/manifest.json describes the expected catalog (what a scan must produce) and the
 // build result. Paths are relative to the library root (Path of the library) unless noted,
@@ -46,7 +50,15 @@
 //	  seasons[]      shows, ascending number (0 = specials): number, path ("" without a
 //	                 season folder), artwork[], episodes[]: number, numberEnd (multi-episode
 //	                 file), absoluteNumber (absolutely numbered files), files[], nfo, artwork[]
-//	cases[]        name, category ("artwork"|"movies"|"shows"), status ("generated"|
+//	music          path (below <library>), albums[] (added in M3-13f without a version bump;
+//	               kept out of libraries[], whose consumers compare movie and show items):
+//	  albumArtist, title, year, compilation, path (album folder), container
+//	                 ("flac"|"mp3"|"m4a")
+//	  tracks[]       file, artist, album, disc, discTotal, track, trackTotal, title, tagged
+//	                 (false: no tags, a scan reads the layout "Artist/Album/[CD n/]NN Title"),
+//	                 coverSource ("embedded"|"folder"|"none"), coverFile (folder image, or
+//	                 the track itself when embedded)
+//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"), status ("generated"|
 //	               "skipped"|"failed"), skipKind, reason, files[] (relative to <library>)
 //
 // The catalog is static; consumers check that every case is generated (or skip with the

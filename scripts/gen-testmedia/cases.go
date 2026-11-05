@@ -385,8 +385,8 @@ const (
 
 // coverArgs returns the input, map and codec options that embed c.Cover. inputIndex is the
 // FFmpeg index the cover input gets. Matroska stores the picture as an attachment, which
-// needs no input; other muxers (MP4) take it as a second video stream marked as attached
-// picture, which follows the single source video stream.
+// needs no input; other muxers (MP4, FLAC) take it as a video stream marked as attached
+// picture, which follows the source video stream if there is one.
 func coverArgs(c mediaCase, inputIndex int) (inputs, maps, options []string) {
 	if c.Cover == "" {
 		return nil, nil, nil
@@ -399,9 +399,14 @@ func coverArgs(c mediaCase, inputIndex int) (inputs, maps, options []string) {
 		}
 	}
 
+	coverStream := "v:0"
+	if c.Source.hasVideo() {
+		coverStream = "v:1"
+	}
+
 	return []string{"-i", c.Cover},
 		[]string{"-map", strconv.Itoa(inputIndex) + ":v:0"},
-		[]string{"-c:v:1", "copy", "-disposition:v:1", "attached_pic"}
+		[]string{"-c:" + coverStream, "copy", "-disposition:" + coverStream, "attached_pic"}
 }
 
 // files returns every path the case writes: Output, its copies and its sidecars.

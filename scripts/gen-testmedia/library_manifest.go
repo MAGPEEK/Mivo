@@ -55,10 +55,61 @@ const (
 // libraryManifest is <library>/manifest.json: the expected catalog and the build result of
 // every library case.
 type libraryManifest struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	FFmpegVersion string             `json:"ffmpegVersion"`
-	Libraries     []expectedLibrary  `json:"libraries"`
-	Cases         []libraryCaseEntry `json:"cases"`
+	SchemaVersion int               `json:"schemaVersion"`
+	FFmpegVersion string            `json:"ffmpegVersion"`
+	Libraries     []expectedLibrary `json:"libraries"`
+	// Music is the music library (task M3-13f). It is kept out of Libraries, whose consumers
+	// compare movie and show items, so adding it changed no existing consumer.
+	Music expectedMusic      `json:"music"`
+	Cases []libraryCaseEntry `json:"cases"`
+}
+
+// Music cover sources: an attached picture in the file, an image in the album folder, none.
+const (
+	coverSourceEmbedded = "embedded"
+	coverSourceFolder   = "folder"
+	coverSourceNone     = "none"
+)
+
+// expectedMusic is the music library root below the -library directory.
+type expectedMusic struct {
+	// Path is the library root relative to the -library directory; the paths of its albums
+	// and tracks are relative to this root.
+	Path   string          `json:"path"`
+	Albums []expectedAlbum `json:"albums"`
+}
+
+// expectedAlbum is one album a scan must produce.
+type expectedAlbum struct {
+	AlbumArtist string `json:"albumArtist"`
+	Title       string `json:"title"`
+	Year        int    `json:"year,omitempty"`
+	Compilation bool   `json:"compilation,omitempty"`
+	// Path is the album folder.
+	Path string `json:"path"`
+	// Container is the short container name of every track: "flac", "mp3" or "m4a".
+	Container string          `json:"container"`
+	Tracks    []expectedTrack `json:"tracks"`
+}
+
+// expectedTrack is one audio file. Artist, Album, Disc, Track and Title are the expected
+// catalog values; Tagged says whether the file carries them as tags (and Year, AlbumArtist
+// and Compilation of its album) or a scan has to take them from the path.
+type expectedTrack struct {
+	File   string `json:"file"`
+	Artist string `json:"artist"`
+	Album  string `json:"album"`
+	Disc   int    `json:"disc"`
+	// DiscTotal and TrackTotal are written as "n/total" tags; 0 when untagged.
+	DiscTotal  int    `json:"discTotal,omitempty"`
+	Track      int    `json:"track"`
+	TrackTotal int    `json:"trackTotal,omitempty"`
+	Title      string `json:"title"`
+	Tagged     bool   `json:"tagged"`
+	// CoverSource is "embedded", "folder" or "none"; CoverFile is the folder image or, for
+	// an embedded cover, the track file itself.
+	CoverSource string `json:"coverSource"`
+	CoverFile   string `json:"coverFile,omitempty"`
 }
 
 // expectedLibrary is one library root below the -library directory.
@@ -176,7 +227,7 @@ func newLibraryManifest(ffmpegVersion string, cases []mediaCase, entries []manif
 
 	result := libraryManifest{
 		SchemaVersion: libraryManifestSchemaVersion, FFmpegVersion: ffmpegVersion,
-		Libraries: libraryCatalog(), Cases: make([]libraryCaseEntry, 0, len(entries)),
+		Libraries: libraryCatalog(), Music: musicCatalog(), Cases: make([]libraryCaseEntry, 0, len(entries)),
 	}
 
 	for _, entry := range newManifest(ffmpegVersion, entries).Cases {

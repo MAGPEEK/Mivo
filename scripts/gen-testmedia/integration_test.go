@@ -247,7 +247,8 @@ func verifyCopies(t *testing.T, dir string, c mediaCase) {
 	}
 }
 
-// verifyCoverArt checks the embedded poster: one 600x900 JPEG attached picture, and in
+// verifyCoverArt checks the embedded poster: one 600x900 JPEG attached picture (the square
+// album cover for music tracks), and in
 // Matroska an attachment named and typed as a cover.
 func verifyCoverArt(t *testing.T, ffprobePath, dir string, c mediaCase) {
 	t.Helper()
@@ -259,7 +260,12 @@ func verifyCoverArt(t *testing.T, ffprobePath, dir string, c mediaCase) {
 
 	cover := covers[0]
 	check(t, "cover codec", cover.CodecName, "mjpeg")
-	check(t, "cover size", fmt.Sprintf("%dx%d", cover.Width, cover.Height), fmt.Sprintf("%dx%d", posterWidth, posterHeight))
+	wantWidth, wantHeight := posterWidth, posterHeight
+	if c.Category == categoryMusic {
+		wantWidth, wantHeight = coverEdge, coverEdge
+	}
+
+	check(t, "cover size", fmt.Sprintf("%dx%d", cover.Width, cover.Height), fmt.Sprintf("%dx%d", wantWidth, wantHeight))
 
 	if c.Muxer == matroskaMuxer {
 		check(t, "attachment file name", cover.Tags.FileName, coverFileName)

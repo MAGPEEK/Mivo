@@ -1,7 +1,9 @@
 package ffmpeg
 
 import (
+	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,6 +15,8 @@ const (
 	artistID = "0383dadf-2a4e-4d10-a46a-e9e041da8eb4"
 	albumID  = "f5093c06-23e3-404f-aeaa-40f72885ee3a"
 	trackID  = "9a1f2a6e-7f43-4c5f-8f7e-2f1f3c6d8b10"
+	// hangingToolTimeout ends a read against the hanging fake ffprobe quickly.
+	hangingToolTimeout = 200 * time.Millisecond
 )
 
 func TestDescribeAudioTags(t *testing.T) {
@@ -69,6 +73,17 @@ func TestDescribeAudioTags(t *testing.T) {
 		{
 			name:   "untagged file with unknown duration",
 			output: `{"streams":[{"index":0,"codec_type":"audio"}],"format":{"duration":"N/A"}}`,
+		},
+		{
+			name: "a container tag wins over a stream tag in another spelling",
+			output: `{"streams":[{"index":0,"codec_type":"audio","tags":{"title":"Stream Title","ALBUM":"Stream Album"}}],
+				"format":{"tags":{"TITLE":"Container Title","album":"Container Album"}}}`,
+			wantTags: media.AudioTags{Title: "Container Title", Album: "Container Album"},
+		},
+		{
+			name:         "raw ADTS stream: the stream duration stands in for the missing format duration",
+			output:       `{"streams":[{"index":0,"codec_type":"audio","duration":"2.500000"}],"format":{}}`,
+			wantDuration: 2500 * time.Millisecond,
 		},
 		{
 			name: "garbage numbers and placeholders are absent values",
@@ -134,6 +149,7 @@ func TestParseYear(t *testing.T) {
 	for text, want := range map[string]int{
 		"2001": 2001, "2001-05-03": 2001, "2001-05-03T10:00:00Z": 2001, "20010503": 2001,
 		"03.05.2001": 2001, "May 1999": 1999, "": 0, "01": 0, "0000": 0, "abc": 0,
+		"12345": 0, "123456789": 0, "12345 2001": 2001,
 	} {
 		if got := parseYear(text); got != want {
 			t.Errorf("parseYear(%q) = %d, want %d", text, got, want)
@@ -170,5 +186,17 @@ func TestMusicBrainzID(t *testing.T) {
 		if got := musicBrainzID(text); got != want {
 			t.Errorf("musicBrainzID(%q) = %q, want %q", text, got, want)
 		}
+	}
+}
+
+// TestReadAudioTagsTimesOut is not parallel: the fake tool configures itself through the
+// environment.
+func TestReadAudioTagsTimesOut(t *testing.T) {
+	prober := newTestProber(t, fakeTool(t, fakeModeHang).executable)
+	prober.probeTimeout = hangingToolTimeout
+
+	_, _, err := prober.ReadAudioTags(t.Context(), filepath.Join(t.TempDir(), "song.flac"))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("error = %v, want context.DeadlineExceeded", err)
 	}
 }
