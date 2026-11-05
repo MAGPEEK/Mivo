@@ -102,6 +102,11 @@ func readRecordProviderIDs(ctx context.Context, queries *sqlcgen.Queries, itemID
 	}
 
 	for _, stored := range ids {
+		// The MusicBrainz IDs of audio tags are not part of the metadata record.
+		if isMusicProvider(stored.Provider) {
+			continue
+		}
+
 		provider, err := metadata.ParseProvider(stored.Provider)
 		if err != nil {
 			return undecodable(fmt.Sprintf("item %q: provider ID", itemID), err)

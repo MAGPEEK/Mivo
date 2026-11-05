@@ -27,9 +27,12 @@ WHERE item_id = ?;
 DELETE FROM item_people
 WHERE item_id = ?;
 
+-- DeleteItemProviderIDs removes the provider IDs the metadata record owns. The MusicBrainz
+-- IDs of the audio tags (providers musicbrainz_*) belong to the music writer and stay.
 -- name: DeleteItemProviderIDs :exec
 DELETE FROM item_provider_ids
-WHERE item_id = ?;
+WHERE item_id = ?
+  AND provider NOT LIKE 'musicbrainz\_%' ESCAPE '\';
 
 -- FindTagID matches the name case-insensitively, so "Sci-Fi" and "sci-fi" share one tag.
 -- name: FindTagID :one

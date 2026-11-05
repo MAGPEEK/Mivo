@@ -22,8 +22,11 @@ func (q *Queries) DeleteItemPeople(ctx context.Context, itemID string) error {
 const deleteItemProviderIDs = `-- name: DeleteItemProviderIDs :exec
 DELETE FROM item_provider_ids
 WHERE item_id = ?
+  AND provider NOT LIKE 'musicbrainz\_%' ESCAPE '\'
 `
 
+// DeleteItemProviderIDs removes the provider IDs the metadata record owns. The MusicBrainz
+// IDs of the audio tags (providers musicbrainz_*) belong to the music writer and stay.
 func (q *Queries) DeleteItemProviderIDs(ctx context.Context, itemID string) error {
 	_, err := q.db.ExecContext(ctx, deleteItemProviderIDs, itemID)
 	return err
