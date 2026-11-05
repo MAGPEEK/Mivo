@@ -16,6 +16,9 @@ export interface FolderBrowserDialogProps {
   readonly onClose: () => void;
 }
 
+/** The part of the dialog body that scrolls; the body itself does not (`body="fill"`). */
+const scrollRegionClass = "-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-1";
+
 function RootPicker({ browser }: { readonly browser: FolderBrowser }) {
   const { t } = useTranslation(settingsNamespace);
   const selectId = useId();
@@ -101,7 +104,7 @@ function EntryRow({ entry, onOpen }: { readonly entry: FolderEntry; readonly onO
         aria-disabled={!entry.selectable}
         aria-describedby={entry.selectable ? undefined : reasonId}
         onClick={entry.selectable ? onOpen : undefined}
-        className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-surface aria-disabled:cursor-not-allowed aria-disabled:text-text-muted"
+        className="w-full rounded-md px-3 py-2 text-left text-sm wrap-anywhere hover:bg-surface aria-disabled:cursor-not-allowed aria-disabled:text-text-muted"
       >
         <span aria-hidden="true">📁 </span>
         {entry.name}
@@ -127,8 +130,10 @@ function Listing({ browser }: { readonly browser: FolderBrowser }) {
   if (listing === undefined) {
     return <p role="status">{t("libraries.browser.loading")}</p>;
   }
+  // Only this region scrolls, so location, breadcrumb and "Select this folder" stay in view
+  // however many folders there are (FIX-folder-select). The padding keeps focus rings visible.
   return (
-    <>
+    <div className={scrollRegionClass}>
       {listing.folders.length === 0 ? (
         <p className="text-sm text-text-muted">{t("libraries.browser.empty")}</p>
       ) : (
@@ -153,7 +158,7 @@ function Listing({ browser }: { readonly browser: FolderBrowser }) {
           <PermissionHelp installKind={installKind} serviceUser={serviceUser} />
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -168,19 +173,21 @@ function BrowserBody({ browser }: { readonly browser: FolderBrowser }) {
   }
   if (browser.root === undefined) {
     return (
-      <>
+      <div className={scrollRegionClass}>
         <p>{t("libraries.browser.noRoots")}</p>
         <PermissionHelp
           installKind={browser.roots.data.installKind}
           serviceUser={browser.roots.data.serviceUser}
         />
-      </>
+      </div>
     );
   }
   return (
     <>
-      <RootPicker browser={browser} />
-      <Breadcrumb browser={browser} />
+      <div className="shrink-0">
+        <RootPicker browser={browser} />
+        <Breadcrumb browser={browser} />
+      </div>
       <Listing browser={browser} />
     </>
   );
@@ -200,6 +207,8 @@ export function FolderBrowserDialog({ onSelect, onClose }: FolderBrowserDialogPr
       closeLabel={t("libraries.dialog.close")}
       onClose={onClose}
       size="wide"
+      body="fill"
+      fullScreenOnPhone
       footer={
         <>
           <span className="min-w-0 break-all font-mono text-sm text-text-muted">
@@ -227,7 +236,7 @@ export function FolderBrowserDialog({ onSelect, onClose }: FolderBrowserDialogPr
         </>
       }
     >
-      <p className="mb-3 text-sm text-text-muted">{t("libraries.browser.hint")}</p>
+      <p className="mb-3 shrink-0 text-sm text-text-muted">{t("libraries.browser.hint")}</p>
       <BrowserBody browser={browser} />
     </ModalDialog>
   );

@@ -601,6 +601,36 @@ describe("Folder browser", () => {
     expect(within(folders).getByText("/media")).toBeTruthy();
   });
 
+  it("scrolls only the folder list so Select this folder stays reachable (FIX-folder-select)", async () => {
+    const manyFolders = Array.from({ length: 120 }, (_, index) =>
+      folderEntry(`Movie folder ${String(index + 1).padStart(3, "0")}`),
+    );
+    renderApp(addPath, {
+      fetch: dialogServer({ listings: { "": listing("", manyFolders) } }).server.fetch,
+    });
+    await openTab("Folders");
+    fireEvent.click(screen.getByRole("button", { name: "Add folder" }));
+    const browser = await screen.findByRole("dialog", { name: "Choose folder" });
+    const list = await within(browser).findByRole("list", { name: "Sub-folders" });
+
+    // jsdom has no layout, so the scroll region is found by its overflow class.
+    const scrollRegion = list.closest(".overflow-y-auto");
+    expect(scrollRegion).not.toBeNull();
+    expect(
+      scrollRegion?.contains(within(browser).getByRole("button", { name: "Movie folder 120" })),
+    ).toBe(true);
+    const fixed = [
+      within(browser).getByRole("button", { name: "Select this folder" }),
+      within(browser).getByRole("button", { name: "Cancel" }),
+      within(browser).getByRole("button", { name: "Up" }),
+      within(browser).getByRole("combobox", { name: "Location" }),
+      within(browser).getByRole("navigation", { name: "Breadcrumb" }),
+    ];
+    for (const element of fixed) {
+      expect(scrollRegion?.contains(element)).toBe(false);
+    }
+  });
+
   it("explains a failed listing", async () => {
     renderApp(addPath, {
       fetch: dialogServer({ listings: {} }).server.fetch,

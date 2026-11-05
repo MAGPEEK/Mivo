@@ -38,6 +38,17 @@ const serverPackage = "./cmd/mivo";
 /** Name of the server's only library: the folder name of its root (ADR 0022). */
 export const e2eLibraryName = "media";
 
+/**
+ * The folder browser's only root holds this many sub-folders, more than any dialog can show at
+ * once, so the browser spec can check that "Select this folder" stays reachable.
+ */
+export const browseFixtureFolderCount = 120;
+
+/** Name of the browse fixture's sub-folder at `index` (0-based); long, so names must wrap. */
+export function browseFixtureFolderName(index: number): string {
+  return `Movie collection ${String(index + 1).padStart(3, "0")} with a rather long folder name`;
+}
+
 /** Only the loopback interface: the test server must not be reachable from the network. */
 export const loopbackHost = "127.0.0.1";
 
@@ -290,18 +301,29 @@ async function isolatedEnvironment(
     [`${envPrefix}PATHS_DATA`]: join(root, "data"),
     [`${envPrefix}PATHS_CACHE`]: join(root, "cache"),
     [`${envPrefix}PATHS_TRANSCODE`]: transcodeDirectoryOf(root),
+    // Without it the browser would list the host's drives or home directory.
+    [`${envPrefix}BROWSE_ROOTS`]: join(root, "browse"),
   };
   if (singleLibrary) {
     // The only library. The server scans it at startup, while it is still empty.
     directories[`${envPrefix}LIBRARIES`] = mediaDirectoryOf(root);
   }
   await Promise.all(Object.values(directories).map((path) => mkdir(path, { recursive: true })));
+  await createBrowseFixture(join(root, "browse"));
   const overrides: Record<string, string> = {
     ...directories,
     [`${envPrefix}SERVER_HOST`]: loopbackHost,
     [`${envPrefix}SERVER_PORT`]: String(port),
   };
   return { ...inheritedEnvironment(Object.keys(overrides)), ...overrides };
+}
+
+async function createBrowseFixture(browseRoot: string): Promise<void> {
+  await Promise.all(
+    Array.from({ length: browseFixtureFolderCount }, (_, index) =>
+      mkdir(join(browseRoot, browseFixtureFolderName(index)), { recursive: true }),
+    ),
+  );
 }
 
 // Windows treats variable names case-insensitively, so "LocalAppData" must not survive next
