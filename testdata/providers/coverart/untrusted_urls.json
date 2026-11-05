@@ -1,0 +1,44 @@
+{
+  "images": [
+    {
+      "approved": false,
+      "front": true,
+      "id": 1,
+      "image": "https://coverartarchive.org/release/0a1b2c3d-0000-4000-8000-000000000001/1.jpg",
+      "thumbnails": {"1200": "https://coverartarchive.org/release/0a1b2c3d-0000-4000-8000-000000000001/1-1200.jpg"},
+      "types": ["Front"]
+    },
+    {
+      "approved": true,
+      "front": true,
+      "id": 2,
+      "image": "https://ia800000.us.archive.org/download/mbid-x/2.jpg",
+      "thumbnails": {"1200": "https://evil.example/2-1200.jpg", "500": "ftp://coverartarchive.org/2-500.jpg"},
+      "types": ["Front"]
+    },
+    {
+      "approved": true,
+      "front": true,
+      "id": 3,
+      "image": "https://coverartarchive.org/release/0a1b2c3d-0000-4000-8000-000000000001/../../3.jpg",
+      "thumbnails": {"1200": "https://coverartarchive.org/release/x/3-1200.jpg?size=big", "500": "https://user@coverartarchive.org/3-500.jpg"},
+      "types": ["Front"]
+    },
+    {
+      "approved": true,
+      "front": true,
+      "id": 4,
+      "image": "http://coverartarchive.org/release/0a1b2c3d-0000-4000-8000-000000000001/4.jpg",
+      "thumbnails": {},
+      "types": ["Front"]
+    },
+    {
+      "approved": true,
+      "front": true,
+      "id": 5,
+      "image": "http://coverartarchive.org/release/0a1b2c3d-0000-4000-8000-000000000001/4.jpg",
+      "types": ["Front"]
+    }
+  ],
+  "release": "https://musicbrainz.org/release/0a1b2c3d-0000-4000-8000-000000000001"
+}

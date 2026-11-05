@@ -1,0 +1,30 @@
+{
+  "images": [
+    {
+      "approved": true,
+      "back": true,
+      "front": false,
+      "id": 5769317885,
+      "image": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769317885.jpg",
+      "thumbnails": {
+        "250": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769317885-250.jpg",
+        "500": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769317885-500.jpg",
+        "1200": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769317885-1200.jpg"
+      },
+      "types": ["Back"]
+    },
+    {
+      "approved": true,
+      "back": false,
+      "front": true,
+      "id": 5769316809,
+      "image": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769316809.jpg",
+      "thumbnails": {
+        "250": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769316809-250.jpg",
+        "500": "https://coverartarchive.org/release/b84ee12a-09ef-421b-82de-0441a926375b/5769316809-500.jpg"
+      },
+      "types": ["Front", "Booklet"]
+    }
+  ],
+  "release": "https://musicbrainz.org/release/b84ee12a-09ef-421b-82de-0441a926375b"
+}
