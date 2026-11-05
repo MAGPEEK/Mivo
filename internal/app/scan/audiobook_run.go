@@ -83,7 +83,7 @@ func (scanRun *audiobookRun) audiobookSteps(ctx context.Context) error {
 	}
 
 	for _, removed := range plan.removals {
-		base.service.setChapterRetry(base.library.ID, keyOf(removed.State), false)
+		base.service.setDetailRetry(base.library.ID, keyOf(removed.State), false)
 	}
 
 	return scanRun.finishSidecars(ctx, files)

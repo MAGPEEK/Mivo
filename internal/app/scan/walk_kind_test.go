@@ -7,19 +7,14 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// Until M3-15f a photos library keeps its images as image sidecars, as before the walker
-// classified by library kind; a photo class would be refused by the sidecar catalog.
-func TestPhotosLibraryKeepsImagesAsImageSidecars(t *testing.T) {
+// A photos library places its images as photos (M3-15f); they are no image sidecars.
+func TestPhotosLibraryPlacesImagesInsteadOfKeepingSidecars(t *testing.T) {
 	t.Parallel()
 
-	const photosID, photosRoot = "lib-photos", "photos"
-
-	h := newHarness(t)
-	h.libraries.set(oneFolder(photosID, "Photos", photosRoot, library.KindPhotos))
+	h, _, _ := newPhotoHarness(t)
 	h.start(t)
 
-	h.walker.set(photosRoot, walkResult{files: []library.FileState{fileAt("Trip/beach.jpg", 1)}})
-	status := h.scan(t, photosID)
+	status := h.scanPhotos(t, fileAt("Trip/beach.jpg", 1))
 
 	assertState(t, status, scan.StateIdle, scan.ErrorCodeNone)
 
@@ -28,7 +23,7 @@ func TestPhotosLibraryKeepsImagesAsImageSidecars(t *testing.T) {
 		t.Fatalf("SidecarStates() error = %v", err)
 	}
 
-	if len(sidecars) != 1 || sidecars[0].Class != library.FileClassImage {
-		t.Errorf("sidecars = %+v, want the image as an image sidecar", sidecars)
+	if len(sidecars) != 0 || h.catalogV2.count(library.ItemKindPhoto) != 1 {
+		t.Errorf("sidecars = %+v, photos = %d, want the image as one photo", sidecars, h.catalogV2.count(library.ItemKindPhoto))
 	}
 }

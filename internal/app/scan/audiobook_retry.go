@@ -2,33 +2,34 @@ package scan
 
 import "maps"
 
-// A file is saved before its chapters can be written (they reference it), so a failed
-// chapter write would leave a stored, unchanged file whose chapters the next scan never
-// writes. The service remembers such files (memory only, like the options) and the next
-// scan treats them as changed (BACKLOG, m3-13e notes).
+// A file is saved before the details that reference it can be written (the chapters of an
+// audiobook part, the details of a photo), so a failed details write would leave a stored,
+// unchanged file whose details the next scan never writes. The service remembers such files
+// (memory only, like the options) and the next scan treats them as changed (BACKLOG, m3-13e
+// notes). A library has one kind, so one set per library serves every pipeline.
 
-// chapterRetriesOf returns a copy of the files of the library whose chapters are due.
-func (service *Service) chapterRetriesOf(libraryID string) map[fileKey]struct{} {
+// detailRetriesOf returns a copy of the files of the library whose details are due.
+func (service *Service) detailRetriesOf(libraryID string) map[fileKey]struct{} {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
-	return maps.Clone(service.chapterRetries[libraryID])
+	return maps.Clone(service.detailRetries[libraryID])
 }
 
-// setChapterRetry remembers (due) or forgets the file whose chapters must be written again.
-func (service *Service) setChapterRetry(libraryID string, key fileKey, due bool) {
+// setDetailRetry remembers (due) or forgets the file whose details must be written again.
+func (service *Service) setDetailRetry(libraryID string, key fileKey, due bool) {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
 	if !due {
-		delete(service.chapterRetries[libraryID], key)
+		delete(service.detailRetries[libraryID], key)
 
 		return
 	}
 
-	if service.chapterRetries[libraryID] == nil {
-		service.chapterRetries[libraryID] = map[fileKey]struct{}{}
+	if service.detailRetries[libraryID] == nil {
+		service.detailRetries[libraryID] = map[fileKey]struct{}{}
 	}
 
-	service.chapterRetries[libraryID][key] = struct{}{}
+	service.detailRetries[libraryID][key] = struct{}{}
 }

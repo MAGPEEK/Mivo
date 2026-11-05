@@ -165,7 +165,7 @@ func (scanRun *audiobookRun) savePart(ctx context.Context, part audiobookResult,
 
 	job.fileID = fileID
 	key := keyOf(job.state)
-	base.service.setChapterRetry(base.library.ID, key, true)
+	base.service.setDetailRetry(base.library.ID, key, true)
 
 	if err := scanRun.saveProbed(ctx, job, part.probe); err != nil {
 		return err
@@ -175,7 +175,7 @@ func (scanRun *audiobookRun) savePart(ctx context.Context, part audiobookResult,
 		return catalogFailure("save chapters of "+job.state.RelativePath, err)
 	}
 
-	base.service.setChapterRetry(base.library.ID, key, false)
+	base.service.setDetailRetry(base.library.ID, key, false)
 	scanRun.wanted = append(scanRun.wanted, placedFile{state: job.state, placement: placement})
 
 	return nil

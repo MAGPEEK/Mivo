@@ -47,16 +47,18 @@ type Info struct {
 	Model           string
 	Lens            string
 	ExposureSeconds float64
-	ISO             int
-	FocalLengthMM   float64
-	Orientation     int
-	GPS             *Coordinates
-	Width           int
-	Height          int
+	// FNumber is the aperture as f-number (2.8 for f/2.8).
+	FNumber       float64
+	ISO           int
+	FocalLengthMM float64
+	Orientation   int
+	GPS           *Coordinates
+	Width         int
+	Height        int
 }
 
 // Validate checks the ranges of the numeric fields: an orientation of 0 or 1-8, a GPS
-// position inside the globe, and no negative exposure, ISO, focal length or size. The error
+// position inside the globe, and no negative exposure, f-number, ISO, focal length or size. The error
 // wraps domain.ErrInvalid.
 func (info Info) Validate() error {
 	if info.Orientation != OrientationUnknown &&
@@ -64,11 +66,12 @@ func (info Info) Validate() error {
 		return fmt.Errorf("validate photo info: orientation %d out of range: %w", info.Orientation, domain.ErrInvalid)
 	}
 
-	if !finite(info.ExposureSeconds, info.FocalLengthMM) {
-		return fmt.Errorf("validate photo info: exposure or focal length is NaN or infinite: %w", domain.ErrInvalid)
+	if !finite(info.ExposureSeconds, info.FNumber, info.FocalLengthMM) {
+		return fmt.Errorf("validate photo info: exposure, f-number or focal length is NaN or infinite: %w", domain.ErrInvalid)
 	}
 
-	if info.ExposureSeconds < 0 || info.ISO < 0 || info.FocalLengthMM < 0 || info.Width < 0 || info.Height < 0 {
+	if info.ExposureSeconds < 0 || info.FNumber < 0 || info.ISO < 0 || info.FocalLengthMM < 0 ||
+		info.Width < 0 || info.Height < 0 {
 		return fmt.Errorf("validate photo info: negative value: %w", domain.ErrInvalid)
 	}
 

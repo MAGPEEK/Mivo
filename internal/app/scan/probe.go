@@ -65,12 +65,14 @@ func (scanRun *run) runBatch(ctx context.Context, runJobs func(context.Context) 
 	return nil
 }
 
-// jobBatch is a set of per-file jobs whose work runs on MaxConcurrentProbes workers and
-// whose results are recorded on the calling goroutine. Work must take a probe slot itself.
+// jobBatch is a set of per-file jobs whose work runs on workers goroutines (zero means
+// MaxConcurrentProbes) and whose results are recorded on the calling goroutine. Work must
+// take a service-wide slot (probe or photo read) itself.
 type jobBatch[Job, Result any] struct {
-	jobs   []Job
-	work   func(context.Context, Job) Result
-	record func(context.Context, Result) error
+	jobs    []Job
+	work    func(context.Context, Job) Result
+	record  func(context.Context, Result) error
+	workers int
 }
 
 // run works off the jobs. The first error that ends the scan cancels the workers; the
@@ -104,7 +106,12 @@ func (batch jobBatch[Job, Result]) start(ctx context.Context) <-chan Result {
 
 	var workers sync.WaitGroup
 
-	for range MaxConcurrentProbes {
+	workerCount := batch.workers
+	if workerCount <= 0 {
+		workerCount = MaxConcurrentProbes
+	}
+
+	for range workerCount {
 		workers.Go(func() {
 			for job := range pending {
 				results <- batch.work(ctx, job)
@@ -157,15 +164,9 @@ func (scanRun *run) probe(ctx context.Context, job probeJob) probeResult {
 // describe resolves and probes one file without any rule about its streams; the caller holds
 // a probe slot. The absolute path is empty when the file could not be resolved.
 func (scanRun *run) describe(ctx context.Context, job probeJob) (probeResult, string) {
-	root, found := folderRoot(scanRun.library, job.state.RootID)
-	if !found {
-		return probeResult{job: job, err: fail(ErrorCodeFailed, "file of an unknown library folder",
-			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}, ""
-	}
-
-	absolutePath, err := scanRun.service.resolver.Resolve(root, job.state.RelativePath)
-	if err != nil {
-		return resolveFailure(job, err), ""
+	absolutePath, failure := scanRun.resolve(job)
+	if failure != nil {
+		return *failure, ""
 	}
 
 	description, err := scanRun.service.prober.Probe(ctx, absolutePath)
@@ -180,14 +181,42 @@ func (scanRun *run) describe(ctx context.Context, job probeJob) (probeResult, st
 	return probeResult{job: job, outcome: outcomeProbed, description: description}, absolutePath
 }
 
+// resolve turns the file's root-relative path into the absolute path inside its library
+// folder. A file that cannot be resolved returns the result to record instead.
+func (scanRun *run) resolve(job probeJob) (string, *probeResult) {
+	root, found := folderRoot(scanRun.library, job.state.RootID)
+	if !found {
+		return "", &probeResult{job: job, err: fail(ErrorCodeFailed, "file of an unknown library folder",
+			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}
+	}
+
+	absolutePath, err := scanRun.service.resolver.Resolve(root, job.state.RelativePath)
+	if err != nil {
+		failure := resolveFailure(job, err)
+
+		return "", &failure
+	}
+
+	return absolutePath, nil
+}
+
 // acquireProbeSlot waits for one of the service-wide probe slots and returns the function
 // that frees it. It gives up when ctx ends.
 func (service *Service) acquireProbeSlot(ctx context.Context) (func(), error) {
+	return acquireSlot(ctx, service.probeSlots, "probe")
+}
+
+// acquirePhotoReadSlot is acquireProbeSlot for the photo metadata reads.
+func (service *Service) acquirePhotoReadSlot(ctx context.Context) (func(), error) {
+	return acquireSlot(ctx, service.photoReadSlots, "photo read")
+}
+
+func acquireSlot(ctx context.Context, slots chan struct{}, purpose string) (func(), error) {
 	select {
-	case service.probeSlots <- struct{}{}:
-		return func() { <-service.probeSlots }, nil
+	case slots <- struct{}{}:
+		return func() { <-slots }, nil
 	case <-ctx.Done():
-		return nil, fmt.Errorf("wait for a probe slot: %w", ctx.Err())
+		return nil, fmt.Errorf("wait for a %s slot: %w", purpose, ctx.Err())
 	}
 }
 

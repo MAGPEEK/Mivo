@@ -9,7 +9,7 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// walkAll walks every folder of the library and sorts the files into videos and sidecars,
+// walkAll walks every folder of the library and sorts the files into media and sidecars,
 // each carrying the ID of its folder.
 //
 // A folder that is missing or lost during its walk contributes nothing and is marked as
@@ -74,12 +74,6 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 			return nil
 		}
 
-		if state.Class == library.FileClassPhoto {
-			// Until the photo pipeline exists (M3-15f), a photos library treats its images
-			// as image sidecars, as it did before the walker classified by library kind.
-			state.Class = library.FileClassImage
-		}
-
 		if isMediaClass(state.Class) {
 			found.mediaFiles = append(found.mediaFiles, state)
 		} else {
@@ -96,7 +90,8 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 }
 
 // isMediaClass reports the classes a pipeline places and probes; the walker only reports
-// the ones the library kind allows, so a video never reaches the music pipeline.
+// the ones the library kind allows, so a video never reaches the music pipeline and a photo
+// only the photo pipeline.
 func isMediaClass(class library.FileClass) bool {
-	return class == library.FileClassVideo || class == library.FileClassAudio
+	return class == library.FileClassVideo || class == library.FileClassAudio || class == library.FileClassPhoto
 }

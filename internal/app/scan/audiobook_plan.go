@@ -72,7 +72,7 @@ func (scanRun *audiobookRun) planBooks(ctx context.Context, files walked) (audio
 // walkedJobs turns the walked files (first occurrence wins) into jobs and marks the folders
 // that hold a new or changed one.
 func (scanRun *audiobookRun) walkedJobs(walkedFiles []library.FileState, storedByKey map[fileKey]PlacedFileState) ([]audiobookJob, map[fileKey]bool) {
-	retries := scanRun.base.service.chapterRetriesOf(scanRun.base.library.ID)
+	retries := scanRun.base.service.detailRetriesOf(scanRun.base.library.ID)
 	dirty := map[fileKey]bool{}
 	seen := make(map[fileKey]bool, len(walkedFiles))
 	jobs := make([]audiobookJob, 0, len(walkedFiles))
