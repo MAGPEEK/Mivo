@@ -239,9 +239,27 @@ func assertTrackPlays(t *testing.T, baseURL string, track apigen.ItemSummary, wa
 		t.Fatalf("track %q has %d files, want 1", track.Title, len(detail.Files))
 	}
 
-	session := createSession(t, baseURL, detail.Files[0].ID.String(), http.StatusCreated)
+	assertAudioFilePlays(t, baseURL, audioPlayback{label: "track " + track.Title, fileID: detail.Files[0].ID.String(), mode: wantMode})
+}
+
+// assertAudioFilePlays starts a session for an audio file and fetches the start of the
+// stream: a range of the file in direct play, the first segment of an HLS transcode.
+// audioPlayback is the file a playback check starts and the mode it expects; label names it
+// in failures.
+type audioPlayback struct {
+	label  string
+	fileID string
+	mode   apigen.PlaybackMode
+}
+
+func assertAudioFilePlays(t *testing.T, baseURL string, playback audioPlayback) {
+	t.Helper()
+
+	label, fileID, wantMode := playback.label, playback.fileID, playback.mode
+
+	session := createSession(t, baseURL, fileID, http.StatusCreated)
 	if session.Mode != wantMode {
-		t.Fatalf("track %q session mode = %s, want %s", track.Title, session.Mode, wantMode)
+		t.Fatalf("%s session mode = %s, want %s", label, session.Mode, wantMode)
 	}
 
 	if wantMode == apigen.PlaybackModeDirectPlay {
@@ -252,7 +270,7 @@ func assertTrackPlays(t *testing.T, baseURL string, track apigen.ItemSummary, wa
 
 	playlist := fetchBody(t, baseURL+session.StreamURL, http.StatusOK)
 	if !strings.Contains(playlist, "seg-00000.m4s") {
-		t.Fatalf("track %q playlist lacks the first segment:\n%s", track.Title, playlist)
+		t.Fatalf("%s playlist lacks the first segment:\n%s", label, playlist)
 	}
 
 	fetchBody(t, strings.TrimSuffix(baseURL+session.StreamURL, "index.m3u8")+"seg-00000.m4s", http.StatusOK)

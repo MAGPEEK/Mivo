@@ -86,6 +86,18 @@ func TestDescribeAudioTags(t *testing.T) {
 			wantDuration: 2500 * time.Millisecond,
 		},
 		{
+			name: "audiobook: ID3 TXXX narrator and an unlabelled composer",
+			output: `{"streams":[{"index":0,"codec_type":"audio"}],"format":{"tags":{
+				"album":"The Paper Lighthouse","composer":"Otto Brine","narrator":"Iris Fenn"}}}`,
+			wantTags: media.AudioTags{Album: "The Paper Lighthouse", Composer: "Otto Brine", Narrator: "Iris Fenn"},
+		},
+		{
+			name: "audiobook: Vorbis NARRATEDBY and a composer labelled as the narrator",
+			output: `{"streams":[{"index":0,"codec_type":"audio"}],"format":{"tags":{
+				"COMPOSER":"  Narrated by: Nora Vale ","NARRATEDBY":"Iris Fenn"}}}`,
+			wantTags: media.AudioTags{Composer: "Nora Vale", Narrator: "Iris Fenn", ComposerIsNarrator: true},
+		},
+		{
 			name: "garbage numbers and placeholders are absent values",
 			output: `{"streams":[{"index":1,"codec_type":"video"},{"index":0,"codec_type":"audio"}],"format":{"tags":{
 				"track":"x/12","disc":"-1","date":"unknown","title":"N/A","compilation":"no"}}}`,
@@ -127,6 +139,36 @@ func TestDescribeAudioTagsRejectsUnusableOutput(t *testing.T) {
 				t.Errorf("error = %v, want domain.ErrUnsupported", err)
 			}
 		})
+	}
+}
+
+func TestParseComposer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		text         string
+		wantComposer string
+		wantNarrator bool
+	}{
+		{"Nora Vale", "Nora Vale", false},
+		{" Nora Vale ", "Nora Vale", false},
+		{"Narrated by Nora Vale", "Nora Vale", true},
+		{"NARRATED BY: Nora Vale", "Nora Vale", true},
+		{"read by Iris Fenn", "Iris Fenn", true},
+		{"Narrator: Iris Fenn", "Iris Fenn", true},
+		{"Narrated by", "Narrated by", false},
+		{"Narrated by : ", "Narrated by :", false},
+		{"Reader", "Reader", false},
+		{"Narratorx", "Narratorx", false},
+		{"Nä", "Nä", false},
+		{"", "", false},
+	}
+
+	for _, test := range tests {
+		composer, isNarrator := parseComposer(test.text)
+		if composer != test.wantComposer || isNarrator != test.wantNarrator {
+			t.Errorf("parseComposer(%q) = %q, %t; want %q, %t", test.text, composer, isNarrator, test.wantComposer, test.wantNarrator)
+		}
 	}
 }
 

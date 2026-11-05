@@ -62,6 +62,9 @@ func itemSummaryResponse(summary applibrary.ItemSummary) (apigen.ItemSummary, er
 
 	if summary.HasPrimaryFile() {
 		response.Media = mediaSummaryResponse(summary.PrimaryFile)
+		if summary.PartsDuration > 0 {
+			response.Media.DurationSeconds = optionalDurationSeconds(summary.PartsDuration)
+		}
 	}
 
 	poster, err := imageRefResponse(summary.Poster)

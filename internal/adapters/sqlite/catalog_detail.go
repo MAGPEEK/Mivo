@@ -45,7 +45,7 @@ func readItemDetail(ctx context.Context, queries *sqlcgen.Queries, itemID string
 
 	steps := []func(context.Context, *sqlcgen.Queries, sqlcgen.Item, *applibrary.ItemDetail) error{
 		readDetailFiles, readDetailMetadata, readDetailAncestors, readDetailSiblings,
-		readDetailPlayTarget, readDetailArtwork, readDetailExtras, readDetailCounts,
+		readDetailPlayTarget, readDetailArtwork, readDetailExtras, readDetailCounts, readDetailChapters,
 	}
 
 	for _, step := range steps {
@@ -242,6 +242,23 @@ func readDetailCounts(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen
 	}
 
 	detail.ChildCount, detail.LeafCount = int(counts.ChildCount), int(counts.LeafCount)
+
+	return nil
+}
+
+// readDetailChapters reads the chapters of an audiobook across its part files. Other kinds
+// get none yet: their chapters need a per-file view (milestone 4, see ItemChapters).
+func readDetailChapters(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
+	if row.Kind != library.ItemKindAudiobook.String() {
+		return nil
+	}
+
+	chapters, err := readItemChapters(ctx, queries, row.ID)
+	if err != nil {
+		return fmt.Errorf("read chapters: %w", err)
+	}
+
+	detail.Chapters = chapters
 
 	return nil
 }

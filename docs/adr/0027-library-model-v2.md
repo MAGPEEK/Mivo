@@ -397,3 +397,19 @@ share that folder cover); a book that stands alone takes only images named after
 its file, then its attached picture. A scan that ends early refreshes only the items it touched
 when its pipeline reads files before the refresh (music, audiobooks); older pending items stay
 pending.
+
+## Notes (M3-14g)
+
+Audiobooks are enabled end to end: `audiobooks` is a config kind, the library manager accepts
+it and `SystemInfo.libraryKinds` reports it; the scan gets ffprobe as tag and chapter reader
+and the catalog as chapter store. The item detail of an audiobook carries `chapters` with
+offsets relative to their part file (`fileId`), read in the detail's transaction from the
+work-relative chapter reader (`ItemChapter.FileStart` is where the file begins); other kinds
+get no chapters until milestone 4 adds a per-file view. A listing card's
+`media.durationSeconds` of an audiobook is the sum of its part files, like the `duration` sort;
+other kinds keep the primary file's length. The tag reader fills the narrator from an explicit
+`narrator`/`narratedby` tag (ID3 TXXX, Vorbis comment); MP4 has no narrator atom, so a
+`composer` is the narrator only when it is labelled "Narrated by …", "Read by …" or
+"Narrator: …" (the label is stripped, `ComposerIsNarrator`); an unlabelled composer stays a
+composer. Book files play through the unchanged playback path (M4B directly, MP3 transcoded
+to AAC), which `TestRunServesTheAudiobookCorpus` (`cmd/mivo`) covers.

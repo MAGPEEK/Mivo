@@ -42,7 +42,9 @@
 // and a shared folder with a single MP3 book (artist tag only, no narrator, no cover) next
 // to a chapterless M4B whose cover is the image named after it. The MP3 parts of the folder
 // book carry an explicit narrator (ID3 TXXX "narrator"); the M4B files carry only a
-// composer, which is no narrator, so they expect none. All names are invented. Audiobook cases start with "library-audiobooks-".
+// composer: the chaptered one labels it as the narrator ("Narrated by …", M3-14g), the
+// chapterless one does not, so it expects none. All names are invented. Audiobook cases
+// start with "library-audiobooks-".
 // <library>/photos (task M3-15g, ADR 0029) holds photos with EXIF written by the generator
 // (FFmpeg writes none): JPEGs with camera, lens, exposure, capture time and the Eiffel Tower
 // as the only GPS position, the nested album "Holidays 2024/Lake Shore" with a portrait
@@ -105,8 +107,9 @@
 //	  title, author  expected book title (album tag) and author
 //	  authorTag      "album_artist" (with an equal artist tag) or "artist"
 //	  composer       raw composer tag of the parts, omitted without one
-//	  narrator       narrator a scan must produce (explicit narrator tag, ID3 TXXX); a
-//	                 composer alone is none; omitted without one
+//	  narrator       narrator a scan must produce (explicit narrator tag, ID3 TXXX, or a
+//	                 composer starting "Narrated by "); an unlabelled composer is none;
+//	                 omitted without one
 //	  path           book folder; standsAlone marks a one-file book sharing it (M4B)
 //	  container      "m4b"|"mp3"
 //	  coverSource    "embedded"|"folder" (image file)|"none"; coverFile (image, or the part)

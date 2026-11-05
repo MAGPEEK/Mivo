@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
@@ -22,13 +23,18 @@ import (
 // shows ("MKV · H.264 · AAC"). Items that own files (movies, episodes, extras) always have
 // one, because the catalog removes an item with its last file; containers (shows, seasons)
 // own no file and leave it zero (HasPrimaryFile reports false).
+//
+// PartsDuration is the summed length of all part files of an audiobook, which the list shows
+// instead of the primary file's length (API MediaSummary.durationSeconds); zero for other
+// kinds, whose files are alternative versions rather than consecutive parts.
 type ItemSummary struct {
-	Item        library.Item
-	PrimaryFile media.File
-	Poster      *artwork.Ref
-	Thumb       *artwork.Ref
-	ChildCount  int
-	LeafCount   int
+	Item          library.Item
+	PrimaryFile   media.File
+	Poster        *artwork.Ref
+	Thumb         *artwork.Ref
+	ChildCount    int
+	LeafCount     int
+	PartsDuration time.Duration
 }
 
 // HasPrimaryFile reports whether the summary carries a primary file; containers have none.
@@ -83,6 +89,8 @@ type ItemFile struct {
 //   - ItemFiles are the files with version label and part number, the primary one first;
 //     containers have none.
 //   - ChildCount and LeafCount are counted as in ItemSummary.
+//   - Chapters are the chapters of an audiobook in playback order across its part files
+//     (see ItemChapter); empty for other kinds and for a book without chapters.
 type ItemDetail struct {
 	Item       library.Item
 	Files      []media.File
@@ -96,6 +104,7 @@ type ItemDetail struct {
 	ItemFiles  []ItemFile
 	ChildCount int
 	LeafCount  int
+	Chapters   []ItemChapter
 }
 
 // ListItems returns one page of a library's top-level items (movies and shows; seasons,

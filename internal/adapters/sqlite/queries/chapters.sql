@@ -32,3 +32,11 @@ LEFT JOIN media_chapters ON media_chapters.media_file_id = media_files.id
 WHERE items.id = sqlc.arg(item_id)
 ORDER BY media_files.part_number, library_roots.position, media_files.relative_path, media_files.id,
          media_chapters.ordinal;
+
+-- ListItemPartDurations returns the summed duration of the files of each listed item that
+-- has files: the length of an audiobook over all its parts (task M3-14g).
+-- name: ListItemPartDurations :many
+SELECT item_id, CAST(SUM(duration_ms) AS INTEGER) AS duration_ms
+FROM media_files
+WHERE item_id IN (sqlc.slice(item_ids))
+GROUP BY item_id;

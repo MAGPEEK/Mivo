@@ -158,9 +158,80 @@ func TestItemChaptersAddThePrecedingPartDurations(t *testing.T) {
 	want := []applibrary.ItemChapter{
 		itemChapter(first, "Book/01.mp3", chapter("One", 0, seconds(30))),
 		itemChapter(first, "Book/01.mp3", chapter("Two", seconds(30), seconds(60))),
-		itemChapter(third, "Book/03.mp3", chapter("Three", seconds(100), seconds(150))),
+		itemChapterAt(third, "Book/03.mp3", seconds(100), chapter("Three", seconds(100), seconds(150))),
 	}
 	assertDeepEqual(t, "chapters", fixture.read(t, bookID), want)
+}
+
+// itemChapterAt is itemChapter for a part file that starts at fileStart on the book's
+// timeline.
+func itemChapterAt(fileID, path string, fileStart time.Duration, chapter media.Chapter) applibrary.ItemChapter {
+	read := itemChapter(fileID, path, chapter)
+	read.FileStart = fileStart
+
+	return read
+}
+
+// The detail of a book carries the chapters ItemChapters reads; its listing entry carries
+// the summed length of its parts.
+func TestAudiobookDetailAndSummaryCoverAllParts(t *testing.T) {
+	t.Parallel()
+
+	fixture := newChapterFixture(t)
+	second, bookID := fixture.addPart(t, "Book/02.mp3", 2, seconds(40))
+	first, _ := fixture.addPart(t, "Book/01.mp3", 1, seconds(60))
+	fixture.replace(t, first, chapter("One", 0, seconds(60)))
+	fixture.replace(t, second, chapter("Two", 0, seconds(40)))
+
+	detail, err := fixture.reader.GetItem(t.Context(), bookID)
+	if err != nil {
+		t.Fatalf("GetItem(book) error = %v", err)
+	}
+
+	want := []applibrary.ItemChapter{
+		itemChapter(first, "Book/01.mp3", chapter("One", 0, seconds(60))),
+		itemChapterAt(second, "Book/02.mp3", seconds(60), chapter("Two", seconds(60), seconds(100))),
+	}
+	assertDeepEqual(t, "detail chapters", detail.Chapters, want)
+
+	page, err := fixture.reader.ListItems(t.Context(), audiobooksLibraryID, library.PageRequest{}, library.ListingQuery{})
+	if err != nil {
+		t.Fatalf("ListItems(audiobooks) error = %v", err)
+	}
+
+	if len(page.Items) != 1 || page.Items[0].PartsDuration != seconds(100) || page.Items[0].PrimaryFile.ID != first {
+		t.Errorf("listing = %+v, want the book with primary file %s and parts duration %v", page.Items, first, seconds(100))
+	}
+}
+
+// Only audiobooks read chapters and part durations: a movie with stored chapters and two
+// versions gets neither.
+func TestNonAudiobookDetailAndSummaryHaveNoChaptersOrPartsDuration(t *testing.T) {
+	t.Parallel()
+
+	fixture := newChapterFixture(t)
+	record := placedFile(moviesLibraryID, testID('f', 1), "Movie (2001)/Movie (2001).mkv", moviePlacement("movie", "Movie", 2001, ""))
+	record.File.Description.Duration = seconds(60)
+	movieID := fixture.save(t, record)[0]
+	fixture.replace(t, testID('f', 1), chapter("Opening", 0, seconds(60)))
+
+	detail, err := fixture.reader.GetItem(t.Context(), movieID)
+	if err != nil {
+		t.Fatalf("GetItem(movie) error = %v", err)
+	}
+
+	if len(detail.Chapters) != 0 {
+		t.Errorf("movie detail chapters = %+v, want none", detail.Chapters)
+	}
+
+	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{})
+	if err != nil {
+		t.Fatalf("ListItems(movies) error = %v", err)
+	}
+
+	if len(page.Items) != 1 || page.Items[0].PartsDuration != 0 {
+		t.Errorf("movie listing = %+v, want one movie without parts duration", page.Items)
+	}
 }
 
 func TestItemChaptersOfAnItemWithoutFilesAreEmpty(t *testing.T) {
@@ -280,8 +351,8 @@ func TestItemChaptersShiftByTheLongerOfDurationAndLastChapterEnd(t *testing.T) {
 
 	want := []applibrary.ItemChapter{
 		itemChapter(first, "Book/01.mp3", chapter("One", 0, seconds(20))),
-		itemChapter(second, "Book/02.mp3", chapter("Two", seconds(20), seconds(32))),
-		itemChapter(third, "Book/03.mp3", chapter("Three", seconds(32), seconds(42))),
+		itemChapterAt(second, "Book/02.mp3", seconds(20), chapter("Two", seconds(20), seconds(32))),
+		itemChapterAt(third, "Book/03.mp3", seconds(32), chapter("Three", seconds(32), seconds(42))),
 	}
 	assertDeepEqual(t, "chapters", fixture.read(t, bookID), want)
 }
@@ -303,7 +374,7 @@ func TestItemChaptersFollowTheFolderOrderBeforeThePath(t *testing.T) {
 
 	want := []applibrary.ItemChapter{
 		itemChapter(earlier, "Book/z.mp3", chapter("Earlier", 0, seconds(10))),
-		itemChapter(later, "Book/a.mp3", chapter("Later", seconds(10), seconds(20))),
+		itemChapterAt(later, "Book/a.mp3", seconds(10), chapter("Later", seconds(10), seconds(20))),
 	}
 	assertDeepEqual(t, "chapters", fixture.read(t, bookID), want)
 }

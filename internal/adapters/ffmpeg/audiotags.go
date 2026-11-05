@@ -55,6 +55,20 @@ func musicBrainzTrackKeys() []string {
 	return []string{"musicbrainz_trackid", "musicbrainz track id"}
 }
 
+// narratorKeys are the explicit narrator tags of audiobook writers: ID3 TXXX frames and
+// Vorbis comments under these names (MP4 has no narrator atom).
+func narratorKeys() []string {
+	return []string{"narrator", "narratedby", "narrated_by", "narrated by"}
+}
+
+// composerNarratorLabels are the prefixes, compared without case, by which a composer tag
+// says that it names the narrator ("Narrated by Nora Vale"); M4B writers without a narrator
+// atom put the narrator there. A composer without a label stays a composer (task M3-14g).
+func composerNarratorLabels() []string { return []string{"narrated by", "read by", "narrator:"} }
+
+// labelSeparators may follow a label ("Narrated by: Nora Vale").
+const labelSeparators = ": "
+
 // trueFlagValues are the compilation flag values that mean "set".
 func trueFlagValues() []string { return []string{"1", "true", "yes"} }
 
@@ -171,7 +185,12 @@ func copyLowerCase(target, tags map[string]string) {
 }
 
 func audioTags(tags map[string]string) media.AudioTags {
+	composer, composerIsNarrator := parseComposer(tag(tags, "composer"))
+
 	return media.AudioTags{
+		Composer:            composer,
+		Narrator:            firstTag(tags, narratorKeys()),
+		ComposerIsNarrator:  composerIsNarrator,
 		AlbumArtist:         firstTag(tags, albumArtistKeys()),
 		Artist:              tag(tags, "artist"),
 		Album:               tag(tags, "album"),
@@ -196,6 +215,25 @@ func firstTag(tags map[string]string, keys []string) string {
 	}
 
 	return ""
+}
+
+// parseComposer returns the composer without a narrator label and whether it had one:
+// "Narrated by Nora Vale" yields "Nora Vale", true; "Nora Vale" yields "Nora Vale", false.
+// A label without a name is no narrator and is kept as the composer.
+func parseComposer(text string) (string, bool) {
+	composer := strings.TrimSpace(text)
+
+	for _, label := range composerNarratorLabels() {
+		if len(composer) < len(label) || !strings.EqualFold(composer[:len(label)], label) {
+			continue
+		}
+
+		if name := strings.TrimLeft(composer[len(label):], labelSeparators); name != "" {
+			return strings.TrimSpace(name), true
+		}
+	}
+
+	return composer, false
 }
 
 // parseOrdinal reads a track or disc number: "3" or "3/12" yield 3. Anything else yields 0

@@ -210,6 +210,11 @@ func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedI
 		return nil, err
 	}
 
+	partsDurations, err := audiobookDurations(ctx, queries, listed)
+	if err != nil {
+		return nil, err
+	}
+
 	summaries := make([]applibrary.ItemSummary, 0, len(listed))
 
 	for _, entry := range listed {
@@ -224,6 +229,7 @@ func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedI
 			Item: item, PrimaryFile: primaryFiles[item.ID],
 			Poster: refPointer(refs, artwork.KindPoster), Thumb: refPointer(refs, artwork.KindThumb),
 			ChildCount: int(entry.childCount), LeafCount: int(entry.leafCount),
+			PartsDuration: partsDurations[item.ID],
 		})
 	}
 

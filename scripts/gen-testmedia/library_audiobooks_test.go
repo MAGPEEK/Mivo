@@ -71,8 +71,8 @@ func TestAudiobookCatalogCoversTheRequiredBooks(t *testing.T) {
 		composer    string
 		narrator    string
 	}{
-		// A composer alone is no narrator, so the M4B books expect none (M3-14a/M3-14e).
-		{"The Clockwork Orchard", audiobookContainerM4B, 1, 3, true, coverSourceEmbedded, "Nora Vale", ""},
+		// A composer is a narrator only when labelled so (M3-14a/M3-14g).
+		{"The Clockwork Orchard", audiobookContainerM4B, 1, 3, true, coverSourceEmbedded, "Narrated by Nora Vale", "Nora Vale"},
 		{"The Paper Lighthouse", audiobookContainerMP3, 3, 3, false, coverSourceFolder, "", "Iris Fenn"},
 		{"Garden Notes", audiobookContainerMP3, 1, 1, false, coverSourceNone, "", ""},
 		{"Midnight Recipes", audiobookContainerM4B, 1, 1, true, coverSourceFolder, "Otto Brine", ""},
@@ -154,8 +154,8 @@ func TestAudiobookPartTags(t *testing.T) {
 	orchard := audiobookNamed(t, "The Clockwork Orchard")
 	got := audiobookPartTags(orchard, audiobookPartSpecOf(t, "Ada Inkwell/The Clockwork Orchard.m4b"))
 
-	if _, hasNarrator := got[narratorTag]; got[composerTag] != "Nora Vale" || hasNarrator {
-		t.Errorf("M4B tags = %v, want a composer and no narrator", got)
+	if _, hasNarrator := got[narratorTag]; got[composerTag] != "Narrated by Nora Vale" || hasNarrator {
+		t.Errorf("M4B tags = %v, want a labelled composer and no narrator tag", got)
 	}
 }
 
@@ -205,7 +205,7 @@ func TestWriteAudiobookSummary(t *testing.T) {
 	writeAudiobookSummary(&text, audiobookCatalog())
 	checkSummaryLines(t, text.String(),
 		"  audiobooks/ (4 books)\n",
-		"    book Ada Inkwell - The Clockwork Orchard: 1 m4b part, 3 chapters, stands alone, composer Nora Vale, cover embedded\n",
+		"    book Ada Inkwell - The Clockwork Orchard: 1 m4b part, 3 chapters, stands alone, composer Narrated by Nora Vale, narrator Nora Vale, cover embedded\n",
 		"    book Bram Quill - The Paper Lighthouse: 3 mp3 parts, narrator Iris Fenn, cover folder\n",
 		"    book Cleo Marsh - Garden Notes: 1 mp3 part, cover none\n",
 	)

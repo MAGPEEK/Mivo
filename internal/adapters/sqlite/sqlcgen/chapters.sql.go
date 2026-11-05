@@ -8,6 +8,7 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const deleteFileChapters = `-- name: DeleteFileChapters :exec
@@ -94,6 +95,53 @@ func (q *Queries) ListItemChapters(ctx context.Context, itemID string) ([]ListIt
 			&i.StartMs,
 			&i.EndMs,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listItemPartDurations = `-- name: ListItemPartDurations :many
+SELECT item_id, CAST(SUM(duration_ms) AS INTEGER) AS duration_ms
+FROM media_files
+WHERE item_id IN (/*SLICE:item_ids*/?)
+GROUP BY item_id
+`
+
+type ListItemPartDurationsRow struct {
+	ItemID     string
+	DurationMs int64
+}
+
+// ListItemPartDurations returns the summed duration of the files of each listed item that
+// has files: the length of an audiobook over all its parts (task M3-14g).
+func (q *Queries) ListItemPartDurations(ctx context.Context, itemIds []string) ([]ListItemPartDurationsRow, error) {
+	query := listItemPartDurations
+	var queryParams []interface{}
+	if len(itemIds) > 0 {
+		for _, v := range itemIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", strings.Repeat(",?", len(itemIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemPartDurationsRow{}
+	for rows.Next() {
+		var i ListItemPartDurationsRow
+		if err := rows.Scan(&i.ItemID, &i.DurationMs); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

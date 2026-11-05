@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,9 @@ const (
 	// chapterTolerance absorbs the rounding of millisecond chapter marks to the stream
 	// time base.
 	chapterTolerance = time.Millisecond
+	// narratedByLabel starts a composer tag that names the narrator (the generator writes it,
+	// the tag reader strips it, task M3-14g).
+	narratedByLabel = "Narrated by "
 )
 
 // audiobookManifest is the audiobooks object of the library manifest (task M3-14f).
@@ -130,8 +134,9 @@ func TestCorpusAudiobooksGroupIntoTheManifestBooks(t *testing.T) {
 			gotParts = append(gotParts, part.Path)
 		}
 
-		if got.Author != want.Author || !slices.Equal(gotParts, want.partFiles()) {
-			t.Errorf("book %q: author %q, parts %v; want %q, %v", want.Title, got.Author, gotParts, want.Author, want.partFiles())
+		if got.Author != want.Author || got.Narrator != want.Narrator || !slices.Equal(gotParts, want.partFiles()) {
+			t.Errorf("book %q: author %q, narrator %q, parts %v; want %q, %q, %v",
+				want.Title, got.Author, got.Narrator, gotParts, want.Author, want.Narrator, want.partFiles())
 		}
 	}
 }
@@ -193,8 +198,8 @@ func (readers musicReaders) audiobookFiles(t *testing.T, bookRoot string) []nami
 	return files
 }
 
-// assertPartTags compares the tags the scan reads today; composer and narrator are checked
-// on the raw tags by assertNarratorTag until ReadAudioTags fills them (M3-14g).
+// assertPartTags compares the tags the scan reads, including the composer without its
+// narrator label and the explicit narrator tag.
 func (readers musicReaders) assertPartTags(t *testing.T, file string, book audiobookRow, part audiobookPartRow) {
 	t.Helper()
 
@@ -203,9 +208,11 @@ func (readers musicReaders) assertPartTags(t *testing.T, file string, book audio
 		t.Fatalf("ReadAudioTags: %v", err)
 	}
 
-	tags.Composer, tags.Narrator, tags.ComposerIsNarrator = "", "", false
-
-	want := media.AudioTags{Artist: book.Author, Album: book.Title, Title: part.Title, Disc: part.Disc, Track: part.Track}
+	want := media.AudioTags{
+		Artist: book.Author, Album: book.Title, Title: part.Title, Disc: part.Disc, Track: part.Track,
+		Composer: strings.TrimPrefix(book.Composer, narratedByLabel), Narrator: book.narratorTag(),
+		ComposerIsNarrator: book.composerNamesNarrator(),
+	}
 	if book.AuthorTag == authorTagAlbumArtist {
 		want.AlbumArtist = book.Author
 	}
@@ -217,6 +224,21 @@ func (readers musicReaders) assertPartTags(t *testing.T, file string, book audio
 	if nominal := secondsToDuration(part.DurationSeconds); (duration - nominal).Abs() > partDurationTolerance {
 		t.Errorf("duration = %v, want %v ± %v", duration, nominal, partDurationTolerance)
 	}
+}
+
+// composerNamesNarrator reports whether the composer tag labels the narrator; the book then
+// has no narrator tag.
+func (book audiobookRow) composerNamesNarrator() bool {
+	return strings.HasPrefix(book.Composer, narratedByLabel)
+}
+
+// narratorTag is the raw narrator tag of the book's parts.
+func (book audiobookRow) narratorTag() string {
+	if book.composerNamesNarrator() {
+		return ""
+	}
+
+	return book.Narrator
 }
 
 // assertNarratorTag reads the raw format tags: the composer and the explicit narrator tag
@@ -241,8 +263,8 @@ func assertNarratorTag(t *testing.T, ffprobePath, file string, book audiobookRow
 	}
 
 	tags := probe.Format.Tags
-	if tags["composer"] != book.Composer || tags["narrator"] != book.Narrator {
-		t.Errorf("composer tag %q, narrator tag %q; want %q, %q", tags["composer"], tags["narrator"], book.Composer, book.Narrator)
+	if tags["composer"] != book.Composer || tags["narrator"] != book.narratorTag() {
+		t.Errorf("composer tag %q, narrator tag %q; want %q, %q", tags["composer"], tags["narrator"], book.Composer, book.narratorTag())
 	}
 }
 

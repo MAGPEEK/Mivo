@@ -1642,7 +1642,7 @@ type ItemSummary struct {
 	// Example: matched
 	MatchState *MatchState `json:"matchState,omitempty"`
 
-	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
+	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"); only durationSeconds of an audiobook covers all its part files. Codec and container identifiers follow ADR 0023.
 	Media *MediaSummary `json:"media,omitempty"`
 
 	// MetadataSources Where the item's metadata came from, for example "nfo", "tmdb" or "musicbrainz"; omitted when unknown. Clients must tolerate new values.
@@ -2123,7 +2123,7 @@ type MediaStream struct {
 // Example: video
 type MediaStreamKind string
 
-// MediaSummary Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023.
+// MediaSummary Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"); only durationSeconds of an audiobook covers all its part files. Codec and container identifiers follow ADR 0023.
 type MediaSummary struct {
 	// AudioCodec Codec of the default audio stream; omitted for files without audio.
 	//

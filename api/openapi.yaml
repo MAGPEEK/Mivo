@@ -2252,8 +2252,9 @@ components:
     MediaSummary:
       type: object
       description: >-
-        Technical summary of an item's primary file for list views ("MKV · H.264 · AAC").
-        Codec and container identifiers follow ADR 0023.
+        Technical summary of an item's primary file for list views ("MKV · H.264 · AAC");
+        only durationSeconds of an audiobook covers all its part files. Codec and container
+        identifiers follow ADR 0023.
       required:
         - available
       properties:

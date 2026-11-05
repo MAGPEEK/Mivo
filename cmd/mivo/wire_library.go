@@ -27,9 +27,9 @@ const closeScansStep = "close scan service"
 
 // enabledLibraryKinds are the library kinds the server can scan and serve end to end: the
 // library manager accepts them and SystemInfo.libraryKinds reports them. A kind joins the
-// list with the task that wires its scan pipeline (music: M3-13g).
+// list with the task that wires its scan pipeline (music: M3-13g, audiobooks: M3-14g).
 func enabledLibraryKinds() []library.Kind {
-	return []library.Kind{library.KindMovies, library.KindShows, library.KindMusic}
+	return []library.Kind{library.KindMovies, library.KindShows, library.KindMusic, library.KindAudiobooks}
 }
 
 // libraryDefinitions converts the configured libraries into domain definitions (platform
@@ -132,6 +132,8 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		Refresher: refresher,
 		// ffprobe reads the tags; the catalog stores disc and MusicBrainz IDs (ADR 0027).
 		Music: appscan.MusicPorts{Tags: adapters.prober, Catalog: catalog},
+		// ffprobe also reads the chapter markers; the catalog stores them per part file.
+		Audiobooks: appscan.AudiobookPorts{Tags: adapters.prober, Chapters: adapters.prober, Catalog: catalog},
 		Finished: func(ctx context.Context, _ string) {
 			app.purgeImageCache(ctx, adapters.images)
 		},

@@ -26,9 +26,10 @@ const (
 // Library kinds (ADR 0022). The domain has its own kinds; cmd converts between them, so
 // platform never imports domain.
 const (
-	LibraryKindMovies = "movies"
-	LibraryKindShows  = "shows"
-	LibraryKindMusic  = "music"
+	LibraryKindMovies     = "movies"
+	LibraryKindShows      = "shows"
+	LibraryKindMusic      = "music"
+	LibraryKindAudiobooks = "audiobooks"
 )
 
 var (
@@ -42,7 +43,7 @@ type LibraryConfig struct {
 	Name string
 	// Path is the absolute root directory. It need not exist yet (ADR 0022).
 	Path string
-	// Kind is LibraryKindMovies (default), LibraryKindShows or LibraryKindMusic.
+	// Kind is LibraryKindMovies (default), LibraryKindShows, LibraryKindMusic or LibraryKindAudiobooks.
 	Kind string
 }
 
@@ -106,7 +107,7 @@ func applyLibraryPath(library *LibraryConfig, raw, baseDir string) error {
 }
 
 func applyLibraryKind(library *LibraryConfig, raw, _ string) error {
-	kind, err := parseChoice(raw, LibraryKindMovies, LibraryKindShows, LibraryKindMusic)
+	kind, err := parseChoice(raw, LibraryKindMovies, LibraryKindShows, LibraryKindMusic, LibraryKindAudiobooks)
 	if err != nil {
 		return err
 	}

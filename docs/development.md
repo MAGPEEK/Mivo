@@ -307,7 +307,7 @@ home directory that exist elsewhere), and `install.kind` / `MIVO_INSTALL_KIND` i
 
 | YAML key | Environment | Default | Meaning |
 |---|---|---|---|
-| `libraries` (list of `name`, `path`, `kind`) | `MIVO_LIBRARIES` (OS path list) | none | library folders imported once at the start (ADR 0028); `kind` is `movies` (default), `shows` or `music`; add and change libraries in the web app (Settings > Libraries) |
+| `libraries` (list of `name`, `path`, `kind`) | `MIVO_LIBRARIES` (OS path list) | none | library folders imported once at the start (ADR 0028); `kind` is `movies` (default), `shows`, `music` or `audiobooks`; add and change libraries in the web app (Settings > Libraries) |
 | `tools.ffmpeg` | `MIVO_TOOLS_FFMPEG` | `ffmpeg` | bare name looked up on `PATH`, or a path |
 | `tools.ffprobe` | `MIVO_TOOLS_FFPROBE` | `ffprobe` | as `tools.ffmpeg` |
 | `transcode.max_sessions` | `MIVO_TRANSCODE_MAX_SESSIONS` | `2` | concurrent re-encoding sessions, `1`–`8` |

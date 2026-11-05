@@ -28,11 +28,14 @@ const (
 
 // FFmpeg metadata keys of the people besides the author. MP4 has no narrator atom (the ipod
 // muxer drops the key), so only the MP3 book carries an explicit narrator, as an ID3 TXXX
-// "narrator" frame. The M4B books carry a composer, which the domain treats as a narrator
-// only when the file says so (media.AudioTags.ComposerIsNarrator), so they expect none.
+// "narrator" frame. The M4B books carry a composer, which the tag reader takes as the
+// narrator only when it is labelled so (narratedByLabel, media.AudioTags.ComposerIsNarrator,
+// task M3-14g): the labelled one expects its narrator, the plain one none.
 const (
 	composerTag = "composer"
 	narratorTag = "narrator"
+	// narratedByLabel starts a composer tag that names the narrator.
+	narratedByLabel = "Narrated by "
 )
 
 const (
@@ -87,8 +90,8 @@ func audiobookCatalog() expectedAudiobooks {
 	return expectedAudiobooks{Path: audiobooksLibraryPath, Books: books}
 }
 
-// clockworkOrchard is a single-file M4B with three chapters and an embedded cover; it names
-// a composer but no narrator.
+// clockworkOrchard is a single-file M4B with three chapters and an embedded cover; its
+// composer tag names the narrator with a label, the only way an M4B can.
 func clockworkOrchard() audiobookSpec {
 	const (
 		title = "The Clockwork Orchard"
@@ -104,7 +107,7 @@ func clockworkOrchard() audiobookSpec {
 	return audiobookSpec{
 		book: expectedAudiobook{
 			Title: title, Author: "Ada Inkwell", AuthorTag: authorTagAlbumArtist,
-			Composer: "Nora Vale", Path: "Ada Inkwell", StandsAlone: true, Container: audiobookContainerM4B,
+			Composer: narratedByLabel + "Nora Vale", Narrator: "Nora Vale", Path: "Ada Inkwell", StandsAlone: true, Container: audiobookContainerM4B,
 			CoverSource: coverSourceEmbedded, CoverFile: file,
 		},
 		parts: []audiobookPartSpec{{
@@ -151,8 +154,8 @@ func gardenNotes() audiobookSpec {
 }
 
 // midnightRecipes is an M4B without chapters in the shared folder; it stands alone, so its
-// cover is the image named after the file, not a folder image. Like the other M4B it names
-// a composer but no narrator.
+// cover is the image named after the file, not a folder image. Its composer has no
+// narrator label, so it names no narrator.
 func midnightRecipes() audiobookSpec {
 	const title = "Midnight Recipes"
 

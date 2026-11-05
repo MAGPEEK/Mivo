@@ -1236,7 +1236,7 @@ export interface components {
          * @enum {string}
          */
         HdrFormat: "hdr10" | "hlg";
-        /** @description Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"). Codec and container identifiers follow ADR 0023. */
+        /** @description Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"); only durationSeconds of an audiobook covers all its part files. Codec and container identifiers follow ADR 0023. */
         MediaSummary: {
             /**
              * @description Whether the file was probed successfully and can be played. False when probing failed; the item is listed but cannot be played.

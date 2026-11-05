@@ -7,11 +7,11 @@ Files/areas: `cmd/mivo`, `restapi` (`libraryKinds`, `chapters` mapping), config 
 Audiobooks work on the server end to end.
 
 ## Acceptance criteria
-- [ ] `libraryKinds` reports `audiobooks`; item detail returns `chapters`.
-- [ ] Integration test over the corpus asserts books, authors, chapter titles and offsets.
-- [ ] A book file plays through the existing playback path.
-- [ ] Tests: Go integration test; `go test -race -tags webui ./cmd/...`.
-- [ ] Gates: lint + layer rules + coverage thresholds pass.
+- [x] `libraryKinds` reports `audiobooks`; item detail returns `chapters`.
+- [x] Integration test over the corpus asserts books, authors, chapter titles and offsets.
+- [x] A book file plays through the existing playback path.
+- [x] Tests: Go integration test; `go test -race -tags webui ./cmd/...`.
+- [x] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes
 Per-user resume is M7; do not add progress storage.

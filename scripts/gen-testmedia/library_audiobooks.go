@@ -31,7 +31,8 @@ type expectedAudiobook struct {
 	// AuthorTag is "album_artist" (written with an equal artist tag) or "artist".
 	AuthorTag string `json:"authorTag"`
 	// Composer is the raw composer tag of every part. Narrator is the narrator a scan must
-	// produce, written as an explicit narrator tag (ID3 TXXX); a composer alone is no
+	// produce: written as an explicit narrator tag (ID3 TXXX), or named by a composer that
+	// starts with narratedByLabel (no narrator tag then); an unlabelled composer is no
 	// narrator (media.AudioTags.ComposerIsNarrator). Both are omitted when empty.
 	Composer string `json:"composer,omitempty"`
 	Narrator string `json:"narrator,omitempty"`
@@ -167,7 +168,7 @@ func audiobookPartTags(book expectedAudiobook, part audiobookPartSpec) map[strin
 		tags[composerTag] = book.Composer
 	}
 
-	if book.Narrator != "" {
+	if book.Narrator != "" && !book.composerNamesNarrator() {
 		tags[narratorTag] = book.Narrator
 	}
 
@@ -180,6 +181,11 @@ func audiobookPartTags(book expectedAudiobook, part audiobookPartSpec) map[strin
 	}
 
 	return tags
+}
+
+// composerNamesNarrator reports whether the composer tag carries the narrator label.
+func (book expectedAudiobook) composerNamesNarrator() bool {
+	return strings.HasPrefix(book.Composer, narratedByLabel)
 }
 
 // writeAudiobookSummary adds one line per book, e.g.

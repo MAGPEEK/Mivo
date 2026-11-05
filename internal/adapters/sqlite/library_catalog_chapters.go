@@ -8,6 +8,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
@@ -58,7 +59,7 @@ func chapterRows(fileID string, chapters []media.Chapter) ([]sqlcgen.InsertFileC
 			StartMs: chapter.Start.Milliseconds(), EndMs: chapter.End.Milliseconds(),
 		}
 		if row.EndMs <= row.StartMs {
-			return nil, fmt.Errorf("chapter %d %q: shorter than a millisecond: %w", ordinal, chapter.Title, domain.ErrInvalid)
+			return nil, fmt.Errorf("chapter %d %q: shorter than a millisecond: %w", ordinal, row.Title, domain.ErrInvalid)
 		}
 
 		rows = append(rows, row)
@@ -111,18 +112,28 @@ func replaceChapterRows(ctx context.Context, queries *sqlcgen.Queries, fileID st
 // shifted by the summed lengths of the files before it, including files without chapters.
 // The length of a file is the larger of its probed duration and its last chapter end, so a
 // file with an unknown (0) duration or chapters past its end never makes the next file's
-// chapters overlap its own. This fits audiobooks;
-// an item with alternative versions (milestone 4 video chapters) needs a per-file view. An
-// item without chapters yields an empty list, an unknown item an error wrapping
-// domain.ErrNotFound.
+// chapters overlap its own. This fits audiobooks; an item with alternative versions
+// (milestone 4 video chapters) needs a per-file view. An item without chapters yields an
+// empty list, an unknown item an error wrapping domain.ErrNotFound.
 func (catalog *CatalogReader) ItemChapters(ctx context.Context, itemID string) ([]applibrary.ItemChapter, error) {
-	rows, err := sqlcgen.New(catalog.reader).ListItemChapters(ctx, itemID)
+	chapters, err := readItemChapters(ctx, sqlcgen.New(catalog.reader), itemID)
 	if err != nil {
 		return nil, fmt.Errorf("read chapters of item %q: %w", itemID, err)
 	}
 
+	return chapters, nil
+}
+
+// readItemChapters is ItemChapters on the given queries, so the item detail reads the
+// chapters in its own read transaction.
+func readItemChapters(ctx context.Context, queries *sqlcgen.Queries, itemID string) ([]applibrary.ItemChapter, error) {
+	rows, err := queries.ListItemChapters(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("list chapters: %w", err)
+	}
+
 	if len(rows) == 0 {
-		return nil, fmt.Errorf("read chapters of item %q: %w", itemID, domain.ErrNotFound)
+		return nil, fmt.Errorf("item: %w", domain.ErrNotFound)
 	}
 
 	return itemChapters(rows), nil
@@ -159,11 +170,39 @@ func itemChapters(rows []sqlcgen.ListItemChaptersRow) []applibrary.ItemChapter {
 				Title: row.Title.String, FileRef: row.RelativePath.String,
 				Start: offset + milliseconds(row.StartMs.Int64), End: offset + end,
 			},
-			FileID: currentFileID,
+			FileID: currentFileID, FileStart: offset,
 		})
 	}
 
 	return chapters
+}
+
+// audiobookDurations returns the summed file length of each listed audiobook; other kinds
+// are skipped, and a page without audiobooks costs no query.
+func audiobookDurations(ctx context.Context, queries *sqlcgen.Queries, listed []listedItem) (map[string]time.Duration, error) {
+	var bookIDs []string
+
+	for _, entry := range listed {
+		if entry.item.Kind == library.ItemKindAudiobook.String() {
+			bookIDs = append(bookIDs, entry.item.ID)
+		}
+	}
+
+	if len(bookIDs) == 0 {
+		return nil, nil
+	}
+
+	rows, err := queries.ListItemPartDurations(ctx, bookIDs)
+	if err != nil {
+		return nil, fmt.Errorf("read audiobook durations: %w", err)
+	}
+
+	durations := make(map[string]time.Duration, len(rows))
+	for _, row := range rows {
+		durations[row.ItemID] = milliseconds(row.DurationMs)
+	}
+
+	return durations, nil
 }
 
 func milliseconds(count int64) time.Duration {

@@ -47,7 +47,8 @@ func TestLoadLibrariesFromFile(t *testing.T) {
 		"  - path: " + yamlQuoted(shows) + "\n" +
 		"    kind: Shows\n" +
 		"  - {name: '  Kids  ', path: ../movies-kids, kind: movies}\n" +
-		"  - {name: Music, path: ../music, kind: music}\n"
+		"  - {name: Music, path: ../music, kind: music}\n" +
+		"  - {name: Books, path: ../books, kind: Audiobooks}\n"
 	f := newFixture(t, yaml, nil)
 
 	got, err := f.load()
@@ -61,6 +62,7 @@ func TestLoadLibrariesFromFile(t *testing.T) {
 		{Name: "TV Shows", Path: shows, Kind: config.LibraryKindShows},
 		{Name: "Kids", Path: filepath.Join(beside, "movies-kids"), Kind: config.LibraryKindMovies},
 		{Name: "Music", Path: filepath.Join(beside, "music"), Kind: config.LibraryKindMusic},
+		{Name: "Books", Path: filepath.Join(beside, "books"), Kind: config.LibraryKindAudiobooks},
 	}
 	if !reflect.DeepEqual(got.Libraries, want) {
 		t.Errorf("Libraries = %+v, want %+v", got.Libraries, want)
