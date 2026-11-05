@@ -2,16 +2,19 @@ import type { Row } from "@mivo/api-client";
 import { Link } from "@tanstack/react-router";
 
 import { MediaRow, useRowTitle, type SeeAllLinkProps } from "../../../shared/ui";
-import { rowCardFormat, seeAllTarget } from "../lib/homeRows";
+import { rowCardFormat, seeAllTarget } from "../lib/serverRows";
 import { RowItemCard } from "./RowItemCard";
 
-/** Props of {@link HomeRow}. */
-export interface HomeRowProps {
+/** Props of {@link ServerRow}. */
+export interface ServerRowProps {
   readonly row: Row;
 }
 
-/** One server row on Home: its translated title, its cards and "See all" into Browse. */
-export function HomeRow({ row }: HomeRowProps) {
+/**
+ * One row the server generated, on Home or a library's Overview pivot: its translated title,
+ * its cards and "See all" into the Browse pivot of its library.
+ */
+export function ServerRow({ row }: ServerRowProps) {
   const rowTitle = useRowTitle();
   const format = rowCardFormat(row.cardFormat);
   const target = seeAllTarget(row);

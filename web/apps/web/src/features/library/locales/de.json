@@ -1,16 +1,36 @@
 {
   "heading": "Bibliothek",
   "loading": "Bibliothek wird geladen",
-  "itemCount_one": "{{count, number}} Video",
-  "itemCount_other": "{{count, number}} Videos",
-  "audiobookCount_one": "{{count, number}} Hörbuch",
-  "audiobookCount_other": "{{count, number}} Hörbücher",
-  "photoItemCount_one": "{{count, number}} Eintrag",
-  "photoItemCount_other": "{{count, number}} Einträge",
   "libraryUnavailable": "Ordner nicht erreichbar",
   "loadFailed": "Die Bibliothek konnte nicht geladen werden.",
   "retry": "Erneut versuchen",
   "backHome": "Zur Startseite",
+  "pivots": {
+    "label": "Bibliotheksansichten",
+    "overview": "Übersicht",
+    "browse": "Durchsuchen"
+  },
+  "overview": {
+    "loading": "Reihen werden geladen",
+    "loadFailed": "Die Übersicht konnte nicht geladen werden.",
+    "notSupported": "Dieser Server kann noch keine Übersicht zeigen. Unter „Durchsuchen“ ist alles da.",
+    "openBrowse": "Durchsuchen öffnen",
+    "hint": {
+      "noItems": "Diese Bibliothek enthält noch keine Titel. Sie erscheinen hier nach dem ersten Scan.",
+      "scanning": "Der erste Scan läuft. Neue Titel erscheinen hier in Kürze.",
+      "notEnoughData": "Für einige Reihen fehlen noch Daten, zum Beispiel Metadaten. Unter „Durchsuchen“ ist alles da.",
+      "generic": "Hier gibt es noch nichts zu sehen. Unter „Durchsuchen“ ist alles da."
+    }
+  },
+  "rowCard": {
+    "newEpisodes_one": "{{count, number}} neue Folge",
+    "newEpisodes_other": "{{count, number}} neue Folgen",
+    "seasons_one": "{{count, number}} Staffel",
+    "seasons_other": "{{count, number}} Staffeln",
+    "season": "Staffel {{number}}",
+    "specials": "Specials",
+    "unavailable": "Nicht verfügbar"
+  },
   "sidebar": {
     "loading": "Bibliotheken werden geladen",
     "loadFailed": "Bibliotheken konnten nicht geladen werden",

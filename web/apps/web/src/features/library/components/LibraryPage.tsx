@@ -1,22 +1,24 @@
-import type { Library, LibraryKind } from "@mivo/api-client";
+import type { Library } from "@mivo/api-client";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
-import { AlertIcon, Badge, Skeleton } from "../../../shared/ui";
+import { AlertIcon, Badge, Skeleton, Tabs } from "../../../shared/ui";
 import type { BrowseSearchChange } from "../hooks/useBrowseState";
 import { useLibrary } from "../hooks/useLibrary";
-import type { BrowseSearch } from "../lib/browseQuery";
+import { useLibraryPivot } from "../hooks/useLibraryPivot";
+import { libraryPivots, type BrowseSearch } from "../lib/browseQuery";
 import { errorCodeOf, errorKeyForCode } from "../lib/errorKeys";
 import { libraryNamespace } from "../locales";
+import { BrowsePivot, type LibraryItemsRenderer } from "./BrowsePivot";
 import { primaryButtonClass } from "./buttonClasses";
-import { LibraryItemGrid, type LibraryItemsRenderer } from "./LibraryItemGrid";
+import { OverviewPivot } from "./OverviewPivot";
 import { ScanControl } from "./ScanControl";
 
 /** Props of {@link LibraryPage}. */
 export interface LibraryPageProps {
   /** Library from the route `/libraries/$libraryId`. */
   readonly libraryId: string;
-  /** Validated search of the route: sort, type and filter of the grid. */
+  /** Validated search of the route: pivot, and sort, type and filter of the Browse pivot. */
   readonly search: BrowseSearch;
   readonly onSearchChange: BrowseSearchChange;
   /**
@@ -28,21 +30,7 @@ export interface LibraryPageProps {
 
 const headingClass = "text-3xl font-semibold";
 
-// The library counts its top-level items: books in an audiobook library, albums and loose
-// photos in a photo library. The other kinds keep the video count until they get their own
-// (BACKLOG M3-14h).
-function itemCountKey(kind: LibraryKind): "audiobookCount" | "photoItemCount" | "itemCount" {
-  switch (kind) {
-    case "audiobooks":
-      return "audiobookCount";
-    case "photos":
-      return "photoItemCount";
-    default:
-      return "itemCount";
-  }
-}
-
-/** One library: name, item count, scan button and the grid of its items. */
+/** One library: name, scan button and the pivots Overview and Browse (LB-01). */
 export function LibraryPage({ libraryId, search, onSearchChange, renderItems }: LibraryPageProps) {
   const { t } = useTranslation(libraryNamespace);
   const library = useLibrary(libraryId);
@@ -77,14 +65,16 @@ interface LibraryContentProps extends Omit<LibraryPageProps, "libraryId"> {
 
 function LibraryContent({ library, search, onSearchChange, renderItems }: LibraryContentProps) {
   const { t } = useTranslation(libraryNamespace);
+  const { pivot, selectPivot, onBrowseSearchChange } = useLibraryPivot({
+    libraryId: library.id,
+    search,
+    onSearchChange,
+  });
   return (
     <>
-      <div className="mb-8 flex flex-col gap-3">
+      <div className="mb-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className={headingClass}>{library.name}</h1>
-          <p className="text-sm text-text-muted">
-            {t(itemCountKey(library.kind), { count: library.itemCount })}
-          </p>
           {!library.available && (
             <Badge icon={<AlertIcon className="size-3 shrink-0 text-accent" />}>
               {t("libraryUnavailable")}
@@ -93,13 +83,31 @@ function LibraryContent({ library, search, onSearchChange, renderItems }: Librar
         </div>
         <ScanControl library={library} />
       </div>
-      <LibraryItemGrid
-        libraryId={library.id}
-        libraryKind={library.kind}
-        search={search}
-        onSearchChange={onSearchChange}
-        renderItems={renderItems}
-      />
+      <Tabs
+        label={t("pivots.label")}
+        tabs={libraryPivots.map((id) => ({ id, label: t(`pivots.${id}`) }))}
+        value={pivot}
+        onChange={selectPivot}
+      >
+        <div className="pt-6">
+          {pivot === "overview" ? (
+            <OverviewPivot
+              libraryId={library.id}
+              onOpenBrowse={() => {
+                selectPivot("browse");
+              }}
+            />
+          ) : (
+            <BrowsePivot
+              libraryId={library.id}
+              libraryKind={library.kind}
+              search={search}
+              onSearchChange={onBrowseSearchChange}
+              renderItems={renderItems}
+            />
+          )}
+        </div>
+      </Tabs>
     </>
   );
 }

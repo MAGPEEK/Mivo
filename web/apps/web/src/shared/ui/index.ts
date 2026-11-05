@@ -64,6 +64,7 @@ export {
 } from "./Sidebar";
 export { Poster, type PosterAspect, type PosterProps } from "./Poster";
 export { Skeleton, type SkeletonProps } from "./Skeleton";
+export { RowsSkeleton, type RowsSkeletonProps } from "./RowsSkeleton";
 export { useMediaQuery } from "./useMediaQuery";
 export { TopBar, type TopBarProps } from "./TopBar";
 export {

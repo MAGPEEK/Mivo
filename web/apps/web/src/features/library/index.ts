@@ -1,5 +1,6 @@
 export { LibraryPage, type LibraryPageProps } from "./components/LibraryPage";
-export type { LibraryItemsRenderer, LibraryItemsView } from "./components/LibraryItemGrid";
+export type { LibraryItemsRenderer, LibraryItemsView } from "./components/BrowsePivot";
+export { ServerRow, type ServerRowProps } from "./components/ServerRow";
 export {
   BrowseItemGrid,
   type BrowseCardProps,

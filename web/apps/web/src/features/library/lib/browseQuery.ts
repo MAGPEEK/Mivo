@@ -19,8 +19,19 @@ export type BrowseType = Extract<
 /** Sort direction the toolbar offers. */
 export type BrowseOrder = "asc" | "desc";
 
+/** The two pivots of a library page (LB-01): the server's rows or the full listing. */
+export type LibraryPivot = "overview" | "browse";
+
+/** Every pivot, in tab order. */
+export const libraryPivots: readonly LibraryPivot[] = ["overview", "browse"];
+
+/** The URL search of the Browse pivot: everything but the pivot itself. */
+export type BrowseListingSearch = Omit<BrowseSearch, "view">;
+
 /** Validated search parameters of the library route; absent keys are the defaults. */
 export interface BrowseSearch {
+  /** Pivot of the page; absent opens the pivot remembered for the library (task M5-30). */
+  readonly view?: LibraryPivot | undefined;
   /** Item kind to list; absent lists the library's top-level kind. */
   readonly type?: BrowseType | undefined;
   /** Sort key; absent sorts by title. */
@@ -118,7 +129,9 @@ export function validateBrowseSearch(search: Readonly<Record<string, unknown>>):
   const type = search["type"];
   const sort = parseSort(search["sort"]);
   const random = sort === "random";
+  const view = search["view"];
   return {
+    view: libraryPivots.find((pivot) => pivot === view),
     type: typeof type === "string" && browsableTypes.has(type) ? (type as BrowseType) : undefined,
     sort,
     order: !random && search["order"] === "desc" ? "desc" : undefined,
@@ -148,8 +161,11 @@ export function resolveBrowse(search: BrowseSearch, kind: LibraryKind): BrowseSt
   };
 }
 
-/** The URL search of `state`; defaults are left out, so the plain library URL stays clean. */
-export function toBrowseSearch(state: BrowseState, kind: LibraryKind): BrowseSearch {
+/**
+ * The URL search of `state`; defaults are left out, so the plain library URL stays clean. The
+ * pivot is not Browse state; the page keeps it.
+ */
+export function toBrowseSearch(state: BrowseState, kind: LibraryKind): BrowseListingSearch {
   const random = state.sort === "random";
   return {
     type: state.type === browseTypesFor(kind)[0] ? undefined : state.type,

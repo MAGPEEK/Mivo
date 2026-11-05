@@ -3,11 +3,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import { useApiClient } from "../../../shared/api";
-import {
-  isNotImplemented,
-  libraryItemsQueryOptions,
-  type LibraryListQuery,
-} from "../api/libraryQueries";
+import { isNotImplemented, libraryItemsQueryOptions } from "../api/libraryQueries";
+import type { BrowseListQuery } from "../lib/browseQuery";
 
 /** The loaded items of a library and the controls to load more. */
 export interface LibraryItems {
@@ -43,11 +40,18 @@ function itemsStatus(hasPages: boolean, isError: boolean): LibraryItems["status"
 
 /**
  * Pages through the items of a library with the server's `nextCursor`, sorted and filtered by
- * `listQuery`.
+ * `listQuery`. Without a query (`undefined`) nothing is requested and the items stay pending,
+ * e.g. while a random sort still waits for its seed.
  */
-export function useLibraryItems(libraryId: string, listQuery?: LibraryListQuery): LibraryItems {
+export function useLibraryItems(
+  libraryId: string,
+  listQuery: BrowseListQuery | undefined,
+): LibraryItems {
   const client = useApiClient();
-  const query = useInfiniteQuery(libraryItemsQueryOptions(client, libraryId, listQuery));
+  const query = useInfiniteQuery({
+    ...libraryItemsQueryOptions(client, libraryId, listQuery ?? {}),
+    enabled: listQuery !== undefined,
+  });
   const { data, fetchNextPage, refetch, isFetchingNextPage } = query;
   const items = useMemo(() => data?.pages.flatMap((page) => page.items) ?? [], [data]);
   const loadMore = useCallback(() => {

@@ -58,6 +58,11 @@ describe("rowTitleMessage", () => {
       { kind: "topRated" as RowTitleSource["kind"], titleKey: "rows.topRated" },
       { key: "rows.fallback" },
     ],
+    [
+      "a key and kind named like Object.prototype members",
+      { kind: "constructor" as RowTitleSource["kind"], titleKey: "toString" },
+      { key: "rows.fallback" },
+    ],
   ])("%s", (_, row, expected) => {
     expect(rowTitleMessage(row)).toEqual(expected);
   });

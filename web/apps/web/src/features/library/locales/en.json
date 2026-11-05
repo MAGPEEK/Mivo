@@ -1,16 +1,36 @@
 {
   "heading": "Library",
   "loading": "Loading library",
-  "itemCount_one": "{{count, number}} video",
-  "itemCount_other": "{{count, number}} videos",
-  "audiobookCount_one": "{{count, number}} audiobook",
-  "audiobookCount_other": "{{count, number}} audiobooks",
-  "photoItemCount_one": "{{count, number}} item",
-  "photoItemCount_other": "{{count, number}} items",
   "libraryUnavailable": "Folder unavailable",
   "loadFailed": "The library could not be loaded.",
   "retry": "Try again",
   "backHome": "Back to home",
+  "pivots": {
+    "label": "Library views",
+    "overview": "Overview",
+    "browse": "Browse"
+  },
+  "overview": {
+    "loading": "Loading rows",
+    "loadFailed": "The overview could not be loaded.",
+    "notSupported": "This server cannot show an overview yet. Everything is under Browse.",
+    "openBrowse": "Open Browse",
+    "hint": {
+      "noItems": "This library has no titles yet. They appear here after the first scan.",
+      "scanning": "The first scan is running. New titles appear here shortly.",
+      "notEnoughData": "Some rows need more data, for example metadata. Everything is under Browse.",
+      "generic": "Nothing to show here yet. Everything is under Browse."
+    }
+  },
+  "rowCard": {
+    "newEpisodes_one": "{{count, number}} new episode",
+    "newEpisodes_other": "{{count, number}} new episodes",
+    "seasons_one": "{{count, number}} season",
+    "seasons_other": "{{count, number}} seasons",
+    "season": "Season {{number}}",
+    "specials": "Specials",
+    "unavailable": "Unavailable"
+  },
   "sidebar": {
     "loading": "Loading libraries",
     "loadFailed": "Libraries could not be loaded",

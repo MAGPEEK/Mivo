@@ -3,10 +3,11 @@ import {
   requestData,
   type ApiClient,
   type Library,
-  type LibraryItemsQuery,
   type ScanStatus,
 } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+
+import type { BrowseListQuery } from "../lib/browseQuery";
 
 /** Prefix of every library cache key; invalidating it refreshes lists, details and items. */
 export const librariesQueryKey = ["libraries"] as const;
@@ -22,6 +23,14 @@ export function libraryQueryKey(libraryId: string) {
 /** Cache key of the pages of `GET /api/v1/libraries/{libraryId}/items`. */
 export function libraryItemsQueryKey(libraryId: string) {
   return [...libraryQueryKey(libraryId), "items"] as const;
+}
+
+/**
+ * Cache key of `GET /api/v1/libraries/{libraryId}/rows` (Overview pivot). It sits below the
+ * libraries key, so a finished scan refreshes the rows too.
+ */
+export function libraryRowsQueryKey(libraryId: string) {
+  return [...libraryQueryKey(libraryId), "rows"] as const;
 }
 
 /** How often the library is reloaded while its scan runs (OD-3 A, ADR 0022). */
@@ -102,9 +111,6 @@ export function libraryQueryOptions(client: ApiClient, libraryId: string) {
   });
 }
 
-/** Sort and filters of a library listing; the paging parameters are added per page. */
-export type LibraryListQuery = Omit<LibraryItemsQuery, "limit" | "cursor">;
-
 /**
  * Infinite query options that page through a library's items with `nextCursor`, sorted and
  * filtered by `listQuery`. Every page repeats the same query, as the contract requires; a new
@@ -113,7 +119,7 @@ export type LibraryListQuery = Omit<LibraryItemsQuery, "limit" | "cursor">;
 export function libraryItemsQueryOptions(
   client: ApiClient,
   libraryId: string,
-  listQuery: LibraryListQuery = {},
+  listQuery: BrowseListQuery = {},
 ) {
   return infiniteQueryOptions({
     // Below the items key, so invalidating the library's items reaches every sort and filter.
@@ -134,6 +140,21 @@ export function libraryItemsQueryOptions(
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor,
+    retry: shouldRetryLibraryQuery,
+  });
+}
+
+/** Query options for the rows of a library's Overview pivot, as the server generates them. */
+export function libraryRowsQueryOptions(client: ApiClient, libraryId: string) {
+  return queryOptions({
+    queryKey: libraryRowsQueryKey(libraryId),
+    queryFn: ({ signal }) =>
+      requestData(
+        client.GET("/api/v1/libraries/{libraryId}/rows", {
+          params: { path: { libraryId } },
+          signal,
+        }),
+      ),
     retry: shouldRetryLibraryQuery,
   });
 }

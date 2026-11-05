@@ -57,7 +57,7 @@ describe("Photo library grids", () => {
     expect(cover?.parentElement?.className).toContain("aspect-square");
     // An album without a ready photo shows the photo placeholder.
     expect(list.querySelector('[data-icon="photos"]')).not.toBeNull();
-    expect(screen.getByText("2 items")).toBeTruthy();
+    expect(screen.getByText("2 albums")).toBeTruthy();
     expect(await blockingAxeViolations(document.body)).toEqual([]);
   });
 

@@ -378,3 +378,36 @@ test("Home shows a recently added row per library with See all into Browse", asy
   expect(href.searchParams.get("sort")).toBe("dateAdded");
   expect(await blockingAxeViolations(page)).toEqual([]);
 });
+
+test("a library opens on Browse, shows its server rows on Overview and remembers the pivot (M5-30)", async ({
+  page,
+}) => {
+  const grid = await openLibraryByName(page, moviesLibraryName);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("tab", { name: "Browse", selected: true })).toBeVisible();
+  await expect(grid.getByRole("listitem").first()).toBeVisible();
+  const libraryPath = new URL(page.url()).pathname;
+
+  await main.getByRole("tab", { name: "Overview" }).click();
+
+  await expect(page).toHaveURL(/[?&]view=overview(&|$)/);
+  const recent = main.getByRole("region", { name: "Recently added" });
+  await expect(recent).toBeVisible();
+  const movieTitles = expectedLibrary("movies").items.map((item) => item.title);
+  const firstCard = recent.getByRole("listitem").first().getByRole("link");
+  expect(movieTitles).toContain(await firstCard.textContent());
+  await expect(grid).toHaveCount(0);
+  expect(await blockingAxeViolations(page)).toEqual([]);
+
+  // A plain library link opens the pivot used last on this device.
+  await page.goto(libraryPath);
+  await expect(main.getByRole("tab", { name: "Overview", selected: true })).toBeVisible();
+  await expect(recent).toBeVisible();
+
+  await recent.getByRole("link", { name: "See all: Recently added" }).click();
+
+  await expect(page).toHaveURL(/[?&]view=browse(&|$)/);
+  await expect(page).toHaveURL(/[?&]sort=dateAdded(&|$)/);
+  await expect(main.getByRole("tab", { name: "Browse", selected: true })).toBeVisible();
+  await expect(grid.getByRole("listitem")).toHaveCount(movieTitles.length);
+});

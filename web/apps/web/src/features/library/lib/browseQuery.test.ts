@@ -14,6 +14,7 @@ import {
 } from "./browseQuery";
 
 const emptySearch: BrowseSearch = {
+  view: undefined,
   type: undefined,
   sort: undefined,
   order: undefined,
@@ -35,6 +36,18 @@ describe("validateBrowseSearch", () => {
         matchState: "unmatched",
       },
     },
+    {
+      name: "the Overview pivot",
+      raw: { view: "overview" },
+      expected: { ...emptySearch, view: "overview" },
+    },
+    {
+      name: "the Browse pivot with its state",
+      raw: { view: "browse", sort: "year" },
+      expected: { ...emptySearch, view: "browse", sort: "year" },
+    },
+    { name: "an unknown pivot", raw: { view: "grid" }, expected: emptySearch },
+    { name: "a pivot that is not text", raw: { view: ["overview"] }, expected: emptySearch },
     { name: "an unknown type", raw: { type: "episode" }, expected: emptySearch },
     { name: "an unknown sort", raw: { sort: "rating" }, expected: emptySearch },
     { name: "the default sort", raw: { sort: "title" }, expected: emptySearch },

@@ -13,14 +13,5 @@
     "notEnoughData": "Für einige Reihen fehlen noch Metadaten. Alle Titel findest du unter „Durchsuchen“ in der Bibliothek.",
     "allUnpinned": "Hefte eine Bibliothek in der Seitenleiste an, um ihre Reihen hier zu sehen.",
     "generic": "Hier gibt es noch nichts zu sehen."
-  },
-  "card": {
-    "newEpisodes_one": "{{count}} neue Folge",
-    "newEpisodes_other": "{{count}} neue Folgen",
-    "seasons_one": "{{count}} Staffel",
-    "seasons_other": "{{count}} Staffeln",
-    "season": "Staffel {{number}}",
-    "specials": "Specials",
-    "unavailable": "Nicht verfügbar"
   }
 }

@@ -57,8 +57,10 @@ describe("useBrowseState", () => {
   });
 
   it("adds a missing random seed to the URL without a new history entry", () => {
-    const { onSearchChange } = renderBrowse({ sort: "random" });
+    const { result, onSearchChange } = renderBrowse({ sort: "random" });
 
+    // No unseeded listing is requested while the seed is on its way into the URL.
+    expect(result.current.query).toBeUndefined();
     expect(onSearchChange).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ sort: "random", seed: fixedSeed }),
       { replace: true },

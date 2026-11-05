@@ -92,3 +92,18 @@ describe("player route search", () => {
     expect(router.state.matches.at(-1)?.search).toMatchObject({ order });
   });
 });
+
+describe("library route search", () => {
+  it.each([
+    { search: "?view=overview", view: "overview" },
+    { search: "?view=browse", view: "browse" },
+    { search: "?view=grid", view: undefined },
+    { search: "", view: undefined },
+  ])("validates the pivot of $search", async ({ search, view }) => {
+    const { router } = renderApp(`/libraries/library-1${search}`);
+
+    await screen.findByRole("main");
+
+    expect(router.state.matches.at(-1)?.search).toMatchObject({ view });
+  });
+});

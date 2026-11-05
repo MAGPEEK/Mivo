@@ -8,12 +8,17 @@ import {
   useSearch,
   type RouterHistory,
 } from "@tanstack/react-router";
-import { createElement } from "react";
+import { createElement, useCallback } from "react";
 
 import { AudiobookGrid } from "../features/audiobooks";
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
-import { LibraryPage, validateBrowseSearch, type LibraryItemsRenderer } from "../features/library";
+import {
+  LibraryPage,
+  validateBrowseSearch,
+  type BrowseSearchChange,
+  type LibraryItemsRenderer,
+} from "../features/library";
 import { MusicLibraryGrid } from "../features/music";
 import { PhotoAlbumGrid, PhotoGrid } from "../features/photos";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
@@ -45,12 +50,17 @@ function LibraryRoute() {
   const { libraryId } = useParams({ from: "/shell/libraries/$libraryId" });
   const search = useSearch({ from: "/shell/libraries/$libraryId" });
   const navigate = useNavigate({ from: "/libraries/$libraryId" });
+  // Stable, so effects that depend on it (the random seed) do not run again on every render.
+  const onSearchChange = useCallback<BrowseSearchChange>(
+    (next, navigation) => {
+      void navigate({ search: next, replace: navigation?.replace === true, resetScroll: true });
+    },
+    [navigate],
+  );
   return createElement(LibraryPage, {
     libraryId,
     search,
-    onSearchChange: (next, navigation) => {
-      void navigate({ search: next, replace: navigation?.replace === true, resetScroll: true });
-    },
+    onSearchChange,
     renderItems: itemsViewByType,
   });
 }

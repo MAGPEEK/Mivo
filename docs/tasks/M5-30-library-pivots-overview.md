@@ -9,16 +9,16 @@ Every library page has tabs Overview and Browse; Overview shows the server rows 
 opens on Browse.
 
 ## Acceptance criteria
-- [ ] `?view=overview|browse` validated in `router.ts`; invalid values fall back to the
+- [x] `?view=overview|browse` validated in `router.ts`; invalid values fall back to the
       remembered pivot; tab change updates the URL without a full reload.
-- [ ] Overview renders `/libraries/{id}/rows` with `MediaRow`; too little data shows the hint
+- [x] Overview renders `/libraries/{id}/rows` with `MediaRow`; too little data shows the hint
       from the contract instead of an empty page.
-- [ ] Remembered pivot per library in local storage; a library without remembered pivot opens
+- [x] Remembered pivot per library in local storage; a library without remembered pivot opens
       Browse.
-- [ ] Existing grid behaviour (Load more) is untouched until M5-34.
-- [ ] Tests: router validation, pivot memory function, hint state, axe clean; existing
+- [x] Existing grid behaviour (Load more) is untouched until M5-34.
+- [x] Tests: router validation, pivot memory function, hint state, axe clean; existing
       `LibraryPage` tests updated, not deleted.
-- [ ] Gates: `pnpm -C web lint`, `pnpm -C web test`, `pnpm -C web build`.
+- [x] Gates: `pnpm -C web lint`, `pnpm -C web test`, `pnpm -C web build`.
 
 ## Notes
 Keep `LibraryPage` < 150 lines by moving state to hooks. M7 rows (continue watching, not

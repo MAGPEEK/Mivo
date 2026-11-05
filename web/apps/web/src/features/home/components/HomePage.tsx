@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 
+import { ServerRow } from "../../library";
 import { useHomeRows, type HomeRowsState } from "../hooks/useHomeRows";
-import { HomeRow } from "./HomeRow";
 import { NoLibraries, RowsHint, RowsLoadError, RowsSkeleton } from "./HomeStates";
 
 /**
@@ -31,7 +31,7 @@ function HomeContent({ home }: { readonly home: HomeRowsState }) {
       return (
         <div className="flex flex-col gap-8">
           {home.rows.map((row) => (
-            <HomeRow key={row.id} row={row} />
+            <ServerRow key={row.id} row={row} />
           ))}
           {home.hint !== undefined && <RowsHint hint={home.hint} />}
         </div>

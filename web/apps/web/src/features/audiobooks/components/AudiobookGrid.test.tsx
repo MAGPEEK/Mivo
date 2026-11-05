@@ -95,10 +95,10 @@ describe("Audiobook grid", () => {
     expect(await blockingAxeViolations(document.body)).toEqual([]);
   });
 
-  it("names the books in the library heading's count", async () => {
+  it("counts the books in the Browse toolbar", async () => {
     renderBooks([itemsRoute(library.id, [orchard])]);
 
-    expect(await screen.findByText("2 audiobooks")).toBeTruthy();
+    expect(await screen.findByText("1 audiobook")).toBeTruthy();
   });
 
   it("shows a card without an author line when the book cannot be loaded", async () => {

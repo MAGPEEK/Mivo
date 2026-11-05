@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import {
   browseSortsFor,
   browseTypesFor,
+  defaultSort,
   maxSeed,
   resolveBrowse,
   toBrowseSearch,
@@ -38,8 +39,11 @@ export interface BrowseControls extends BrowseState {
   /** The item kinds the library can list; the type switch shows only with more than one. */
   readonly types: readonly BrowseType[];
   readonly sorts: readonly ItemSort[];
-  /** The listing query of the state; a new value starts again at the first page. */
-  readonly query: BrowseListQuery;
+  /**
+   * The listing query of the state; a new value starts again at the first page. `undefined`
+   * while a random sort waits for its seed, so no unseeded listing is requested.
+   */
+  readonly query: BrowseListQuery | undefined;
   readonly selectType: (type: string) => void;
   /** Choosing "random" again shuffles again with a new seed. */
   readonly selectSort: (sort: string) => void;
@@ -67,15 +71,18 @@ export function useBrowseState({
   nextSeed = randomSeed,
 }: BrowseStateOptions): BrowseControls {
   const state = useMemo(() => resolveBrowse(search, libraryKind), [search, libraryKind]);
-  const query = useMemo(() => toListQuery(state, libraryKind), [state, libraryKind]);
+  // A random sort without a seed (a hand-edited link) gets one, so a reload keeps its order.
+  const missingSeed = state.sort === "random" && state.seed === undefined;
+  const query = useMemo(
+    () => (missingSeed ? undefined : toListQuery(state, libraryKind)),
+    [missingSeed, state, libraryKind],
+  );
   const apply = useCallback(
     (next: BrowseState, navigation?: BrowseNavigation) => {
       onSearchChange(toBrowseSearch(next, libraryKind), navigation);
     },
     [onSearchChange, libraryKind],
   );
-  // A random sort without a seed (a hand-edited link) gets one, so a reload keeps its order.
-  const missingSeed = state.sort === "random" && state.seed === undefined;
   useEffect(() => {
     if (missingSeed) {
       apply({ ...state, seed: nextSeed() }, { replace: true });
@@ -90,7 +97,7 @@ export function useBrowseState({
     query,
     selectType: (id) => {
       if (isOneOf(types, id) && id !== state.type) {
-        const sort = browseSortsFor(id).includes(state.sort) ? state.sort : "title";
+        const sort = browseSortsFor(id).includes(state.sort) ? state.sort : defaultSort;
         apply({ ...state, type: id, sort });
       }
     },

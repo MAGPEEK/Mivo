@@ -13,7 +13,7 @@ import {
   type RowCardProps,
 } from "../../../shared/ui";
 import { rowCardArtwork, toRowCardModel, type RowCardDetail } from "../lib/rowCard";
-import { homeNamespace } from "../locales";
+import { libraryNamespace } from "../locales";
 
 /** Props of {@link RowItemCard}. */
 export interface RowItemCardProps {
@@ -27,16 +27,16 @@ const placeholderIconClass = "size-1/4";
 const countBadgeClass =
   "absolute top-1.5 right-1.5 grid h-5.5 min-w-5.5 place-items-center rounded-full bg-accent px-1.5 text-xs font-bold text-on-accent shadow-card transition-opacity group-focus-within:opacity-0 group-hover:opacity-0";
 
-/** Card of one item in a Home row; opens the item detail page. */
+/** Card of one item in a server row (Home, Overview); opens the item detail page. */
 export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
-  const { t } = useTranslation(homeNamespace);
+  const { t } = useTranslation(libraryNamespace);
   const card = toRowCardModel(item);
   const artwork = rowCardArtwork(item, format);
   // The details already say "3 new episodes" on a show card; elsewhere the badge says it.
   const badgeLabel =
     card.newEpisodeCount === undefined || card.detail.kind === "newEpisodes"
       ? undefined
-      : t("card.newEpisodes", { count: card.newEpisodeCount });
+      : t("rowCard.newEpisodes", { count: card.newEpisodeCount });
   return (
     <MediaCard
       title={card.title}
@@ -57,9 +57,8 @@ export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
       }
       overlay={
         card.newEpisodeCount === undefined ? undefined : (
-          <span className={countBadgeClass}>
-            <span aria-hidden="true">{card.newEpisodeCount}</span>
-            {badgeLabel !== undefined && <span className="sr-only">{badgeLabel}</span>}
+          <span aria-hidden="true" className={countBadgeClass}>
+            {card.newEpisodeCount}
           </span>
         )
       }
@@ -71,7 +70,9 @@ export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
       details={
         <>
           <CardDetail detail={card.detail} />
-          {!card.available && <Badge>{t("card.unavailable")}</Badge>}
+          {/* In the details, so the link's description reads the count after the season. */}
+          {badgeLabel !== undefined && <span className="sr-only">{badgeLabel}</span>}
+          {!card.available && <Badge>{t("rowCard.unavailable")}</Badge>}
         </>
       }
     />
@@ -79,17 +80,17 @@ export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
 }
 
 function CardDetail({ detail }: { readonly detail: RowCardDetail }) {
-  const { t } = useTranslation(homeNamespace);
+  const { t } = useTranslation(libraryNamespace);
   const formatEpisodeCode = useFormatEpisodeCode();
   switch (detail.kind) {
     case "newEpisodes":
-      return <span>{t("card.newEpisodes", { count: detail.count })}</span>;
+      return <span>{t("rowCard.newEpisodes", { count: detail.count })}</span>;
     case "show":
       return (
         <>
           {detail.year !== "" && <span>{detail.year}</span>}
           {detail.seasonCount > 0 && (
-            <span>{t("card.seasons", { count: detail.seasonCount })}</span>
+            <span>{t("rowCard.seasons", { count: detail.seasonCount })}</span>
           )}
         </>
       );
@@ -109,13 +110,13 @@ function CardDetail({ detail }: { readonly detail: RowCardDetail }) {
   }
 }
 
-type HomeT = ReturnType<typeof useTranslation<typeof homeNamespace>>["t"];
+type LibraryT = ReturnType<typeof useTranslation<typeof libraryNamespace>>["t"];
 
-function seasonLabel(detail: Extract<RowCardDetail, { kind: "season" }>, t: HomeT): string {
+function seasonLabel(detail: Extract<RowCardDetail, { kind: "season" }>, t: LibraryT): string {
   if (detail.seasonNumber === undefined) {
     return detail.name;
   }
   return detail.seasonNumber === 0
-    ? t("card.specials")
-    : t("card.season", { number: detail.seasonNumber });
+    ? t("rowCard.specials")
+    : t("rowCard.season", { number: detail.seasonNumber });
 }

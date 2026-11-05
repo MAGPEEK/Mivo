@@ -17,7 +17,7 @@ export type RowCardDetail =
     }
   | { readonly kind: "other"; readonly year: string };
 
-/** What a card in a Home row shows for one item. */
+/** What a card in a server row (Home, Overview) shows for one item. */
 export interface RowCardModel {
   readonly id: string;
   /** Name of the card and its link: the show for seasons and episodes, else the item. */
@@ -68,7 +68,7 @@ function cardDetail(item: ItemSummary, showTitle: string | undefined): RowCardDe
 }
 
 /**
- * Derives the card of `item` in a Home row. Grouped season and episode cards are named after
+ * Derives the card of `item` in a server row (Home, Overview). Grouped season and episode cards are named after
  * their show, as the row cards of the approved prototype; the season or episode follows below.
  */
 export function toRowCardModel(item: ItemSummary): RowCardModel {

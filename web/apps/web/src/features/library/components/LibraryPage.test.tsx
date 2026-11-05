@@ -52,6 +52,15 @@ function renderLoadedLibrary(
   return renderLibrary([libraryRoute(shown), itemsRoute(library.id, items)]);
 }
 
+// One movie on the first page of a listing the server counts as `totalCount` items.
+function countedItemsRoute(totalCount: number): FakeRoute {
+  return {
+    method: "GET",
+    path: itemsApiPath,
+    respond: () => jsonResponse({ items: [fakeItem()], totalCount }),
+  };
+}
+
 async function findItemList(): Promise<HTMLElement> {
   return screen.findByRole("list", { name: "Videos" });
 }
@@ -66,24 +75,26 @@ function scanStatus(): HTMLElement {
 }
 
 describe("LibraryPage header", () => {
-  it("shows the library name and its item count", async () => {
-    renderLoadedLibrary();
+  // The count lives in the Browse toolbar (LB-23) only; the header no longer repeats it.
+  it("shows the library name and counts the listed items once, in the toolbar", async () => {
+    renderLoadedLibrary([fakeItem(), fakeItem({ id: "item-2", title: "Sintel" })]);
 
     expect(await screen.findByRole("heading", { level: 1, name: "Movies" })).toBeTruthy();
-    expect(screen.getByText("2 videos")).toBeTruthy();
+    expect(await screen.findByText("2 movies")).toBeTruthy();
+    expect(screen.queryByText(/videos?$/)).toBeNull();
     expect(screen.queryByText("Folder unavailable")).toBeNull();
   });
 
   it("formats large counts for the language", async () => {
-    renderLoadedLibrary([fakeItem()], { itemCount: 1234 });
+    renderLibrary([libraryRoute(library), countedItemsRoute(1234)]);
 
-    expect(await screen.findByText("1,234 videos")).toBeTruthy();
+    expect(await screen.findByText("1,234 movies")).toBeTruthy();
   });
 
   it("uses the singular for one item", async () => {
-    renderLoadedLibrary([fakeItem()], { itemCount: 1 });
+    renderLoadedLibrary([fakeItem()]);
 
-    expect(await screen.findByText("1 video")).toBeTruthy();
+    expect(await screen.findByText("1 movie")).toBeTruthy();
   });
 
   it("marks a library whose folder is unavailable", async () => {
@@ -628,7 +639,7 @@ describe("LibraryPage scan polling", () => {
     expect(scanButton().getAttribute("aria-busy")).toBe("false");
     expect(scanStatus().textContent).toContain("Last scan: 3 added");
     expect(await screen.findByRole("link", { name: "Big Buck Bunny" })).toBeTruthy();
-    expect(await screen.findByText("1 video")).toBeTruthy();
+    expect(await screen.findByText("1 movie")).toBeTruthy();
     expect(server.countRequests("GET", "/api/v1/libraries")).toBe(2);
     const getsWhenDone = server.countRequests("GET", libraryApiPath);
     await advance(scanStatusPollIntervalMs * 3);
@@ -689,10 +700,17 @@ describe("LibraryPage language and accessibility", () => {
       ["de"],
     );
 
-    expect(await screen.findByText("1.234 Videos")).toBeTruthy();
+    expect(await screen.findByRole("tab", { name: "Durchsuchen", selected: true })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Übersicht" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Bibliothek scannen" })).toBeTruthy();
     expect(await screen.findByText("Noch keine Videos")).toBeTruthy();
     expect(screen.getByText(/^Letzter Scan: 3 neu/)).toBeTruthy();
+  });
+
+  it("formats the toolbar count in German", async () => {
+    renderLibrary([libraryRoute(library), countedItemsRoute(1234)], ["de"]);
+
+    expect(await screen.findByText("1.234 Filme")).toBeTruthy();
   });
 
   it.each([

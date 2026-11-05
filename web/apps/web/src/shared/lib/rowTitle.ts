@@ -30,6 +30,15 @@ function nonEmpty(value: string | undefined): string | undefined {
   return value === undefined || value.trim() === "" ? undefined : value;
 }
 
+// Keys come from the server; an own-property check keeps "constructor" or "toString" from
+// resolving to members of Object.prototype.
+function ownMessage(
+  table: Readonly<Record<string, RowTitleMessage>>,
+  key: string,
+): RowTitleMessage | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 function moreGenreMessage(genre: string | undefined): RowTitleMessage | undefined {
   return genre === undefined ? undefined : { key: "rows.moreGenre", values: { genre } };
 }
@@ -44,7 +53,7 @@ function fromTitleKey(row: RowTitleSource): RowTitleMessage | undefined {
     case "rows.moreGenre":
       return moreGenreMessage(nonEmpty(params["genre"]) ?? nonEmpty(row.genre));
     default:
-      return plainTitleKeys[row.titleKey];
+      return ownMessage(plainTitleKeys, row.titleKey);
   }
 }
 
@@ -52,7 +61,7 @@ function fromKind(row: RowTitleSource): RowTitleMessage {
   if (row.kind === "moreGenre") {
     return moreGenreMessage(nonEmpty(row.genre)) ?? { key: "rows.fallback" };
   }
-  return kindTitleKeys[row.kind] ?? { key: "rows.fallback" };
+  return ownMessage(kindTitleKeys, row.kind) ?? { key: "rows.fallback" };
 }
 
 /**

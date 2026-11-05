@@ -13,14 +13,5 @@
     "notEnoughData": "Some rows need more metadata. Every title is under Browse in its library.",
     "allUnpinned": "Pin a library in the sidebar to see its rows here.",
     "generic": "Nothing to show here yet."
-  },
-  "card": {
-    "newEpisodes_one": "{{count}} new episode",
-    "newEpisodes_other": "{{count}} new episodes",
-    "seasons_one": "{{count}} season",
-    "seasons_other": "{{count}} seasons",
-    "season": "Season {{number}}",
-    "specials": "Specials",
-    "unavailable": "Unavailable"
   }
 }

@@ -7,8 +7,8 @@ import type { BrowseSearch, BrowseType, LibraryItemFilter } from "../lib/browseQ
 import { BrowseItemGrid } from "./BrowseItemGrid";
 import { BrowseToolbar } from "./BrowseToolbar";
 
-/** Props of {@link LibraryItemGrid}. */
-export interface LibraryItemGridProps {
+/** Props of {@link BrowsePivot}. */
+export interface BrowsePivotProps {
   readonly libraryId: string;
   readonly libraryKind: LibraryKind;
   /** Sort, type and filter from the URL. */
@@ -32,18 +32,24 @@ export interface LibraryItemsView {
  */
 export type LibraryItemsRenderer = (view: LibraryItemsView) => ReactNode | undefined;
 
-/** The items of a library as a poster grid, page by page, with the Browse toolbar above. */
-export function LibraryItemGrid({
+// Key of the listing while a random sort waits for its seed; no request runs meanwhile.
+const pendingQueryKey = "pending";
+
+/**
+ * The Browse pivot: every item of a library, page by page, with the Browse toolbar above.
+ * Albums, books and photos get their own view through `renderItems`, the others the poster grid.
+ */
+export function BrowsePivot({
   libraryId,
   libraryKind,
   search,
   onSearchChange,
   renderItems,
-}: LibraryItemGridProps) {
+}: BrowsePivotProps) {
   const browse = useBrowseState({ search, onSearchChange, libraryKind });
   const items = useLibraryItems(libraryId, browse.query);
   // Keyed, so focus targets and "load more" state never carry over to another query.
-  const key = JSON.stringify(browse.query);
+  const key = browse.query === undefined ? pendingQueryKey : JSON.stringify(browse.query);
   return (
     <>
       <BrowseToolbar browse={browse} totalCount={items.totalCount} />
