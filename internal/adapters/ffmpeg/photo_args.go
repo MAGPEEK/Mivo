@@ -27,11 +27,12 @@ const (
 	// AVIF photo, which FFmpeg assembles into one picture; gridOutputLabel the scaled result.
 	gridInputLabel  = "[0:g:0]"
 	gridOutputLabel = "[photo]"
-	// maxGridAllocationBytes bounds every single allocation of a tile grid render
-	// (-max_alloc). -max_pixels only bounds each decoded tile, not the canvas the tiles are
-	// assembled on, whose size the file declares (up to 65535 x 65535); this bound admits
-	// one 16-bit plane of a canvas at maxDecodedPixels and refuses a forged larger one. Grid
-	// tiles are separate small items, so no packet comes near it.
+	// maxGridAllocationBytes bounds every single allocation of a HEIF or AVIF render
+	// (-max_alloc), the tile grid and the single image run alike. -max_pixels only bounds
+	// each decoded tile, not the canvas the tiles are assembled on, whose size the file
+	// declares (up to 65535 x 65535); this bound admits one 16-bit plane of a canvas at
+	// maxDecodedPixels and refuses a forged larger one. Grid tiles are separate small items;
+	// a single coded image above the bound fails over to the embedded preview.
 	maxGridAllocationBytes = 2 * maxDecodedPixels
 )
 
@@ -95,7 +96,9 @@ func photoArguments(job photoJob) ([]string, error) {
 		"-hide_banner", "-nostdin", "-loglevel", "error",
 		"-max_pixels", strconv.Itoa(maxDecodedPixels),
 	}
-	if job.input == inputTileGrid {
+	// The single image run of a HEIF or AVIF file is bounded too: FFmpeg may pick a tile grid
+	// as its default stream and assemble the forged canvas there as well.
+	if job.input == inputTileGrid || job.input == inputFileWithContainerRotation {
 		arguments = append(arguments, "-max_alloc", strconv.Itoa(maxGridAllocationBytes))
 	}
 

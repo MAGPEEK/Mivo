@@ -80,8 +80,11 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   `-filter_complex "[0:g:0]scale…[photo]" -map "[photo]"` (M3-15h); a file with a single
   image has no stream group and is retried with `-vf` – FFmpeg fails at once, before
   decoding, on the arguments of the other shape. `-max_pixels` bounds each tile only, not the
-  canvas whose size the file declares, so a grid render also sets `-max_alloc` to one 16-bit
-  plane at the pixel limit (128 MB) and refuses a forged larger canvas. RAW files, undecodable HEIC/AVIF, files over 256 MiB and every direct decode that fails as
+  canvas whose size the file declares, so every direct HEIF/AVIF render (grid and the
+  single-image retry, M3-15h-b) sets `-max_alloc` to about one 16-bit plane at the pixel limit
+  (128 MB) and refuses a forged larger canvas; a single image above the bound falls back to
+  the preview. RAW files, undecodable HEIC/AVIF, files over 256 MiB and every direct decode
+  that fails as
   unsupported fall back to the embedded JPEG preview piped to FFmpeg (`jpeg_pipe`, protocol
   `pipe` only); without a preview the render fails with `ErrPhotoUnsupported`
   (`domain.ErrUnsupported`). The image endpoint accepts a photo item ID (`app/images`

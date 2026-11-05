@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -40,6 +41,10 @@ const (
 	// after a kill the error pipe stays open until the test ends the grandchild.
 	fakeModeHangHoldingStderr = "hang-holding-stderr"
 	fakeHolderVariable        = "MIVO_FFMPEG_FAKE_HOLDER"
+	// fakeModeFailFileInput records its arguments, fails like fakeModeFail on a file input
+	// and echoes a picture piped to its standard input: a photo whose direct renders fail and
+	// whose preview succeeds.
+	fakeModeFailFileInput = "fail-file-input"
 
 	fakeFailExitCode = 3
 	fakeFailStderr   = "first line\nInvalid data found when processing input: ü\n"
@@ -67,6 +72,8 @@ func runFakeTool(mode string, arguments []string) int {
 		fmt.Fprint(os.Stderr, fakeFailStderr)
 
 		return fakeFailExitCode
+	case fakeModeFailFileInput:
+		return fakeFailFileInput(arguments)
 	case fakeModeHang:
 		time.Sleep(fakeHangDuration)
 
@@ -212,6 +219,27 @@ func fakeRespond(arguments []string) int {
 	}
 
 	if _, err := fmt.Fprint(os.Stdout, response); err != nil {
+		return 1
+	}
+
+	return 0
+}
+
+func fakeFailFileInput(arguments []string) int {
+	if err := recordFakeArguments(arguments); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+
+		return 1
+	}
+
+	if position := slices.Index(arguments, "-i"); position < 0 || position+1 >= len(arguments) ||
+		arguments[position+1] != standardInput {
+		fmt.Fprint(os.Stderr, fakeFailStderr)
+
+		return fakeFailExitCode
+	}
+
+	if _, err := io.Copy(os.Stdout, os.Stdin); err != nil {
 		return 1
 	}
 

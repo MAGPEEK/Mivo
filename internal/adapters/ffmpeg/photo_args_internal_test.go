@@ -37,22 +37,25 @@ func argumentValue(arguments []string, flag string) string {
 	return arguments[index+1]
 }
 
-// assertGridArguments expects the complex filter graph of a tile grid, mapped as output and
-// with the allocation bound of its canvas, or none of them for wantComplex "".
-func assertGridArguments(t *testing.T, arguments []string, wantComplex string) {
+// assertGridArguments expects the complex filter graph of a tile grid mapped as output, or
+// none for wantComplex "", and the allocation bound of a HEIF or AVIF canvas exactly when
+// wantAllocationBound is set.
+func assertGridArguments(t *testing.T, arguments []string, wantComplex string, wantAllocationBound bool) {
 	t.Helper()
 
 	if got := argumentValue(arguments, "-filter_complex"); got != wantComplex {
 		t.Errorf("-filter_complex = %q, want %q", got, wantComplex)
 	}
 
-	wantAllocation := ""
 	if wantComplex != "" {
-		wantAllocation = strconv.Itoa(maxGridAllocationBytes)
-
 		if got := argumentValue(arguments, "-map"); got != gridOutputLabel {
 			t.Errorf("-map = %q, want %q", got, gridOutputLabel)
 		}
+	}
+
+	wantAllocation := ""
+	if wantAllocationBound {
+		wantAllocation = strconv.Itoa(maxGridAllocationBytes)
 	}
 
 	if got := argumentValue(arguments, "-max_alloc"); got != wantAllocation {
@@ -71,6 +74,7 @@ func TestPhotoArgumentsByInput(t *testing.T) {
 		job           photoJob
 		wantFilter    string
 		wantComplex   string
+		wantAllocated bool
 		wantMap       bool
 		wantNoRotate  bool
 		wantPipeInput bool
@@ -81,15 +85,17 @@ func TestPhotoArgumentsByInput(t *testing.T) {
 			wantFilter: "transpose=1," + scale, wantMap: true, wantNoRotate: true,
 		},
 		{
-			name:       "HEIF with container rotation ignores EXIF",
-			job:        photoJob{input: inputFileWithContainerRotation, path: path, width: artwork.Width320, format: artwork.FormatJPEG, orientation: 6},
-			wantFilter: scale,
+			name:          "HEIF with container rotation ignores EXIF and bounds allocations",
+			job:           photoJob{input: inputFileWithContainerRotation, path: path, width: artwork.Width320, format: artwork.FormatJPEG, orientation: 6},
+			wantFilter:    scale,
+			wantAllocated: true,
 		},
 		{
-			name:        "HEIF tile grid scales the assembled canvas in the complex graph",
-			job:         photoJob{input: inputTileGrid, path: path, width: artwork.Width320, format: artwork.FormatJPEG, orientation: 6},
-			wantMap:     true,
-			wantComplex: "[0:g:0]" + scale + "[photo]",
+			name:          "HEIF tile grid scales the assembled canvas in the complex graph",
+			job:           photoJob{input: inputTileGrid, path: path, width: artwork.Width320, format: artwork.FormatJPEG, orientation: 6},
+			wantMap:       true,
+			wantComplex:   "[0:g:0]" + scale + "[photo]",
+			wantAllocated: true,
 		},
 		{
 			name:       "preview from the pipe",
@@ -127,7 +133,7 @@ func TestPhotoArgumentsByInput(t *testing.T) {
 				t.Errorf("-vf = %q, want %q", got, test.wantFilter)
 			}
 
-			assertGridArguments(t, arguments, test.wantComplex)
+			assertGridArguments(t, arguments, test.wantComplex, test.wantAllocated)
 		})
 	}
 }
