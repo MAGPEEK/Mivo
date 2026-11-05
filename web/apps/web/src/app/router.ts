@@ -1,5 +1,6 @@
 import {
   createRootRoute,
+  type AnyRoute,
   createRoute,
   createRouter,
   useNavigate,
@@ -13,7 +14,12 @@ import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import { LibraryPage } from "../features/library";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
-import { LibrariesSettingsPage, validateSettingsSearch } from "../features/settings";
+import {
+  AboutSettingsPage,
+  LibrariesSettingsPage,
+  MetadataSettingsPage,
+  validateSettingsSearch,
+} from "../features/settings";
 import { NotFoundPage } from "./NotFoundPage";
 import { AppLayout } from "./layout/AppLayout";
 import { FullScreenLayout } from "./layout/FullScreenLayout";
@@ -61,6 +67,22 @@ function PlayerRoute() {
   return createElement(PlayerPage, { itemId, search });
 }
 
+// Settings pages without search params; split off to keep the route tree function short.
+function settingsPages<Parent extends AnyRoute>(parent: Parent) {
+  return [
+    createRoute({
+      getParentRoute: () => parent,
+      path: "/admin/settings/metadata",
+      component: MetadataSettingsPage,
+    }),
+    createRoute({
+      getParentRoute: () => parent,
+      path: "/admin/settings/about",
+      component: AboutSettingsPage,
+    }),
+  ] as const;
+}
+
 // Code-based route tree: no generated file in milestone 1. Switching to file-based routing
 // needs an ADR note (ADR 0005). Pages with sidebar and top bar sit below the shell layout
 // route; full-screen pages (the player) below their own layout route without them.
@@ -89,6 +111,7 @@ function createRouteTree() {
       validateSearch: validateSettingsSearch,
       component: SettingsRoute,
     }),
+    ...settingsPages(shellRoute),
     createRoute({
       getParentRoute: () => shellRoute,
       path: "/items/$itemId",

@@ -74,7 +74,8 @@
         "legend": "Scanning and metadata",
         "scanExtras": "Find extras (trailers, interviews)",
         "readNfo": "Read NFO files",
-        "localArtwork": "Use local artwork"
+        "localArtwork": "Use local artwork",
+        "onlineMetadata": "Use online metadata"
       },
       "importedHint": "This library was imported from the configuration.",
       "foldersHeading": "Folders (1 to {{max}})",
@@ -129,5 +130,92 @@
       "docker": "Mount the folder into the container below <code>/media</code> (for example <code>{{example}}</code>) and restart the container.",
       "standard": "Give the user <code>{{user}}</code> read access to the folder."
     }
+  },
+  "nav": {
+    "label": "Settings pages",
+    "libraries": "Libraries",
+    "metadata": "Metadata",
+    "about": "About"
+  },
+  "metadata": {
+    "heading": "Metadata",
+    "intro": "Online metadata adds posters, summaries and cast to your items. Everything else stays on this server.",
+    "loading": "Loading metadata settings",
+    "loadFailed": "The metadata settings could not be loaded.",
+    "retry": "Try again",
+    "unavailable": "This server version does not support online metadata yet. The settings appear here after an update.",
+    "online": {
+      "legend": "Online metadata",
+      "label": "Look up metadata online",
+      "hint": "Off means the server never contacts a metadata provider."
+    },
+    "providers": {
+      "legend": "Providers",
+      "tmdb": "TMDB (movies and shows)",
+      "music": "MusicBrainz and Cover Art Archive (music)",
+      "offHint": "Switch on online metadata to choose providers."
+    },
+    "key": {
+      "label": "Own TMDB API key",
+      "hint": "Optional. Your key is stored on the server and never shown again.",
+      "status": "Key in use: {{status}}",
+      "statusBundled": "Project key",
+      "statusOwn": "Your key",
+      "statusNone": "None",
+      "save": "Save key",
+      "remove": "Remove own key"
+    },
+    "language": {
+      "label": "Metadata language",
+      "default": "Server default",
+      "hint": "Libraries without their own language use this one."
+    },
+    "saving": "Saving…",
+    "problems": {
+      "language_invalid": "The server does not accept this language.",
+      "forbidden": "Metadata settings are only available from the local network until accounts exist.",
+      "unavailable": "This server version does not support online metadata yet.",
+      "failed": "The change could not be saved."
+    },
+    "privacy": {
+      "heading": "What goes online",
+      "summary": "When online metadata is on, the server contacts only these hosts:",
+      "sent": "It sends only titles, years, season and episode numbers, the metadata language and provider IDs – never file names, folder paths or library names.",
+      "hosts": {
+        "tmdb": "api.themoviedb.org and image.tmdb.org (TMDB)",
+        "musicBrainz": "musicbrainz.org (MusicBrainz)",
+        "coverArt": "coverartarchive.org and the archive.org servers it links to (Cover Art Archive)"
+      }
+    },
+    "status": {
+      "heading": "Status",
+      "loading": "Loading status",
+      "failed": "The status could not be loaded.",
+      "unavailable": "No status: online metadata is not available on this server yet.",
+      "queue_one": "{{count, number}} item waiting for metadata",
+      "queue_other": "{{count, number}} items waiting for metadata",
+      "providersLabel": "Provider states",
+      "provider": {
+        "tmdb": "TMDB",
+        "musicbrainz": "MusicBrainz",
+        "coverartarchive": "Cover Art Archive"
+      },
+      "state": {
+        "ok": "OK",
+        "rate_limited": "Busy, will retry",
+        "offline": "Offline",
+        "disabled": "Disabled",
+        "unknown": "Unknown"
+      }
+    },
+    "attributionHeading": "Data sources"
+  },
+  "about": {
+    "heading": "About",
+    "serverVersion": "Server version",
+    "loading": "Loading…",
+    "unknown": "Unknown",
+    "privacy": "{{productName}} sends no telemetry. Online metadata contacts providers only while it is switched on in Settings › Metadata.",
+    "attributionHeading": "Data sources"
   }
 }

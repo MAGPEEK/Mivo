@@ -1,4 +1,5 @@
 import { ItemMatchMenu } from "../../identify";
+import { MetadataAttribution } from "../../../shared/ui";
 import { useHeadingFocusAfterNavigation } from "../hooks/useHeadingFocusAfterNavigation";
 import { useHeadingFocusAfterRetry } from "../hooks/useHeadingFocusAfterRetry";
 import { useItemChanged } from "../hooks/useItemChanged";
@@ -43,7 +44,14 @@ export function ItemPage({ itemId, search = {} }: ItemPageProps) {
       );
     case "ready":
       return (
-        <ItemByKind headingRef={headingRef} itemId={itemId} item={state.item} search={search} />
+        <>
+          <ItemByKind headingRef={headingRef} itemId={itemId} item={state.item} search={search} />
+          {/* Credits the providers the shown data came from (ADR 0031 section 4). */}
+          <MetadataAttribution
+            sources={state.item.metadataSources}
+            className="mt-12 border-t border-divider pt-4"
+          />
+        </>
       );
   }
 }

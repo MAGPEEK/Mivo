@@ -66,5 +66,12 @@
     "seeAllLabel": "See all: {{title}}",
     "previous": "Scroll {{title}} back",
     "next": "Scroll {{title}} forward"
+  },
+  "attribution": {
+    "poweredBy": "Powered by",
+    "tmdbLogo": "TMDB",
+    "tmdbDisclaimerTranslation": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+    "musicBrainz": "Music metadata provided by MusicBrainz (CC0).",
+    "coverArtArchive": "Album covers from the Cover Art Archive; each image remains under its own licence."
   }
 }

@@ -74,7 +74,8 @@
         "legend": "Scannen und Metadaten",
         "scanExtras": "Extras suchen (Trailer, Interviews)",
         "readNfo": "NFO-Dateien lesen",
-        "localArtwork": "Lokale Bilder verwenden"
+        "localArtwork": "Lokale Bilder verwenden",
+        "onlineMetadata": "Online-Metadaten verwenden"
       },
       "importedHint": "Diese Bibliothek wurde aus der Konfiguration übernommen.",
       "foldersHeading": "Ordner (1 bis {{max}})",
@@ -129,5 +130,92 @@
       "docker": "Binde den Ordner unterhalb von <code>/media</code> in den Container ein (zum Beispiel <code>{{example}}</code>) und starte den Container neu.",
       "standard": "Gib dem Benutzer <code>{{user}}</code> Lesezugriff auf den Ordner."
     }
+  },
+  "nav": {
+    "label": "Einstellungsseiten",
+    "libraries": "Bibliotheken",
+    "metadata": "Metadaten",
+    "about": "Info"
+  },
+  "metadata": {
+    "heading": "Metadaten",
+    "intro": "Online-Metadaten ergänzen Poster, Beschreibungen und Besetzung. Alles andere bleibt auf diesem Server.",
+    "loading": "Metadaten-Einstellungen werden geladen",
+    "loadFailed": "Die Metadaten-Einstellungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "unavailable": "Diese Serverversion unterstützt noch keine Online-Metadaten. Die Einstellungen erscheinen hier nach einem Update.",
+    "online": {
+      "legend": "Online-Metadaten",
+      "label": "Metadaten online abrufen",
+      "hint": "Aus bedeutet: Der Server kontaktiert nie einen Metadaten-Anbieter."
+    },
+    "providers": {
+      "legend": "Anbieter",
+      "tmdb": "TMDB (Filme und Serien)",
+      "music": "MusicBrainz und Cover Art Archive (Musik)",
+      "offHint": "Schalte Online-Metadaten ein, um Anbieter zu wählen."
+    },
+    "key": {
+      "label": "Eigener TMDB-API-Schlüssel",
+      "hint": "Optional. Dein Schlüssel wird auf dem Server gespeichert und nie wieder angezeigt.",
+      "status": "Verwendeter Schlüssel: {{status}}",
+      "statusBundled": "Projektschlüssel",
+      "statusOwn": "Dein Schlüssel",
+      "statusNone": "Keiner",
+      "save": "Schlüssel speichern",
+      "remove": "Eigenen Schlüssel entfernen"
+    },
+    "language": {
+      "label": "Metadatensprache",
+      "default": "Server-Standard",
+      "hint": "Bibliotheken ohne eigene Sprache verwenden diese."
+    },
+    "saving": "Wird gespeichert …",
+    "problems": {
+      "language_invalid": "Der Server akzeptiert diese Sprache nicht.",
+      "forbidden": "Die Metadaten-Einstellungen sind bis zur Einführung von Konten nur im lokalen Netzwerk verfügbar.",
+      "unavailable": "Diese Serverversion unterstützt noch keine Online-Metadaten.",
+      "failed": "Die Änderung konnte nicht gespeichert werden."
+    },
+    "privacy": {
+      "heading": "Was ins Internet geht",
+      "summary": "Wenn Online-Metadaten eingeschaltet sind, kontaktiert der Server nur diese Hosts:",
+      "sent": "Er sendet nur Titel, Jahre, Staffel- und Episodennummern, die Metadatensprache und Anbieter-IDs – niemals Dateinamen, Ordnerpfade oder Bibliotheksnamen.",
+      "hosts": {
+        "tmdb": "api.themoviedb.org und image.tmdb.org (TMDB)",
+        "musicBrainz": "musicbrainz.org (MusicBrainz)",
+        "coverArt": "coverartarchive.org und die verlinkten archive.org-Server (Cover Art Archive)"
+      }
+    },
+    "status": {
+      "heading": "Status",
+      "loading": "Status wird geladen",
+      "failed": "Der Status konnte nicht geladen werden.",
+      "unavailable": "Kein Status: Online-Metadaten sind auf diesem Server noch nicht verfügbar.",
+      "queue_one": "{{count, number}} Eintrag wartet auf Metadaten",
+      "queue_other": "{{count, number}} Einträge warten auf Metadaten",
+      "providersLabel": "Anbieterstatus",
+      "provider": {
+        "tmdb": "TMDB",
+        "musicbrainz": "MusicBrainz",
+        "coverartarchive": "Cover Art Archive"
+      },
+      "state": {
+        "ok": "OK",
+        "rate_limited": "Ausgelastet, neuer Versuch folgt",
+        "offline": "Offline",
+        "disabled": "Ausgeschaltet",
+        "unknown": "Unbekannt"
+      }
+    },
+    "attributionHeading": "Datenquellen"
+  },
+  "about": {
+    "heading": "Info",
+    "serverVersion": "Server-Version",
+    "loading": "Wird geladen …",
+    "unknown": "Unbekannt",
+    "privacy": "{{productName}} sendet keine Telemetrie. Online-Metadaten kontaktieren Anbieter nur, solange sie unter Einstellungen › Metadaten eingeschaltet sind.",
+    "attributionHeading": "Datenquellen"
   }
 }

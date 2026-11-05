@@ -66,3 +66,8 @@ export { Poster, type PosterAspect, type PosterProps } from "./Poster";
 export { Skeleton, type SkeletonProps } from "./Skeleton";
 export { useMediaQuery } from "./useMediaQuery";
 export { TopBar, type TopBarProps } from "./TopBar";
+export {
+  MetadataAttribution,
+  creditedMetadataSources,
+  type MetadataAttributionProps,
+} from "./MetadataAttribution";

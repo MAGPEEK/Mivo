@@ -64,7 +64,7 @@ describe("drafts", () => {
       name: "Shows",
       folders: [{ rootId: "root-1", path: "Shows" }],
       metadataLanguage: "",
-      options: { scanExtras: true, readNfo: true, localArtwork: true },
+      options: { scanExtras: true, readNfo: true, localArtwork: true, onlineMetadata: true },
     });
   });
 

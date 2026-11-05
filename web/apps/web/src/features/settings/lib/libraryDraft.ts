@@ -60,6 +60,7 @@ export const defaultOptions: LibraryOptions = {
   scanExtras: true,
   readNfo: true,
   localArtwork: true,
+  onlineMetadata: true,
 };
 
 const pathSeparators = /[\\/]+/;
@@ -137,6 +138,7 @@ export function sameDraft(a: LibraryDraft, b: LibraryDraft): boolean {
     a.options.scanExtras === b.options.scanExtras &&
     a.options.readNfo === b.options.readNfo &&
     a.options.localArtwork === b.options.localArtwork &&
+    (a.options.onlineMetadata ?? true) === (b.options.onlineMetadata ?? true) &&
     a.folders.length === b.folders.length &&
     a.folders.every((folder, index) => folder.key === b.folders[index]?.key)
   );

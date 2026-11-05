@@ -17,6 +17,8 @@ import type { SettingsSearch } from "../lib/settingsSearch";
 import { settingsNamespace } from "../locales";
 import { LibraryDialog } from "./LibraryDialog";
 import { LibraryRow } from "./LibraryRow";
+import { SettingsNav } from "./SettingsNav";
+import { SettingsBreadcrumb } from "./SettingsPageHeading";
 
 interface LibraryListProps {
   readonly onEdit: (library: Library) => void;
@@ -121,13 +123,7 @@ export function LibrariesSettingsPage({ search, onSearchChange }: LibrariesSetti
   const removal = useLibraryRemoval(() => headingRef.current?.focus());
   return (
     <>
-      <nav aria-label={t("libraries.breadcrumb.label")} className="mb-2 text-sm text-text-muted">
-        <ol className="flex gap-2">
-          <li>{t("libraries.breadcrumb.settings")}</li>
-          <li aria-hidden="true">›</li>
-          <li aria-current="page">{t("libraries.heading")}</li>
-        </ol>
-      </nav>
+      <SettingsBreadcrumb title={t("libraries.heading")} />
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 ref={headingRef} tabIndex={-1} className="text-3xl font-semibold">
           {t("libraries.heading")}
@@ -142,6 +138,7 @@ export function LibrariesSettingsPage({ search, onSearchChange }: LibrariesSetti
           {t("libraries.add")}
         </button>
       </div>
+      <SettingsNav />
       {/* Live region for the scan the server starts after saving; it outlives the dialog. */}
       <p role="status" className="sr-only">
         {announcement}

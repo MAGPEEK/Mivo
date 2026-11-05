@@ -173,7 +173,7 @@ describe("Add library dialog", () => {
           name: "My films",
           folders: [{ rootId, path: "Shows" }],
           metadataLanguage: "de",
-          options: { scanExtras: true, readNfo: true, localArtwork: true },
+          options: { scanExtras: true, readNfo: true, localArtwork: true, onlineMetadata: true },
         },
       },
     ]);
@@ -233,6 +233,7 @@ describe("Add library dialog", () => {
       true,
     );
     fireEvent.click(nfo);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use online metadata" }));
     await chooseFolder("Movies");
     save();
 
@@ -240,7 +241,7 @@ describe("Add library dialog", () => {
       expect(saved).toHaveLength(1);
     });
     expect(saved[0]?.body).toMatchObject({
-      options: { scanExtras: true, readNfo: false, localArtwork: true },
+      options: { scanExtras: true, readNfo: false, localArtwork: true, onlineMetadata: false },
     });
   });
 

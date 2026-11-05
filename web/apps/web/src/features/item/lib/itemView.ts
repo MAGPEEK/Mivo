@@ -64,6 +64,8 @@ export interface ItemView {
   readonly audioTracks: readonly TrackView[];
   readonly subtitleTracks: readonly TrackView[];
   readonly play: PlayView;
+  /** Where the metadata came from, e.g. `["nfo", "tmdb"]`; empty when unknown. */
+  readonly metadataSources: readonly string[];
 }
 
 /** The translated texts the view needs; the hook builds them from i18next. */
@@ -110,6 +112,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     poster: item.artwork?.poster,
     still: item.artwork?.thumb,
     play: playView(item, texts),
+    metadataSources: item.metadataSources ?? [],
     ...fileView,
     facts: [...itemFacts(item, texts), ...fileView.facts],
   };

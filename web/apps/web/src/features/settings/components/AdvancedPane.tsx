@@ -16,9 +16,10 @@ const optionLabels = [
   ["scanExtras", "libraries.dialog.options.scanExtras"],
   ["readNfo", "libraries.dialog.options.readNfo"],
   ["localArtwork", "libraries.dialog.options.localArtwork"],
+  ["onlineMetadata", "libraries.dialog.options.onlineMetadata"],
 ] as const satisfies readonly (readonly [keyof LibraryOptions, string])[];
 
-/** Tab "Advanced": the switches milestone 3 supports. */
+/** Tab "Advanced": the per-library switches. An omitted `onlineMetadata` means on (contract). */
 export function AdvancedPane({ form, importedFromConfig }: AdvancedPaneProps) {
   const { t } = useTranslation(settingsNamespace);
   return (
@@ -29,7 +30,7 @@ export function AdvancedPane({ form, importedFromConfig }: AdvancedPaneProps) {
           <label key={option} className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={form.draft.options[option]}
+              checked={form.draft.options[option] ?? true}
               onChange={(event) => {
                 form.setOption(option, event.target.checked);
               }}

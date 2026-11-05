@@ -364,3 +364,31 @@ describe("ItemPage in the app", () => {
     expect(server.countRequests("GET", "/api/v1/items/item-1")).toBe(1);
   });
 });
+
+describe("ItemPage metadata credits", () => {
+  const tmdbDisclaimer = "This product uses the TMDB API but is not endorsed or certified by TMDB.";
+
+  it("credits TMDB in the footer when the data came from TMDB", async () => {
+    const main = await renderItem({ ...hdrMovie, metadataSources: ["nfo", "tmdb"] });
+
+    expect(within(main).getByText(tmdbDisclaimer)).toBeTruthy();
+    expect(within(main).getByRole("img", { name: "TMDB" })).toBeTruthy();
+  });
+
+  it("credits MusicBrainz and the Cover Art Archive for music data", async () => {
+    const main = await renderItem({
+      ...hdrMovie,
+      metadataSources: ["musicbrainz", "coverartarchive"],
+    });
+
+    expect(within(main).getByText(/MusicBrainz/)).toBeTruthy();
+    expect(within(main).getByText(/Cover Art Archive/)).toBeTruthy();
+    expect(within(main).queryByText(tmdbDisclaimer)).toBeNull();
+  });
+
+  it("shows no credit for local data", async () => {
+    const main = await renderItem({ ...hdrMovie, metadataSources: ["nfo"] });
+
+    expect(within(main).queryByText(tmdbDisclaimer)).toBeNull();
+  });
+});
