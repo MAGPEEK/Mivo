@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
@@ -15,8 +16,24 @@ import (
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
+
+// assertHeroMeta checks the meta line fields: the show has genres and no media, the movie
+// the summary of its primary file.
+func assertHeroMeta(t *testing.T, hero []apigen.HeroItem) {
+	t.Helper()
+
+	show, movie := hero[0], hero[1]
+	if show.Genres == nil || len(*show.Genres) != 1 || (*show.Genres)[0] != "Drama" || show.Media != nil {
+		t.Errorf("show hero genres %v media %+v, want [Drama] and no media", show.Genres, show.Media)
+	}
+
+	if movie.Genres != nil || movie.Media == nil || !movie.Media.Available || movie.Media.DurationSeconds == nil || *movie.Media.DurationSeconds != 90 {
+		t.Errorf("movie hero genres %v media %+v, want no genres and a 90 s file", movie.Genres, movie.Media)
+	}
+}
 
 // homeRowsPath is the Home rows route (task M5-12).
 const homeRowsPath = "/api/v1/home/rows"
@@ -153,6 +170,10 @@ func TestGetHomeRows(t *testing.T) {
 		Hero: []approws.HeroItem{{
 			ItemID: rowShowID, LibraryID: testLibraryID, Kind: library.ItemKindShow, Title: "Elephants Dream",
 			Year: library.NumberOf(2006), SummaryLine: "Two men.", Backdrop: artwork.Ref{ID: rowImageID, Tag: "b"},
+			Genres: []string{"Drama"},
+		}, {
+			ItemID: rowEpisodeID, LibraryID: testLibraryID, Kind: library.ItemKindMovie, Title: "Sintel", Backdrop: artwork.Ref{ID: rowImageID, Tag: "c"},
+			PrimaryFile: media.File{ID: "file-1", Description: media.Description{Duration: 90 * time.Second}},
 		}},
 	}}
 
@@ -160,8 +181,8 @@ func TestGetHomeRows(t *testing.T) {
 	assertJSONResponse(t, got, http.StatusOK)
 
 	home := decodeStrictly[apigen.HomeRows](t, got.body)
-	if len(home.Rows) != 2 || len(home.Hero) != 1 || home.Hint != nil {
-		t.Fatalf("home = %+v, want two rows, one hero, no hint", home)
+	if len(home.Rows) != 2 || len(home.Hero) != 2 || home.Hint != nil {
+		t.Fatalf("home = %+v, want two rows, two heroes, no hint", home)
 	}
 
 	assertSeasonCardRow(t, home.Rows[0])
@@ -170,6 +191,8 @@ func TestGetHomeRows(t *testing.T) {
 	if hero := home.Hero[0]; hero.ItemID.String() != rowShowID || hero.Backdrop.Tag != "b" || hero.Logo != nil || *hero.SummaryLine != "Two men." || *hero.Year != 2006 {
 		t.Errorf("hero = %+v", hero)
 	}
+
+	assertHeroMeta(t, home.Hero)
 
 	if limits := service.requestedLimits(); len(limits) != 1 || limits[0] != 7 {
 		t.Errorf("limits = %v, want [7]", limits)

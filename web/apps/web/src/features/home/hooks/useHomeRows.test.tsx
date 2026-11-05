@@ -12,9 +12,11 @@ import { librariesRoute } from "../../../test/libraryFixtures";
 import { libraryLayoutStorageKey } from "../../sidebar-layout";
 import {
   failingHomeRowsRoute,
+  heroMovie,
   homeRowsRoute,
   moviesLibrary,
   moviesRow,
+  rowsWithHero,
   showsLibrary,
   showsRow,
   twoLibraryRows,
@@ -58,6 +60,7 @@ describe("useHomeRows", () => {
 
     expect(result.current).toEqual({
       state: "loaded",
+      hero: [],
       rows: [moviesRow, showsRow],
       hint: undefined,
     });
@@ -71,7 +74,34 @@ describe("useHomeRows", () => {
 
     const result = await loadedState([bothLibraries, homeRowsRoute(twoLibraryRows)]);
 
-    expect(result.current).toEqual({ state: "loaded", rows: [moviesRow], hint: undefined });
+    expect(result.current).toEqual({
+      state: "loaded",
+      hero: [],
+      rows: [moviesRow],
+      hint: undefined,
+    });
+  });
+
+  it("leaves out hero titles of unpinned libraries", async () => {
+    window.localStorage.setItem(
+      libraryLayoutStorageKey,
+      JSON.stringify({ version: 1, order: [], unpinned: [showsLibrary.id] }),
+    );
+
+    const result = await loadedState([bothLibraries, homeRowsRoute(rowsWithHero)]);
+
+    expect(result.current).toMatchObject({ state: "loaded", hero: [heroMovie] });
+  });
+
+  it("orders the rows as the sidebar", async () => {
+    window.localStorage.setItem(
+      libraryLayoutStorageKey,
+      JSON.stringify({ version: 1, order: [showsLibrary.id, moviesLibrary.id], unpinned: [] }),
+    );
+
+    const result = await loadedState([bothLibraries, homeRowsRoute(twoLibraryRows)]);
+
+    expect(result.current).toMatchObject({ state: "loaded", rows: [showsRow, moviesRow] });
   });
 
   it("hints at the sidebar when every library is unpinned", async () => {
@@ -82,7 +112,7 @@ describe("useHomeRows", () => {
 
     const result = await loadedState([bothLibraries, homeRowsRoute(twoLibraryRows)]);
 
-    expect(result.current).toEqual({ state: "loaded", rows: [], hint: "allUnpinned" });
+    expect(result.current).toEqual({ state: "loaded", hero: [], rows: [], hint: "allUnpinned" });
   });
 
   it("reports no libraries from the library list", async () => {
@@ -107,7 +137,7 @@ describe("useHomeRows", () => {
 
     const result = await loadedState([bothLibraries, homeRowsRoute(broken)]);
 
-    expect(result.current).toEqual({ state: "loaded", rows: [], hint: "generic" });
+    expect(result.current).toEqual({ state: "loaded", hero: [], rows: [], hint: "generic" });
   });
 
   it("fails after a retry and loads again on request", async () => {

@@ -1737,7 +1737,7 @@ export interface components {
             /** @description The row's first items in display order, at most the requested limit: movies, shows, seasons (grouped episodes) or episodes, depending on kind. */
             items: components["schemas"]["ItemSummary"][];
         };
-        /** @description One title of the Home hero (HO-01). Only items with a backdrop are listed. */
+        /** @description One title of the Home hero (HO-01). Only items with a backdrop are listed. year, genres and media (duration and resolution of a movie's primary file; omitted for shows, which own no file) make up the meta line above the title. */
         HeroItem: {
             /**
              * Format: uuid
@@ -1770,6 +1770,15 @@ export interface components {
             summaryLine?: string;
             backdrop: components["schemas"]["ImageRef"];
             logo?: components["schemas"]["ImageRef"];
+            /**
+             * @description Up to three of the item's genres in metadata order, for the meta line; omitted when the item has none.
+             * @example [
+             *       "Animation",
+             *       "Comedy"
+             *     ]
+             */
+            genres?: string[];
+            media?: components["schemas"]["MediaSummary"];
         };
         /** @description The rows and the hero list of the Home screen. */
         HomeRows: {

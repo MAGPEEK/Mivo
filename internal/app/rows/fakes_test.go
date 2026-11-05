@@ -224,7 +224,7 @@ func (catalog *fakeCatalog) GetItem(_ context.Context, id string) (applibrary.It
 	}
 
 	detail := applibrary.ItemDetail{Item: item.summary.Item, Artwork: map[artwork.Kind]artwork.Ref{}}
-	detail.Metadata.Summary = item.summaryText
+	detail.Metadata.Summary, detail.Metadata.Genres = item.summaryText, item.genres
 
 	if item.backdrop {
 		detail.Artwork[artwork.KindBackdrop] = artwork.Ref{ID: "backdrop-" + id, Tag: "t"}

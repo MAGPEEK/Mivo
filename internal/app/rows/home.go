@@ -21,6 +21,8 @@ const (
 	MaxHeroItems             = 5
 	heroCandidatesPerLibrary = 2 * MaxHeroItems
 	maxHeroLookups           = 3 * MaxHeroItems
+	// MaxHeroGenres bounds the genres of a hero's meta line (API HeroItem.genres).
+	MaxHeroGenres = 3
 )
 
 // MaxHomeRows is the most rows Home carries (API HomeRows.rows maxItems); libraries after
@@ -98,7 +100,7 @@ func (service *Service) hero(ctx context.Context, libraries []target) ([]HeroIte
 			return nil, fmt.Errorf("hero: %w", err)
 		}
 
-		if item, found := heroItemOf(detail); found {
+		if item, found := heroItemOf(candidate, detail); found {
 			hero = append(hero, item)
 			if len(hero) == MaxHeroItems {
 				break
@@ -138,8 +140,9 @@ func (service *Service) heroCandidates(ctx context.Context, libraries []target) 
 	return candidates, nil
 }
 
-// heroItemOf returns the hero entry of an item; found is false without a backdrop.
-func heroItemOf(detail applibrary.ItemDetail) (HeroItem, bool) {
+// heroItemOf returns the hero entry of an item; found is false without a backdrop. The
+// primary file comes from the listing, so the meta line costs no extra read.
+func heroItemOf(candidate applibrary.ItemSummary, detail applibrary.ItemDetail) (HeroItem, bool) {
 	backdrop, found := detail.Artwork[artwork.KindBackdrop]
 	if !found {
 		return HeroItem{}, false
@@ -148,6 +151,8 @@ func heroItemOf(detail applibrary.ItemDetail) (HeroItem, bool) {
 	item := HeroItem{
 		ItemID: detail.Item.ID, LibraryID: detail.Item.LibraryID, Kind: detail.Item.Kind, Title: detail.Item.Title,
 		Year: detail.Item.Year, SummaryLine: rows.SummaryLine(detail.Metadata.Summary), Backdrop: backdrop,
+		Genres:      slices.Clone(detail.Metadata.Genres[:min(MaxHeroGenres, len(detail.Metadata.Genres))]),
+		PrimaryFile: candidate.PrimaryFile,
 	}
 
 	if logo, found := detail.Artwork[artwork.KindLogo]; found {

@@ -7,6 +7,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -199,5 +200,15 @@ func heroItemResponse(item approws.HeroItem) (apigen.HeroItem, error) {
 	return apigen.HeroItem{
 		ItemID: identity.id, LibraryID: identity.libraryID, Kind: identity.kind, Title: item.Title,
 		Year: optionalNumber(item.Year), SummaryLine: optionalString(item.SummaryLine), Backdrop: *backdrop, Logo: logo,
+		Genres: optionalStrings(item.Genres), Media: heroMediaResponse(item.PrimaryFile),
 	}, nil
+}
+
+// heroMediaResponse describes a movie's primary file; nil for a show, which owns no file.
+func heroMediaResponse(file media.File) *apigen.MediaSummary {
+	if file.ID == "" {
+		return nil
+	}
+
+	return mediaSummaryResponse(file)
 }

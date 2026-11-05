@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.9.0"
+  version: "1.10.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -3174,7 +3174,10 @@ components:
             $ref: "#/components/schemas/ItemSummary"
     HeroItem:
       type: object
-      description: One title of the Home hero (HO-01). Only items with a backdrop are listed.
+      description: >-
+        One title of the Home hero (HO-01). Only items with a backdrop are listed. year,
+        genres and media (duration and resolution of a movie's primary file; omitted for
+        shows, which own no file) make up the meta line above the title.
       required:
         - itemId
         - libraryId
@@ -3217,6 +3220,18 @@ components:
           $ref: "#/components/schemas/ImageRef"
         logo:
           $ref: "#/components/schemas/ImageRef"
+        genres:
+          type: array
+          maxItems: 3
+          description: >-
+            Up to three of the item's genres in metadata order, for the meta line; omitted
+            when the item has none.
+          items:
+            type: string
+            description: Name of a genre.
+          example: [Animation, Comedy]
+        media:
+          $ref: "#/components/schemas/MediaSummary"
     HomeRows:
       type: object
       description: The rows and the hero list of the Home screen.

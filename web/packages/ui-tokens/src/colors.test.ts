@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { colors, contrastRatio, type ColorToken } from "./index";
+import { colors, compositeColor, contrastRatio, textScrimOpacity, type ColorToken } from "./index";
 
 // WCAG 2.x AA: normal text needs 4.5:1, large text and UI components (icons, badges,
 // focus rings) need 3:1.
@@ -51,6 +51,20 @@ describe("text contrast (>= 4.5:1)", () => {
     expect(contrastRatio(colors[foreground], colors[background])).toBeGreaterThanOrEqual(
       textContrast,
     );
+  });
+});
+
+describe("text scrim (>= 4.5:1 over any image)", () => {
+  // White is the worst image behind the dark scrim; the others cover dark and saturated ones.
+  const images = ["#FFFFFF", "#000000", "#FF0000", "#00FF00", "#808080"];
+
+  it.each(
+    pairs(["text", "textMuted"], ["background"]).flatMap((pair) =>
+      images.map((image) => ({ ...pair, image })),
+    ),
+  )("$foreground on the scrim over $image", ({ foreground, background, image }) => {
+    const scrim = compositeColor(colors[background], textScrimOpacity, image);
+    expect(contrastRatio(colors[foreground], scrim)).toBeGreaterThanOrEqual(textContrast);
   });
 });
 

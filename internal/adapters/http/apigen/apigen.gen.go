@@ -1111,10 +1111,15 @@ type HealthResponse struct {
 // HealthStatus State of the server as a whole or of one health check. Clients must tolerate values added in later versions.
 type HealthStatus string
 
-// HeroItem One title of the Home hero (HO-01). Only items with a backdrop are listed.
+// HeroItem One title of the Home hero (HO-01). Only items with a backdrop are listed. year, genres and media (duration and resolution of a movie's primary file; omitted for shows, which own no file) make up the meta line above the title.
 type HeroItem struct {
 	// Backdrop Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Backdrop ImageRef `json:"backdrop"`
+
+	// Genres Up to three of the item's genres in metadata order, for the meta line; omitted when the item has none.
+	//
+	// Example: ["Animation","Comedy"]
+	Genres *[]string `json:"genres,omitempty"`
 
 	// ItemID ID of the item, for "More info" (getItem) and "Play".
 	//
@@ -1133,6 +1138,9 @@ type HeroItem struct {
 
 	// Logo Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Logo *ImageRef `json:"logo,omitempty"`
+
+	// Media Technical summary of an item's primary file for list views ("MKV · H.264 · AAC"); only durationSeconds of an audiobook covers all its part files. Codec and container identifiers follow ADR 0023.
+	Media *MediaSummary `json:"media,omitempty"`
 
 	// SummaryLine Start of the item's summary, cut by the server at a word boundary to fit one line; omitted when the item has no summary.
 	//

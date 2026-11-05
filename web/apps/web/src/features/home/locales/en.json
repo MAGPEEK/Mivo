@@ -1,4 +1,20 @@
 {
+  "hero": {
+    "label": "Featured",
+    "roleDescription": "carousel",
+    "slideRoleDescription": "slide",
+    "slide": "{{position}} of {{count}}",
+    "dots": "Featured titles",
+    "dot": "Show {{title}}",
+    "play": "Play",
+    "moreInfo": "More info",
+    "stopRotation": "Pause rotation",
+    "startRotation": "Start rotation",
+    "runtime": {
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "minutes": "{{minutes}} min"
+    }
+  },
   "rows": {
     "loading": "Loading rows",
     "loadError": {

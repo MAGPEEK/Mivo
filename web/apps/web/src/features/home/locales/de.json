@@ -1,4 +1,20 @@
 {
+  "hero": {
+    "label": "Empfohlen",
+    "roleDescription": "Karussell",
+    "slideRoleDescription": "Folie",
+    "slide": "{{position}} von {{count}}",
+    "dots": "Empfohlene Titel",
+    "dot": "{{title}} zeigen",
+    "play": "Abspielen",
+    "moreInfo": "Mehr Infos",
+    "stopRotation": "Wechsel anhalten",
+    "startRotation": "Wechsel starten",
+    "runtime": {
+      "hoursMinutes": "{{hours}} Std. {{minutes}} Min.",
+      "minutes": "{{minutes}} Min."
+    }
+  },
   "rows": {
     "loading": "Reihen werden geladen",
     "loadError": {

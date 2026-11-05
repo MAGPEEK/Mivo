@@ -75,3 +75,24 @@ export function contrastRatio(foreground: string, background: string): number {
   const darker = Math.min(foregroundLuminance, backgroundLuminance);
   return (lighter + flare) / (darker + flare);
 }
+
+const hexDigitsPerChannel = 2;
+
+/**
+ * The colour seen where `overlay` lies with `opacity` (0 to 1) over `underlay`, as `#RRGGBB`.
+ * Checks text on a translucent scrim: compose the scrim over the worst image behind it, then
+ * take the contrast ratio against the result.
+ * @throws {InvalidColorError} if either colour cannot be parsed.
+ */
+export function compositeColor(overlay: string, opacity: number, underlay: string): string {
+  const top = parseHexChannels(overlay);
+  const bottom = parseHexChannels(underlay);
+  const weight = Math.min(1, Math.max(0, opacity));
+  const mixed = top.map((channelHex, index) => {
+    const topValue = Number.parseInt(channelHex, hexRadix);
+    const bottomValue = Number.parseInt(bottom[index] ?? channelHex, hexRadix);
+    const value = Math.round(topValue * weight + bottomValue * (1 - weight));
+    return value.toString(hexRadix).padStart(hexDigitsPerChannel, "0");
+  });
+  return `#${mixed.join("").toUpperCase()}`;
+}

@@ -393,7 +393,7 @@ test("the absolute-numbered show has one season with all its episodes", async ({
 test("Home shows a recently added row per library with See all into Browse", async ({ page }) => {
   await openApp(page);
   const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { level: 2 })).toHaveText([
+  await expect(main.getByRole("heading", { level: 2, name: /^Recently added in / })).toHaveText([
     `Recently added in ${moviesLibraryName}`,
     `Recently added in ${showsLibraryName}`,
   ]);
@@ -411,6 +411,37 @@ test("Home shows a recently added row per library with See all into Browse", asy
   expect(href.searchParams.get("view")).toBe("browse");
   expect(href.searchParams.get("sort")).toBe("dateAdded");
   expect(await blockingAxeViolations(page)).toEqual([]);
+});
+
+test("the Home hero features the newest show with a backdrop, plays it and opens its page (M5-26)", async ({
+  page,
+}) => {
+  // Reduced motion keeps the first title still.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openApp(page);
+  const hero = page.getByRole("main").getByRole("region", { name: "Featured" });
+  // Pioneer One is the corpus show with a local fanart.jpg; the movie with one (Big Buck
+  // Bunny) is older than the newest movies the server looks at.
+  await expect(hero.getByRole("heading", { level: 2 })).toHaveText(showWithSpecials);
+  await expect(hero.getByText("Drama, Science Fiction")).toBeVisible();
+  await expect(hero.locator("img")).toHaveAttribute("src", imageUrlPattern);
+  expect(await blockingAxeViolations(page)).toEqual([]);
+
+  const moreInfo = hero.getByRole("link", { name: "More info" });
+  const showPath = (await moreInfo.getAttribute("href")) ?? "";
+  expect(showPath).toMatch(/^\/items\/[^/]+$/);
+
+  // A show plays the episode the server names, never the show itself.
+  await hero.getByRole("button", { name: "Play" }).click();
+  await expect(page).toHaveURL(/\/items\/[^/]+\/play/);
+  expect(new URL(page.url()).pathname).not.toBe(`${showPath}/play`);
+
+  await openApp(page);
+  await moreInfo.click();
+  await expect(page).toHaveURL(new RegExp(`${showPath}$`));
+  await expect(
+    page.getByRole("main").getByRole("heading", { level: 1, name: showWithSpecials }),
+  ).toBeVisible();
 });
 
 test("a library opens on Browse, shows its server rows on Overview and remembers the pivot (M5-30)", async ({

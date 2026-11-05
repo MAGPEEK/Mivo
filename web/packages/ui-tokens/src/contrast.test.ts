@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio, InvalidColorError, relativeLuminance } from "./index";
+import { compositeColor, contrastRatio, InvalidColorError, relativeLuminance } from "./index";
 
 const maximumContrast = 21;
 const minimumContrast = 1;
@@ -65,5 +65,28 @@ describe("contrastRatio", () => {
 
     expect(error).toBeInstanceOf(InvalidColorError);
     expect(error).toMatchObject({ name: "InvalidColorError", value: "#12" });
+  });
+});
+
+describe("compositeColor", () => {
+  it.each([
+    {
+      name: "an opaque overlay",
+      overlay: "#000000",
+      opacity: 1,
+      under: "#FFFFFF",
+      seen: "#000000",
+    },
+    { name: "a clear overlay", overlay: "#000000", opacity: 0, under: "#FFFFFF", seen: "#FFFFFF" },
+    { name: "half, rounded", overlay: "#FF0000", opacity: 0.5, under: "#0000FF", seen: "#800080" },
+    { name: "short hex input", overlay: "#fff", opacity: 0.5, under: "#000", seen: "#808080" },
+    { name: "opacity above 1", overlay: "#123456", opacity: 2, under: "#FFFFFF", seen: "#123456" },
+    { name: "opacity below 0", overlay: "#123456", opacity: -1, under: "#ffffff", seen: "#FFFFFF" },
+  ])("blends $name", ({ overlay, opacity, under, seen }) => {
+    expect(compositeColor(overlay, opacity, under)).toBe(seen);
+  });
+
+  it("rejects an invalid colour", () => {
+    expect(() => compositeColor("red", 0.5, "#000000")).toThrow(InvalidColorError);
   });
 });

@@ -1,4 +1,4 @@
-import type { HomeRows, Library, Row } from "@mivo/api-client";
+import type { HeroItem, HomeRows, Library, Row } from "@mivo/api-client";
 
 import { jsonResponse, problemResponse, type FakeRoute } from "../../../test/fakeApi";
 import { fakeItem, fakeLibrary, fakeShow } from "../../../test/libraryFixtures";
@@ -58,6 +58,31 @@ export const showsRow: Row = {
 
 /** Home rows of both libraries. */
 export const twoLibraryRows: HomeRows = { rows: [moviesRow, showsRow], hero: [] };
+
+/** A hero movie with every meta line fact. */
+export const heroMovie: HeroItem = {
+  itemId: "movie-1",
+  libraryId: moviesLibrary.id,
+  kind: "movie",
+  title: "Sintel",
+  year: 2010,
+  summaryLine: "A lonely girl searches for her dragon.",
+  backdrop: { id: "backdrop-movie-1", tag: "b1" },
+  genres: ["Animation", "Fantasy"],
+  media: { available: true, durationSeconds: 888, width: 1920, height: 818 },
+};
+
+/** A hero show: no file, so no runtime or resolution. */
+export const heroShow: HeroItem = {
+  itemId: "show-1",
+  libraryId: showsLibrary.id,
+  kind: "show",
+  title: "Cosmos Laundromat",
+  backdrop: { id: "backdrop-show-1", tag: "b2" },
+};
+
+/** Home rows of both libraries with a hero of a movie and a show. */
+export const rowsWithHero: HomeRows = { ...twoLibraryRows, hero: [heroMovie, heroShow] };
 
 /** Answers `GET /api/v1/home/rows` with `rows`. */
 export function homeRowsRoute(rows: HomeRows): FakeRoute {

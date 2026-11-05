@@ -36,3 +36,10 @@ export const colors = {
 
 /** Name of a colour token. */
 export type ColorToken = keyof typeof colors;
+
+/**
+ * Opacity of a `background` scrim that carries text over an arbitrary image, such as the
+ * Home hero backdrop (`from-background/90`). It keeps `text` and `textMuted` at 4.5:1 or more
+ * even over a white image (colors.test.ts).
+ */
+export const textScrimOpacity = 0.9;

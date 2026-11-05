@@ -9,6 +9,7 @@ import (
 
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -48,10 +49,12 @@ func TestHomeHero(t *testing.T) {
 	catalog := newFixtureCatalog()
 	catalog.items = nil
 
-	// Seven movies with backdrops, added on days 1 to 7, and a newer one without.
+	// Seven movies with backdrops, four genres and a primary file, added on days 1 to 7, and
+	// a newer one without a backdrop.
 	for index := range 7 {
-		item := movie(fmt.Sprintf("m-%d", index+1), day(index+1), "")
+		item := movie(fmt.Sprintf("m-%d", index+1), day(index+1), "", "Drama", "Comedy", "Animation", "Family")
 		item.backdrop, item.summaryText = true, "A summary\nof movie."
+		item.summary.PrimaryFile = media.File{ID: "file-" + item.summary.Item.ID}
 		catalog.items = append(catalog.items, item)
 	}
 
@@ -68,6 +71,10 @@ func TestHomeHero(t *testing.T) {
 
 		if hero.SummaryLine != "A summary of movie." || hero.Backdrop.ID != "backdrop-"+hero.ItemID || hero.Kind != library.ItemKindMovie {
 			t.Errorf("hero %+v", hero)
+		}
+
+		if want := []string{"Drama", "Comedy", "Animation"}; !slices.Equal(hero.Genres, want) || hero.PrimaryFile.ID != "file-"+hero.ItemID {
+			t.Errorf("hero genres %v file %q, want the first three genres %v and the listed primary file", hero.Genres, hero.PrimaryFile.ID, want)
 		}
 	}
 

@@ -1,8 +1,8 @@
 import type { Row, RowsHint } from "@mivo/api-client";
 import { describe, expect, it } from "vitest";
 
-import { moviesRow, showsRow } from "../test/homeFixtures";
-import { homeHint, visibleHomeRows, type RowCounts } from "./homeRows";
+import { heroMovie, heroShow, moviesRow, showsRow } from "../test/homeFixtures";
+import { homeHint, visibleHeroItems, visibleHomeRows, type RowCounts } from "./homeRows";
 
 describe("visibleHomeRows", () => {
   const acrossLibraries: Row = {
@@ -13,14 +13,46 @@ describe("visibleHomeRows", () => {
     items: [],
   };
 
-  it("keeps server order and drops rows of unpinned libraries", () => {
+  const moviesId = moviesRow.libraryId ?? "";
+  const showsId = showsRow.libraryId ?? "";
+
+  it("drops rows of unpinned libraries", () => {
     const rows = [moviesRow, acrossLibraries, showsRow];
 
-    expect(visibleHomeRows(rows, new Set([moviesRow.libraryId ?? ""]))).toEqual([
+    expect(
+      visibleHomeRows(rows, { order: [moviesId, showsId], unpinned: new Set([moviesId]) }),
+    ).toEqual([acrossLibraries, showsRow]);
+  });
+
+  it("keeps server order without a known layout", () => {
+    const rows = [showsRow, acrossLibraries, moviesRow];
+
+    expect(visibleHomeRows(rows, { order: [], unpinned: new Set() })).toEqual([
       acrossLibraries,
       showsRow,
+      moviesRow,
     ]);
-    expect(visibleHomeRows(rows, new Set())).toEqual(rows);
+  });
+
+  it("follows the sidebar order, rows across libraries first, unknown libraries last", () => {
+    const newLibraryRow: Row = { ...moviesRow, id: "recentlyAdded:new", libraryId: "new" };
+    const rows = [newLibraryRow, moviesRow, acrossLibraries, showsRow];
+
+    expect(visibleHomeRows(rows, { order: [showsId, moviesId], unpinned: new Set() })).toEqual([
+      acrossLibraries,
+      showsRow,
+      moviesRow,
+      newLibraryRow,
+    ]);
+  });
+});
+
+describe("visibleHeroItems", () => {
+  it("drops titles of unpinned libraries and keeps server order", () => {
+    const items = [heroShow, heroMovie];
+
+    expect(visibleHeroItems(items, new Set())).toEqual(items);
+    expect(visibleHeroItems(items, new Set([heroShow.libraryId]))).toEqual([heroMovie]);
   });
 });
 

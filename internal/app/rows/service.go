@@ -9,6 +9,7 @@ import (
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -39,7 +40,8 @@ type Row struct {
 	Items       []Item
 }
 
-// HeroItem is one title of the Home hero; Logo is nil without a logo.
+// HeroItem is one title of the Home hero; Logo is nil without a logo. Genres (at most
+// MaxHeroGenres) and PrimaryFile feed the meta line; a show has no primary file (zero ID).
 type HeroItem struct {
 	ItemID      string
 	LibraryID   string
@@ -49,6 +51,8 @@ type HeroItem struct {
 	SummaryLine string
 	Backdrop    artwork.Ref
 	Logo        *artwork.Ref
+	Genres      []string
+	PrimaryFile media.File
 }
 
 // Home is the Home screen: its rows, the hero and the hint (HintNone for none).
