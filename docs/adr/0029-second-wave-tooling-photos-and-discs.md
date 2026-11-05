@@ -57,3 +57,13 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
 
 - Folder discs are change-detected by their index file (`index.bdmv`, `VIDEO_TS.IFO`) only:
   size and modification time of the clips are not part of the scan state (M3-16b).
+- Main-title rules (M3-16c, `internal/adapters/disc`): Blu-ray = longest MPLS playlist that
+  repeats no clip and whose STREAM clips all exist (ties: lowest playlist number; multi-angle
+  items use angle 1; only the in/out span counts toward the duration, the whole clip file is
+  played). DVD = title set with the largest total size of `VTS_nn_k.VOB` (k ≥ 1, no gaps);
+  duration = longest PGC in `VTS_nn_0.IFO` (or `.BUP`), unknown (0) when neither parses.
+  Playlists/sets with missing clips are skipped; none left → `disc_no_title`. Directory
+  listings, file sizes and the total bytes read per disc are capped (hostile input →
+  `disc_unsupported`); 0-byte stream clips count as missing; corrupt ISO structures are
+  `disc_unsupported`, cancellation is not. AVCHD nesting (`PRIVATE/AVCHD/BDMV`) is found only
+  when the walker reports that BDMV folder itself, not inside ISO images.
