@@ -355,3 +355,26 @@ test("the absolute-numbered show has one season with all its episodes", async ({
   }
   await expect(episodeRows(page)).toHaveCount(absoluteNumberedEpisodeCount);
 });
+
+test("Home shows a recently added row per library with See all into Browse", async ({ page }) => {
+  await openApp(page);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 2 })).toHaveText([
+    `Recently added in ${moviesLibraryName}`,
+    `Recently added in ${showsLibraryName}`,
+  ]);
+
+  const shows = main.getByRole("region", { name: `Recently added in ${showsLibraryName}` });
+  const showTitles = expectedLibrary("shows").items.map((item) => item.title);
+  const firstCard = shows.getByRole("listitem").first().getByRole("link");
+  expect(showTitles).toContain(await firstCard.textContent());
+
+  const seeAll = shows.getByRole("link", {
+    name: `See all: Recently added in ${showsLibraryName}`,
+  });
+  const href = new URL((await seeAll.getAttribute("href")) ?? "", page.url());
+  expect(href.pathname).toMatch(/^\/libraries\/[^/]+$/);
+  expect(href.searchParams.get("view")).toBe("browse");
+  expect(href.searchParams.get("sort")).toBe("dateAdded");
+  expect(await blockingAxeViolations(page)).toEqual([]);
+});

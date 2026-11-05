@@ -71,3 +71,4 @@ export {
   creditedMetadataSources,
   type MetadataAttributionProps,
 } from "./MetadataAttribution";
+export { useRowTitle } from "./useRowTitle";

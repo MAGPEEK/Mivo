@@ -1,0 +1,26 @@
+{
+  "rows": {
+    "loading": "Reihen werden geladen",
+    "loadError": {
+      "title": "Die Startseite konnte nicht geladen werden",
+      "message": "Der Server hat nicht geantwortet oder einen Fehler gemeldet. Prüfe die Verbindung und versuche es erneut.",
+      "retry": "Erneut versuchen"
+    }
+  },
+  "hint": {
+    "noItems": "Deine Bibliotheken enthalten noch keine Titel. Sie erscheinen hier nach dem ersten Scan.",
+    "scanning": "Der erste Scan läuft. Neue Titel erscheinen hier in Kürze.",
+    "notEnoughData": "Für einige Reihen fehlen noch Metadaten. Alle Titel findest du unter „Durchsuchen“ in der Bibliothek.",
+    "allUnpinned": "Hefte eine Bibliothek in der Seitenleiste an, um ihre Reihen hier zu sehen.",
+    "generic": "Hier gibt es noch nichts zu sehen."
+  },
+  "card": {
+    "newEpisodes_one": "{{count}} neue Folge",
+    "newEpisodes_other": "{{count}} neue Folgen",
+    "seasons_one": "{{count}} Staffel",
+    "seasons_other": "{{count}} Staffeln",
+    "season": "Staffel {{number}}",
+    "specials": "Specials",
+    "unavailable": "Nicht verfügbar"
+  }
+}

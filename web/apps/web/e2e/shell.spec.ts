@@ -7,15 +7,15 @@ import { abortSystemInfo, openApp } from "./support/shell";
 // Enough intermediate pointer positions to land several times in the gap beside the icon.
 const pointerSteps = 20;
 
-test("renders the shell with navigation, search, home heading and empty state", async ({
-  page,
-}) => {
+test("renders the shell with navigation, search, home heading and rows", async ({ page }) => {
   const { sidebar, searchBox, heading } = await openApp(page);
 
   await expect(sidebar).toBeVisible();
   await expect(searchBox).toBeVisible();
   await expect(heading).toHaveText("Home");
-  await expect(page.getByRole("main").getByText("Nothing to show yet")).toBeVisible();
+  await expect(
+    page.getByRole("main").getByRole("region", { name: `Recently added in ${e2eLibraryName}` }),
+  ).toBeVisible();
 });
 
 test("shows the version the system info API reports in the sidebar footer", async ({

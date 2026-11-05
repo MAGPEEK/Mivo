@@ -1,6 +1,7 @@
 import {
   createApiClient,
   type ApiClient,
+  type HomeRows,
   type LibraryList,
   type Problem,
   type SystemInfo,
@@ -93,6 +94,11 @@ export const defaultRoutes: readonly FakeRoute[] = [
     method: "GET",
     path: "/api/v1/libraries",
     respond: () => jsonResponse({ libraries: [] } satisfies LibraryList),
+  },
+  {
+    method: "GET",
+    path: "/api/v1/home/rows",
+    respond: () => jsonResponse({ rows: [], hero: [], hint: "noLibraries" } satisfies HomeRows),
   },
 ];
 

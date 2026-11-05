@@ -1,43 +1,40 @@
-import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState, LibraryIcon, primaryButtonClass } from "../../../shared/ui";
-import { useLibraries } from "../../library";
+import { useHomeRows, type HomeRowsState } from "../hooks/useHomeRows";
+import { HomeRow } from "./HomeRow";
+import { NoLibraries, RowsHint, RowsLoadError, RowsSkeleton } from "./HomeStates";
 
 /**
- * Home page. Without libraries it leads to Settings › Libraries (HO-09); the hero area and
- * media rows replace the other empty state in milestone 5.
+ * Home page: one media row per server row of the pinned libraries (HO-02, HO-07), or the
+ * "No libraries yet" state leading to Settings › Libraries (HO-09). The hero follows in M5-26.
  */
 export function HomePage() {
   const { t } = useTranslation();
-  const libraries = useLibraries();
-  const noLibraries = libraries.isSuccess && libraries.data.length === 0;
+  const home = useHomeRows();
   return (
     <>
       <h1 className="mb-6 text-3xl font-semibold">{t("home.heading")}</h1>
-      {noLibraries && (
-        <EmptyState
-          icon={<LibraryIcon className="size-10" />}
-          title={t("home.noLibraries.title")}
-          description={t("home.noLibraries.hint")}
-          action={
-            <Link
-              to="/admin/manage/libraries"
-              search={{ add: true }}
-              className={`inline-block ${primaryButtonClass}`}
-            >
-              {t("home.noLibraries.add")}
-            </Link>
-          }
-        />
-      )}
-      {libraries.isSuccess && !noLibraries && (
-        <EmptyState
-          icon={<LibraryIcon className="size-10" />}
-          title={t("home.empty.title")}
-          description={t("home.empty.hint")}
-        />
-      )}
+      <HomeContent home={home} />
     </>
   );
+}
+
+function HomeContent({ home }: { readonly home: HomeRowsState }) {
+  switch (home.state) {
+    case "noLibraries":
+      return <NoLibraries />;
+    case "loading":
+      return <RowsSkeleton />;
+    case "error":
+      return <RowsLoadError onRetry={home.retry} />;
+    default:
+      return (
+        <div className="flex flex-col gap-8">
+          {home.rows.map((row) => (
+            <HomeRow key={row.id} row={row} />
+          ))}
+          {home.hint !== undefined && <RowsHint hint={home.hint} />}
+        </div>
+      );
+  }
 }

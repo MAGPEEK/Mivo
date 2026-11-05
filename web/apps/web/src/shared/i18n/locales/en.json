@@ -67,6 +67,14 @@
     "previous": "Scroll {{title}} back",
     "next": "Scroll {{title}} forward"
   },
+  "rows": {
+    "recentlyAdded": "Recently added",
+    "recentlyAddedIn": "Recently added in {{library}}",
+    "newReleases": "New releases",
+    "moreGenre": "More {{genre}}",
+    "recentEpisodes": "Recently released episodes",
+    "fallback": "More to explore"
+  },
   "attribution": {
     "poweredBy": "Powered by",
     "tmdbLogo": "TMDB",

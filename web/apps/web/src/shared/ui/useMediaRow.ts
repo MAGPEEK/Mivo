@@ -158,8 +158,9 @@ function useRowSlots(
     overscan: overscanCards,
     rangeExtractor,
   });
-  // Card sizes are estimated once per index; another format must drop the cached positions.
-  useEffect(() => {
+  // Card sizes are estimated once per index; another format must drop the cached positions
+  // before the browser paints, or the row shows one frame with the old offsets.
+  useLayoutEffect(() => {
     virtualizer.measure();
   }, [virtualizer, format]);
   const stride = cardStride(format);

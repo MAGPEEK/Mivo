@@ -16,7 +16,7 @@ export interface SeeAllLinkProps {
 
 /** Props of {@link MediaRow}. */
 export interface MediaRowProps<Item> {
-  /** Row heading, e.g. "Recently added in Movies"; also names the section and the list. */
+  /** Row heading, e.g. "Recently added in Movies"; also names the section. */
   readonly title: string;
   readonly items: readonly Item[];
   /** Shape of every card in the row; sets the card width. */

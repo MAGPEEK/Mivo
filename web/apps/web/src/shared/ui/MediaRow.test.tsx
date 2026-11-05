@@ -59,10 +59,13 @@ afterEach(() => {
 interface RenderRowOptions {
   readonly count: number;
   readonly withSeeAll?: boolean;
+  readonly format?: CardFormat;
 }
 
-function renderRow({ count, withSeeAll = true }: RenderRowOptions) {
-  fakeLayout(count);
+const i18n = createI18n(["en"]);
+
+function rowElement({ count, withSeeAll = true, format = "poster" }: RenderRowOptions) {
+  fakeLayout(count, format);
   const seeAll = withSeeAll
     ? {
         renderSeeAll: (link: SeeAllLinkProps) => (
@@ -72,13 +75,13 @@ function renderRow({ count, withSeeAll = true }: RenderRowOptions) {
         ),
       }
     : {};
-  return render(
-    <I18nextProvider i18n={createI18n(["en"])}>
+  return (
+    <I18nextProvider i18n={i18n}>
       <main>
         <MediaRow
           title="Recently added"
           items={movies(count)}
-          format="poster"
+          format={format}
           getKey={(movie) => movie.id}
           renderCard={(movie, card) => (
             <a href={`#${movie.id}`} {...card}>
@@ -88,8 +91,12 @@ function renderRow({ count, withSeeAll = true }: RenderRowOptions) {
           {...seeAll}
         />
       </main>
-    </I18nextProvider>,
+    </I18nextProvider>
   );
+}
+
+function renderRow(options: RenderRowOptions) {
+  return render(rowElement(options));
 }
 
 // The section carries the row's name; its list needs none of its own.
@@ -126,7 +133,7 @@ function scrollRowTo(left: number): void {
 }
 
 describe("MediaRow", () => {
-  it("names the section and list after its title and links to all items", () => {
+  it("names the section after its title and links to all items", () => {
     renderRow({ count: 5 });
 
     expect(screen.getByRole("region", { name: "Recently added" })).toBeTruthy();
@@ -174,6 +181,17 @@ describe("MediaRow", () => {
     // The card that holds the tab stop stays mounted, so Tab still reaches the row.
     expect(titles).toContain("Movie 0");
     expect(titles).not.toContain("Movie 50");
+  });
+
+  it("moves the cards of a mounted long row to the offsets of a new format", () => {
+    const { rerender } = renderRow({ count: 200 });
+    const secondCardOffset = () =>
+      within(rowList()).getAllByRole("listitem")[1]?.style.transform ?? "";
+    expect(secondCardOffset()).toBe(`translateX(${String(cardStride("poster"))}px)`);
+
+    rerender(rowElement({ count: 200, format: "episode" }));
+
+    expect(secondCardOffset()).toBe(`translateX(${String(cardStride("episode"))}px)`);
   });
 
   it("makes one card tabbable and moves focus with the arrow keys", () => {

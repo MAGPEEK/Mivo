@@ -67,6 +67,14 @@
     "previous": "{{title}} zurückblättern",
     "next": "{{title}} weiterblättern"
   },
+  "rows": {
+    "recentlyAdded": "Kürzlich hinzugefügt",
+    "recentlyAddedIn": "Kürzlich hinzugefügt in {{library}}",
+    "newReleases": "Neuerscheinungen",
+    "moreGenre": "Mehr {{genre}}",
+    "recentEpisodes": "Neu erschienene Folgen",
+    "fallback": "Mehr entdecken"
+  },
   "attribution": {
     "poweredBy": "Powered by",
     "tmdbLogo": "TMDB",

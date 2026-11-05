@@ -1,0 +1,26 @@
+{
+  "rows": {
+    "loading": "Loading rows",
+    "loadError": {
+      "title": "Home could not be loaded",
+      "message": "The server did not answer or reported an error. Check the connection and try again.",
+      "retry": "Try again"
+    }
+  },
+  "hint": {
+    "noItems": "Your libraries have no titles yet. They appear here after the first scan.",
+    "scanning": "The first scan is running. New titles appear here shortly.",
+    "notEnoughData": "Some rows need more metadata. Every title is under Browse in its library.",
+    "allUnpinned": "Pin a library in the sidebar to see its rows here.",
+    "generic": "Nothing to show here yet."
+  },
+  "card": {
+    "newEpisodes_one": "{{count}} new episode",
+    "newEpisodes_other": "{{count}} new episodes",
+    "seasons_one": "{{count}} season",
+    "seasons_other": "{{count}} seasons",
+    "season": "Season {{number}}",
+    "specials": "Specials",
+    "unavailable": "Unavailable"
+  }
+}

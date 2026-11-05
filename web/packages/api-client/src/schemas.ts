@@ -188,3 +188,27 @@ export type ItemQuickFilter = Schemas["ItemQuickFilter"];
 
 /** Query parameters of `GET /api/v1/libraries/{libraryId}/items`: sort, filters and paging. */
 export type LibraryItemsQuery = NonNullable<operations["listLibraryItems"]["parameters"]["query"]>;
+
+/** One row of Home or of a library's Overview pivot with its first items. */
+export type Row = Schemas["Row"];
+
+/** What a row shows. Later API versions may add values; render unknown kinds generically. */
+export type RowKind = Schemas["RowKind"];
+
+/** Card shape of a row. Later API versions may add values; render unknown ones as posters. */
+export type CardFormat = Schemas["CardFormat"];
+
+/** Why a rows response has no or few rows. Later API versions may add values. */
+export type RowsHint = Schemas["RowsHint"];
+
+/** Sort and filters of a Browse pivot listing, as "See all" of a row opens it. */
+export type BrowseQuery = Schemas["BrowseQuery"];
+
+/** One title of the Home hero. */
+export type HeroItem = Schemas["HeroItem"];
+
+/** Body of `GET /api/v1/home/rows`: rows and hero of the Home screen. */
+export type HomeRows = Schemas["HomeRows"];
+
+/** Body of `GET /api/v1/libraries/{libraryId}/rows`: the rows of a library's Overview. */
+export type LibraryRows = Schemas["LibraryRows"];
