@@ -127,6 +127,10 @@ func TestMerge(t *testing.T) {
 	partialNFO := metadata.Record{Summary: "Only a plot.", Year: 1999}
 	listOnlySecond := metadata.Record{Title: "Second", Genres: []string{"Action"}, People: matrix.People}
 	allLocked := metadata.NewLockSet(metadata.Fields())
+	tmdbRecord := metadata.Record{
+		Title: "The Matrix (TMDB)", Year: 1999, Genres: []string{"Sci-Fi"},
+		ProviderIDs: []metadata.ProviderID{{Provider: metadata.ProviderTMDB, Value: "603"}},
+	}
 
 	tests := []struct {
 		name    string
@@ -177,6 +181,40 @@ func TestMerge(t *testing.T) {
 				{Source: metadata.SourceNFO, Record: matrix},
 			},
 			want: withTitleAndGenres(matrix, "My Matrix", []string{"Favourites"}),
+		},
+		{
+			name: "tmdb between nfo and filename fills what nfo lacks",
+			sources: []metadata.SourcedRecord{
+				{Source: metadata.SourceNFO, Record: partialNFO},
+				{Source: metadata.SourceTMDB, Record: tmdbRecord},
+				{Source: metadata.SourceFilename, Record: fileNameRecord()},
+			},
+			want: metadata.Record{
+				Title: "The Matrix (TMDB)", Year: 1999, Summary: "Only a plot.", Genres: []string{"Sci-Fi"},
+				ProviderIDs: tmdbRecord.ProviderIDs,
+			},
+		},
+		{
+			name: "nfo wins over tmdb and tmdb over filename",
+			sources: []metadata.SourcedRecord{
+				{Source: metadata.SourceNFO, Record: metadata.Record{Title: "NFO Title"}},
+				{Source: metadata.SourceTMDB, Record: tmdbRecord},
+				{Source: metadata.SourceFilename, Record: fileNameRecord()},
+			},
+			want: metadata.Record{
+				Title: "NFO Title", Year: 1999, Genres: []string{"Sci-Fi"},
+				ProviderIDs: tmdbRecord.ProviderIDs,
+			},
+		},
+		{
+			name:    "locked provider ids survive a tmdb result",
+			current: metadata.Record{ProviderIDs: []metadata.ProviderID{{Provider: metadata.ProviderTMDB, Value: "1"}}},
+			locks:   metadata.NewLockSet([]metadata.Field{metadata.FieldProviderIDs}),
+			sources: []metadata.SourcedRecord{{Source: metadata.SourceTMDB, Record: tmdbRecord}},
+			want: metadata.Record{
+				Title: "The Matrix (TMDB)", Year: 1999, Genres: []string{"Sci-Fi"},
+				ProviderIDs: []metadata.ProviderID{{Provider: metadata.ProviderTMDB, Value: "1"}},
+			},
 		},
 		{
 			name:    "locked empty field stays empty",

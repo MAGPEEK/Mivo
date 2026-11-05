@@ -6,12 +6,11 @@ import (
 	"github.com/magpeek/mivo/internal/domain"
 )
 
-// Source is where a Record came from. Milestone 3 produces only SourceFilename (the name
-// parser) and SourceNFO (Kodi NFO files), in the order nfo, filename. The other values are
-// reserved so stored data and the ordered source list (UX AD-22) need no migration later:
-// SourceEmbedded for container tags (not used for videos, ADR 0027 §6; music in M3-13),
-// SourceTMDB and SourceMusicBrainz for the providers of milestone 6, and SourceUser for the
-// edit dialog of milestone 6.
+// Source is where a Record came from. The documented merge order, highest priority first, is
+// SourceUser (edit dialog and identify; locks always win), SourceNFO, the providers
+// SourceTMDB and SourceMusicBrainz, then SourceFilename (the name parser). SourceEmbedded
+// holds container tags (not used for videos, ADR 0027 §6; music in M3-13). Callers pass the
+// records to Merge in that order; Merge does not sort them (ADR 0031 §8).
 type Source string
 
 // Known metadata sources. The text values are stored and used in the API.
