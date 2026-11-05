@@ -95,6 +95,7 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "photo_info", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "photo_info", column: "parent_id", parent: "items", onDelete: "CASCADE"},
 		{table: "photo_info", column: "primary_file_id", parent: "media_files", onDelete: "SET NULL"},
+		{table: "search_docs", column: "item_id", parent: "items", onDelete: "CASCADE"},
 	}
 
 	if got := foreignKeys(t, inspection); !slices.Equal(got, want) {

@@ -51,3 +51,12 @@ cgo for amd64, arm64, armv7 and windows/amd64.
   page read was a system call in the pure-Go driver, which made 50,000-item facet counts several
   times slower. The writer keeps the defaults. Memory bound: 16 MiB per reader connection
   (one per GOMAXPROCS).
+
+## Notes (M5-14)
+
+- Search uses a contentful FTS5 table (`item_search`, migration 00010) kept in sync by
+  triggers, so no writer has to remember the index. Its rowid is the `doc_id` of `search_docs`
+  (an `INTEGER PRIMARY KEY`), not `items.rowid`: `items` has a TEXT primary key, whose implicit
+  rowids VACUUM may renumber. The search query reads only `item_search` and `search_docs`;
+  `search_docs` copies `library_id` and `kind` because joining `items` for every match doubled the
+  time of a search that matches 50,000 items.

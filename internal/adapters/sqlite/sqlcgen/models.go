@@ -95,6 +95,14 @@ type ItemProviderID struct {
 	ExternalID string
 }
 
+type ItemSearch struct {
+	Title         string
+	OriginalTitle string
+	SortTitle     string
+	People        string
+	Genres        string
+}
+
 type ItemTag struct {
 	ItemID   string
 	TagID    string
@@ -230,6 +238,22 @@ type ProviderCache struct {
 	FetchedAt int64
 	ExpiresAt int64
 	NotFound  int64
+}
+
+type SearchDoc struct {
+	DocID     int64
+	ItemID    string
+	LibraryID string
+	Kind      string
+}
+
+type SearchDocText struct {
+	DocID         int64
+	Title         string
+	OriginalTitle string
+	SortTitle     string
+	People        interface{}
+	Genres        interface{}
 }
 
 type ServerIdentity struct {
