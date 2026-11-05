@@ -11,6 +11,7 @@ import (
 	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 )
 
 // chainRequest is the placement chain to upsert inside a write transaction.
@@ -167,7 +168,9 @@ func placedStates(files []sqlcgen.ListPlacedFilesRow, index chainIndex) ([]scan.
 				Class:        library.FileClassVideo,
 				Size:         file.SizeBytes,
 				ModifiedAt:   time.UnixMilli(file.ModifiedAt).UTC(),
+				Layout:       layoutFromColumn(file.Layout),
 			},
+			ProbeError: media.ProbeError(file.ProbeError.String),
 		})
 	}
 

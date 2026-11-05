@@ -4,6 +4,7 @@ import (
 	"path"
 
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/naming"
 )
 
@@ -36,6 +37,16 @@ func (video placedFile) context(videoCount int) naming.FileContext {
 	return naming.FileContext{Path: video.state.PathForParsing(), DirectoryVideoCount: videoCount}
 }
 
+// place runs the name parser; a disc is placed like a video named after its folder or image
+// (naming.PlaceDisc), which ignores the directory's video count.
+func (video placedFile) place(kind library.Kind, videoCount int) (naming.Result, error) {
+	if video.state.Layout.IsDisc() {
+		return naming.PlaceDisc(kind, video.state.PathForParsing())
+	}
+
+	return naming.Place(kind, video.context(videoCount))
+}
+
 // placeVideos runs the name parser over every video. The parser needs to know how many
 // videos share a directory (not counting extras and samples), which it cannot see, so a first
 // pass classifies each video and a second places the counted ones with the real count. The
@@ -47,7 +58,7 @@ func placeVideos(kind library.Kind, videos []library.FileState) (placed []placed
 	for _, state := range videos {
 		video := placedFile{state: state}
 
-		result, err := naming.Place(kind, video.context(0))
+		result, err := video.place(kind, 0)
 		if err != nil || result.Outcome != naming.OutcomePlaced {
 			ignored = append(ignored, state)
 
@@ -64,7 +75,7 @@ func placeVideos(kind library.Kind, videos []library.FileState) (placed []placed
 
 	for _, video := range first {
 		if !video.isExtra() {
-			again, err := naming.Place(kind, video.context(counts[video.directory()]))
+			again, err := video.place(kind, counts[video.directory()])
 			if err != nil || again.Outcome != naming.OutcomePlaced {
 				ignored = append(ignored, video.state)
 
@@ -182,7 +193,7 @@ func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]Placed
 
 	if previous, found := storedByPath[keyOf(state)]; found {
 		switch {
-		case library.Changed(previous.State, state):
+		case needsProbe(previous, state):
 			plan.probes = append(plan.probes, probeJob{state: state, placement: video.placement, placed: &previous})
 		case previous.PlacementKey != video.placement.Key():
 			plan.moves = append(plan.moves, moveJob{stored: previous, placement: video.placement})
@@ -201,4 +212,13 @@ func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]Placed
 	}
 
 	plan.probes = append(plan.probes, probeJob{state: state, placement: video.placement})
+}
+
+// needsProbe reports a stored file that must be probed again: it changed, or it is a disc
+// stored as disc_unsupported. That code also stands for an FFmpeg build without the needed
+// demuxers or protocols (ADR 0029), which an update may add, and an unchanged disc would
+// otherwise stay unavailable for good; the cost is one probe per such disc and scan.
+func needsProbe(previous PlacedFileState, current library.FileState) bool {
+	return library.Changed(previous.State, current) ||
+		(current.Layout.IsDisc() && previous.ProbeError == media.ProbeErrorDiscUnsupported)
 }

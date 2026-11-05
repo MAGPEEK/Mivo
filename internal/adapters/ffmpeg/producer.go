@@ -167,7 +167,7 @@ type preparedRun struct {
 	arguments []string
 	// inherited are closed once the process has started; it holds its own copies.
 	inherited []*os.File
-	// release frees what must outlive the start (a disc's concat list or loopback source);
+	// release frees what must outlive the start (a disc's concat list);
 	// nil when nothing does. The production calls it once the process has ended or failed
 	// to start.
 	release func()

@@ -32,7 +32,7 @@ func Decide(input Input) (Plan, error) {
 		return Plan{}, fmt.Errorf("decide playback: file has neither video nor audio: %w", domain.ErrUnsupported)
 	}
 
-	reasons := directPlayReasons(chosen, input.Description.Container, input.Profile)
+	reasons := sourceReasons(input, chosen)
 	if len(reasons) == 0 {
 		return directPlayPlan(input.Description.Container, chosen), nil
 	}
@@ -43,6 +43,18 @@ func Decide(input Input) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+// sourceReasons explains why the source is not played directly. A disc is never: its title
+// is a list of clips that only FFmpeg joins (ADR 0029), so its one reason is disc_source and
+// the container and codec checks of direct play do not apply; the copy checks of the HLS
+// plan still add why a stream is re-encoded.
+func sourceReasons(input Input, chosen selection) []Reason {
+	if input.Layout.IsDisc() {
+		return []Reason{{Code: ReasonDiscSource, Scope: ScopeContainer}}
+	}
+
+	return directPlayReasons(chosen, input.Description.Container, input.Profile)
 }
 
 func directPlayPlan(container media.Container, chosen selection) Plan {

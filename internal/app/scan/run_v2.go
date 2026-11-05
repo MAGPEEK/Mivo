@@ -443,7 +443,7 @@ func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.
 		File: media.File{
 			ID: fileID, LibraryID: base.library.ID,
 			RelativePath: job.state.RelativePath, Size: job.state.Size, ModifiedAt: job.state.ModifiedAt,
-			Description: description, ProbeError: probeError,
+			Layout: job.state.Layout, Description: description, ProbeError: probeError,
 		},
 		ProbedAt: now,
 	}

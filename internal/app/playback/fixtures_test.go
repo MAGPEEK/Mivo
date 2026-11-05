@@ -98,6 +98,8 @@ type environment struct {
 	logs      *lockedBuffer     // text output at the default level (info)
 	records   *capturingHandler // every record, debug included
 	options   appplayback.Options
+	// discs are the disc ports; zero leaves disc playback unconfigured.
+	discs appplayback.DiscPorts
 }
 
 func newEnvironment() *environment {
@@ -131,6 +133,7 @@ func (env *environment) dependencies() appplayback.Dependencies {
 		Clock:     env.clock.Now,
 		After:     env.clock.After,
 		Logger:    slog.New(slog.NewMultiHandler(slog.NewTextHandler(env.logs, nil), env.records)),
+		Discs:     env.discs,
 	}
 }
 

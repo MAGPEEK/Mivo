@@ -94,15 +94,27 @@ type preparedStart struct {
 	playable  PlayableFile
 	plan      playback.Plan
 	inputPath string
+	// disc is the title of a disc source; nil for a single file. inputPath is then the
+	// absolute disc root.
+	disc *media.DiscSource
 }
 
 // prepare decides the plan and resolves the file's path. Every mode resolves it, so a
 // deleted file or one that escapes its library fails here for direct play too, before a
-// slot is taken.
+// slot is taken. A disc also resolves its main title.
 func (s *Service) prepare(ctx context.Context, request StartRequest) (preparedStart, error) {
 	playable, plan, err := s.decide(ctx, request)
 	if err != nil {
 		return preparedStart{}, err
+	}
+
+	if playable.File.Layout.IsDisc() {
+		discPath, disc, err := s.prepareDisc(ctx, playable)
+		if err != nil {
+			return preparedStart{}, err
+		}
+
+		return preparedStart{playable: playable, plan: plan, inputPath: discPath, disc: disc}, nil
 	}
 
 	inputPath, err := s.paths.Resolve(playable.LibraryRoot, playable.File.RelativePath)
@@ -148,6 +160,7 @@ func (s *Service) decide(ctx context.Context, request StartRequest) (PlayableFil
 
 	plan, err := playback.Decide(playback.Input{
 		Description:  playable.File.Description,
+		Layout:       playable.File.Layout,
 		Profile:      request.Profile,
 		Capabilities: s.capabilities,
 		Request: playback.Request{
@@ -246,6 +259,10 @@ func (s *Service) produce(ctx context.Context, request productionRequest) (activ
 		InputPath: prepared.inputPath, StartPosition: start, OutputDir: directory,
 	}
 
+	if disc := prepared.disc; disc != nil {
+		job.RelativePath, job.Layout, job.DiscTitle = disc.RelativePath, disc.Layout, disc.Title
+	}
+
 	production, err := s.producer.Start(s.processContext, job) //nolint:contextcheck // FFmpeg must outlive the request (ADR 0024)
 	if err != nil {
 		if cleanupErr := s.removeWorkspace(ctx, id); cleanupErr != nil {
@@ -276,7 +293,7 @@ func (s *Service) actualStart(ctx context.Context, request productionRequest) (t
 		return requested, nil
 	}
 
-	keyframe, err := s.keyframes.KeyframeAtOrBefore(ctx, request.prepared.inputPath, requested)
+	keyframe, err := s.keyframeAtOrBefore(ctx, request.prepared, requested)
 	if err == nil {
 		return keyframe, nil
 	}
@@ -289,6 +306,15 @@ func (s *Service) actualStart(ctx context.Context, request productionRequest) (t
 		"session", request.sessionID, "position", requested, "error", err)
 
 	return 0, nil
+}
+
+// keyframeAtOrBefore searches the file, or the joined clips of a disc title.
+func (s *Service) keyframeAtOrBefore(ctx context.Context, prepared preparedStart, position time.Duration) (time.Duration, error) {
+	if prepared.disc != nil {
+		return s.discs.Keyframes.DiscKeyframeAtOrBefore(ctx, prepared.playable.LibraryRoot, *prepared.disc, position)
+	}
+
+	return s.keyframes.KeyframeAtOrBefore(ctx, prepared.inputPath, position)
 }
 
 // contentType is the Content-Type of a directly played file (ADR 0023 table).

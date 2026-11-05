@@ -164,3 +164,25 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   subfile is refused when it is not on the protocol whitelist. Every ffmpeg call of the
   capability script runs under `timeout(1)` when the system has one, so a hanging binary cannot
   hold up postinst; whether DSM 7.2 ships `timeout` is not documented.
+- Scan and playback of discs (M3-16h):
+  - A disc entry is one media file: `relative_path` stays what the walker reported (the
+    `BDMV`/`VIDEO_TS` folder or the image), `media_files.layout` holds the layout, and
+    `naming.PlaceDisc` places it. The title is resolved from the disc root
+    (`media.Layout.DiscRoot`: the folder holding `BDMV`/`VIDEO_TS`, so an `AACS` folder next
+    to `BDMV` is seen, or the image) and probed; it is not stored. A disc that cannot be
+    played is stored with its code as `probe_error` (`disc_encrypted`, `disc_unsupported`,
+    `disc_no_title`) and listed as unavailable with that `errorCode`. An unchanged disc
+    stored as `disc_unsupported` is probed again on every scan, since the code also stands
+    for an FFmpeg build that lacks a demuxer or protocol. Without the disc ports discs are
+    skipped (nothing stored, entries at or below them kept) until a scan has the ports.
+    Only movies and shows libraries take discs; other kinds drop what the walker reports.
+    Discs in the library root stay unmatched.
+  - A session resolves the title again (directory or image resolved inside the library
+    root first) and hands it to the producer. The decision engine never plays a disc
+    directly: its one source reason is `disc_source` (container and direct-play codec checks
+    do not apply), the copy checks still add why a stream is re-encoded, and bitmap
+    subtitles keep the `subtitles_not_supported` warning until milestone 4. A disc error at
+    start is `domain.ErrUnsupported` (also `disc_no_title`, which would otherwise read as a
+    missing file).
+  - Remux seeks look for the keyframe in the joined title (`Prober.DiscKeyframeAtOrBefore`,
+    the same input as the prober), so `-ss` before the concat input lands on it.

@@ -53,7 +53,18 @@ func (p *Prober) ProbeDisc(ctx context.Context, input DiscInput) (media.Descript
 	return description, nil
 }
 
-// closeDiscInput releases the list or loopback source of a finished run; a failure only leaves
+// ProbeDiscTitle is ProbeDisc for the scan's port: the disc and its title inside the library
+// folder libraryRoot.
+func (p *Prober) ProbeDiscTitle(ctx context.Context, libraryRoot string, disc media.DiscSource) (media.Description, error) {
+	return p.ProbeDisc(ctx, discInputOf(libraryRoot, disc))
+}
+
+// discInputOf is the DiscInput of a disc inside the library folder libraryRoot.
+func discInputOf(libraryRoot string, disc media.DiscSource) DiscInput {
+	return DiscInput{LibraryRoot: libraryRoot, DiscPath: disc.RelativePath, Layout: disc.Layout, Title: disc.Title}
+}
+
+// closeDiscInput releases the concat list of a finished run; a failure only leaves
 // a small file in the temporary directory, so it is logged, not returned.
 func (p *Prober) closeDiscInput(ctx context.Context, prepared *DiscInputArguments) {
 	if err := prepared.Close(); err != nil {

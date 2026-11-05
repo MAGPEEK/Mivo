@@ -10,7 +10,10 @@ import (
 
 // Input is everything Decide considers.
 type Input struct {
-	Description  media.Description
+	Description media.Description
+	// Layout says how the source is stored; empty is a single file. A disc layout
+	// (media.Layout.IsDisc) never plays directly (ReasonDiscSource).
+	Layout       media.Layout
 	Profile      ClientProfile
 	Capabilities ServerCapabilities
 	Request      Request
@@ -42,6 +45,10 @@ func (input Input) validate() error {
 
 	if err := input.Description.Validate(); err != nil {
 		return err
+	}
+
+	if input.Layout != "" && !input.Layout.Valid() {
+		return fmt.Errorf("unknown source layout %q: %w", input.Layout, domain.ErrInvalid)
 	}
 
 	if err := input.Request.validate(input.Description.Duration); err != nil {

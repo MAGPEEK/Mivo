@@ -19,6 +19,12 @@ const (
 	ProbeErrorFailed ProbeError = "probe_failed"
 	// ProbeErrorTimedOut means ffprobe did not finish within the per-file timeout.
 	ProbeErrorTimedOut ProbeError = "probe_timed_out"
+	// ProbeErrorDiscEncrypted, ProbeErrorDiscUnsupported and ProbeErrorDiscNoTitle are the
+	// codes of the disc errors (DiscError, ADR 0029): a disc whose main title is CSS or AACS
+	// protected, cannot be read, or does not exist.
+	ProbeErrorDiscEncrypted   ProbeError = "disc_encrypted"
+	ProbeErrorDiscUnsupported ProbeError = "disc_unsupported"
+	ProbeErrorDiscNoTitle     ProbeError = "disc_no_title"
 )
 
 // File is one media file of a library together with its technical description.
@@ -33,6 +39,10 @@ type File struct {
 	// Size is in bytes.
 	Size       int64
 	ModifiedAt time.Time
+	// Layout says how the media is stored; empty means a single file, like LayoutFile. A disc
+	// (Layout.IsDisc) is never played directly; RelativePath then names the BDMV or VIDEO_TS
+	// folder or the image file, as the walker reported it (see Layout.DiscRoot).
+	Layout Layout
 	// Description is the zero value when ProbeError is set.
 	Description Description
 	ProbeError  ProbeError
@@ -43,8 +53,9 @@ func (file File) Probed() bool {
 	return file.ProbeError == ProbeErrorNone
 }
 
-// Validate rejects a negative size, an empty relative path, an invalid description of a
-// probed file and streams on a file whose probe failed. Errors wrap domain.ErrInvalid.
+// Validate rejects a negative size, an empty relative path, an unknown layout, an invalid
+// description of a probed file and streams on a file whose probe failed. Errors wrap
+// domain.ErrInvalid.
 func (file File) Validate() error {
 	if file.Size < 0 {
 		return fmt.Errorf("validate file %s: negative size %d: %w", file.ID, file.Size, domain.ErrInvalid)
@@ -52,6 +63,10 @@ func (file File) Validate() error {
 
 	if file.RelativePath == "" {
 		return fmt.Errorf("validate file %s: empty relative path: %w", file.ID, domain.ErrInvalid)
+	}
+
+	if file.Layout != "" && !file.Layout.Valid() {
+		return fmt.Errorf("validate file %s: unknown layout %q: %w", file.ID, file.Layout, domain.ErrInvalid)
 	}
 
 	if !file.Probed() {

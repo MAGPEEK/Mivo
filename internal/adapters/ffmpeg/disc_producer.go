@@ -120,7 +120,7 @@ func (p *Producer) inheritedClipURLs(root string, clips []discClip) ([]string, [
 	return urls, inherited, nil
 }
 
-// closeDiscInput releases the list or loopback source of a finished production; a failure
+// closeDiscInput releases the concat list of a finished production; a failure
 // leaves only a small file in the temporary directory, so it is logged.
 func (p *Producer) closeDiscInput(sessionID string, prepared *DiscInputArguments) {
 	if err := prepared.Close(); err != nil {

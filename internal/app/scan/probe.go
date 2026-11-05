@@ -164,6 +164,10 @@ func (scanRun *run) probe(ctx context.Context, job probeJob) probeResult {
 // describe resolves and probes one file without any rule about its streams; the caller holds
 // a probe slot. The absolute path is empty when the file could not be resolved.
 func (scanRun *run) describe(ctx context.Context, job probeJob) (probeResult, string) {
+	if job.state.Layout.IsDisc() {
+		return scanRun.describeDisc(ctx, job)
+	}
+
 	absolutePath, failure := scanRun.resolve(job)
 	if failure != nil {
 		return *failure, ""
@@ -174,20 +178,25 @@ func (scanRun *run) describe(ctx context.Context, job probeJob) (probeResult, st
 		return probeFailure(ctx, job, err), absolutePath
 	}
 
+	return validatedDescription(job, description), absolutePath
+}
+
+// validatedDescription is the result of a successful probe, or probe_failed when the prober
+// returned a description the domain rejects.
+func validatedDescription(job probeJob, description media.Description) probeResult {
 	if err := description.Validate(); err != nil {
-		return probeResult{job: job, outcome: outcomeProbeFailed, probeError: media.ProbeErrorFailed, reason: err.Error()}, absolutePath
+		return probeResult{job: job, outcome: outcomeProbeFailed, probeError: media.ProbeErrorFailed, reason: err.Error()}
 	}
 
-	return probeResult{job: job, outcome: outcomeProbed, description: description}, absolutePath
+	return probeResult{job: job, outcome: outcomeProbed, description: description}
 }
 
 // resolve turns the file's root-relative path into the absolute path inside its library
 // folder. A file that cannot be resolved returns the result to record instead.
 func (scanRun *run) resolve(job probeJob) (string, *probeResult) {
-	root, found := folderRoot(scanRun.library, job.state.RootID)
-	if !found {
-		return "", &probeResult{job: job, err: fail(ErrorCodeFailed, "file of an unknown library folder",
-			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}
+	root, failure := scanRun.folderRootOf(job)
+	if failure != nil {
+		return "", failure
 	}
 
 	absolutePath, err := scanRun.service.resolver.Resolve(root, job.state.RelativePath)

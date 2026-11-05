@@ -12,6 +12,7 @@ import (
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/metadata"
 )
 
@@ -39,8 +40,10 @@ type memoryCatalogV2 struct {
 	files    map[string]*v2File
 	sidecars map[string]library.FileState
 	records  map[string]metadata.Record
-	saves    int
-	moves    int
+	// saved holds the last media file saved per relative path.
+	saved map[string]media.File
+	saves int
+	moves int
 	// removeErr, when set, fails RemovePlacedFiles.
 	removeErr error
 	// sidecarWrites counts SaveSidecarStates calls.
@@ -50,8 +53,18 @@ type memoryCatalogV2 struct {
 func newMemoryCatalogV2() *memoryCatalogV2 {
 	return &memoryCatalogV2{
 		items: map[string]*v2Item{}, files: map[string]*v2File{}, sidecars: map[string]library.FileState{},
-		records: map[string]metadata.Record{},
+		records: map[string]metadata.Record{}, saved: map[string]media.File{},
 	}
+}
+
+// savedFile returns the last media file saved at path.
+func (catalog *memoryCatalogV2) savedFile(path string) (media.File, bool) {
+	catalog.mutex.Lock()
+	defer catalog.mutex.Unlock()
+
+	file, found := catalog.saved[path]
+
+	return file, found
 }
 
 func (catalog *memoryCatalogV2) PlacedFiles(_ context.Context, libraryID string) ([]scan.PlacedFileState, error) {
@@ -66,6 +79,7 @@ func (catalog *memoryCatalogV2) PlacedFiles(_ context.Context, libraryID string)
 
 		result = append(result, scan.PlacedFileState{
 			ID: file.id, PlacementKey: file.placementKey, ItemIDs: catalog.chainOf(file.itemID), State: file.state,
+			ProbeError: catalog.saved[file.state.RelativePath].ProbeError,
 		})
 	}
 
@@ -110,8 +124,10 @@ func (catalog *memoryCatalogV2) SavePlacedFile(_ context.Context, record scan.Pl
 	}
 
 	catalog.saves++
+	catalog.saved[record.File.RelativePath] = record.File
 	catalog.place(record.File.ID, chain[len(chain)-1], record.Placement.Key(), library.FileState{
 		RootID: record.RootID, RelativePath: record.File.RelativePath, Size: record.File.Size, ModifiedAt: record.File.ModifiedAt,
+		Layout: record.File.Layout,
 	})
 	catalog.files[record.File.ID].libraryID = record.File.LibraryID
 

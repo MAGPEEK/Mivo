@@ -100,3 +100,42 @@ func TestDiscErrors(t *testing.T) {
 		t.Error("plain error has a disc code")
 	}
 }
+
+func TestLayoutDiscRoot(t *testing.T) {
+	tests := []struct {
+		layout Layout
+		path   string
+		want   string
+	}{
+		{LayoutBDMV, "Movie (2019)/BDMV", "Movie (2019)"},
+		{LayoutVideoTS, "Show/Season 1/Show S01E02/VIDEO_TS", "Show/Season 1/Show S01E02"},
+		{LayoutVideoTS, "VIDEO_TS", "."},
+		{LayoutISO, "Show/Show S01E02.iso", "Show/Show S01E02.iso"},
+		{LayoutFile, "Movie.mkv", "Movie.mkv"},
+		{"", "Movie.mkv", "Movie.mkv"},
+	}
+	for _, test := range tests {
+		if got := test.layout.DiscRoot(test.path); got != test.want {
+			t.Errorf("%q.DiscRoot(%q) = %q, want %q", test.layout, test.path, got, test.want)
+		}
+	}
+}
+
+func TestDiscProbeError(t *testing.T) {
+	tests := []struct {
+		err   error
+		want  ProbeError
+		found bool
+	}{
+		{fmt.Errorf("probe: %w", ErrDiscEncrypted), ProbeErrorDiscEncrypted, true},
+		{fmt.Errorf("probe: %w", ErrDiscUnsupported), ProbeErrorDiscUnsupported, true},
+		{fmt.Errorf("probe: %w", ErrDiscNoTitle), ProbeErrorDiscNoTitle, true},
+		{domain.ErrUnsupported, "", false},
+	}
+	for _, test := range tests {
+		got, found := DiscProbeError(test.err)
+		if got != test.want || found != test.found {
+			t.Errorf("DiscProbeError(%v) = %q, %v, want %q, %v", test.err, got, found, test.want, test.found)
+		}
+	}
+}

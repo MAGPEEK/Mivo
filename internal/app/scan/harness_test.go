@@ -34,6 +34,8 @@ type harness struct {
 	audiobooks scan.AudiobookPorts
 	// photos are the photo ports; zero leaves photos libraries unconfigured.
 	photos scan.PhotoPorts
+	// discs are the disc ports; zero stores every disc as disc_unsupported.
+	discs scan.DiscPorts
 	// finished is the optional Finished callback.
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
@@ -85,6 +87,7 @@ func (h *harness) dependencies() scan.Dependencies {
 		Music:      h.music,
 		Audiobooks: h.audiobooks,
 		Photos:     h.photos,
+		Discs:      h.discs,
 	}
 
 	// A nil pointer in an interface field would count as set.

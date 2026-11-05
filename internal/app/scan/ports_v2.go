@@ -12,12 +12,14 @@ import (
 
 // PlacedFileState is a media file as the v2 catalog knows it: its file state, the canonical
 // key of the placement it was stored with (library.Placement.Key) and the IDs of its item
-// chain, top-level item first, leaf last.
+// chain, top-level item first, leaf last. ProbeError is the stored probe error; a disc stored
+// as media.ProbeErrorDiscUnsupported is probed again on every scan (see needsProbe).
 type PlacedFileState struct {
 	ID           string
 	PlacementKey string
 	ItemIDs      []string
 	State        library.FileState
+	ProbeError   media.ProbeError
 }
 
 // PlacedFile is the result of probing one new or changed file together with its placement.

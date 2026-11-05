@@ -160,7 +160,8 @@ func (q *Queries) ListLibraryChainItems(ctx context.Context, libraryID string) (
 }
 
 const listPlacedFiles = `-- name: ListPlacedFiles :many
-SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number
+SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number, layout,
+       probe_error
 FROM media_files
 WHERE library_id = ?
 ORDER BY relative_path, root_id
@@ -175,6 +176,8 @@ type ListPlacedFilesRow struct {
 	ModifiedAt   int64
 	VersionLabel string
 	PartNumber   int64
+	Layout       string
+	ProbeError   sql.NullString
 }
 
 func (q *Queries) ListPlacedFiles(ctx context.Context, libraryID string) ([]ListPlacedFilesRow, error) {
@@ -195,6 +198,8 @@ func (q *Queries) ListPlacedFiles(ctx context.Context, libraryID string) ([]List
 			&i.ModifiedAt,
 			&i.VersionLabel,
 			&i.PartNumber,
+			&i.Layout,
+			&i.ProbeError,
 		); err != nil {
 			return nil, err
 		}
@@ -302,11 +307,11 @@ func (q *Queries) UpdateFilePlacement(ctx context.Context, arg UpdateFilePlaceme
 const upsertPlacedFile = `-- name: UpsertPlacedFile :exec
 INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error,
-                         version_label, part_number)
+                         version_label, part_number, layout)
 VALUES (?1, ?2, ?3, ?4,
         ?5, ?6, ?7, ?8,
         ?9, ?10, ?11, ?12,
-        ?13, ?14, ?15)
+        ?13, ?14, ?15, ?16)
 ON CONFLICT (id) DO UPDATE
 SET item_id       = excluded.item_id,
     relative_path = excluded.relative_path,
@@ -319,7 +324,8 @@ SET item_id       = excluded.item_id,
     probed_at     = excluded.probed_at,
     probe_error   = excluded.probe_error,
     version_label = excluded.version_label,
-    part_number   = excluded.part_number
+    part_number   = excluded.part_number,
+    layout        = excluded.layout
 `
 
 type UpsertPlacedFileParams struct {
@@ -338,11 +344,13 @@ type UpsertPlacedFileParams struct {
 	ProbeError   sql.NullString
 	VersionLabel string
 	PartNumber   int64
+	Layout       string
 }
 
 // UpsertPlacedFile writes a probe result together with the file's placement. library_id and
 // root_id are never changed by the update: the repository has checked that a stored file
-// keeps its library and that root_id is a folder of that library.
+// keeps its library and that root_id is a folder of that library. layout is 'file' or a disc
+// layout (ADR 0029).
 func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFileParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPlacedFile,
 		arg.ID,
@@ -360,6 +368,7 @@ func (q *Queries) UpsertPlacedFile(ctx context.Context, arg UpsertPlacedFilePara
 		arg.ProbeError,
 		arg.VersionLabel,
 		arg.PartNumber,
+		arg.Layout,
 	)
 	return err
 }

@@ -23,12 +23,25 @@ import (
 // domain.ErrNotFound, a root that cannot be opened or an I/O error of a dropped disk or share
 // domain.ErrUnavailable, a relative root domain.ErrInvalid.
 func (*FileSystem) Resolve(root, relativePath string) (string, error) {
+	return resolveInRoot(root, relativePath, requireRegular)
+}
+
+// ResolveDirectory is Resolve for a directory: the folder of a disc (ADR 0029), which the disc
+// resolver opens as an os.Root and FFmpeg reads clips from. A regular file or another
+// non-directory wraps domain.ErrNotFound; the other errors are those of Resolve.
+func (*FileSystem) ResolveDirectory(root, relativePath string) (string, error) {
+	return resolveInRoot(root, relativePath, requireDirectory)
+}
+
+// resolveInRoot checks the path rules, the entry's type (require) inside os.Root and the
+// containment of the evaluated path.
+func resolveInRoot(root, relativePath string, require func(fs.FileInfo) error) (string, error) {
 	native, err := checkedRelativePath(relativePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", relativePath, err)
 	}
 
-	if err := requireRegularFileInRoot(root, native); err != nil {
+	if err := requireTypeInRoot(root, native, require); err != nil {
 		return "", fmt.Errorf("resolve %q: %w", relativePath, err)
 	}
 
@@ -76,7 +89,7 @@ func checkedRelativePath(relativePath string) (string, error) {
 	return native, nil
 }
 
-func requireRegularFileInRoot(root, native string) error {
+func requireTypeInRoot(root, native string, require func(fs.FileInfo) error) error {
 	libraryRoot, err := openLibraryRoot(root)
 	if err != nil {
 		return err
@@ -89,7 +102,7 @@ func requireRegularFileInRoot(root, native string) error {
 		return classifyRootError(err)
 	}
 
-	return requireRegular(info)
+	return require(info)
 }
 
 // openRegularFile opens without blocking (openFileFlags), so a FIFO cannot hang the caller,
@@ -116,6 +129,14 @@ func openRegularFile(libraryRoot *os.Root, native string) (*os.File, error) {
 func requireRegular(info fs.FileInfo) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("not a regular file: %w", domain.ErrNotFound)
+	}
+
+	return nil
+}
+
+func requireDirectory(info fs.FileInfo) error {
+	if !info.IsDir() {
+		return fmt.Errorf("not a directory: %w", domain.ErrNotFound)
 	}
 
 	return nil

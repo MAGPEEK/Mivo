@@ -6,8 +6,8 @@
 //
 // The package declares the ports it needs; adapters implement them (sqlite: the playable
 // file source, fs/libraryfs: the path resolver, ffmpeg: the keyframe locator and the stream
-// producer, fs/transcodedir: the workspace, http/stream: the stream URL builder) and
-// cmd/mivo wires them (ADR 0003).
+// producer, fs/transcodedir: the workspace, http/stream: the stream URL builder; for discs
+// disc: the title resolver, see DiscPorts) and cmd/mivo wires them (ADR 0003).
 package playback
 
 import (

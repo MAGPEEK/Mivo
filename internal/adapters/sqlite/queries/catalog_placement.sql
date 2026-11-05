@@ -17,15 +17,16 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- UpsertPlacedFile writes a probe result together with the file's placement. library_id and
 -- root_id are never changed by the update: the repository has checked that a stored file
--- keeps its library and that root_id is a folder of that library.
+-- keeps its library and that root_id is a folder of that library. layout is 'file' or a disc
+-- layout (ADR 0029).
 -- name: UpsertPlacedFile :exec
 INSERT INTO media_files (id, item_id, library_id, root_id, relative_path, size_bytes, modified_at,
                          container, format_name, duration_ms, bit_rate, probed_at, probe_error,
-                         version_label, part_number)
+                         version_label, part_number, layout)
 VALUES (sqlc.arg(id), sqlc.arg(item_id), sqlc.arg(library_id), sqlc.arg(root_id),
         sqlc.arg(relative_path), sqlc.arg(size_bytes), sqlc.arg(modified_at), sqlc.arg(container),
         sqlc.arg(format_name), sqlc.arg(duration_ms), sqlc.arg(bit_rate), sqlc.arg(probed_at),
-        sqlc.arg(probe_error), sqlc.arg(version_label), sqlc.arg(part_number))
+        sqlc.arg(probe_error), sqlc.arg(version_label), sqlc.arg(part_number), sqlc.arg(layout))
 ON CONFLICT (id) DO UPDATE
 SET item_id       = excluded.item_id,
     relative_path = excluded.relative_path,
@@ -38,7 +39,8 @@ SET item_id       = excluded.item_id,
     probed_at     = excluded.probed_at,
     probe_error   = excluded.probe_error,
     version_label = excluded.version_label,
-    part_number   = excluded.part_number;
+    part_number   = excluded.part_number,
+    layout        = excluded.layout;
 
 -- name: UpdateFilePlacement :execrows
 UPDATE media_files
@@ -55,7 +57,8 @@ WHERE items.id = ?
 RETURNING parent_id;
 
 -- name: ListPlacedFiles :many
-SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number
+SELECT id, item_id, root_id, relative_path, size_bytes, modified_at, version_label, part_number, layout,
+       probe_error
 FROM media_files
 WHERE library_id = ?
 ORDER BY relative_path, root_id;

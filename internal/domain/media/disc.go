@@ -3,6 +3,7 @@ package media
 import (
 	"errors"
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
@@ -36,6 +37,32 @@ func (layout Layout) Valid() bool {
 // IsDisc reports whether the layout is a disc (folder or image). Discs are never played directly.
 func (layout Layout) IsDisc() bool {
 	return layout.Valid() && layout != LayoutFile
+}
+
+// DiscRoot returns the path the main title of a disc is resolved and read from, given the
+// slash-separated path the walker reported: for a disc folder the folder that holds BDMV or
+// VIDEO_TS (so the disc resolver also sees an AACS folder next to BDMV, and the clip paths
+// of the title start with "BDMV/" or "VIDEO_TS/"), for an image or a single file the path
+// itself. A disc folder directly in the library root yields "."; it is never resolved,
+// because naming.PlaceDisc leaves such a disc unmatched, so it is neither probed nor played.
+func (layout Layout) DiscRoot(relativePath string) string {
+	if layout == LayoutVideoTS || layout == LayoutBDMV {
+		return path.Dir(relativePath)
+	}
+
+	return relativePath
+}
+
+// DiscSource is the main title of a disc inside a library folder, as the prober and the
+// keyframe locator read it.
+type DiscSource struct {
+	// RelativePath is the disc root (Layout.DiscRoot), slash-separated and relative to the
+	// library folder; the clip paths of Title are relative to it.
+	RelativePath string
+	// Layout is LayoutVideoTS, LayoutBDMV or LayoutISO.
+	Layout Layout
+	// Title lists the clips in playback order.
+	Title DiscTitle
 }
 
 // DiscClip is one piece of a disc title: a file inside a disc folder, or a byte extent of an
@@ -129,6 +156,14 @@ var (
 	// ErrDiscNoTitle marks a disc without a usable main title.
 	ErrDiscNoTitle = &DiscError{Code: "disc_no_title", base: domain.ErrNotFound}
 )
+
+// DiscProbeError returns the probe error a disc failure is stored with (the code of a
+// wrapped DiscError), or false.
+func DiscProbeError(err error) (ProbeError, bool) {
+	code, found := DiscErrorCode(err)
+
+	return ProbeError(code), found
+}
 
 // DiscErrorCode returns the code of a wrapped DiscError, or false.
 func DiscErrorCode(err error) (string, bool) {

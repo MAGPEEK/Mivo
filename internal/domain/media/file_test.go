@@ -16,7 +16,10 @@ func TestFileValidateAcceptsProbedAndFailedFiles(t *testing.T) {
 	failed.Description = media.Description{}
 	failed.ProbeError = media.ProbeErrorTimedOut
 
-	for name, file := range map[string]media.File{"probed": probedFile(), "probe failed": failed} {
+	disc := probedFile()
+	disc.Layout = media.LayoutBDMV
+
+	for name, file := range map[string]media.File{"probed": probedFile(), "probe failed": failed, "disc": disc} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -37,6 +40,7 @@ func TestFileValidateRejectsBrokenValues(t *testing.T) {
 		{name: "negative size", mutate: func(f *media.File) { f.Size = -1 }},
 		{name: "empty relative path", mutate: func(f *media.File) { f.RelativePath = "" }},
 		{name: "invalid description", mutate: func(f *media.File) { f.Description.Duration = -time.Second }},
+		{name: "unknown layout", mutate: func(f *media.File) { f.Layout = "dvd" }},
 		{
 			name:   "probe error with streams",
 			mutate: func(f *media.File) { f.ProbeError = media.ProbeErrorFailed },
@@ -81,6 +85,9 @@ func TestProbeErrorCodes(t *testing.T) {
 		{code: media.ProbeErrorNone, want: ""},
 		{code: media.ProbeErrorFailed, want: "probe_failed"},
 		{code: media.ProbeErrorTimedOut, want: "probe_timed_out"},
+		{code: media.ProbeErrorDiscEncrypted, want: media.ErrDiscEncrypted.Code},
+		{code: media.ProbeErrorDiscUnsupported, want: media.ErrDiscUnsupported.Code},
+		{code: media.ProbeErrorDiscNoTitle, want: media.ErrDiscNoTitle.Code},
 	}
 
 	for _, test := range tests {

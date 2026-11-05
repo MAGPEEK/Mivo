@@ -108,6 +108,7 @@ func fileFromRow(row sqlcgen.MediaFile, streamRows []sqlcgen.MediaStream) (media
 		RelativePath: row.RelativePath,
 		Size:         row.SizeBytes,
 		ModifiedAt:   time.UnixMilli(row.ModifiedAt).UTC(),
+		Layout:       layoutFromColumn(row.Layout),
 		Description:  media.Description{Streams: streams},
 	}
 
@@ -125,6 +126,26 @@ func fileFromRow(row sqlcgen.MediaFile, streamRows []sqlcgen.MediaStream) (media
 	}
 
 	return file, nil
+}
+
+// layoutValue is the media_files.layout of a file: the column has no empty value, so the zero
+// layout (a single file) is stored as 'file'.
+func layoutValue(layout media.Layout) string {
+	if layout == "" {
+		return string(media.LayoutFile)
+	}
+
+	return string(layout)
+}
+
+// layoutFromColumn reads media_files.layout back; 'file' becomes the zero layout, so a file
+// round-trips unchanged. An unknown value fails media.File.Validate.
+func layoutFromColumn(column string) media.Layout {
+	if media.Layout(column) == media.LayoutFile {
+		return ""
+	}
+
+	return media.Layout(column)
 }
 
 // streamsFromRows returns nil for no rows, the value a probe without streams produces.

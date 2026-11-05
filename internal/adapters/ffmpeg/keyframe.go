@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"path/filepath"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/media"
 )
 
 const (
@@ -56,15 +58,21 @@ func (p *Prober) KeyframeAtOrBefore(ctx context.Context, absolutePath string, po
 		return 0, nil
 	}
 
+	return p.keyframeIn(ctx, input, absolutePath, position)
+}
+
+// keyframeIn runs the windowed search over input (the result of inputArguments or a prepared
+// disc input); name is the file or disc logged and named in errors.
+func (p *Prober) keyframeIn(ctx context.Context, input []string, name string, position time.Duration) (time.Duration, error) {
 	searchContext, cancel := context.WithTimeout(ctx, p.keyframeTimeout)
 	defer cancel()
 
 	for _, window := range keyframeSearchWindows() {
 		keyframe, found, err := p.searchKeyframe(searchContext, input, position, window)
 		if err != nil {
-			p.logRunFailure(ctx, keyframeOperation, absolutePath, err)
+			p.logRunFailure(ctx, keyframeOperation, name, err)
 
-			return 0, fmt.Errorf("find keyframe before %s in %s: %w", position, filepath.Base(absolutePath), err)
+			return 0, fmt.Errorf("find keyframe before %s in %s: %w", position, filepath.Base(name), err)
 		}
 
 		if found {
@@ -79,6 +87,27 @@ func (p *Prober) KeyframeAtOrBefore(ctx context.Context, absolutePath string, po
 	}
 
 	return 0, nil
+}
+
+// DiscKeyframeAtOrBefore is KeyframeAtOrBefore for the title of a disc inside the library
+// folder libraryRoot: it searches the clips joined like ProbeDisc joins them, so a remuxed
+// disc session that seeks starts on a keyframe of the title (ADR 0029). Errors wrap those of
+// PrepareDiscInput and of KeyframeAtOrBefore.
+func (p *Prober) DiscKeyframeAtOrBefore(
+	ctx context.Context, libraryRoot string, disc media.DiscSource, position time.Duration,
+) (time.Duration, error) {
+	if position <= 0 {
+		return 0, nil
+	}
+
+	prepared, err := PrepareDiscInput(ctx, discInputOf(libraryRoot, disc))
+	if err != nil {
+		return 0, fmt.Errorf("find keyframe in disc %s: %w", path.Base(disc.RelativePath), err)
+	}
+
+	defer p.closeDiscInput(ctx, prepared)
+
+	return p.keyframeIn(ctx, prepared.arguments, disc.RelativePath, position)
 }
 
 // searchKeyframe decodes only the keyframes of the seek video stream between

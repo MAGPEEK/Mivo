@@ -65,19 +65,18 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 	skipped, err := scanRun.service.walker.Walk(ctx, folder.Path, scanRun.library.Kind, func(state library.FileState) error {
 		state.RootID = folder.ID
 
-		if state.Layout.IsDisc() {
-			// Temporary guard, removed by M3-16h: until discs are placed and probed, a disc
-			// is neither a video nor a failure, and its stored entries at or below the path
-			// (the disc's files from older scans) must survive.
+		switch scanRun.discHandling(state) {
+		case discDropped:
+		case discProtected:
 			discPaths = append(discPaths, state.RelativePath)
-
-			return nil
-		}
-
-		if isMediaClass(state.Class) {
-			found.mediaFiles = append(found.mediaFiles, state)
-		} else {
-			found.sidecars = append(found.sidecars, state)
+		case discNone, discPlaced:
+			// A disc (folder or image) is one video entry; placement and probing dispatch on
+			// its layout (placedFile.place, describe).
+			if isMediaClass(state.Class) {
+				found.mediaFiles = append(found.mediaFiles, state)
+			} else {
+				found.sidecars = append(found.sidecars, state)
+			}
 		}
 
 		return nil
@@ -89,9 +88,40 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 	return found, append(skipped, discPaths...), nil
 }
 
-// isMediaClass reports the classes a pipeline places and probes; the walker only reports
-// the ones the library kind allows, so a video never reaches the music pipeline and a photo
-// only the photo pipeline.
+// discHandling says what the scan does with a walked entry that may be a disc.
+type discHandling int
+
+const (
+	// discNone: no disc; handled like any walked file.
+	discNone discHandling = iota
+	// discPlaced: a disc in a movies or shows library with complete disc ports.
+	discPlaced
+	// discDropped: a disc in a library kind without discs (music, audiobooks, photos); it is
+	// no catalog entry of that kind.
+	discDropped
+	// discProtected: a disc while the disc ports are incomplete. It is neither placed nor a
+	// failure, and the entries stored at or below its path survive, so the disc is scanned
+	// once the ports exist instead of being stored as unavailable.
+	discProtected
+)
+
+func (scanRun *run) discHandling(state library.FileState) discHandling {
+	switch {
+	case !state.Layout.IsDisc():
+		return discNone
+	case scanRun.library.Kind != library.KindMovies && scanRun.library.Kind != library.KindShows:
+		return discDropped
+	case !scanRun.service.discs.complete():
+		return discProtected
+	default:
+		return discPlaced
+	}
+}
+
+// isMediaClass reports the classes a pipeline places and probes. The walker only reports the
+// ones the library kind allows, so a video never reaches the music pipeline and a photo only
+// the photo pipeline; discs, which the walker reports for every kind, are sorted out before
+// (discHandling).
 func isMediaClass(class library.FileClass) bool {
 	return class == library.FileClassVideo || class == library.FileClassAudio || class == library.FileClassPhoto
 }

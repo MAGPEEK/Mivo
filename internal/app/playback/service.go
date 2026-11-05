@@ -20,8 +20,10 @@ const cleanupTimeout = 30 * time.Second
 // "transcoding off" value, a server without encoders reports it through its capabilities.
 const minReencodingSessions = 1
 
-// Dependencies lists the ports and helpers Service needs; all are required.
+// Dependencies lists the ports and helpers Service needs; all are required except Discs.
 type Dependencies struct {
+	// Discs plays disc sources; without them a disc fails with ErrDiscPlaybackUnavailable.
+	Discs     DiscPorts
 	Files     FileSource
 	Paths     PathResolver
 	Keyframes KeyframeLocator
@@ -52,6 +54,7 @@ type Service struct {
 	files        FileSource
 	paths        PathResolver
 	keyframes    KeyframeLocator
+	discs        DiscPorts
 	producer     StreamProducer
 	workspace    Workspace
 	urls         StreamURLBuilder
@@ -84,6 +87,7 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 		files:        dependencies.Files,
 		paths:        dependencies.Paths,
 		keyframes:    dependencies.Keyframes,
+		discs:        dependencies.Discs,
 		producer:     dependencies.Producer,
 		workspace:    dependencies.Workspace,
 		urls:         dependencies.URLs,

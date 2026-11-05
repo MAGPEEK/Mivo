@@ -36,6 +36,9 @@ type Dependencies struct {
 	// Photos holds the ports of the photo pipeline; a photos library fails to scan without
 	// them.
 	Photos PhotoPorts
+	// Discs holds the ports that resolve and probe disc titles; without them discs are
+	// skipped and stored entries at or below them kept (DiscPorts).
+	Discs DiscPorts
 	// Finished, when set, is called after every scan ended, whatever its outcome.
 	Finished func(ctx context.Context, libraryID string)
 	// IDs creates item and file IDs.
@@ -59,6 +62,7 @@ type Service struct {
 	music     MusicPorts
 	audiobook AudiobookPorts
 	photo     PhotoPorts
+	discs     DiscPorts
 	finished  func(ctx context.Context, libraryID string)
 	ids       IDGenerator
 	clock     func() time.Time
@@ -116,6 +120,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		music:       dependencies.Music,
 		audiobook:   dependencies.Audiobooks,
 		photo:       dependencies.Photos,
+		discs:       dependencies.Discs,
 		finished:    dependencies.Finished,
 		libraries:   dependencies.Libraries,
 		walker:      dependencies.Walker,

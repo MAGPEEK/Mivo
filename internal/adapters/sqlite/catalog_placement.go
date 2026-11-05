@@ -230,6 +230,7 @@ func (run placedSave) writeFile(ctx context.Context, file media.File) error {
 		ProbedAt: base.ProbedAt, ProbeError: base.ProbeError,
 		VersionLabel: run.record.Placement.VersionLabel,
 		PartNumber:   partNumberValue(run.record.Placement),
+		Layout:       layoutValue(file.Layout),
 	}
 
 	if err := run.queries.UpsertPlacedFile(ctx, params); err != nil {
