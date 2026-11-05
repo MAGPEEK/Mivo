@@ -87,3 +87,12 @@ SPK: `mivo-0.1.0-alpha.3-r1-x86_64.spk` (Package Center: 0.1.0-1031), SHA-256
 
 Hand-over note: uninstall this 0.1.0-1031 test build before installing the 0.1.0-alpha.3 release
 (0.1.0-1030), otherwise Package Center treats the release as a downgrade.
+
+## Run 4 (2026-11-05): release 0.1.0-alpha.4 on the DS925+
+
+SPK: `mivo-0.1.0-alpha.4-x86_64.spk` from the GitHub release v0.1.0-alpha.4.
+
+| Step | Result |
+|---|---|
+| Install / upgrade, start, web app, playback (TESTING A3–A5, B2, D3a, E1–E2) | **pass** – owner: no difference to alpha.3, nothing broke |
+| B6a FFmpeg capabilities log lines | not recorded; alpha.4 ships FFmpeg recipe revision 2, the `9.0.2-static4` build (subfile protocol, timeout wrapper) comes with the next SPK release – check B6a there |
