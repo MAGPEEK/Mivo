@@ -96,10 +96,16 @@ func exitAttributes(err error) []slog.Attr {
 // maxOutputBytes (errOutputTooLarge). A tool that cannot be started wraps
 // domain.ErrUnavailable; an unsuccessful exit is an *exitError.
 func (t tool) output(ctx context.Context, arguments []string) ([]byte, error) {
+	return t.boundedOutput(ctx, arguments, maxOutputBytes)
+}
+
+// boundedOutput is output with a caller-chosen size limit, for outputs such as an embedded
+// picture whose sensible bound differs from that of ffprobe's JSON.
+func (t tool) boundedOutput(ctx context.Context, arguments []string, limit int) ([]byte, error) {
 	runContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	stdout := &limitedBuffer{limit: maxOutputBytes, exceeded: cancel}
+	stdout := &limitedBuffer{limit: limit, exceeded: cancel}
 
 	started, err := t.start(runContext, arguments, processFiles{stdout: stdout})
 	if err != nil {
@@ -112,7 +118,7 @@ func (t tool) output(ctx context.Context, arguments []string) ([]byte, error) {
 	// overflow flag is atomic. stdout.data is read only after a nil waitErr, which means the
 	// copy goroutine has finished (an expired WaitDelay always yields an error).
 	if stdout.overflowed.Load() {
-		return nil, fmt.Errorf("run %s: %w (%d bytes)", t.name, errOutputTooLarge, maxOutputBytes)
+		return nil, fmt.Errorf("run %s: %w (%d bytes)", t.name, errOutputTooLarge, limit)
 	}
 
 	if waitErr != nil {
