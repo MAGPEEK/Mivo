@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { fakeItem } from "../../../test/libraryFixtures";
 import { errorCodeOf, errorKeyForCode } from "./errorKeys";
 import { formatDuration } from "./formatDuration";
-import { toItemCardModel } from "./itemCard";
+import { cardArtwork, cardEpisodeNumbers, toItemCardModel } from "./itemCard";
 import { mediaChipLabel } from "./mediaChip";
 
 describe("formatDuration", () => {
@@ -127,5 +127,46 @@ describe("errorCodeOf", () => {
 
   it("returns undefined for any other error", () => {
     expect(errorCodeOf(new Error("boom"))).toBeUndefined();
+  });
+});
+
+describe("cardEpisodeNumbers", () => {
+  it.each([
+    {
+      name: "an episode with its season",
+      item: { kind: "episode", number: 9 },
+      season: 3,
+      expected: { season: 3, number: 9, numberEnd: undefined },
+    },
+    {
+      name: "a double episode",
+      item: { kind: "episode", number: 1, numberEnd: 2 },
+      season: 1,
+      expected: { season: 1, number: 1, numberEnd: 2 },
+    },
+    {
+      name: "an episode without a known season",
+      item: { kind: "episode", number: 4 },
+      season: undefined,
+      expected: { season: undefined, number: 4, numberEnd: undefined },
+    },
+    { name: "a movie", item: { kind: "movie", number: 2 }, season: 1, expected: undefined },
+    { name: "a season", item: { kind: "season", number: 2 }, season: 2, expected: undefined },
+  ] as const)("reads $name", ({ item, season, expected }) => {
+    expect(cardEpisodeNumbers(fakeItem(item), season)).toEqual(expected);
+  });
+});
+
+describe("cardArtwork", () => {
+  const poster = { id: "poster-1", tag: "tag-1" };
+  const thumb = { id: "thumb-1", tag: "tag-2" };
+  it.each([
+    { format: "poster", item: { poster, thumb }, expected: { imageRef: poster, aspect: "poster" } },
+    { format: "square", item: { poster, thumb }, expected: { imageRef: poster, aspect: "square" } },
+    { format: "episode", item: { poster, thumb }, expected: { imageRef: thumb, aspect: "still" } },
+    { format: "episode", item: { poster }, expected: { imageRef: poster, aspect: "still" } },
+    { format: "poster", item: {}, expected: { imageRef: undefined, aspect: "poster" } },
+  ] as const)("picks the $format artwork of $item", ({ format, item, expected }) => {
+    expect(cardArtwork(fakeItem(item), format)).toEqual(expected);
   });
 });

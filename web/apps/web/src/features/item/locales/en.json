@@ -60,8 +60,6 @@
   "episode": {
     "number": "Episode {{number}}",
     "numbers": "Episodes {{first}}–{{last}}",
-    "code": "S{{season}} · E{{number}}",
-    "codeRange": "S{{season}} · E{{first}}–E{{last}}",
     "list": "Episodes",
     "airDate": "Aired {{date}}"
   },

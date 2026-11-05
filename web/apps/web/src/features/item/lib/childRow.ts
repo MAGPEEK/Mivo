@@ -1,7 +1,7 @@
 import type { ImageRef, ItemKind, ItemSummary } from "@mivo/api-client";
 
+import { episodeRange, type EpisodeRange } from "../../../shared/lib/episodeCode";
 import { durationParts, type DurationParts } from "./duration";
-import { episodeRange, type EpisodeRange } from "./episodeLabel";
 
 /** The translated texts a child row needs; the hook builds them from i18next. */
 export interface ChildRowTexts {

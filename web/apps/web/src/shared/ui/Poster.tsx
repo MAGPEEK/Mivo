@@ -3,8 +3,8 @@ import { useState, type ReactNode } from "react";
 
 import { FilmIcon } from "./icons";
 
-/** Box shape of a {@link Poster}: `poster` is 2:3 portrait, `still` is a 16:9 frame. */
-export type PosterAspect = "poster" | "still";
+/** Box shape of a {@link Poster}: `poster` is 2:3 portrait, `still` a 16:9 frame, `square` 1:1. */
+export type PosterAspect = "poster" | "still" | "square";
 
 /** Props of {@link Poster}. */
 export interface PosterProps {
@@ -33,6 +33,7 @@ const fallbackWidth: ImageWidth = 320;
 const aspectClasses: Readonly<Record<PosterAspect, string>> = {
   poster: "aspect-2/3",
   still: "aspect-video",
+  square: "aspect-square",
 };
 
 function isSameImage(left: ImageRef, right: ImageRef | undefined): boolean {

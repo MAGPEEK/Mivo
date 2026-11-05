@@ -22,10 +22,12 @@ export interface ItemHeaderProps {
 }
 
 const factSeparator = " · ";
-// The artwork box is w-40 (10rem) as a poster and w-64 (16rem) as a still at every breakpoint.
+// The artwork box is w-40 (10rem) as a poster or square and w-64 (16rem) as a still at every
+// breakpoint.
 const artworkBoxes: Readonly<Record<PosterAspect, { className: string; sizes: string }>> = {
   poster: { className: "w-40", sizes: "10rem" },
   still: { className: "w-64", sizes: "16rem" },
+  square: { className: "w-40", sizes: "10rem" },
 };
 
 /**

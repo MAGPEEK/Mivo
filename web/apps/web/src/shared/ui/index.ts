@@ -1,6 +1,14 @@
 export { Badge, type BadgeProps } from "./Badge";
 export { BottomNav, type BottomNavProps } from "./BottomNav";
-export { MediaCard, stretchedLinkClass, type CardLinkProps, type MediaCardProps } from "./Card";
+export {
+  MediaCard,
+  stretchedLinkClass,
+  type CardHeadingLevel,
+  type CardLinkProps,
+  type MediaCardProps,
+} from "./Card";
+export { MediaRow, type MediaRowProps, type RowCardProps, type SeeAllLinkProps } from "./MediaRow";
+export { useFormatEpisodeCode } from "./useFormatEpisodeCode";
 export { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { ModalDialog, type ModalDialogProps } from "./ModalDialog";
@@ -16,6 +24,8 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export {
   AlertIcon,
   BackIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   CloseIcon,
   ExitFullscreenIcon,
   FilmIcon,

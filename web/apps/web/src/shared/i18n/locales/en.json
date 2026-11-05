@@ -44,5 +44,15 @@
     "heading": "Page not found",
     "message": "The page you are looking for does not exist.",
     "backHome": "Back to home"
+  },
+  "episodeCode": {
+    "single": "S{{season}} · E{{number}}",
+    "range": "S{{season}} · E{{first}}–E{{last}}"
+  },
+  "mediaRow": {
+    "seeAll": "See all",
+    "seeAllLabel": "See all: {{title}}",
+    "previous": "Scroll {{title}} back",
+    "next": "Scroll {{title}} forward"
   }
 }

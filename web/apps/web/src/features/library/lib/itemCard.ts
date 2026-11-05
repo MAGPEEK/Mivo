@@ -1,5 +1,9 @@
 import type { ImageRef, ItemSummary } from "@mivo/api-client";
 
+import type { EpisodeNumbers } from "../../../shared/lib/episodeCode";
+import type { CardFormat } from "../../../shared/lib/rowScroll";
+import type { PosterAspect } from "../../../shared/ui";
+
 import { formatDuration } from "./formatDuration";
 import { mediaChipLabel } from "./mediaChip";
 
@@ -21,6 +25,41 @@ export interface ItemCardModel {
   readonly chip: string;
   /** False when the file could not be probed or no media summary exists; true for shows. */
   readonly available: boolean;
+}
+
+/** The image and box shape of a card in one format. */
+export interface CardArtwork {
+  readonly imageRef: ImageRef | undefined;
+  readonly aspect: PosterAspect;
+}
+
+const formatAspects: Readonly<Record<CardFormat, PosterAspect>> = {
+  poster: "poster",
+  episode: "still",
+  square: "square",
+};
+
+/**
+ * Picks the artwork of `item` for a card `format`: an episode card shows the still (falling
+ * back to the poster), the other formats the poster.
+ */
+export function cardArtwork(item: ItemSummary, format: CardFormat): CardArtwork {
+  const imageRef = format === "episode" ? (item.thumb ?? item.poster) : item.poster;
+  return { imageRef, aspect: formatAspects[format] };
+}
+
+/**
+ * The numbers for the `S3 · E9` label of an episode card, or `undefined` for other kinds. The
+ * season comes from the row's source: the item summary does not carry it.
+ */
+export function cardEpisodeNumbers(
+  item: ItemSummary,
+  seasonNumber: number | undefined,
+): EpisodeNumbers | undefined {
+  if (item.kind !== "episode") {
+    return undefined;
+  }
+  return { season: seasonNumber, number: item.number, numberEnd: item.numberEnd };
 }
 
 /** Derives the card content of `item`. */

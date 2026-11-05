@@ -18,6 +18,7 @@
     "@mivo/ui-tokens": "workspace:*",
     "@tanstack/react-query": "^5.105.0",
     "@tanstack/react-router": "^1.170.46",
+    "@tanstack/react-virtual": "^3.14.26",
     "hls.js": "1.7.3",
     "i18next": "^26.5.12",
     "react": "^19.3.1",

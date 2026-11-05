@@ -135,6 +135,24 @@ export function BackIcon({ className }: IconProps) {
   );
 }
 
+/** Chevron pointing left: scroll a row back. */
+export function ChevronLeftIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="m15 18-6-6 6-6" />
+    </IconFrame>
+  );
+}
+
+/** Chevron pointing right: scroll a row forward. */
+export function ChevronRightIcon({ className }: IconProps) {
+  return (
+    <IconFrame className={className}>
+      <path d="m9 18 6-6-6-6" />
+    </IconFrame>
+  );
+}
+
 /** Speaker with sound waves: the sound is on. */
 export function VolumeIcon({ className }: IconProps) {
   return (

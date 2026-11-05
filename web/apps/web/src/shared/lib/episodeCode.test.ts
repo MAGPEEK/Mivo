@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { episodeRange, isMultiEpisode } from "./episodeLabel";
+import { episodeCodeMessage, episodeRange, isMultiEpisode } from "./episodeCode";
 
 describe("episodeRange", () => {
   it.each([
@@ -17,5 +17,26 @@ describe("episodeRange", () => {
   it("tells multi-episode ranges", () => {
     expect(isMultiEpisode({ first: 1, last: 2 })).toBe(true);
     expect(isMultiEpisode({ first: 1, last: 1 })).toBe(false);
+  });
+});
+
+describe("episodeCodeMessage", () => {
+  it.each([
+    {
+      numbers: { season: 3, number: 9 },
+      expected: { key: "episodeCode.single", values: { season: 3, number: 9 } },
+    },
+    {
+      numbers: { season: 0, number: 1 },
+      expected: { key: "episodeCode.single", values: { season: 0, number: 1 } },
+    },
+    {
+      numbers: { season: 1, number: 1, numberEnd: 2 },
+      expected: { key: "episodeCode.range", values: { season: 1, first: 1, last: 2 } },
+    },
+    { numbers: { season: undefined, number: 4 }, expected: undefined },
+    { numbers: { season: 2, number: undefined }, expected: undefined },
+  ])("formats $numbers", ({ numbers, expected }) => {
+    expect(episodeCodeMessage(numbers)).toEqual(expected);
   });
 });

@@ -1,23 +1,21 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 
 import { useApiClient } from "../../../shared/api";
+import { useFormatEpisodeCode } from "../../../shared/ui";
 import { childrenQueryOptions } from "../api/childrenQuery";
-import { episodeRange, isMultiEpisode } from "../lib/episodeLabel";
 import type { ItemView } from "../lib/itemView";
-import { itemNamespace } from "../locales";
 
 /**
  * The `S1 · E3` label of an episode, or `undefined` while its numbers are unknown.
  *
- * The item detail carries no episode number (API 1.2.0; ItemDetail has number since 1.3.0), so the number is read from the
- * season's children, the list the season page loads anyway and the query cache shares. An
- * episode beyond the first page of a large season gets no label until the contract adds the
- * numbers to `ItemDetail`.
+ * The number is read from the season's children, the list the season page loads anyway and
+ * the query cache shares; this predates API 1.3.0, which added `number` to `ItemDetail`. An
+ * episode beyond the first page of a large season therefore gets no label yet; reading the
+ * detail instead is in docs/tasks/BACKLOG.md (m5-24 review nits).
  */
 export function useEpisodeCode(episodeId: string, item: ItemView): string | undefined {
   const client = useApiClient();
-  const { t } = useTranslation(itemNamespace);
+  const formatEpisodeCode = useFormatEpisodeCode();
   const season = item.ancestors.find((ancestor) => ancestor.kind === "season");
   const query = useInfiniteQuery({
     ...childrenQueryOptions(client, season?.id ?? "", "asc"),
@@ -26,11 +24,9 @@ export function useEpisodeCode(episodeId: string, item: ItemView): string | unde
   const summary = query.data?.pages
     .flatMap((page) => page.items)
     .find((child) => child.id === episodeId);
-  const range = episodeRange(summary?.number, summary?.numberEnd);
-  if (season?.number === undefined || range === undefined) {
-    return undefined;
-  }
-  return isMultiEpisode(range)
-    ? t("episode.codeRange", { season: season.number, first: range.first, last: range.last })
-    : t("episode.code", { season: season.number, number: range.first });
+  return formatEpisodeCode({
+    season: season?.number,
+    number: summary?.number,
+    numberEnd: summary?.numberEnd,
+  });
 }

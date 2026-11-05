@@ -44,5 +44,15 @@
     "heading": "Seite nicht gefunden",
     "message": "Die gesuchte Seite gibt es nicht.",
     "backHome": "Zur Startseite"
+  },
+  "episodeCode": {
+    "single": "S{{season}} · E{{number}}",
+    "range": "S{{season}} · E{{first}}–E{{last}}"
+  },
+  "mediaRow": {
+    "seeAll": "Alle anzeigen",
+    "seeAllLabel": "Alle anzeigen: {{title}}",
+    "previous": "{{title}} zurückblättern",
+    "next": "{{title}} weiterblättern"
   }
 }
