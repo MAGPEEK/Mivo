@@ -1,0 +1,26 @@
+{
+  "id": "0b6b4ba0-d36f-47bd-b4ea-6a5b91842d29",
+  "title": "OK Computer",
+  "status": "Official",
+  "date": "2009-03-24",
+  "country": "XE",
+  "barcode": "5099969945823",
+  "artist-credit": [
+    {"name": "Radiohead", "joinphrase": " & ", "artist": {"id": "a74b1b7f-71a5-4011-9441-d0b5e4122711", "name": "Radiohead"}},
+    {"name": "Guest", "joinphrase": "", "artist": {"id": "11111111-2222-3333-4444-555555555555", "name": "Guest"}}
+  ],
+  "release-group": {
+    "id": "b1392450-e666-3926-a536-22c65f834433",
+    "title": "OK Computer",
+    "first-release-date": "1997-05-21",
+    "primary-type": "Album"
+  },
+  "label-info": [
+    {"catalog-number": "5099969945823", "label": {"id": "df7d1c7f-ef95-425f-8eef-445b3d7bcbd9", "name": "Parlophone"}},
+    {"catalog-number": "x", "label": {"id": "df7d1c7f-ef95-425f-8eef-445b3d7bcbd9", "name": "Parlophone"}},
+    {"catalog-number": "y", "label": null}
+  ],
+  "genres": [],
+  "tags": [{"name": "rock", "count": 2}, {"name": "remaster", "count": 1}],
+  "cover-art-archive": {"artwork": true, "count": 4, "front": true, "back": true, "darkened": false}
+}

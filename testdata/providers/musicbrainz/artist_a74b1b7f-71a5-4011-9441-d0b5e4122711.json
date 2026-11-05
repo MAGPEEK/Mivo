@@ -1,0 +1,14 @@
+{
+  "id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+  "name": "Radiohead",
+  "sort-name": "Radiohead",
+  "type": "Group",
+  "country": "GB",
+  "area": {"id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed", "type": "Country", "name": "United Kingdom", "iso-3166-1-codes": ["GB"]},
+  "begin-area": {"name": "Abingdon"},
+  "life-span": {"begin": "1991", "end": null, "ended": false},
+  "disambiguation": "",
+  "isnis": ["0000000115475162"],
+  "genres": [{"name": "alternative rock", "count": 30}, {"name": "art rock", "count": 12}],
+  "tags": [{"name": "british", "count": 10}]
+}

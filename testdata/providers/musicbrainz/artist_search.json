@@ -1,0 +1,26 @@
+{
+  "created": "2026-11-05T10:00:00.000Z",
+  "count": 2,
+  "offset": 0,
+  "artists": [
+    {
+      "id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+      "type": "Group",
+      "score": 100,
+      "name": "Radiohead",
+      "sort-name": "Radiohead",
+      "country": "GB",
+      "area": {"id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed", "type": "Country", "name": "United Kingdom"},
+      "life-span": {"begin": "1991", "ended": null},
+      "tags": [{"count": 9, "name": "rock"}]
+    },
+    {
+      "id": "0e3c7f15-9b1a-4b52-8d7e-3c2b1a0f9e8d",
+      "type": "Person",
+      "score": 54,
+      "name": "Radiohead Tribute",
+      "sort-name": "Radiohead Tribute",
+      "disambiguation": "tribute act"
+    }
+  ]
+}

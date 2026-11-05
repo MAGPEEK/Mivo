@@ -1,0 +1,38 @@
+{
+  "created": "2026-11-05T10:00:00.000Z",
+  "count": 3,
+  "offset": 0,
+  "release-groups": [
+    {
+      "id": "b1392450-e666-3926-a536-22c65f834433",
+      "type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "score": 100,
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "count": 48,
+      "title": "OK Computer",
+      "first-release-date": "1997-05-21",
+      "primary-type": "Album",
+      "artist-credit": [
+        {
+          "name": "Radiohead",
+          "artist": {"id": "a74b1b7f-71a5-4011-9441-d0b5e4122711", "name": "Radiohead", "sort-name": "Radiohead"}
+        }
+      ],
+      "tags": [{"count": 12, "name": "alternative rock"}]
+    },
+    {
+      "id": "4f6b2c4e-1b7c-3c5d-9a0e-2d7b1f0e6a11",
+      "score": 61,
+      "title": "OK Computer OKNOTOK 1997 2017",
+      "first-release-date": "2017-06-23",
+      "primary-type": "Album",
+      "secondary-types": ["Compilation"],
+      "artist-credit": [{"name": "Radiohead", "artist": {"id": "a74b1b7f-71a5-4011-9441-d0b5e4122711", "name": "Radiohead"}}]
+    },
+    {
+      "id": "not-a-uuid",
+      "score": 20,
+      "title": "Broken entry"
+    }
+  ]
+}

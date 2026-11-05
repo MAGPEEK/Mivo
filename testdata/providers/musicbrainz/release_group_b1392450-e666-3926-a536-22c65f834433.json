@@ -1,0 +1,26 @@
+{
+  "id": "b1392450-e666-3926-a536-22c65f834433",
+  "title": "OK Computer",
+  "first-release-date": "1997-05-21",
+  "primary-type": "Album",
+  "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+  "secondary-types": [],
+  "disambiguation": "",
+  "rating": {"value": 4.6, "votes-count": 120},
+  "artist-credit": [
+    {
+      "name": "Radiohead",
+      "joinphrase": "",
+      "artist": {"id": "a74b1b7f-71a5-4011-9441-d0b5e4122711", "name": "Radiohead", "sort-name": "Radiohead", "disambiguation": ""}
+    }
+  ],
+  "genres": [
+    {"id": "ceeaa283-5d7b-4202-8d1d-e25d116b2a18", "name": "alternative rock", "count": 14, "disambiguation": ""},
+    {"id": "0e3fc579-2d24-4f20-9dae-736e1ec78798", "name": "art rock", "count": 21, "disambiguation": ""},
+    {"id": "a3d8b9a4-8c1e-4e1b-9f2b-2b1c3d4e5f60", "name": "Art Rock", "count": 1, "disambiguation": ""}
+  ],
+  "tags": [
+    {"name": "1997", "count": 3},
+    {"name": "art rock", "count": 21}
+  ]
+}

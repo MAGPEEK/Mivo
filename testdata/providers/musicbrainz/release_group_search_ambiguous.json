@@ -1,0 +1,25 @@
+{
+  "created": "2026-11-05T10:00:00.000Z",
+  "count": 2,
+  "offset": 0,
+  "release-groups": [
+    {
+      "id": "1d3c1a6e-5b0f-4c8e-9d2a-7e4f3b2a1c01",
+      "score": 100,
+      "title": "Live",
+      "first-release-date": "1994",
+      "primary-type": "Album",
+      "secondary-types": ["Live"],
+      "artist-credit": [{"name": "Example Band", "artist": {"id": "6c1e9a2b-0d3f-4a5b-8c7d-1e2f3a4b5c6d", "name": "Example Band"}}]
+    },
+    {
+      "id": "2e4d2b7f-6c1a-4d9f-8e3b-8f5a4c3b2d02",
+      "score": 100,
+      "title": "Live",
+      "first-release-date": "2003-10",
+      "primary-type": "Album",
+      "secondary-types": ["Live"],
+      "artist-credit": [{"name": "Example Band", "artist": {"id": "6c1e9a2b-0d3f-4a5b-8c7d-1e2f3a4b5c6d", "name": "Example Band"}}]
+    }
+  ]
+}
