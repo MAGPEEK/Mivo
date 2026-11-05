@@ -8,48 +8,37 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	"github.com/magpeek/mivo/internal/app/enrich"
 	"github.com/magpeek/mivo/internal/domain"
 )
 
-// EnrichmentReason tells why an item was queued (M6-11).
-type EnrichmentReason string
+// EnrichmentReason tells why an item was queued. It is the app's type, so the store
+// implements the queue ports of internal/app/enrich directly.
+type EnrichmentReason = enrich.Reason
 
 // The reasons the enrichment_queue table accepts.
 const (
-	EnrichmentReasonScan     EnrichmentReason = "scan"
-	EnrichmentReasonRefresh  EnrichmentReason = "refresh"
-	EnrichmentReasonIdentify EnrichmentReason = "identify"
-	EnrichmentReasonPeriodic EnrichmentReason = "periodic"
+	EnrichmentReasonScan     = enrich.ReasonScan
+	EnrichmentReasonRefresh  = enrich.ReasonRefresh
+	EnrichmentReasonIdentify = enrich.ReasonIdentify
+	EnrichmentReasonPeriodic = enrich.ReasonPeriodic
 )
 
-func (reason EnrichmentReason) isValid() bool {
-	switch reason {
-	case EnrichmentReasonScan, EnrichmentReasonRefresh, EnrichmentReasonIdentify, EnrichmentReasonPeriodic:
-		return true
-	default:
-		return false
-	}
-}
+// EnrichmentJob is a claimed queue entry (enrich.Job). Revision identifies the request the
+// claim saw; MarkJobDone and MarkJobFailed use it to keep a request that came in while the
+// job ran. LeaseUntil is the lease of this claim; it proves the claim still owns the job.
+type EnrichmentJob = enrich.Job
 
-// EnrichmentJob is a claimed queue entry. Revision identifies the request the claim saw;
-// MarkJobDone and MarkJobFailed use it to keep a request that came in while the job ran.
-// LeaseUntil is the lease of this claim; it proves the claim still owns the job.
-type EnrichmentJob struct {
-	ItemID     string
-	Reason     EnrichmentReason
-	NotBefore  time.Time
-	Attempts   int
-	LastError  string
-	Revision   int64
-	LeaseUntil time.Time
-}
+// minimumLease is the shortest lease ClaimNextJob accepts: leases are stored in whole
+// milliseconds, and a shorter one would round to "now", leaving ownership ambiguous.
+const minimumLease = time.Millisecond
 
 // Enqueue queues an item for enrichment, due now. An item is queued once: a repeated
 // request takes the newer reason and is due now as well, but keeps the attempts, so the
 // backoff of the next failure keeps growing. The error wraps domain.ErrInvalid for an unknown
 // reason and domain.ErrNotFound for an unknown item.
 func (store *EnrichmentStore) Enqueue(ctx context.Context, itemID string, reason EnrichmentReason) error {
-	if !reason.isValid() {
+	if !reason.IsValid() {
 		return fmt.Errorf("enqueue item %q: unknown reason %q: %w", itemID, reason, domain.ErrInvalid)
 	}
 
@@ -69,7 +58,7 @@ func (store *EnrichmentStore) Enqueue(ctx context.Context, itemID string, reason
 // whose worker died without marking it is claimable again once its lease ran out, also
 // after the database was reopened.
 func (store *EnrichmentStore) ClaimNextJob(ctx context.Context, lease time.Duration) (EnrichmentJob, bool, error) {
-	if lease <= 0 {
+	if lease < minimumLease {
 		return EnrichmentJob{}, false, fmt.Errorf("claim enrichment job: lease %v: %w", lease, domain.ErrInvalid)
 	}
 
@@ -153,6 +142,28 @@ func (store *EnrichmentStore) MarkJobFailed(ctx context.Context, job EnrichmentJ
 	})
 	if err != nil {
 		return fmt.Errorf("mark enrichment of item %q failed: %w", job.ItemID, err)
+	}
+
+	return nil
+}
+
+// ReleaseJob gives an unfinished job back, claimable at once and without counting an
+// attempt; the worker calls it for jobs its shutdown interrupted. The error wraps
+// domain.ErrNotFound when the job is gone and domain.ErrConflict when another worker claimed
+// it after this claim's lease ran out.
+func (store *EnrichmentStore) ReleaseJob(ctx context.Context, job EnrichmentJob) error {
+	err := inWriteTransaction(ctx, store.writer, func(queries *sqlcgen.Queries) error {
+		released, err := queries.ReleaseEnrichmentClaim(ctx, sqlcgen.ReleaseEnrichmentClaimParams{
+			ItemID: job.ItemID, ClaimedUntil: sql.NullInt64{Int64: job.LeaseUntil.UnixMilli(), Valid: true},
+		})
+		if err != nil || released > 0 {
+			return err
+		}
+
+		return lostClaim(ctx, queries, job.ItemID, domain.ErrNotFound)
+	})
+	if err != nil {
+		return fmt.Errorf("release enrichment of item %q: %w", job.ItemID, err)
 	}
 
 	return nil

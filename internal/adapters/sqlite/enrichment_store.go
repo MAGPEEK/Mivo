@@ -38,12 +38,17 @@ func NewEnrichmentStore(db *DB, clock func() time.Time) *EnrichmentStore {
 }
 
 // ItemMatch is the online match of an item. Provider and MatchedAt are set for a match;
-// Confidence is the score that led to it (1 for a user identification).
+// Confidence is the score that led to it (1 for a user identification). Ref is the provider
+// entry the item was linked by (enrich.MatchResult.Ref), zero when none; it is the only
+// place a MusicBrainz ID is kept. CheckedAt is when the match was last stored (zero when
+// never); SetItemMatch takes it from the store's clock and ignores the field.
 type ItemMatch struct {
 	State      match.MatchState
 	Provider   string
 	Confidence float64
 	MatchedAt  time.Time
+	Ref        match.ProviderRef
+	CheckedAt  time.Time
 }
 
 // ItemMatch returns the match of an item; an item that was never matched is unmatched.
@@ -71,28 +76,38 @@ func storedItemMatch(row sqlcgen.GetItemMatchRow) (ItemMatch, error) {
 		return ItemMatch{}, fmt.Errorf("read match of item %q: %w", row.ID, err)
 	}
 
-	stored := ItemMatch{State: state, Provider: row.Provider.String, Confidence: row.Confidence.Float64}
-	if row.MatchedAt.Valid {
-		stored.MatchedAt = time.UnixMilli(row.MatchedAt.Int64).UTC()
-	}
-
-	return stored, nil
+	return ItemMatch{
+		State:      state,
+		Provider:   row.Provider.String,
+		Confidence: row.Confidence.Float64,
+		MatchedAt:  storedMillis(row.MatchedAt),
+		Ref: match.ProviderRef{
+			Provider: match.RefProvider(row.RefProvider.String),
+			Kind:     match.RefKind(row.RefKind.String),
+			ID:       row.RefID.String,
+		},
+		CheckedAt: storedMillis(row.CheckedAt),
+	}, nil
 }
 
 // SetItemMatch replaces the match of an item. The error wraps domain.ErrInvalid for an
-// unknown state, a confidence outside [0, 1] or a match without provider or time, and
-// domain.ErrNotFound for an unknown item.
+// unknown state, a confidence outside [0, 1], a match without provider or time or a
+// malformed reference, and domain.ErrNotFound for an unknown item.
 func (store *EnrichmentStore) SetItemMatch(ctx context.Context, itemID string, itemMatch ItemMatch) error {
 	if err := validateItemMatch(itemMatch); err != nil {
 		return fmt.Errorf("set match of item %q: %w", itemID, err)
 	}
 
 	err := sqlcgen.New(store.writer).UpsertItemMatch(ctx, sqlcgen.UpsertItemMatchParams{
-		ItemID:     itemID,
-		State:      itemMatch.State.String(),
-		Provider:   itemMatch.Provider,
-		Confidence: itemMatch.Confidence,
-		MatchedAt:  optionalMillis(itemMatch.MatchedAt),
+		ItemID:      itemID,
+		State:       itemMatch.State.String(),
+		Provider:    itemMatch.Provider,
+		Confidence:  itemMatch.Confidence,
+		MatchedAt:   optionalMillis(itemMatch.MatchedAt),
+		RefProvider: string(itemMatch.Ref.Provider),
+		RefKind:     string(itemMatch.Ref.Kind),
+		RefID:       itemMatch.Ref.ID,
+		CheckedAt:   optionalMillis(store.clock()),
 	})
 	if err != nil {
 		return fmt.Errorf("set match of item %q: %w", itemID, foreignKeyAsNotFound(err))
@@ -109,9 +124,49 @@ func validateItemMatch(itemMatch ItemMatch) error {
 		return fmt.Errorf("confidence %v outside [0, 1]: %w", itemMatch.Confidence, domain.ErrInvalid)
 	case itemMatch.State == match.MatchStateMatched && (itemMatch.Provider == "" || itemMatch.MatchedAt.IsZero()):
 		return fmt.Errorf("match without provider or time: %w", domain.ErrInvalid)
+	case !validMatchRef(itemMatch.Ref):
+		return fmt.Errorf("malformed reference %s/%s/%q: %w",
+			itemMatch.Ref.Provider, itemMatch.Ref.Kind, itemMatch.Ref.ID, domain.ErrInvalid)
 	default:
 		return nil
 	}
+}
+
+// validMatchRef accepts the zero reference and a reference of a known provider and kind
+// with an ID; the item_match CHECK constraints enforce the same lists.
+func validMatchRef(ref match.ProviderRef) bool {
+	if ref == (match.ProviderRef{}) {
+		return true
+	}
+
+	switch ref.Provider {
+	case match.RefTMDB, match.RefIMDb, match.RefMusicBrainz:
+	default:
+		return false
+	}
+
+	switch ref.Kind {
+	case match.RefKindUnknown, match.RefKindMovie, match.RefKindShow, match.RefKindRelease, match.RefKindArtist:
+		return ref.ID != ""
+	default:
+		return false
+	}
+}
+
+// ItemsDueForRefresh returns up to limit items of libraries with online metadata whose match
+// was last stored before cutoff (or never had a time recorded), oldest first, skipping
+// disabled matches and items that are already queued, so a job in backoff keeps its due
+// time. It implements enrich.RefreshSource.
+func (store *EnrichmentStore) ItemsDueForRefresh(ctx context.Context, cutoff time.Time, limit int) ([]string, error) {
+	itemIDs, err := sqlcgen.New(store.reader).ListItemsDueForRefresh(ctx, sqlcgen.ListItemsDueForRefreshParams{
+		CheckedAt: sql.NullInt64{Int64: cutoff.UnixMilli(), Valid: true},
+		Limit:     int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list items due for refresh: %w", err)
+	}
+
+	return itemIDs, nil
 }
 
 // DeleteProviderArtwork removes the provider artwork rows of an item ("Remove match", ADR
@@ -193,4 +248,13 @@ func optionalMillis(moment time.Time) sql.NullInt64 {
 	}
 
 	return sql.NullInt64{Int64: moment.UnixMilli(), Valid: true}
+}
+
+// storedMillis reads a nullable millisecond column; NULL is the zero time.
+func storedMillis(millis sql.NullInt64) time.Time {
+	if !millis.Valid {
+		return time.Time{}
+	}
+
+	return time.UnixMilli(millis.Int64).UTC()
 }

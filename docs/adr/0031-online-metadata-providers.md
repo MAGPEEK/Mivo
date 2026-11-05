@@ -76,5 +76,7 @@ offline, must not leak the user's files, and CI must never touch the network.
   escape hatch, and `ErrRateLimited` is surfaced in the UI as "TMDB is busy, will retry".
 - Default-on online lookup is a deliberate trade-off against the "works out of the box" goal;
   the opt-out is one switch and the host list is documented.
-- A new table set (migration `00005`: match state, provider cache, enrichment queue) is needed.
+- A new table set (migration `00005`: match state, provider cache, enrichment queue) is needed;
+  `00007` adds the linked provider reference (the only home of MusicBrainz IDs) and the
+  last-checked time that drives the periodic refresh to `item_match`.
 - Episode ordering (absolute/DVD) and OpenSubtitles are not part of this ADR (M6 follow-ups).

@@ -9,23 +9,14 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	"github.com/magpeek/mivo/internal/app/enrich"
 	"github.com/magpeek/mivo/internal/domain"
 )
 
-// CacheEntry is one cached provider answer: provider-neutral JSON, or NotFound with no
-// payload. An expired entry is still returned by ReadProviderCache; it is the offline
-// fallback (ADR 0031 §8).
-type CacheEntry struct {
-	Payload   []byte
-	NotFound  bool
-	FetchedAt time.Time
-	ExpiresAt time.Time
-}
-
-// Expired reports whether the entry should be fetched again at now.
-func (entry CacheEntry) Expired(now time.Time) bool {
-	return !now.Before(entry.ExpiresAt)
-}
+// CacheEntry is one cached provider answer (enrich.CacheEntry): provider-neutral JSON, or
+// NotFound with no payload. An expired entry is still returned by ReadProviderCache; it is
+// the offline fallback (ADR 0031 §8). The alias lets the store implement enrich.ProviderCache.
+type CacheEntry = enrich.CacheEntry
 
 // ReadProviderCache returns the cached answer of provider for key, expired or not. The error
 // wraps domain.ErrNotFound when nothing is cached.
@@ -55,8 +46,8 @@ func (store *EnrichmentStore) ReadProviderCache(ctx context.Context, provider, k
 
 // WriteProviderCache stores or replaces the cached answer of provider for key. The error
 // wraps domain.ErrInvalid for an empty provider or key, a payload that is not JSON or larger
-// than MaxCachePayloadBytes, a
-// payload on a not-found entry, a missing payload otherwise, or an expiry before the fetch.
+// than MaxCachePayloadBytes, a payload on a not-found entry, a missing payload otherwise, or
+// an expiry before the fetch.
 func (store *EnrichmentStore) WriteProviderCache(ctx context.Context, provider, key string, entry CacheEntry) error {
 	if err := validateCacheEntry(provider, key, entry); err != nil {
 		return fmt.Errorf("write %s cache entry %q: %w", provider, key, err)

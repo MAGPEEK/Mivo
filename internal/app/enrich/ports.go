@@ -227,6 +227,11 @@ type CacheEntry struct {
 	ExpiresAt time.Time
 }
 
+// Expired reports whether the entry should be fetched again at now.
+func (entry CacheEntry) Expired(now time.Time) bool {
+	return !now.Before(entry.ExpiresAt)
+}
+
 // ProviderCache keeps provider answers (TTL 7 days, 30 days for "not found"). Used by the
 // caching lookups of the enrichment queue (M6-11); implemented by adapters/sqlite.
 type ProviderCache interface {

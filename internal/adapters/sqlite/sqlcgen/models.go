@@ -70,11 +70,15 @@ type ItemFieldLock struct {
 }
 
 type ItemMatch struct {
-	ItemID     string
-	State      string
-	Provider   string
-	Confidence float64
-	MatchedAt  sql.NullInt64
+	ItemID      string
+	State       string
+	Provider    string
+	Confidence  float64
+	MatchedAt   sql.NullInt64
+	RefProvider string
+	RefKind     string
+	RefID       string
+	CheckedAt   sql.NullInt64
 }
 
 type ItemPerson struct {

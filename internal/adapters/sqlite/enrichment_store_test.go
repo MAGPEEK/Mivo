@@ -89,8 +89,10 @@ func TestSetItemMatchStoresAndReplacesTheMatch(t *testing.T) {
 	fixture := newEnrichmentFixture(t)
 	matched := sqlite.ItemMatch{
 		State: match.MatchStateMatched, Provider: "tmdb", Confidence: 0.92, MatchedAt: enrichmentStart(),
+		Ref:       match.ProviderRef{Provider: match.RefMusicBrainz, Kind: match.RefKindRelease, ID: "b84ee12a-09ef-421b-82de-0441a926375b"},
+		CheckedAt: enrichmentStart(),
 	}
-	disabled := sqlite.ItemMatch{State: match.MatchStateDisabled}
+	disabled := sqlite.ItemMatch{State: match.MatchStateDisabled, CheckedAt: enrichmentStart()}
 
 	for _, want := range []sqlite.ItemMatch{matched, disabled, matched} {
 		if err := fixture.store.SetItemMatch(t.Context(), "item-1", want); err != nil {
@@ -129,6 +131,12 @@ func TestSetItemMatchRejectsWhatItCannotStore(t *testing.T) {
 		{"confidence not a number", "item-1", matched(func(m *sqlite.ItemMatch) { m.Confidence = math.NaN() }), domain.ErrInvalid},
 		{"match without provider", "item-1", matched(func(m *sqlite.ItemMatch) { m.Provider = "" }), domain.ErrInvalid},
 		{"match without time", "item-1", matched(func(m *sqlite.ItemMatch) { m.MatchedAt = time.Time{} }), domain.ErrInvalid},
+		{"reference of an unknown provider", "item-1", matched(func(m *sqlite.ItemMatch) { m.Ref = match.ProviderRef{Provider: "anidb", ID: "1"} }), domain.ErrInvalid},
+		{"reference of an unknown kind", "item-1", matched(func(m *sqlite.ItemMatch) { m.Ref = match.ProviderRef{Provider: match.RefTMDB, Kind: "book", ID: "1"} }), domain.ErrInvalid},
+		{"reference without ID", "item-1", matched(func(m *sqlite.ItemMatch) {
+			m.Ref = match.ProviderRef{Provider: match.RefTMDB, Kind: match.RefKindMovie}
+		}), domain.ErrInvalid},
+		{"ID without provider", "item-1", matched(func(m *sqlite.ItemMatch) { m.Ref = match.ProviderRef{ID: "603"} }), domain.ErrInvalid},
 		{"unknown item", "item-9", matched(func(*sqlite.ItemMatch) {}), domain.ErrNotFound},
 	}
 

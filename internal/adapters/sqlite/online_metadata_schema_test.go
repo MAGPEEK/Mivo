@@ -68,7 +68,7 @@ func TestDeletingAnItemCascadesToItsMatchAndJob(t *testing.T) {
 	t.Parallel()
 
 	inspection := openCatalogV2Fixture(t)
-	execute(t, inspection, `INSERT INTO item_match VALUES ('item-1', 'matched', 'tmdb', 0.9, 5), ('show-1', 'disabled', '', 0, NULL)`)
+	execute(t, inspection, `INSERT INTO item_match (item_id, state, provider, confidence, matched_at) VALUES ('item-1', 'matched', 'tmdb', 0.9, 5), ('show-1', 'disabled', '', 0, NULL)`)
 	execute(t, inspection, `INSERT INTO enrichment_queue (item_id, reason, not_before, enqueued_at)
 		VALUES ('item-1', 'scan', 0, 0), ('show-1', 'periodic', 0, 0)`)
 	execute(t, inspection, `INSERT INTO provider_cache VALUES ('tmdb', 'movie:603', '{}', 0, 1, 0)`)
@@ -150,7 +150,7 @@ func TestMigrationDownToVersion4RestoresTheVersion4Schema(t *testing.T) {
 
 	version4, _ := seedVersion4(t)
 	inspection := openCatalogV2Fixture(t)
-	execute(t, inspection, `INSERT INTO item_match VALUES ('item-1', 'matched', 'tmdb', 0.9, 5)`)
+	execute(t, inspection, `INSERT INTO item_match (item_id, state, provider, confidence, matched_at) VALUES ('item-1', 'matched', 'tmdb', 0.9, 5)`)
 	execute(t, inspection, `INSERT INTO enrichment_queue (item_id, reason, not_before, enqueued_at) VALUES ('item-1', 'scan', 0, 0)`)
 
 	if _, err := newSourceMigrationProvider(t, inspection).DownTo(t.Context(), libraryManagementVersion); err != nil {
