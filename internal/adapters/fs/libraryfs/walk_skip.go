@@ -77,12 +77,12 @@ func isSkippedName(name string) bool {
 }
 
 // isPlainUnclassifiedFile lets the walk skip most non-library files without any I/O.
-func isPlainUnclassifiedFile(entry fs.DirEntry) bool {
+func isPlainUnclassifiedFile(kind library.Kind, entry fs.DirEntry) bool {
 	if !entry.Type().IsRegular() {
 		return false
 	}
 
-	_, ok := library.ClassifyFile(entry.Name())
+	_, ok := library.ClassifyFileIn(kind, entry.Name())
 
 	return !ok && !isISOName(entry.Name())
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -27,6 +28,8 @@ type Dependencies struct {
 	CatalogV2 CatalogV2
 	// Refresher optionally recomputes metadata of the items a scan touched; nil does nothing.
 	Refresher ItemRefresher
+	// Music holds the ports of the music pipeline; a music library fails to scan without them.
+	Music MusicPorts
 	// Finished, when set, is called after every scan ended, whatever its outcome.
 	Finished func(ctx context.Context, libraryID string)
 	// IDs creates item and file IDs.
@@ -47,6 +50,7 @@ type Service struct {
 	prober    Prober
 	catalogV2 CatalogV2
 	refresher ItemRefresher
+	music     MusicPorts
 	finished  func(ctx context.Context, libraryID string)
 	ids       IDGenerator
 	clock     func() time.Time
@@ -94,6 +98,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 	return &Service{
 		catalogV2:   dependencies.CatalogV2,
 		refresher:   refresher,
+		music:       dependencies.Music,
 		finished:    dependencies.Finished,
 		libraries:   dependencies.Libraries,
 		walker:      dependencies.Walker,
@@ -265,7 +270,7 @@ func (service *Service) runScan(scanned library.ManagedLibrary, scanTracker *tra
 	scanContext := scanTracker.scanContext
 	defer scanTracker.cancel()
 
-	err := service.newRunV2(scanned, scanTracker).execute(scanContext)
+	err := service.pipelineFor(scanned, scanTracker).execute(scanContext)
 	code, cause := describeEnd(err, scanContext.Err() != nil)
 	status := scanTracker.final(code, service.clock())
 
@@ -358,14 +363,19 @@ func (service *Service) takePendingRefresh(libraryID string) []string {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
-	ids := make([]string, 0, len(service.pendingRefresh[libraryID]))
-	for id := range service.pendingRefresh[libraryID] {
-		ids = append(ids, id)
-	}
-
+	ids := slices.Collect(maps.Keys(service.pendingRefresh[libraryID]))
 	delete(service.pendingRefresh, libraryID)
 
 	return ids
+}
+
+// peekPendingRefresh lists the items waiting for a refresh without taking them; the music
+// pipeline needs them to know which unchanged tracks to read before the refresh takes them.
+func (service *Service) peekPendingRefresh(libraryID string) []string {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	return slices.Collect(maps.Keys(service.pendingRefresh[libraryID]))
 }
 
 // addPendingRefresh marks items as waiting for a refresh.

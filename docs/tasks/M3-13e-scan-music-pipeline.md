@@ -16,3 +16,15 @@ A scan of a `music` folder reads tags, places tracks into artist/album, attaches
 
 ## Notes
 Do not reuse the video "no video stream, skip" rule. Keep the pipeline in separate files so M3-14e and M3-15f can add siblings without editing it.
+
+Implementation (M3-13e): ports `AudioTagReader` and `MusicCatalog` in `music_ports.go`, passed
+as `Dependencies.Music` (optional; a music library fails with `scan_failed` without them).
+`CoverExtractor` is not declared: the prober already reports attached pictures, which become
+embedded artwork candidates the image service extracts on demand (ADR 0027 Notes M3-13e), so a
+scan-side extractor would be dead code. `pipelineFor` in `run.go` dispatches by library kind;
+siblings add one case. Shared edits outside the music files: the `Walker` port passes the
+library kind (the walker uses `ClassifyFileIn`), `walked.mediaFiles` holds audio too, the probe
+worker pool is a generic `jobBatch` with `describe` split from the no-video rule, `runV2` got
+`executeSteps` and a `beforeRefresh` hook, and `artwork.go` routes album and artist items to
+`music_artwork.go`. Domain: `naming.PlaceMusicTrack` (disc), `naming.MusicFoldersOf`,
+`media.IsVariousArtists`, artwork contexts `album_folder`/`artist_folder`.

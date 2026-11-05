@@ -28,6 +28,8 @@ type harness struct {
 	prober    *recordingProber
 	catalogV2 *memoryCatalogV2
 	refresher *recordingRefresher
+	// music are the music ports; zero leaves music libraries unconfigured.
+	music scan.MusicPorts
 	// finished is the optional Finished callback.
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
@@ -76,6 +78,7 @@ func (h *harness) dependencies() scan.Dependencies {
 		Clock:     h.clock.Now,
 		Logger:    slog.New(handler),
 		Finished:  h.finished,
+		Music:     h.music,
 	}
 
 	// A nil pointer in an interface field would count as set.

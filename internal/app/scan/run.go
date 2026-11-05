@@ -19,6 +19,23 @@ type run struct {
 	itemKind library.ItemKind
 }
 
+// pipeline is one scan of one library by the pipeline of its kind.
+type pipeline interface {
+	execute(ctx context.Context) error
+}
+
+// pipelineFor picks the pipeline of the library kind; each new kind adds one case.
+func (service *Service) pipelineFor(scanned library.ManagedLibrary, scanTracker *tracker) pipeline {
+	switch scanned.Kind {
+	case library.KindMusic:
+		return service.newMusicRun(scanned, scanTracker)
+	case library.KindMovies, library.KindShows, library.KindPhotos, library.KindAudiobooks:
+		return service.newRunV2(scanned, scanTracker)
+	default:
+		return service.newRunV2(scanned, scanTracker)
+	}
+}
+
 func (service *Service) newRun(scanned library.ManagedLibrary, scanTracker *tracker) *run {
 	return &run{service: service, library: scanned, tracker: scanTracker}
 }

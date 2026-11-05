@@ -51,7 +51,7 @@ func (tags AudioTags) Placement() AudioPlacement {
 		albumArtist = artist
 	}
 
-	if isVariousArtists(albumArtist) || (tags.Compilation && strings.TrimSpace(tags.AlbumArtist) == "") {
+	if IsVariousArtists(albumArtist) || (tags.Compilation && strings.TrimSpace(tags.AlbumArtist) == "") {
 		albumArtist = VariousArtists
 	}
 
@@ -76,8 +76,9 @@ func (tags AudioTags) Placement() AudioPlacement {
 	}
 }
 
-// isVariousArtists recognises the common spellings of the compilation album artist.
-func isVariousArtists(name string) bool {
+// IsVariousArtists recognises the common spellings of the compilation album artist; the
+// name parser also applies it to artist folders, so a "VA" folder groups like the tag does.
+func IsVariousArtists(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "various artists", "various", "va", "v.a.", "verschiedene interpreten", "verschiedene":
 		return true

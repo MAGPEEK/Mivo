@@ -7,20 +7,20 @@ import (
 	"github.com/magpeek/mivo/internal/domain/naming"
 )
 
-// placedVideo is a walked video with the placement the name parser computed.
-type placedVideo struct {
+// placedFile is a walked media file with the placement the name parser (or, for music, the tags) computed.
+type placedFile struct {
 	state     library.FileState
 	placement library.Placement
 }
 
-func (video placedVideo) isExtra() bool {
+func (video placedFile) isExtra() bool {
 	levels := video.placement.Levels
 
 	return levels[len(levels)-1].Kind == library.ItemKindExtra
 }
 
 // ownerKey identifies the top-level item an extra belongs to.
-func (video placedVideo) ownerKey() string {
+func (video placedFile) ownerKey() string {
 	top := video.placement.Levels[0]
 
 	return top.Kind.String() + "\x00" + top.MatchKey
@@ -28,11 +28,11 @@ func (video placedVideo) ownerKey() string {
 
 // directory is the folder of the video, per library folder: two folders may hold equal
 // relative directories whose videos must not be counted together.
-func (video placedVideo) directory() fileKey {
+func (video placedFile) directory() fileKey {
 	return fileKey{rootID: video.state.RootID, path: path.Dir(video.state.PathForParsing())}
 }
 
-func (video placedVideo) context(videoCount int) naming.FileContext {
+func (video placedFile) context(videoCount int) naming.FileContext {
 	return naming.FileContext{Path: video.state.PathForParsing(), DirectoryVideoCount: videoCount}
 }
 
@@ -40,12 +40,12 @@ func (video placedVideo) context(videoCount int) naming.FileContext {
 // videos share a directory (not counting extras and samples), which it cannot see, so a first
 // pass classifies each video and a second places the counted ones with the real count. The
 // second result lists the videos that are no catalog files (samples, unplaceable names).
-func placeVideos(kind library.Kind, videos []library.FileState) (placed []placedVideo, ignored []library.FileState) {
+func placeVideos(kind library.Kind, videos []library.FileState) (placed []placedFile, ignored []library.FileState) {
 	counts := map[fileKey]int{}
-	first := make([]placedVideo, 0, len(videos))
+	first := make([]placedFile, 0, len(videos))
 
 	for _, state := range videos {
-		video := placedVideo{state: state}
+		video := placedFile{state: state}
 
 		result, err := naming.Place(kind, video.context(0))
 		if err != nil || result.Outcome != naming.OutcomePlaced {
@@ -82,7 +82,7 @@ func placeVideos(kind library.Kind, videos []library.FileState) (placed []placed
 
 // withoutExtras splits the extras off for a library that does not scan them. They are no
 // catalog files then, so extras stored earlier are removed by the plan.
-func withoutExtras(videos []placedVideo) (kept []placedVideo, extras []library.FileState) {
+func withoutExtras(videos []placedFile) (kept []placedFile, extras []library.FileState) {
 	for _, video := range videos {
 		if video.isExtra() {
 			extras = append(extras, video.state)
@@ -98,7 +98,7 @@ func withoutExtras(videos []placedVideo) (kept []placedVideo, extras []library.F
 
 // dropOrphanExtras removes extras whose movie or show has no video of its own and returns
 // them separately.
-func dropOrphanExtras(videos []placedVideo) (kept []placedVideo, orphans []library.FileState) {
+func dropOrphanExtras(videos []placedFile) (kept []placedFile, orphans []library.FileState) {
 	owners := map[string]bool{}
 
 	for _, video := range videos {
@@ -140,7 +140,7 @@ type placementPlan struct {
 // placementInput is what planPlacements compares.
 type placementInput struct {
 	stored       []PlacedFileState
-	wanted       []placedVideo
+	wanted       []placedFile
 	skipped      skipSet
 	withoutVideo map[fileKey]library.FileState
 }
@@ -175,7 +175,7 @@ func planPlacements(input placementInput) placementPlan {
 	return plan
 }
 
-func (plan *placementPlan) add(video placedVideo, storedByPath map[fileKey]PlacedFileState,
+func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]PlacedFileState,
 	withoutVideo map[fileKey]library.FileState,
 ) {
 	state := video.state

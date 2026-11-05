@@ -17,14 +17,14 @@ type LibrarySource interface {
 	ListLibraries(ctx context.Context) ([]library.ManagedLibrary, error)
 }
 
-// Walker lists the video files below a library root. Implemented by adapters/fs/libraryfs.
+// Walker lists the library files below a library root. Implemented by adapters/fs/libraryfs.
 type Walker interface {
-	// Walk calls visit once per video file with its root-relative state. It returns the
-	// root-relative paths it could not read (directories, entries, directories beyond the
-	// depth limit): catalog entries equal to or below them must be kept. A root that is
-	// missing or lost during the walk returns an error wrapping domain.ErrUnavailable; a
-	// cancelled ctx returns ctx.Err().
-	Walk(ctx context.Context, root string, visit func(library.FileState) error) (skipped []string, err error)
+	// Walk calls visit once per file library.ClassifyFileIn accepts for the library kind (media
+	// files and sidecars) with its root-relative state. It returns the root-relative paths it
+	// could not read (directories, entries, directories beyond the depth limit): catalog
+	// entries equal to or below them must be kept. A root that is missing or lost during the
+	// walk returns an error wrapping domain.ErrUnavailable; a cancelled ctx returns ctx.Err().
+	Walk(ctx context.Context, root string, kind library.Kind, visit func(library.FileState) error) (skipped []string, err error)
 }
 
 // PathResolver turns a root-relative path into the absolute path handed to the prober,

@@ -35,7 +35,7 @@ func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
 		case err != nil:
 			return walked{}, scanRun.walkError(err)
 		default:
-			files.videos = append(files.videos, found.videos...)
+			files.mediaFiles = append(files.mediaFiles, found.mediaFiles...)
 			files.sidecars = append(files.sidecars, found.sidecars...)
 			files.skipped.add(folder.ID, skipped...)
 		}
@@ -62,7 +62,7 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 		discPaths []string
 	)
 
-	skipped, err := scanRun.service.walker.Walk(ctx, folder.Path, func(state library.FileState) error {
+	skipped, err := scanRun.service.walker.Walk(ctx, folder.Path, scanRun.library.Kind, func(state library.FileState) error {
 		state.RootID = folder.ID
 
 		if state.Layout.IsDisc() {
@@ -74,8 +74,14 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 			return nil
 		}
 
-		if state.Class == library.FileClassVideo {
-			found.videos = append(found.videos, state)
+		if state.Class == library.FileClassPhoto {
+			// Until the photo pipeline exists (M3-15f), a photos library treats its images
+			// as image sidecars, as it did before the walker classified by library kind.
+			state.Class = library.FileClassImage
+		}
+
+		if isMediaClass(state.Class) {
+			found.mediaFiles = append(found.mediaFiles, state)
 		} else {
 			found.sidecars = append(found.sidecars, state)
 		}
@@ -87,4 +93,10 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 	}
 
 	return found, append(skipped, discPaths...), nil
+}
+
+// isMediaClass reports the classes a pipeline places and probes; the walker only reports
+// the ones the library kind allows, so a video never reaches the music pipeline.
+func isMediaClass(class library.FileClass) bool {
+	return class == library.FileClassVideo || class == library.FileClassAudio
 }

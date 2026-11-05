@@ -131,11 +131,22 @@ func (run trackDetailsWrite) apply(ctx context.Context, trackID string) error {
 		return err
 	}
 
-	if !artistIDNamesAlbumArtist(run.tags) {
+	return run.upsertArtistID(ctx, album)
+}
+
+// upsertArtistID stores the artist ID of the tags on the album's artist, which must be an
+// artist item, when it names the album artist.
+func (run trackDetailsWrite) upsertArtistID(ctx context.Context, album sqlcgen.Item) error {
+	if run.tags.MusicBrainzArtistID == "" || !artistIDNamesAlbumArtist(run.tags) {
 		return nil
 	}
 
-	return run.upsertID(ctx, album.ParentID.String, providerMusicBrainzArtist, run.tags.MusicBrainzArtistID)
+	artist, err := itemOfKind(ctx, run.queries, album.ParentID.String, library.ItemKindArtist)
+	if err != nil {
+		return fmt.Errorf("artist of the album: %w", err)
+	}
+
+	return run.upsertID(ctx, artist.ID, providerMusicBrainzArtist, run.tags.MusicBrainzArtistID)
 }
 
 func (run trackDetailsWrite) replaceTrackID(ctx context.Context, trackID string) error {

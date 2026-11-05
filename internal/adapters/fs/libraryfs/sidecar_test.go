@@ -46,7 +46,7 @@ func TestWalkReportsSidecarClassesAndNormalizedPaths(t *testing.T) {
 
 	got := map[string]library.FileState{}
 
-	if _, err := fileSystem.Walk(t.Context(), root, func(state library.FileState) error {
+	if _, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(state library.FileState) error {
 		got[state.RelativePath] = state
 		return nil
 	}); err != nil {

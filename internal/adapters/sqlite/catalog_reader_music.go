@@ -165,7 +165,9 @@ type trackPageRequest struct {
 }
 
 // readTrackPage reads every track of the album, sorts them in Go (the order needs the file
-// name, which SQL cannot cut from the path portably) and pages the sorted list.
+// name, which SQL cannot cut from the path portably) and pages the sorted list. Every page
+// pays for the whole album: usually a few dozen tracks, but the "Unknown Album" of untagged
+// files in the root can hold thousands (keyset paging on a stored sort key: BACKLOG).
 func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackPageRequest) (applibrary.ItemPage, error) {
 	if _, err := itemOfKind(ctx, queries, request.albumID, library.ItemKindAlbum); err != nil {
 		return applibrary.ItemPage{}, err

@@ -57,7 +57,7 @@ func TestWalkReportsARootThatBecomesUnreadableMidWalkAsUnavailable(t *testing.T)
 
 	denied := false
 
-	_, err := fileSystem.Walk(t.Context(), root, func(library.FileState) error {
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(library.FileState) error {
 		if !denied {
 			denied = true
 			denyListing(t, root, listDirectoryInherited)

@@ -84,7 +84,7 @@ func TestWalkReportsSizeAndModificationTime(t *testing.T) {
 
 	var states []library.FileState
 
-	_, err := fileSystem.Walk(t.Context(), root, func(state library.FileState) error {
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(state library.FileState) error {
 		states = append(states, state)
 		return nil
 	})
@@ -131,7 +131,7 @@ func TestWalkStopsWhenTheContextIsCancelled(t *testing.T) {
 
 	visited := 0
 
-	_, err := fileSystem.Walk(ctx, root, func(library.FileState) error {
+	_, err := fileSystem.Walk(ctx, root, library.KindMovies, func(library.FileState) error {
 		visited++
 		cancel()
 
@@ -157,7 +157,7 @@ func TestWalkWithACancelledContextVisitsNothing(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err := fileSystem.Walk(ctx, root, func(state library.FileState) error {
+	_, err := fileSystem.Walk(ctx, root, library.KindMovies, func(state library.FileState) error {
 		t.Errorf("visited %s with a cancelled context", state.RelativePath)
 		return nil
 	})
@@ -177,7 +177,7 @@ func TestWalkStopsWithTheErrorOfVisit(t *testing.T) {
 	errStop := errors.New("stop")
 	visited := 0
 
-	_, err := fileSystem.Walk(t.Context(), root, func(library.FileState) error {
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(library.FileState) error {
 		visited++
 		return errStop
 	})
@@ -204,7 +204,7 @@ func TestWalkReportsAnUnusableRootAsUnavailable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := fileSystem.Walk(t.Context(), root, noVisit)
+			_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, noVisit)
 			if !errors.Is(err, domain.ErrUnavailable) {
 				t.Errorf("Walk(%s) error = %v, want ErrUnavailable", root, err)
 			}
@@ -218,11 +218,11 @@ func TestWalkRejectsInvalidArguments(t *testing.T) {
 	fileSystem, _ := newFileSystem(t)
 	root, _ := newLibrary(t)
 
-	if _, err := fileSystem.Walk(t.Context(), root, nil); !errors.Is(err, domain.ErrInvalid) {
+	if _, err := fileSystem.Walk(t.Context(), root, library.KindMovies, nil); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("Walk with a nil visit error = %v, want ErrInvalid", err)
 	}
 
-	_, err := fileSystem.Walk(t.Context(), "library", noVisit)
+	_, err := fileSystem.Walk(t.Context(), "library", library.KindMovies, noVisit)
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("Walk with a relative root error = %v, want ErrInvalid", err)
 	}

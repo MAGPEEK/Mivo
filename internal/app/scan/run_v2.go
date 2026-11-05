@@ -13,9 +13,10 @@ import (
 
 // walked is what a completed walk found.
 type walked struct {
-	videos   []library.FileState
-	sidecars []library.FileState
-	skipped  skipSet
+	// mediaFiles are the videos, or the audio files of an audio library.
+	mediaFiles []library.FileState
+	sidecars   []library.FileState
+	skipped    skipSet
 }
 
 // runV2 is one scan of one library with the v2 pipeline (placement, versions, extras,
@@ -36,10 +37,13 @@ type runV2 struct {
 	refreshed bool
 	// sidecars are the sidecar files of the completed walk.
 	sidecars []library.FileState
-	// wanted are the placed videos of the walk; pictures holds the attached-picture stream
+	// wanted are the placed media files of the walk; pictures holds the attached-picture stream
 	// indexes of the files probed by this scan.
-	wanted   []placedVideo
+	wanted   []placedFile
 	pictures map[fileKey][]int
+	// beforeRefresh, when set, runs once the items to refresh are known and before the
+	// refresher is called; the music pipeline reads unchanged tracks there (music_refresh.go).
+	beforeRefresh func(ctx context.Context) error
 }
 
 // refreshGrace bounds the refresh of an early-ended scan, which runs after cancellation.
@@ -60,7 +64,12 @@ func (service *Service) newRunV2(scanned library.ManagedLibrary, scanTracker *tr
 // A scan that ends early still refreshes the items it already touched: saved files are
 // unchanged on the next scan, so their new items would otherwise never be refreshed.
 func (scanRun *runV2) execute(ctx context.Context) error {
-	err := scanRun.steps(ctx)
+	return scanRun.executeSteps(ctx, scanRun.steps)
+}
+
+// executeSteps runs the steps of a pipeline and refreshes what an early end touched.
+func (scanRun *runV2) executeSteps(ctx context.Context, steps func(context.Context) error) error {
+	err := steps(ctx)
 	if err != nil && !scanRun.refreshed && len(scanRun.refresh.ids) > 0 {
 		// Best effort on a context that survives cancellation but is bounded by refreshGrace;
 		// Close waits for this scan, so it is bounded by the same grace. The scan's own error
@@ -116,7 +125,7 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 		return placementPlan{}, catalogFailure("load placed files", err)
 	}
 
-	placed, ignored := placeVideos(base.library.Kind, files.videos)
+	placed, ignored := placeVideos(base.library.Kind, files.mediaFiles)
 
 	if !base.library.Options.ScanExtras {
 		var extras []library.FileState
@@ -228,7 +237,7 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 		}
 	}
 
-	if err := scanRun.refreshTouched(ctx, files.sidecars); err != nil {
+	if err := scanRun.prepareAndRefresh(ctx, files.sidecars); err != nil {
 		return err
 	}
 
@@ -241,6 +250,17 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 	}
 
 	return nil
+}
+
+// prepareAndRefresh runs the pipeline's beforeRefresh hook, then the refresh.
+func (scanRun *runV2) prepareAndRefresh(ctx context.Context, sidecars []library.FileState) error {
+	if scanRun.beforeRefresh != nil {
+		if err := scanRun.beforeRefresh(ctx); err != nil {
+			return err
+		}
+	}
+
+	return scanRun.refreshTouched(ctx, sidecars)
 }
 
 // refreshTouched hands the collected items to the refresher.

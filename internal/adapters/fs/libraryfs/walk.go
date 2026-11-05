@@ -56,9 +56,10 @@ func New(logger *slog.Logger) (*FileSystem, error) {
 }
 
 // Walk calls visit once for every library file below the absolute library root: every file
-// library.ClassifyFile accepts (videos, NFO and image sidecars), with its class and, when the
-// raw path is not in Unicode NFC, its NFC form (ADR 0027 §3). The raw path stays the one that
-// opens and is stored; only parsing uses the NFC form.
+// library.ClassifyFileIn accepts for the library kind (videos, or audio files in music and
+// audiobooks libraries, plus NFO and image sidecars), with its class and, when the raw path
+// is not in Unicode NFC, its NFC form (ADR 0027 §3). The raw path stays the one that opens and
+// is stored; only parsing uses the NFC form.
 //
 // The real directory tree is walked first, directories in name order; directory links are
 // followed afterwards, and every physical directory is listed once, so a file keeps the path
@@ -79,7 +80,7 @@ func New(logger *slog.Logger) (*FileSystem, error) {
 // A root that cannot be opened or listed, or that becomes unreadable during the walk, returns
 // an error wrapping domain.ErrUnavailable. Walk stops with ctx.Err() when ctx ends (checked
 // before each entry) and with the error of visit when visit fails.
-func (fileSystem *FileSystem) Walk(ctx context.Context, root string, visit func(library.FileState) error) ([]string, error) {
+func (fileSystem *FileSystem) Walk(ctx context.Context, root string, kind library.Kind, visit func(library.FileState) error) ([]string, error) {
 	if visit == nil {
 		return nil, fmt.Errorf("walk library root %s: visit is nil: %w", root, domain.ErrInvalid)
 	}
@@ -92,6 +93,8 @@ func (fileSystem *FileSystem) Walk(ctx context.Context, root string, visit func(
 	defer closeRoot(libraryRoot)
 
 	walker := newWalk(libraryRoot, fileSystem.logger, visit)
+	walker.kind = kind
+
 	if err := walker.run(ctx); err != nil {
 		return nil, fmt.Errorf("walk library root %s: %w", root, err)
 	}
@@ -116,6 +119,9 @@ type walk struct {
 	root   *os.Root
 	logger *slog.Logger
 	visit  func(library.FileState) error
+	// kind is the library kind the files are classified for; the zero value classifies like
+	// library.ClassifyFile (videos and sidecars).
+	kind library.Kind
 	// identify reads the identity of an open directory; tests inject colliding or unknown ids.
 	identify func(*os.File) (directoryID, error)
 	visited  map[directoryID]struct{}
@@ -277,7 +283,7 @@ func (w *walk) unknownLinkedDirectory(at location) {
 
 func (w *walk) entry(ctx context.Context, parent location, entry fs.DirEntry) error {
 	name := entry.Name()
-	if isSkippedName(name) || isPlainUnclassifiedFile(entry) {
+	if isSkippedName(name) || isPlainUnclassifiedFile(w.kind, entry) {
 		return nil
 	}
 
@@ -343,7 +349,7 @@ func (w *walk) file(relativePath string, info fs.FileInfo) error {
 		return w.isoFile(relativePath, info)
 	}
 
-	class, ok := library.ClassifyFile(relativePath)
+	class, ok := library.ClassifyFileIn(w.kind, relativePath)
 	if !ok {
 		return nil
 	}

@@ -22,6 +22,10 @@ const (
 	ContextSeasonFolder LocalContextKind = "season_folder"
 	// ContextEpisode is one episode file; only names with its base name belong to it.
 	ContextEpisode LocalContextKind = "episode"
+	// ContextAlbumFolder is the folder of a music album (above any disc folders).
+	ContextAlbumFolder LocalContextKind = "album_folder"
+	// ContextArtistFolder is the folder above a music album folder.
+	ContextArtistFolder LocalContextKind = "artist_folder"
 )
 
 // LocalContext describes the item whose folder is classified. BaseName is the video file
@@ -173,6 +177,10 @@ func rulesFor(contextKind LocalContextKind) []localRule {
 		return seasonFolderRules()
 	case ContextEpisode:
 		return episodeRules()
+	case ContextAlbumFolder:
+		return albumFolderRules()
+	case ContextArtistFolder:
+		return artistFolderRules()
 	default:
 		return nil
 	}
@@ -218,6 +226,16 @@ func seasonFolderRules() []localRule {
 
 func episodeRules() []localRule {
 	return []localRule{{"<base>-thumb", KindThumb}, {"<base>", KindThumb}}
+}
+
+// albumFolderRules are the album covers of M3-13. The kind is poster until the square kind
+// exists (BACKLOG, M3-13b).
+func albumFolderRules() []localRule {
+	return []localRule{{"cover", KindPoster}, {"folder", KindPoster}, {"front", KindPoster}}
+}
+
+func artistFolderRules() []localRule {
+	return []localRule{{"artist", KindPoster}}
 }
 
 // baseNameRules keeps only the rules built from the base name, in their order.

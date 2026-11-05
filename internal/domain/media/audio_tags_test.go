@@ -81,3 +81,13 @@ func TestVariousArtistsSpellings(t *testing.T) {
 		}
 	}
 }
+
+func TestIsVariousArtists(t *testing.T) {
+	t.Parallel()
+
+	for name, want := range map[string]bool{" va ": true, "Various Artists": true, "Vanessa": false, "": false} {
+		if got := media.IsVariousArtists(name); got != want {
+			t.Errorf("IsVariousArtists(%q) = %v, want %v", name, got, want)
+		}
+	}
+}

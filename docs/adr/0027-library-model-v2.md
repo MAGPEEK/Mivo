@@ -340,3 +340,28 @@ parts and is designed to carry video chapters too (M4, PL-30). Audiobooks add li
 Grouping reading of AC4: only M4B is isolated as its own book (plus any file in the library root).
 M4A and MP3 files join the folder book unless their album tag differs; untagged files follow the
 first album of their folder.
+
+## Notes (M3-13e)
+
+§3 for music: the placement of an audio file comes from its tags (folder layout as fallback),
+so it is computed after the probe, and an unchanged file keeps its stored placement without a
+re-read. The album key is `artist/album/year`, except for `Various Artists`, whose key leaves
+the year out: compilation tracks often carry the year of each song. An artist folder spelled
+like `VA`, `Various` or `V.A.` files under `Various Artists`. Untagged files without artist and
+album folders share one `Unknown Artist`/`Unknown Album` album.
+
+§8 for music: album covers are `cover`, `folder`, `front` in the album folder (above disc
+folders), then the attached picture of the album's first track that has one (folder and path
+order); `artist.jpg` in the folder above the album folder is the artist image. Both use kind
+`poster` until `square` exists. Embedded covers stay attached-picture streams that the image
+service extracts on demand, so the scan needs no cover extractor port.
+
+§9 for music: the walker classifies with `library.ClassifyFileIn(kind, name)`, so music
+libraries see audio files and no videos. A file without a video stream is not skipped; a file
+whose tags cannot be read is placed by its folders with one warning. To refresh an album whose
+tracks did not change, the scan reads (probe and tags) the unchanged tracks of that album, and
+one track of any other due item; items left pending by an earlier scan count as due. A rescan
+without changes reads nothing, but a changed library option makes every item due and so reads
+every track of the library once. Until the photo pipeline (M3-15f), a photos library keeps its
+images as image sidecars. An artist folder like `VA` also wins over a plain artist tag when no
+album artist tag is set.

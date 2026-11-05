@@ -27,13 +27,19 @@ const (
 // validMusicParent is the hierarchy of ADR 0027 §3: artists are top level, an album belongs
 // to an artist and a track to an album. Any other child is not a music kind.
 func validMusicParent(child, parent ItemKind) bool {
-	expectedParent, isMusic := map[ItemKind]ItemKind{
-		ItemKindArtist: noParent,
-		ItemKindAlbum:  ItemKindArtist,
-		ItemKindTrack:  ItemKindAlbum,
-	}[child]
-
-	return isMusic && parent == expectedParent
+	switch child {
+	case ItemKindArtist:
+		return parent == noParent
+	case ItemKindAlbum:
+		return parent == ItemKindArtist
+	case ItemKindTrack:
+		return parent == ItemKindAlbum
+	case ItemKindMovie, ItemKindShow, ItemKindSeason, ItemKindEpisode, ItemKindExtra,
+		ItemKindAudiobook, ItemKindPhotoAlbum, ItemKindPhoto:
+		return false
+	default:
+		return false
+	}
 }
 
 // ArtistKey is the match key of an artist among its siblings: the normalised name. A name

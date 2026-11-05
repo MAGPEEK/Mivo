@@ -37,19 +37,40 @@ type musicFolderInfo struct {
 	title  string
 }
 
-// PlaceMusic decides where one audio file belongs: artist, album and track levels. Tags win
-// over the folder layout field by field, so a file with only a title tag still gets its
-// artist and album from the folders. A zero AudioTags value means "no tags". The error wraps
-// domain.ErrInvalid for an invalid path.
+// MusicTrack is where one audio file belongs plus the disc it was placed on, which the
+// placement only carries inside the track's match key.
+type MusicTrack struct {
+	Placement library.Placement
+	// Disc is the resolved disc number, 1 or more.
+	Disc int
+}
+
+// PlaceMusic decides where one audio file belongs: artist, album and track levels. See
+// PlaceMusicTrack.
 func PlaceMusic(filePath string, tags media.AudioTags) (library.Placement, error) {
+	track, err := PlaceMusicTrack(filePath, tags)
+
+	return track.Placement, err
+}
+
+// PlaceMusicTrack decides where one audio file belongs: artist, album and track levels. Tags
+// win over the folder layout field by field, so a file with only a title tag still gets its
+// artist and album from the folders. A zero AudioTags value means "no tags"; untagged files
+// without artist or album folders share one "Unknown Artist"/"Unknown Album" album.
+//
+// An artist folder spelled like "VA" or "Various" files under media.VariousArtists like the
+// tag does, unless an album artist tag names someone else. A compilation's album key leaves the year out (ADR 0027 §3): its tracks often
+// carry the year of each song, which must not split the album. The error wraps
+// domain.ErrInvalid for an invalid path.
+func PlaceMusicTrack(filePath string, tags media.AudioTags) (MusicTrack, error) {
 	if _, err := library.ParseRelativePath(filePath); err != nil {
-		return library.Placement{}, fmt.Errorf("place music: %w", err)
+		return MusicTrack{}, fmt.Errorf("place music: %w", err)
 	}
 
 	folder := parseMusicPath(filePath)
 	fromTags := tags.Placement()
 
-	artist := firstNonBlank(fromTags.ArtistName, folder.artist, unknownArtist)
+	artist := musicArtist(tags, fromTags, folder.artist)
 	album := firstNonBlank(fromTags.AlbumTitle, folder.album, unknownAlbum)
 	title := firstNonBlank(fromTags.TrackTitle, folder.title)
 	disc := folder.disc
@@ -63,15 +84,68 @@ func PlaceMusic(filePath string, tags media.AudioTags) (library.Placement, error
 
 	placement := library.Placement{Levels: []library.Level{
 		{Kind: library.ItemKindArtist, MatchKey: library.ArtistKey(artist), Title: artist},
-		{Kind: library.ItemKindAlbum, MatchKey: library.AlbumKey(artist, album, year), Title: album, Year: year},
+		{Kind: library.ItemKindAlbum, MatchKey: albumKey(artist, album, year), Title: album, Year: year},
 		{Kind: library.ItemKindTrack, MatchKey: library.TrackKey(disc, track, title), Title: title, Number: track},
 	}}
 
 	if err := placement.Validate(); err != nil {
-		return library.Placement{}, fmt.Errorf("place music %q: %w", filePath, err)
+		return MusicTrack{}, fmt.Errorf("place music %q: %w", filePath, err)
 	}
 
-	return placement, nil
+	return MusicTrack{Placement: placement, Disc: disc}, nil
+}
+
+// musicArtist is the artist the album is filed under: tags first, then the artist folder. A
+// "VA"-like folder also wins over a plain artist tag, because without an album artist tag the
+// artist tag names the track's performer, which would split the compilation per performer.
+func musicArtist(tags media.AudioTags, fromTags media.AudioPlacement, folderArtist string) string {
+	if strings.TrimSpace(tags.AlbumArtist) == "" && media.IsVariousArtists(folderArtist) {
+		return media.VariousArtists
+	}
+
+	artist := firstNonBlank(fromTags.ArtistName, folderArtist, unknownArtist)
+	if media.IsVariousArtists(artist) {
+		return media.VariousArtists
+	}
+
+	return artist
+}
+
+// albumKey leaves the year out of a compilation's key (see PlaceMusicTrack).
+func albumKey(artist, album string, year library.OptionalNumber) string {
+	if artist == media.VariousArtists {
+		return library.AlbumKey(artist, album, library.OptionalNumber{})
+	}
+
+	return library.AlbumKey(artist, album, year)
+}
+
+// MusicFolders are the folders of an audio file's album and artist, relative to the library
+// root like the file; empty when the file lies too high for that folder ("" album for a file
+// in the root, "" artist for an album folder in the root).
+type MusicFolders struct {
+	Album  string
+	Artist string
+}
+
+// MusicFoldersOf finds the album folder (the file's folder, or the one above a disc folder
+// such as "CD 2") and the artist folder above it, where album and artist images lie.
+func MusicFoldersOf(filePath string) MusicFolders {
+	album := path.Dir(filePath)
+	if _, isDisc := discNumberOf(path.Base(album)); isDisc {
+		album = path.Dir(album)
+	}
+
+	if album == "." {
+		return MusicFolders{}
+	}
+
+	artist := path.Dir(album)
+	if artist == "." {
+		artist = ""
+	}
+
+	return MusicFolders{Album: album, Artist: artist}
 }
 
 // parseMusicPath reads the folder layout. The last folder is the album (or the disc folder,

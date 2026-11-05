@@ -46,29 +46,18 @@ type probeResult struct {
 // on this goroutine, so the catalog is written by one writer per scan. The first error that
 // ends the scan cancels the workers; the remaining results are drained, not recorded.
 func (scanRun *run) probeAll(ctx context.Context, jobs []probeJob, record func(context.Context, probeResult) error) error {
-	workContext, cancelWork := context.WithCancel(ctx)
-	defer cancelWork()
+	batch := jobBatch[probeJob, probeResult]{jobs: jobs, work: scanRun.probe, record: record}
 
-	var firstErr error
+	return scanRun.runBatch(ctx, batch.run)
+}
 
-	for result := range scanRun.startProbes(workContext, jobs) {
-		if firstErr != nil {
-			continue
-		}
-
-		if err := record(ctx, result); err != nil {
-			firstErr = err
-
-			cancelWork()
-		}
+// runBatch runs a job batch and reports a cancellation that ended it early: the feeder stops
+// handing out jobs when ctx ends, so a cancelled scan may end without any failed result.
+func (scanRun *run) runBatch(ctx context.Context, runJobs func(context.Context) error) error {
+	if err := runJobs(ctx); err != nil {
+		return err
 	}
 
-	if firstErr != nil {
-		return firstErr
-	}
-
-	// The feeder stops handing out jobs when ctx ends, so a cancelled scan may end here
-	// without any failed result.
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("probe files of library %s: %w", scanRun.library.ID, err)
 	}
@@ -76,24 +65,55 @@ func (scanRun *run) probeAll(ctx context.Context, jobs []probeJob, record func(c
 	return nil
 }
 
-// startProbes starts the workers and a feeder. The returned channel is closed after every
-// worker has returned, so draining it guarantees that no probe goroutine outlives the scan.
-func (scanRun *run) startProbes(ctx context.Context, jobs []probeJob) <-chan probeResult {
-	pending := make(chan probeJob)
-	results := make(chan probeResult)
+// jobBatch is a set of per-file jobs whose work runs on MaxConcurrentProbes workers and
+// whose results are recorded on the calling goroutine. Work must take a probe slot itself.
+type jobBatch[Job, Result any] struct {
+	jobs   []Job
+	work   func(context.Context, Job) Result
+	record func(context.Context, Result) error
+}
+
+// run works off the jobs. The first error that ends the scan cancels the workers; the
+// remaining results are drained, not recorded.
+func (batch jobBatch[Job, Result]) run(ctx context.Context) error {
+	workContext, cancelWork := context.WithCancel(ctx)
+	defer cancelWork()
+
+	var firstErr error
+
+	for result := range batch.start(workContext) {
+		if firstErr != nil {
+			continue
+		}
+
+		if err := batch.record(ctx, result); err != nil {
+			firstErr = err
+
+			cancelWork()
+		}
+	}
+
+	return firstErr
+}
+
+// start starts the workers and a feeder. The returned channel is closed after every worker
+// has returned, so draining it guarantees that no worker goroutine outlives the scan.
+func (batch jobBatch[Job, Result]) start(ctx context.Context) <-chan Result {
+	pending := make(chan Job)
+	results := make(chan Result)
 
 	var workers sync.WaitGroup
 
 	for range MaxConcurrentProbes {
 		workers.Go(func() {
 			for job := range pending {
-				results <- scanRun.probe(ctx, job)
+				results <- batch.work(ctx, job)
 			}
 		})
 	}
 
 	go func() {
-		feed(ctx, jobs, pending)
+		feed(ctx, batch.jobs, pending)
 		close(pending)
 		workers.Wait()
 		close(results)
@@ -102,7 +122,7 @@ func (scanRun *run) startProbes(ctx context.Context, jobs []probeJob) <-chan pro
 	return results
 }
 
-func feed(ctx context.Context, jobs []probeJob, pending chan<- probeJob) {
+func feed[Job any](ctx context.Context, jobs []Job, pending chan<- Job) {
 	for _, job := range jobs {
 		select {
 		case pending <- job:
@@ -122,31 +142,42 @@ func (scanRun *run) probe(ctx context.Context, job probeJob) probeResult {
 
 	defer releaseSlot()
 
+	result, _ := scanRun.describe(ctx, job)
+	if result.outcome != outcomeProbed || result.err != nil {
+		return result
+	}
+
+	if _, hasVideo := result.description.PrimaryVideo(); !hasVideo {
+		return probeResult{job: job, outcome: outcomeNoVideo}
+	}
+
+	return result
+}
+
+// describe resolves and probes one file without any rule about its streams; the caller holds
+// a probe slot. The absolute path is empty when the file could not be resolved.
+func (scanRun *run) describe(ctx context.Context, job probeJob) (probeResult, string) {
 	root, found := folderRoot(scanRun.library, job.state.RootID)
 	if !found {
 		return probeResult{job: job, err: fail(ErrorCodeFailed, "file of an unknown library folder",
-			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}
+			fmt.Errorf("probe file: folder %q: %w", job.state.RootID, domain.ErrNotFound))}, ""
 	}
 
 	absolutePath, err := scanRun.service.resolver.Resolve(root, job.state.RelativePath)
 	if err != nil {
-		return resolveFailure(job, err)
+		return resolveFailure(job, err), ""
 	}
 
 	description, err := scanRun.service.prober.Probe(ctx, absolutePath)
 	if err != nil {
-		return probeFailure(ctx, job, err)
+		return probeFailure(ctx, job, err), absolutePath
 	}
 
 	if err := description.Validate(); err != nil {
-		return probeResult{job: job, outcome: outcomeProbeFailed, probeError: media.ProbeErrorFailed, reason: err.Error()}
+		return probeResult{job: job, outcome: outcomeProbeFailed, probeError: media.ProbeErrorFailed, reason: err.Error()}, absolutePath
 	}
 
-	if _, hasVideo := description.PrimaryVideo(); !hasVideo {
-		return probeResult{job: job, outcome: outcomeNoVideo}
-	}
-
-	return probeResult{job: job, outcome: outcomeProbed, description: description}
+	return probeResult{job: job, outcome: outcomeProbed, description: description}, absolutePath
 }
 
 // acquireProbeSlot waits for one of the service-wide probe slots and returns the function

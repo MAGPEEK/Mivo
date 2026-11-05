@@ -116,7 +116,7 @@ func (walker *scriptedWalker) forget(root string) {
 }
 
 func (walker *scriptedWalker) Walk(
-	ctx context.Context, root string, visit func(library.FileState) error,
+	ctx context.Context, root string, kind library.Kind, visit func(library.FileState) error,
 ) ([]string, error) {
 	walker.mutex.Lock()
 	result, found := walker.results[root]
@@ -144,7 +144,7 @@ func (walker *scriptedWalker) Walk(
 
 		// Like the real walker, every reported file carries its class; scripts may leave it out.
 		if file.Class == "" {
-			file.Class, _ = library.ClassifyFile(file.RelativePath)
+			file.Class, _ = library.ClassifyFileIn(kind, file.RelativePath)
 		}
 
 		if err := visit(file); err != nil {

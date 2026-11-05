@@ -16,7 +16,7 @@ func walkStates(t *testing.T, fileSystem *libraryfs.FileSystem, root string) map
 
 	states := map[string]library.FileState{}
 
-	if _, err := fileSystem.Walk(t.Context(), root, func(state library.FileState) error {
+	if _, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(state library.FileState) error {
 		states[state.RelativePath] = state
 		return nil
 	}); err != nil {
@@ -189,7 +189,7 @@ func TestWalkReturnsTheVisitorErrorForADisc(t *testing.T) {
 
 	stop := errors.New("stop")
 
-	_, err := fileSystem.Walk(t.Context(), root, func(library.FileState) error { return stop })
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(library.FileState) error { return stop })
 	if !errors.Is(err, stop) {
 		t.Errorf("Walk error = %v, want the visitor error", err)
 	}

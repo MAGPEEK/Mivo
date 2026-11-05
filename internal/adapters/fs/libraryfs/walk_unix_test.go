@@ -86,7 +86,7 @@ func TestWalkReportsARootThatBecomesUnreadableMidWalkAsUnavailable(t *testing.T)
 
 	// A NAS share that drops mid-walk must not look like a library without "b" and "c":
 	// the scan would delete their catalog entries.
-	_, err := fileSystem.Walk(t.Context(), root, func(library.FileState) error {
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(library.FileState) error {
 		lock(t, root)
 		return nil
 	})
@@ -105,7 +105,7 @@ func TestWalkReportsAnUnreadableRootAsUnavailable(t *testing.T) {
 	writeFiles(t, root, "movie.mkv")
 	lock(t, root)
 
-	_, err := fileSystem.Walk(t.Context(), root, noVisit)
+	_, err := fileSystem.Walk(t.Context(), root, library.KindMovies, noVisit)
 	if !errors.Is(err, domain.ErrUnavailable) {
 		t.Errorf("Walk error = %v, want ErrUnavailable", err)
 	}

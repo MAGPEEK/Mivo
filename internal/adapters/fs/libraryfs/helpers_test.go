@@ -157,7 +157,7 @@ func walkWithSkipped(t *testing.T, fileSystem *libraryfs.FileSystem, root string
 
 	var paths []string
 
-	skipped, err := fileSystem.Walk(t.Context(), root, func(state library.FileState) error {
+	skipped, err := fileSystem.Walk(t.Context(), root, library.KindMovies, func(state library.FileState) error {
 		paths = append(paths, state.RelativePath)
 		return nil
 	})

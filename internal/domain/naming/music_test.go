@@ -112,8 +112,39 @@ func TestPlaceMusic(t *testing.T) {
 			path:   "Hits/05 X.mp3",
 			tags:   media.AudioTags{Artist: "Single Artist", Album: "Hits", Compilation: true, Year: 2020},
 			artist: wantLevel{title: "Various Artists", key: "various artists"},
-			album:  wantLevel{title: "Hits", key: "various artists/hits/2020", year: 2020},
+			album:  wantLevel{title: "Hits", key: "various artists/hits/", year: 2020},
 			track:  wantLevel{title: "X", key: "d1t5 x", number: 5},
+		},
+		{
+			name:   "compilation tracks with other year tags share the album key",
+			path:   "Hits/06 Y.mp3",
+			tags:   media.AudioTags{Artist: "Other Artist", AlbumArtist: "VA", Album: "Hits", Year: 1984},
+			artist: wantLevel{title: "Various Artists", key: "various artists"},
+			album:  wantLevel{title: "Hits", key: "various artists/hits/", year: 1984},
+			track:  wantLevel{title: "Y", key: "d1t6 y", number: 6},
+		},
+		{
+			name:   "track artist tag in a various artists folder",
+			path:   "Various/Hits/03 W.mp3",
+			tags:   media.AudioTags{Artist: "Solo Singer", Album: "Hits", Title: "W"},
+			artist: wantLevel{title: "Various Artists", key: "various artists"},
+			album:  wantLevel{title: "Hits", key: "various artists/hits/"},
+			track:  wantLevel{title: "W", key: "d1t3 w", number: 3},
+		},
+		{
+			name:   "album artist tag wins over a various artists folder",
+			path:   "VA/Hits/04 V.mp3",
+			tags:   media.AudioTags{Artist: "Solo Singer", AlbumArtist: "Solo Singer", Album: "Hits", Title: "V"},
+			artist: wantLevel{title: "Solo Singer", key: "solo singer"},
+			album:  wantLevel{title: "Hits", key: "solo singer/hits/"},
+			track:  wantLevel{title: "V", key: "d1t4 v", number: 4},
+		},
+		{
+			name:   "various artists folder",
+			path:   "V.A./Summer Hits (2003)/02 Z.flac",
+			artist: wantLevel{title: "Various Artists", key: "various artists"},
+			album:  wantLevel{title: "Summer Hits", key: "various artists/summer hits/", year: 2003},
+			track:  wantLevel{title: "Z", key: "d1t2 z", number: 2},
 		},
 		{
 			name:   "punctuation-only artist",
@@ -168,6 +199,87 @@ func TestPlaceMusicRejectsInvalidPaths(t *testing.T) {
 	for _, bad := range []string{"", "/abs/a.flac", "../a.flac", "a/../../b.flac"} {
 		if _, err := naming.PlaceMusic(bad, media.AudioTags{}); !errors.Is(err, domain.ErrInvalid) {
 			t.Errorf("PlaceMusic(%q) err = %v, want ErrInvalid", bad, err)
+		}
+	}
+}
+
+// Untagged files without artist and album folders all land in one "Unknown Artist" /
+// "Unknown Album" album, wherever they lie: the folder fallback has nothing else to go by.
+func TestPlaceMusicUnknownFallbackMergesUntaggedFiles(t *testing.T) {
+	t.Parallel()
+
+	var albumKeys []string
+
+	for _, filePath := range []string{"One.flac", "Two.mp3"} {
+		placement, err := naming.PlaceMusic(filePath, media.AudioTags{})
+		if err != nil {
+			t.Fatalf("PlaceMusic(%s): %v", filePath, err)
+		}
+
+		albumKeys = append(albumKeys, placement.Levels[1].MatchKey)
+	}
+
+	if albumKeys[0] != albumKeys[1] || albumKeys[0] != "unknown artist/unknown album/" {
+		t.Errorf("album keys = %q, want one Unknown Album", albumKeys)
+	}
+}
+
+func TestPlaceMusicTrackReportsTheDisc(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		tags media.AudioTags
+		want int
+	}{
+		{name: "no disc", path: "A/B/01 S.flac", want: 1},
+		{name: "disc folder", path: "A/B/CD 2/01 S.flac", want: 2},
+		{name: "disc in the file name", path: "A/B/3-01 S.flac", want: 3},
+		{name: "disc tag wins", path: "A/B/CD 2/01 S.flac", tags: media.AudioTags{Disc: 4}, want: 4},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			track, err := naming.PlaceMusicTrack(test.path, test.tags)
+			if err != nil {
+				t.Fatalf("PlaceMusicTrack: %v", err)
+			}
+
+			if track.Disc != test.want {
+				t.Errorf("disc = %d, want %d", track.Disc, test.want)
+			}
+
+			if err := track.Placement.Validate(); err != nil {
+				t.Errorf("placement: %v", err)
+			}
+		})
+	}
+
+	if _, err := naming.PlaceMusicTrack("../x.flac", media.AudioTags{}); !errors.Is(err, domain.ErrInvalid) {
+		t.Errorf("invalid path err = %v, want ErrInvalid", err)
+	}
+}
+
+func TestMusicFoldersOf(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct{ path, album, artist string }{
+		{path: "Artist/Album/01 S.flac", album: "Artist/Album", artist: "Artist"},
+		{path: "Artist/Album/CD 2/01 S.flac", album: "Artist/Album", artist: "Artist"},
+		{path: "Rock/Queen/Jazz/01 S.flac", album: "Rock/Queen/Jazz", artist: "Rock/Queen"},
+		{path: "Album/01 S.flac", album: "Album", artist: ""},
+		{path: "Album/Disc 1/01 S.flac", album: "Album", artist: ""},
+		{path: "01 S.flac", album: "", artist: ""},
+		{path: "CD1/01 S.flac", album: "", artist: ""},
+	}
+
+	for _, test := range tests {
+		folders := naming.MusicFoldersOf(test.path)
+		if folders.Album != test.album || folders.Artist != test.artist {
+			t.Errorf("MusicFoldersOf(%q) = %+v, want album %q artist %q", test.path, folders, test.album, test.artist)
 		}
 	}
 }
