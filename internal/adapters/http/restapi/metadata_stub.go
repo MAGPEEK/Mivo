@@ -7,11 +7,13 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 )
 
-// CodeNotImplemented is the problem code of operations whose contract exists but whose
-// handler is not built yet (M6-13). It is not a published code: the stubs vanish with that task.
+// CodeNotImplemented is the problem code of operations or parameter values whose contract
+// exists but whose handler is not built yet (online metadata until M6-13, Browse sorting,
+// filters, facets, letters and folders until M5-11). It is published since API 1.5.0 so
+// clients can show "not available on this server" instead of a generic error.
 const CodeNotImplemented = "not_implemented"
 
-// notImplementedProblem is the 501 answer of the online metadata stubs.
+// notImplementedProblem is the 501 answer of the contract stubs.
 func notImplementedProblem() apigen.Problem {
 	return NewProblem(http.StatusNotImplemented, CodeNotImplemented)
 }

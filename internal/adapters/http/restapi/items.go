@@ -27,12 +27,24 @@ const (
 // operationListItemChildren is the operation name of the children endpoint, for logs.
 const operationListItemChildren = "listItemChildren"
 
-// ListLibraryItems answers one page of a library's items. A limit or cursor outside the
-// contract answers 400 "invalid", an unknown library 404; every other failure is a 500.
+// ListLibraryItems answers one page of a library's items. A limit, cursor, sort or filter
+// outside the contract answers 400 "invalid", an unknown library 404; a valid sort or filter
+// other than the defaults answers 501 until M5-11. Every other failure is a 500.
 func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibraryItemsRequestObject) (apigen.ListLibraryItemsResponseObject, error) {
 	page, err := pageRequest(request.Params.Limit, request.Params.Cursor)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationListLibraryItems, err)
+	}
+
+	options := listingOptionsOf(request.Params)
+
+	err = options.validate()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", operationListLibraryItems, err)
+	}
+
+	if options.customized() {
+		return notImplementedListing(), nil
 	}
 
 	items, err := api.items.ListItems(ctx, request.LibraryID.String(), page)

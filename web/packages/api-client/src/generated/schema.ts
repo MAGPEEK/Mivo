@@ -189,9 +189,87 @@ export interface paths {
         };
         /**
          * Page through the items of a library
-         * @description Returns one page of the library's top-level items (movies and shows) ordered by sort title. Seasons and episodes are reached through listItemChildren; extras are never listed on their own, they belong to their parent's ItemDetail. Follow nextCursor until it is absent. A limit outside 1–500 or a cursor this server did not issue answers 400 with the problem code "invalid"; an unknown library answers 404 "not_found".
+         * @description Returns one page of the library's top-level items (movies and shows) in the order of sort and order (default: sort title ascending). Seasons and episodes are reached through listItemChildren; extras are never listed on their own, they belong to their parent's ItemDetail. The filters narrow the list: the values of one field filter combine with OR, different filters (and quick) combine with AND. Follow nextCursor until it is absent and repeat the same sort, order, seed and filters on every page; cursors stay opaque. totalCount counts the matching items across all pages. A limit outside 1–500, a cursor this server did not issue, or an unknown or malformed sort, order, type, quick or filter value answers 400 with the problem code "invalid" and field naming the parameter; an unknown library answers 404 "not_found". A server that cannot sort or filter yet answers 501 with the problem code "not_implemented" for any value other than the defaults.
          */
         get: operations["listLibraryItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Count the filter values of a library's items
+         * @description Returns, per filter field, the values that occur among the library's top-level items (movies and shows; extras are never counted) with the number of items per value, for the filter menu. The count of a value applies the current filter with that field's own filter left out, so choosing a further value of the same field shows how far the list widens. An unknown field or a malformed filter value answers 400 "invalid" with field naming the parameter; an unknown library answers 404 "not_found". A server that cannot count yet answers 501 "not_implemented".
+         */
+        get: operations["listLibraryFacets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/letters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Find where each first letter starts in the title-sorted list
+         * @description Returns, for the library's top-level items (movies and shows; extras are never listed) sorted by title in order and narrowed by the filters, the position of the first item of each first letter, so an A–Z bar can scroll a virtual grid. The filters mean the same as on listLibraryItems. An unknown order or a malformed filter value answers 400 "invalid" with field naming the parameter; an unknown library answers 404 "not_found". A server that cannot index yet answers 501 "not_implemented".
+         */
+        get: operations["listLibraryLetters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/libraries/{libraryId}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Browse a library by its folders
+         * @description Returns one page of the children of a folder of the library: sub-folders first, then the catalog items found there, each group ordered by name. Paths are relative to the library and never absolute: the empty path lists the library's folders, whose path is their LibraryFolder.id; deeper paths append folder names separated by "/". A library with one folder therefore lists a single entry at the top; clients may open it right away. A path with a "." or ".." segment, an empty segment, a backslash or a leading "/" answers 400 "invalid" with field "path"; a limit outside 1–500 or a cursor this server did not issue answers 400 "invalid"; an unknown library or a missing folder answers 404 "not_found". A server that cannot browse folders yet answers 501 "not_implemented".
+         */
+        get: operations["listLibraryFolders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1351,6 +1429,146 @@ export interface components {
              * @example eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
              */
             nextCursor?: string;
+            /**
+             * Format: int64
+             * @description Number of items a library listing matches across all pages, for the result count and the height of a virtual grid. Omitted by listItemChildren and by a server that cannot count the listing yet.
+             * @example 42
+             */
+            totalCount?: number;
+        };
+        /**
+         * @description Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+         * @default title
+         * @example dateAdded
+         * @enum {string}
+         */
+        ItemSort: "title" | "year" | "releaseDate" | "contentRating" | "duration" | "dateAdded" | "resolution" | "bitrate" | "fileSize" | "random";
+        /**
+         * @description Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
+         * @default all
+         * @example hdr
+         * @enum {string}
+         */
+        ItemQuickFilter: "all" | "hdr" | "dolbyVision" | "hdr10plus" | "atmos" | "uhd" | "unavailable" | "duplicates";
+        /**
+         * @description Resolution class of a video, decided by width or height so cropped and portrait video land in the expected class: "8k" (width ≥ 7000 or height ≥ 4000), "4k" (≥ 3200 or ≥ 1800), "1080p" (≥ 1600 or ≥ 900), "720p" (≥ 1100 or ≥ 650), else "sd". Clients must tolerate values added in later versions.
+         * @example 1080p
+         * @enum {string}
+         */
+        VideoResolution: "sd" | "720p" | "1080p" | "4k" | "8k";
+        /**
+         * @description A filter field that facet counts are given for; each value names the listLibraryItems parameter of the same name. Clients must tolerate values added in later versions.
+         * @example genre
+         * @enum {string}
+         */
+        FacetField: "genre" | "year" | "decade" | "contentRating" | "resolution" | "videoCodec" | "audioCodec" | "container" | "audioLanguage" | "subtitleLanguage";
+        /** @description One value of a filter field with the number of items that carry it. */
+        FacetValue: {
+            /**
+             * @description The value as it is sent back in the filter parameter, for example "Drama", "2008", "1990" (a decade) or "1080p".
+             * @example Drama
+             */
+            value: string;
+            /**
+             * Format: int64
+             * @description Number of top-level items with this value under the current filter.
+             * @example 12
+             */
+            count: number;
+        };
+        /** @description The values of one filter field. */
+        Facet: {
+            field: components["schemas"]["FacetField"];
+            /** @description Values ordered by value (numbers numerically, text case-insensitively); values with a count of 0 are left out. Capped at 500 entries. */
+            values: components["schemas"]["FacetValue"][];
+            /**
+             * @description Whether more than 500 values exist and the list is cut.
+             * @example false
+             */
+            truncated: boolean;
+        };
+        /** @description Facet counts of a library listing, one entry per requested field. */
+        FacetList: {
+            /** @description The requested fields in the order of FacetField. */
+            facets: components["schemas"]["Facet"][];
+        };
+        /** @description Where the items of one first letter start in the title-sorted list. */
+        LetterOffset: {
+            /**
+             * @description "A" to "Z" for sort titles that start with that letter, accents folded ("Ä" is "A"), or "#" for every other first character (digits, symbols, other scripts).
+             * @example B
+             */
+            letter: string;
+            /**
+             * Format: int64
+             * @description Zero-based position of the letter's first item in the sorted, filtered list.
+             * @example 17
+             */
+            offset: number;
+        };
+        /** @description The start positions of the first letters that occur in the list. */
+        LetterIndex: {
+            /** @description Letters in list order ("#" first when ascending); letters without items are left out. */
+            letters: components["schemas"]["LetterOffset"][];
+            /**
+             * Format: int64
+             * @description Number of items in the sorted, filtered list.
+             * @example 42
+             */
+            totalCount: number;
+        };
+        /**
+         * @description What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
+         * @example folder
+         * @enum {string}
+         */
+        LibraryFolderEntryKind: "folder" | "item";
+        /** @description One child of a library folder. */
+        LibraryFolderEntry: {
+            kind: components["schemas"]["LibraryFolderEntryKind"];
+            /**
+             * @description Name of the folder, or file or folder name of the item; at the top the last segment of the library folder.
+             * @example Animation
+             */
+            name: string;
+            /**
+             * @description Path relative to the library, separated by "/"; pass a folder's path to listLibraryFolders. Never an absolute server path.
+             * @example 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d/Animation
+             */
+            path: string;
+            item?: components["schemas"]["ItemSummary"];
+        };
+        /** @description One page of the children of a library folder. */
+        LibraryFolderListing: {
+            /**
+             * Format: uuid
+             * @description ID of the library.
+             * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+             */
+            libraryId: string;
+            /**
+             * @description The listed folder relative to the library; empty for the top.
+             * @example 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d/Animation
+             */
+            path: string;
+            /**
+             * @description The parent folder relative to the library; null at the top.
+             * @example 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+             */
+            parentPath?: string | null;
+            /** @description Sub-folders first, then items, each group ordered by name. An entry of kind "item" carries item; folders carry none. */
+            entries: components["schemas"]["LibraryFolderEntry"][];
+            /**
+             * @description Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
+             * @example eyJuIjoiQW5pbWF0aW9uIn0
+             */
+            nextCursor?: string;
+            /**
+             * Format: int64
+             * @description Number of entries of the folder across all pages.
+             * @example 3
+             */
+            totalCount?: number;
         };
         /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster. */
         ItemDetail: {
@@ -1948,7 +2166,7 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). New codes may be added; clients show a generic message for unknown codes.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
@@ -2027,6 +2245,30 @@ export interface components {
          * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
          */
         ImageId: string;
+        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+        ItemTypeFilter: components["schemas"]["ItemKind"];
+        /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
+        QuickFilter: components["schemas"]["ItemQuickFilter"];
+        /** @description Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values. */
+        GenreFilter: string[];
+        /** @description Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values. */
+        YearFilter: number[];
+        /** @description Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values. */
+        DecadeFilter: number[];
+        /** @description Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values. */
+        ContentRatingFilter: string[];
+        /** @description Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values. */
+        ResolutionFilter: components["schemas"]["VideoResolution"][];
+        /** @description Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values. */
+        VideoCodecFilter: string[];
+        /** @description Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values. */
+        AudioCodecFilter: string[];
+        /** @description Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values. */
+        ContainerFilter: string[];
+        /** @description Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+        AudioLanguageFilter: string[];
+        /** @description Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+        SubtitleLanguageFilter: string[];
         /** @description Byte range (RFC 9110), for example "bytes=0-1023". */
         Range: string;
     };
@@ -2321,6 +2563,36 @@ export interface operations {
                 cursor?: string;
                 /** @description Only items in this match state, for example "unmatched" for the "not matched" filter (ADR 0031). Omitted lists every item. */
                 matchState?: components["schemas"]["MatchState"];
+                /** @description Sort key; omitted sorts by title. Ties follow by sort title, then by ID, so the order is total and paging is stable. Items without a value for the key (no year, no rating) come last in both directions. */
+                sort?: components["schemas"]["ItemSort"];
+                /** @description Sort direction; omitted means ascending. Ignored for sort "random". */
+                order?: components["schemas"]["SortOrder"];
+                /** @description Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort. */
+                seed?: number;
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                type?: components["parameters"]["ItemTypeFilter"];
+                /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
+                quick?: components["parameters"]["QuickFilter"];
+                /** @description Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values. */
+                genre?: components["parameters"]["GenreFilter"];
+                /** @description Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values. */
+                year?: components["parameters"]["YearFilter"];
+                /** @description Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values. */
+                decade?: components["parameters"]["DecadeFilter"];
+                /** @description Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values. */
+                contentRating?: components["parameters"]["ContentRatingFilter"];
+                /** @description Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values. */
+                resolution?: components["parameters"]["ResolutionFilter"];
+                /** @description Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values. */
+                videoCodec?: components["parameters"]["VideoCodecFilter"];
+                /** @description Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values. */
+                audioCodec?: components["parameters"]["AudioCodecFilter"];
+                /** @description Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values. */
+                container?: components["parameters"]["ContainerFilter"];
+                /** @description Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                audioLanguage?: components["parameters"]["AudioLanguageFilter"];
+                /** @description Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                subtitleLanguage?: components["parameters"]["SubtitleLanguageFilter"];
             };
             header?: never;
             path: {
@@ -2341,6 +2613,148 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemPage"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLibraryFacets: {
+        parameters: {
+            query?: {
+                /** @description Fields to count; omitted counts every field. */
+                field?: components["schemas"]["FacetField"][];
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                type?: components["parameters"]["ItemTypeFilter"];
+                /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
+                quick?: components["parameters"]["QuickFilter"];
+                /** @description Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values. */
+                genre?: components["parameters"]["GenreFilter"];
+                /** @description Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values. */
+                year?: components["parameters"]["YearFilter"];
+                /** @description Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values. */
+                decade?: components["parameters"]["DecadeFilter"];
+                /** @description Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values. */
+                contentRating?: components["parameters"]["ContentRatingFilter"];
+                /** @description Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values. */
+                resolution?: components["parameters"]["ResolutionFilter"];
+                /** @description Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values. */
+                videoCodec?: components["parameters"]["VideoCodecFilter"];
+                /** @description Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values. */
+                audioCodec?: components["parameters"]["AudioCodecFilter"];
+                /** @description Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values. */
+                container?: components["parameters"]["ContainerFilter"];
+                /** @description Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                audioLanguage?: components["parameters"]["AudioLanguageFilter"];
+                /** @description Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                subtitleLanguage?: components["parameters"]["SubtitleLanguageFilter"];
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The values with their counts per field. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FacetList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLibraryLetters: {
+        parameters: {
+            query?: {
+                /** @description Direction of the title sort; omitted means ascending. */
+                order?: components["schemas"]["SortOrder"];
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                type?: components["parameters"]["ItemTypeFilter"];
+                /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
+                quick?: components["parameters"]["QuickFilter"];
+                /** @description Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values. */
+                genre?: components["parameters"]["GenreFilter"];
+                /** @description Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values. */
+                year?: components["parameters"]["YearFilter"];
+                /** @description Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values. */
+                decade?: components["parameters"]["DecadeFilter"];
+                /** @description Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values. */
+                contentRating?: components["parameters"]["ContentRatingFilter"];
+                /** @description Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values. */
+                resolution?: components["parameters"]["ResolutionFilter"];
+                /** @description Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values. */
+                videoCodec?: components["parameters"]["VideoCodecFilter"];
+                /** @description Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values. */
+                audioCodec?: components["parameters"]["AudioCodecFilter"];
+                /** @description Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values. */
+                container?: components["parameters"]["ContainerFilter"];
+                /** @description Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                audioLanguage?: components["parameters"]["AudioLanguageFilter"];
+                /** @description Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values. */
+                subtitleLanguage?: components["parameters"]["SubtitleLanguageFilter"];
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The letters with their start positions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterIndex"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listLibraryFolders: {
+        parameters: {
+            query?: {
+                /** @description Folder to list, relative to the library and separated by "/", up to 4096 characters: a LibraryFolder.id followed by folder names. Empty or omitted lists the library's folders. */
+                path?: string;
+                /** @description Maximum number of entries in the page. */
+                limit?: number;
+                /** @description Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the library.
+                 * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+                 */
+                libraryId: components["parameters"]["LibraryId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the folder's children. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryFolderListing"];
                 };
             };
             default: components["responses"]["Problem"];

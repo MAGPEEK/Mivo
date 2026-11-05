@@ -224,6 +224,9 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: library, operationID: "getLibrary", tag: "libraries", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "Library"},
 		{method: http.MethodPost, path: library + "/scan", operationID: "startLibraryScan", tag: "libraries", statuses: []int{http.StatusAccepted}, mediaType: jsonMediaType, schema: "ScanStatus"},
 		{method: http.MethodGet, path: library + "/items", operationID: "listLibraryItems", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
+		{method: http.MethodGet, path: library + "/facets", operationID: "listLibraryFacets", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "FacetList"},
+		{method: http.MethodGet, path: library + "/letters", operationID: "listLibraryLetters", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LetterIndex"},
+		{method: http.MethodGet, path: library + "/folders", operationID: "listLibraryFolders", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LibraryFolderListing"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}", operationID: "getItem", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}/children", operationID: "listItemChildren", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
 		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes", unauthenticated: true},
@@ -437,6 +440,7 @@ func TestPublishedProblemCodesAreDocumented(t *testing.T) {
 		"name_invalid": http.StatusBadRequest, "language_invalid": http.StatusBadRequest,
 		"too_many_folders": http.StatusBadRequest,
 		"online_disabled":  http.StatusConflict, "provider_unavailable": http.StatusServiceUnavailable,
+		"not_implemented": http.StatusNotImplemented,
 	}
 
 	for code, status := range codes {
@@ -610,7 +614,7 @@ func TestHLSFileNamePattern(t *testing.T) {
 func TestPagingParameters(t *testing.T) {
 	spec := loadSpec(t)
 
-	for _, path := range []string{"/api/v1/libraries/{libraryId}/items", "/api/v1/items/{itemId}/children"} {
+	for _, path := range []string{"/api/v1/libraries/{libraryId}/items", "/api/v1/items/{itemId}/children", "/api/v1/libraries/{libraryId}/folders"} {
 		t.Run(path, func(t *testing.T) {
 			assertPagingParameters(t, getOperation(t, spec, http.MethodGet, path))
 		})
@@ -822,9 +826,13 @@ func TestMediaFileExposesNoPath(t *testing.T) {
 }
 
 // folderBrowserSchemas are the schemas that carry root-relative folder paths of the library
-// management API (ADR 0028); they never hold an absolute media file path.
+// management API (ADR 0028) or library-relative paths of folder browsing (task M5-10); they
+// never hold an absolute media file path.
 func folderBrowserSchemas() []string {
-	return []string{"LibraryFolder", "FolderRef", "FolderRoot", "FolderEntry", "FolderListing"}
+	return []string{
+		"LibraryFolder", "FolderRef", "FolderRoot", "FolderEntry", "FolderListing",
+		"LibraryFolderEntry", "LibraryFolderListing",
+	}
 }
 
 // TestLibraryManagementContract pins the schemas of task M3-19a (ADR 0028).

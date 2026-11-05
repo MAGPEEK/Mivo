@@ -55,6 +55,48 @@ func (e ExtraType) Valid() bool {
 	}
 }
 
+// Defines values for FacetField.
+const (
+	FacetFieldAudioCodec       FacetField = "audioCodec"
+	FacetFieldAudioLanguage    FacetField = "audioLanguage"
+	FacetFieldContainer        FacetField = "container"
+	FacetFieldContentRating    FacetField = "contentRating"
+	FacetFieldDecade           FacetField = "decade"
+	FacetFieldGenre            FacetField = "genre"
+	FacetFieldResolution       FacetField = "resolution"
+	FacetFieldSubtitleLanguage FacetField = "subtitleLanguage"
+	FacetFieldVideoCodec       FacetField = "videoCodec"
+	FacetFieldYear             FacetField = "year"
+)
+
+// Valid indicates whether the value is a known member of the FacetField enum.
+func (e FacetField) Valid() bool {
+	switch e {
+	case FacetFieldAudioCodec:
+		return true
+	case FacetFieldAudioLanguage:
+		return true
+	case FacetFieldContainer:
+		return true
+	case FacetFieldContentRating:
+		return true
+	case FacetFieldDecade:
+		return true
+	case FacetFieldGenre:
+		return true
+	case FacetFieldResolution:
+		return true
+	case FacetFieldSubtitleLanguage:
+		return true
+	case FacetFieldVideoCodec:
+		return true
+	case FacetFieldYear:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FolderReason.
 const (
 	FolderReasonInUse    FolderReason = "in_use"
@@ -172,6 +214,102 @@ func (e ItemKind) Valid() bool {
 	case ItemKindSeason:
 		return true
 	case ItemKindShow:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemQuickFilter.
+const (
+	ItemQuickFilterAll         ItemQuickFilter = "all"
+	ItemQuickFilterAtmos       ItemQuickFilter = "atmos"
+	ItemQuickFilterDolbyVision ItemQuickFilter = "dolbyVision"
+	ItemQuickFilterDuplicates  ItemQuickFilter = "duplicates"
+	ItemQuickFilterHdr         ItemQuickFilter = "hdr"
+	ItemQuickFilterHdr10Plus   ItemQuickFilter = "hdr10plus"
+	ItemQuickFilterUhd         ItemQuickFilter = "uhd"
+	ItemQuickFilterUnavailable ItemQuickFilter = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the ItemQuickFilter enum.
+func (e ItemQuickFilter) Valid() bool {
+	switch e {
+	case ItemQuickFilterAll:
+		return true
+	case ItemQuickFilterAtmos:
+		return true
+	case ItemQuickFilterDolbyVision:
+		return true
+	case ItemQuickFilterDuplicates:
+		return true
+	case ItemQuickFilterHdr:
+		return true
+	case ItemQuickFilterHdr10Plus:
+		return true
+	case ItemQuickFilterUhd:
+		return true
+	case ItemQuickFilterUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemSort.
+const (
+	ItemSortBitrate       ItemSort = "bitrate"
+	ItemSortContentRating ItemSort = "contentRating"
+	ItemSortDateAdded     ItemSort = "dateAdded"
+	ItemSortDuration      ItemSort = "duration"
+	ItemSortFileSize      ItemSort = "fileSize"
+	ItemSortRandom        ItemSort = "random"
+	ItemSortReleaseDate   ItemSort = "releaseDate"
+	ItemSortResolution    ItemSort = "resolution"
+	ItemSortTitle         ItemSort = "title"
+	ItemSortYear          ItemSort = "year"
+)
+
+// Valid indicates whether the value is a known member of the ItemSort enum.
+func (e ItemSort) Valid() bool {
+	switch e {
+	case ItemSortBitrate:
+		return true
+	case ItemSortContentRating:
+		return true
+	case ItemSortDateAdded:
+		return true
+	case ItemSortDuration:
+		return true
+	case ItemSortFileSize:
+		return true
+	case ItemSortRandom:
+		return true
+	case ItemSortReleaseDate:
+		return true
+	case ItemSortResolution:
+		return true
+	case ItemSortTitle:
+		return true
+	case ItemSortYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LibraryFolderEntryKind.
+const (
+	LibraryFolderEntryKindFolder LibraryFolderEntryKind = "folder"
+	LibraryFolderEntryKindItem   LibraryFolderEntryKind = "item"
+)
+
+// Valid indicates whether the value is a known member of the LibraryFolderEntryKind enum.
+func (e LibraryFolderEntryKind) Valid() bool {
+	switch e {
+	case LibraryFolderEntryKindFolder:
+		return true
+	case LibraryFolderEntryKindItem:
 		return true
 	default:
 		return false
@@ -478,6 +616,33 @@ func (e StreamAction) Valid() bool {
 	}
 }
 
+// Defines values for VideoResolution.
+const (
+	VideoResolutionN1080P VideoResolution = "1080p"
+	VideoResolutionN4K    VideoResolution = "4k"
+	VideoResolutionN720P  VideoResolution = "720p"
+	VideoResolutionN8K    VideoResolution = "8k"
+	VideoResolutionSd     VideoResolution = "sd"
+)
+
+// Valid indicates whether the value is a known member of the VideoResolution enum.
+func (e VideoResolution) Valid() bool {
+	switch e {
+	case VideoResolutionN1080P:
+		return true
+	case VideoResolutionN4K:
+		return true
+	case VideoResolutionN720P:
+		return true
+	case VideoResolutionN8K:
+		return true
+	case VideoResolutionSd:
+		return true
+	default:
+		return false
+	}
+}
+
 // Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
 type Artwork struct {
 	// Backdrop Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
@@ -553,6 +718,46 @@ type DirectPlayProfile struct {
 //
 // Example: trailer
 type ExtraType string
+
+// Facet The values of one filter field.
+type Facet struct {
+	// Field A filter field that facet counts are given for; each value names the listLibraryItems parameter of the same name. Clients must tolerate values added in later versions.
+	//
+	// Example: genre
+	Field FacetField `json:"field"`
+
+	// Truncated Whether more than 500 values exist and the list is cut.
+	//
+	// Example: false
+	Truncated bool `json:"truncated"`
+
+	// Values Values ordered by value (numbers numerically, text case-insensitively); values with a count of 0 are left out. Capped at 500 entries.
+	Values []FacetValue `json:"values"`
+}
+
+// FacetField A filter field that facet counts are given for; each value names the listLibraryItems parameter of the same name. Clients must tolerate values added in later versions.
+//
+// Example: genre
+type FacetField string
+
+// FacetList Facet counts of a library listing, one entry per requested field.
+type FacetList struct {
+	// Facets The requested fields in the order of FacetField.
+	Facets []Facet `json:"facets"`
+}
+
+// FacetValue One value of a filter field with the number of items that carry it.
+type FacetValue struct {
+	// Count Number of top-level items with this value under the current filter.
+	//
+	// Example: 12
+	Count int64 `json:"count"`
+
+	// Value The value as it is sent back in the filter parameter, for example "Drama", "2008", "1990" (a decade) or "1080p".
+	//
+	// Example: Drama
+	Value string `json:"value"`
+}
 
 // FolderEntry One sub-folder in a folder listing.
 type FolderEntry struct {
@@ -980,6 +1185,11 @@ type ItemPage struct {
 	//
 	// Example: eyJ0IjoiYmlnIGJ1Y2sgYnVubnkifQ
 	NextCursor *string `json:"nextCursor,omitempty"`
+
+	// TotalCount Number of items a library listing matches across all pages, for the result count and the height of a virtual grid. Omitted by listItemChildren and by a server that cannot count the listing yet.
+	//
+	// Example: 42
+	TotalCount *int64 `json:"totalCount,omitempty"`
 }
 
 // ItemPerson A person credited on an item.
@@ -999,6 +1209,16 @@ type ItemPerson struct {
 	// Example: actor
 	Role PersonRole `json:"role"`
 }
+
+// ItemQuickFilter Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
+//
+// Example: hdr
+type ItemQuickFilter string
+
+// ItemSort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+//
+// Example: dateAdded
+type ItemSort string
 
 // ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season).
 type ItemSummary struct {
@@ -1080,6 +1300,30 @@ type ItemSummary struct {
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
+}
+
+// LetterIndex The start positions of the first letters that occur in the list.
+type LetterIndex struct {
+	// Letters Letters in list order ("#" first when ascending); letters without items are left out.
+	Letters []LetterOffset `json:"letters"`
+
+	// TotalCount Number of items in the sorted, filtered list.
+	//
+	// Example: 42
+	TotalCount int64 `json:"totalCount"`
+}
+
+// LetterOffset Where the items of one first letter start in the title-sorted list.
+type LetterOffset struct {
+	// Letter "A" to "Z" for sort titles that start with that letter, accents folded ("Ä" is "A"), or "#" for every other first character (digits, symbols, other scripts).
+	//
+	// Example: B
+	Letter string `json:"letter"`
+
+	// Offset Zero-based position of the letter's first item in the sorted, filtered list.
+	//
+	// Example: 17
+	Offset int64 `json:"offset"`
 }
 
 // Library A set of server folders with media files of one kind.
@@ -1169,6 +1413,63 @@ type LibraryFolder struct {
 	//
 	// Example: /media/movies
 	Path string `json:"path"`
+}
+
+// LibraryFolderEntry One child of a library folder.
+type LibraryFolderEntry struct {
+	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season).
+	Item *ItemSummary `json:"item,omitempty"`
+
+	// Kind What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
+	//
+	// Example: folder
+	Kind LibraryFolderEntryKind `json:"kind"`
+
+	// Name Name of the folder, or file or folder name of the item; at the top the last segment of the library folder.
+	//
+	// Example: Animation
+	Name string `json:"name"`
+
+	// Path Path relative to the library, separated by "/"; pass a folder's path to listLibraryFolders. Never an absolute server path.
+	//
+	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d/Animation
+	Path string `json:"path"`
+}
+
+// LibraryFolderEntryKind What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
+//
+// Example: folder
+type LibraryFolderEntryKind string
+
+// LibraryFolderListing One page of the children of a library folder.
+type LibraryFolderListing struct {
+	// Entries Sub-folders first, then items, each group ordered by name. An entry of kind "item" carries item; folders carry none.
+	Entries []LibraryFolderEntry `json:"entries"`
+
+	// LibraryID ID of the library.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// NextCursor Opaque cursor for the next page; omitted on the last page. Pass it unchanged as the cursor query parameter.
+	//
+	// Example: eyJuIjoiQW5pbWF0aW9uIn0
+	NextCursor *string `json:"nextCursor,omitempty"`
+
+	// ParentPath The parent folder relative to the library; null at the top.
+	//
+	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d
+	ParentPath *string `json:"parentPath,omitempty"`
+
+	// Path The listed folder relative to the library; empty for the top.
+	//
+	// Example: 6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d/Animation
+	Path string `json:"path"`
+
+	// TotalCount Number of entries of the folder across all pages.
+	//
+	// Example: 3
+	TotalCount *int64 `json:"totalCount,omitempty"`
 }
 
 // LibraryKind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
@@ -1684,7 +1985,7 @@ type PlaybackSessionState string
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). New codes may be added; clients show a generic message for unknown codes.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -1905,20 +2206,65 @@ type SystemInfo struct {
 	Version string `json:"version"`
 }
 
+// VideoResolution Resolution class of a video, decided by width or height so cropped and portrait video land in the expected class: "8k" (width ≥ 7000 or height ≥ 4000), "4k" (≥ 3200 or ≥ 1800), "1080p" (≥ 1600 or ≥ 900), "720p" (≥ 1100 or ≥ 650), else "sd". Clients must tolerate values added in later versions.
+//
+// Example: 1080p
+type VideoResolution string
+
+// AudioCodecFilter defines model for AudioCodecFilter.
+type AudioCodecFilter = []string
+
+// AudioLanguageFilter defines model for AudioLanguageFilter.
+type AudioLanguageFilter = []string
+
+// ContainerFilter defines model for ContainerFilter.
+type ContainerFilter = []string
+
+// ContentRatingFilter defines model for ContentRatingFilter.
+type ContentRatingFilter = []string
+
+// DecadeFilter defines model for DecadeFilter.
+type DecadeFilter = []int32
+
+// GenreFilter defines model for GenreFilter.
+type GenreFilter = []string
+
 // ImageID defines model for ImageId.
 type ImageID = uuid.UUID
 
 // ItemID defines model for ItemId.
 type ItemID = uuid.UUID
 
+// ItemTypeFilter Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+//
+// Example: movie
+type ItemTypeFilter = ItemKind
+
 // LibraryID defines model for LibraryId.
 type LibraryID = uuid.UUID
+
+// QuickFilter Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
+//
+// Example: hdr
+type QuickFilter = ItemQuickFilter
+
+// ResolutionFilter defines model for ResolutionFilter.
+type ResolutionFilter = []VideoResolution
 
 // RootID defines model for RootId.
 type RootID = uuid.UUID
 
 // SessionID defines model for SessionId.
 type SessionID = uuid.UUID
+
+// SubtitleLanguageFilter defines model for SubtitleLanguageFilter.
+type SubtitleLanguageFilter = []string
+
+// VideoCodecFilter defines model for VideoCodecFilter.
+type VideoCodecFilter = []string
+
+// YearFilter defines model for YearFilter.
+type YearFilter = []int32
 
 // OnlineDisabled Problem details (RFC 9457) with a machine-readable code that clients translate.
 type OnlineDisabled = Problem
@@ -1944,6 +2290,60 @@ type ListItemChildrenParams struct {
 	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
 }
 
+// ListLibraryFacetsParams defines parameters for ListLibraryFacets.
+type ListLibraryFacetsParams struct {
+	// Field Fields to count; omitted counts every field.
+	Field *[]FacetField `form:"field,omitempty" json:"field,omitempty"`
+
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
+
+	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
+	Quick *QuickFilter `form:"quick,omitempty" json:"quick,omitempty"`
+
+	// Genre Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values.
+	Genre *GenreFilter `form:"genre,omitempty" json:"genre,omitempty"`
+
+	// Year Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values.
+	Year *YearFilter `form:"year,omitempty" json:"year,omitempty"`
+
+	// Decade Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values.
+	Decade *DecadeFilter `form:"decade,omitempty" json:"decade,omitempty"`
+
+	// ContentRating Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values.
+	ContentRating *ContentRatingFilter `form:"contentRating,omitempty" json:"contentRating,omitempty"`
+
+	// Resolution Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values.
+	Resolution *ResolutionFilter `form:"resolution,omitempty" json:"resolution,omitempty"`
+
+	// VideoCodec Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values.
+	VideoCodec *VideoCodecFilter `form:"videoCodec,omitempty" json:"videoCodec,omitempty"`
+
+	// AudioCodec Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values.
+	AudioCodec *AudioCodecFilter `form:"audioCodec,omitempty" json:"audioCodec,omitempty"`
+
+	// Container Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values.
+	Container *ContainerFilter `form:"container,omitempty" json:"container,omitempty"`
+
+	// AudioLanguage Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	AudioLanguage *AudioLanguageFilter `form:"audioLanguage,omitempty" json:"audioLanguage,omitempty"`
+
+	// SubtitleLanguage Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	SubtitleLanguage *SubtitleLanguageFilter `form:"subtitleLanguage,omitempty" json:"subtitleLanguage,omitempty"`
+}
+
+// ListLibraryFoldersParams defines parameters for ListLibraryFolders.
+type ListLibraryFoldersParams struct {
+	// Path Folder to list, relative to the library and separated by "/", up to 4096 characters: a LibraryFolder.id followed by folder names. Empty or omitted lists the library's folders.
+	Path *string `form:"path,omitempty" json:"path,omitempty"`
+
+	// Limit Maximum number of entries in the page.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque position from nextCursor of the previous page. Omit it for the first page. Clients must not parse or build it.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // ListLibraryItemsParams defines parameters for ListLibraryItems.
 type ListLibraryItemsParams struct {
 	// Limit Maximum number of items in the page.
@@ -1954,6 +2354,93 @@ type ListLibraryItemsParams struct {
 
 	// MatchState Only items in this match state, for example "unmatched" for the "not matched" filter (ADR 0031). Omitted lists every item.
 	MatchState *MatchState `form:"matchState,omitempty" json:"matchState,omitempty"`
+
+	// Sort Sort key; omitted sorts by title. Ties follow by sort title, then by ID, so the order is total and paging is stable. Items without a value for the key (no year, no rating) come last in both directions.
+	Sort *ItemSort `form:"sort,omitempty" json:"sort,omitempty"`
+
+	// Order Sort direction; omitted means ascending. Ignored for sort "random".
+	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Seed Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort.
+	Seed *int32 `form:"seed,omitempty" json:"seed,omitempty"`
+
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
+
+	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
+	Quick *QuickFilter `form:"quick,omitempty" json:"quick,omitempty"`
+
+	// Genre Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values.
+	Genre *GenreFilter `form:"genre,omitempty" json:"genre,omitempty"`
+
+	// Year Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values.
+	Year *YearFilter `form:"year,omitempty" json:"year,omitempty"`
+
+	// Decade Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values.
+	Decade *DecadeFilter `form:"decade,omitempty" json:"decade,omitempty"`
+
+	// ContentRating Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values.
+	ContentRating *ContentRatingFilter `form:"contentRating,omitempty" json:"contentRating,omitempty"`
+
+	// Resolution Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values.
+	Resolution *ResolutionFilter `form:"resolution,omitempty" json:"resolution,omitempty"`
+
+	// VideoCodec Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values.
+	VideoCodec *VideoCodecFilter `form:"videoCodec,omitempty" json:"videoCodec,omitempty"`
+
+	// AudioCodec Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values.
+	AudioCodec *AudioCodecFilter `form:"audioCodec,omitempty" json:"audioCodec,omitempty"`
+
+	// Container Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values.
+	Container *ContainerFilter `form:"container,omitempty" json:"container,omitempty"`
+
+	// AudioLanguage Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	AudioLanguage *AudioLanguageFilter `form:"audioLanguage,omitempty" json:"audioLanguage,omitempty"`
+
+	// SubtitleLanguage Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	SubtitleLanguage *SubtitleLanguageFilter `form:"subtitleLanguage,omitempty" json:"subtitleLanguage,omitempty"`
+}
+
+// ListLibraryLettersParams defines parameters for ListLibraryLetters.
+type ListLibraryLettersParams struct {
+	// Order Direction of the title sort; omitted means ascending.
+	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
+
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
+
+	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
+	Quick *QuickFilter `form:"quick,omitempty" json:"quick,omitempty"`
+
+	// Genre Only items with one of these genres (ItemDetail.genres, compared case-insensitively). Repeat the parameter for several values.
+	Genre *GenreFilter `form:"genre,omitempty" json:"genre,omitempty"`
+
+	// Year Only items released (movies) or first aired (shows) in one of these years. Repeat the parameter for several values.
+	Year *YearFilter `form:"year,omitempty" json:"year,omitempty"`
+
+	// Decade Only items whose year lies in one of these decades, each given by its first year (1990 for 1990–1999); a year that is no multiple of 10 answers 400 "invalid". Repeat the parameter for several values.
+	Decade *DecadeFilter `form:"decade,omitempty" json:"decade,omitempty"`
+
+	// ContentRating Only items with one of these content ratings (ItemDetail.contentRating, exact text). Repeat the parameter for several values.
+	ContentRating *ContentRatingFilter `form:"contentRating,omitempty" json:"contentRating,omitempty"`
+
+	// Resolution Only items whose primary video falls into one of these resolution classes. Repeat the parameter for several values.
+	Resolution *ResolutionFilter `form:"resolution,omitempty" json:"resolution,omitempty"`
+
+	// VideoCodec Only items whose primary video stream uses one of these codecs (identifiers of ADR 0023, as in MediaSummary.videoCodec). Repeat the parameter for several values.
+	VideoCodec *VideoCodecFilter `form:"videoCodec,omitempty" json:"videoCodec,omitempty"`
+
+	// AudioCodec Only items with an audio stream in one of these codecs (identifiers of ADR 0023). Repeat the parameter for several values.
+	AudioCodec *AudioCodecFilter `form:"audioCodec,omitempty" json:"audioCodec,omitempty"`
+
+	// Container Only items whose primary file uses one of these containers (as in MediaSummary.container). Repeat the parameter for several values.
+	Container *ContainerFilter `form:"container,omitempty" json:"container,omitempty"`
+
+	// AudioLanguage Only items with an audio stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	AudioLanguage *AudioLanguageFilter `form:"audioLanguage,omitempty" json:"audioLanguage,omitempty"`
+
+	// SubtitleLanguage Only items with a subtitle stream in one of these languages (MediaStream.language, usually ISO 639-2). Repeat the parameter for several values.
+	SubtitleLanguage *SubtitleLanguageFilter `form:"subtitleLanguage,omitempty" json:"subtitleLanguage,omitempty"`
 }
 
 // IdentifyItemJSONRequestBody defines body for IdentifyItem for application/json ContentType.
@@ -2018,9 +2505,18 @@ type ServerInterface interface {
 	// UpdateLibrary Change a library
 	// (PATCH /api/v1/libraries/{libraryId})
 	UpdateLibrary(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// ListLibraryFacets Count the filter values of a library's items
+	// (GET /api/v1/libraries/{libraryId}/facets)
+	ListLibraryFacets(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryFacetsParams)
+	// ListLibraryFolders Browse a library by its folders
+	// (GET /api/v1/libraries/{libraryId}/folders)
+	ListLibraryFolders(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryFoldersParams)
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams)
+	// ListLibraryLetters Find where each first letter starts in the title-sorted list
+	// (GET /api/v1/libraries/{libraryId}/letters)
+	ListLibraryLetters(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryLettersParams)
 	// RefreshLibraryMetadata Queue a metadata refresh of a library
 	// (POST /api/v1/libraries/{libraryId}/refresh)
 	RefreshLibraryMetadata(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
@@ -2433,6 +2929,272 @@ func (siw *ServerInterfaceWrapper) UpdateLibrary(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListLibraryFacets operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryFacets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryFacetsParams
+
+	// ------------- Optional query parameter "field" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "field", r.URL.Query(), &params.Field, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "field"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "field", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "quick" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "quick", r.URL.Query(), &params.Quick, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "quick"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "quick", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "genre" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "genre", r.URL.Query(), &params.Genre, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "genre"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "year" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year", r.URL.Query(), &params.Year, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "decade" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "decade", r.URL.Query(), &params.Decade, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "decade"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decade", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "contentRating" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "contentRating", r.URL.Query(), &params.ContentRating, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "contentRating"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "contentRating", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resolution" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resolution", r.URL.Query(), &params.Resolution, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resolution"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resolution", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "videoCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "videoCodec", r.URL.Query(), &params.VideoCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "videoCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "videoCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioCodec", r.URL.Query(), &params.AudioCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "container" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "container", r.URL.Query(), &params.Container, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "container"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "container", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioLanguage", r.URL.Query(), &params.AudioLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioLanguage", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subtitleLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subtitleLanguage", r.URL.Query(), &params.SubtitleLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subtitleLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subtitleLanguage", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryFacets(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryFolders operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryFolders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryFoldersParams
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryFolders(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListLibraryItems operation middleware
 func (siw *ServerInterfaceWrapper) ListLibraryItems(w http.ResponseWriter, r *http.Request) {
 
@@ -2490,8 +3252,401 @@ func (siw *ServerInterfaceWrapper) ListLibraryItems(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sort", r.URL.Query(), &params.Sort, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sort"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order", r.URL.Query(), &params.Order, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "seed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "seed", r.URL.Query(), &params.Seed, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "seed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "seed", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "quick" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "quick", r.URL.Query(), &params.Quick, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "quick"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "quick", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "genre" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "genre", r.URL.Query(), &params.Genre, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "genre"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "year" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year", r.URL.Query(), &params.Year, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "decade" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "decade", r.URL.Query(), &params.Decade, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "decade"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decade", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "contentRating" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "contentRating", r.URL.Query(), &params.ContentRating, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "contentRating"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "contentRating", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resolution" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resolution", r.URL.Query(), &params.Resolution, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resolution"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resolution", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "videoCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "videoCodec", r.URL.Query(), &params.VideoCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "videoCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "videoCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioCodec", r.URL.Query(), &params.AudioCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "container" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "container", r.URL.Query(), &params.Container, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "container"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "container", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioLanguage", r.URL.Query(), &params.AudioLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioLanguage", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subtitleLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subtitleLanguage", r.URL.Query(), &params.SubtitleLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subtitleLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subtitleLanguage", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraryItems(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryLetters operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryLetters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryLettersParams
+
+	// ------------- Optional query parameter "order" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "order", r.URL.Query(), &params.Order, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "order"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "order", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "quick" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "quick", r.URL.Query(), &params.Quick, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "quick"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "quick", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "genre" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "genre", r.URL.Query(), &params.Genre, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "genre"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "year" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "year", r.URL.Query(), &params.Year, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "year"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "year", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "decade" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "decade", r.URL.Query(), &params.Decade, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "decade"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decade", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "contentRating" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "contentRating", r.URL.Query(), &params.ContentRating, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "contentRating"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "contentRating", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resolution" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resolution", r.URL.Query(), &params.Resolution, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resolution"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resolution", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "videoCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "videoCodec", r.URL.Query(), &params.VideoCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "videoCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "videoCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioCodec" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioCodec", r.URL.Query(), &params.AudioCodec, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioCodec"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioCodec", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "container" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "container", r.URL.Query(), &params.Container, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "container"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "container", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "audioLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "audioLanguage", r.URL.Query(), &params.AudioLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "audioLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "audioLanguage", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "subtitleLanguage" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "subtitleLanguage", r.URL.Query(), &params.SubtitleLanguage, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subtitleLanguage"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subtitleLanguage", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryLetters(w, r, libraryID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2806,6 +3961,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/folder-roots/{rootId}/folders", wrapper.ListFolders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/scan", wrapper.StartLibraryScan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/items", wrapper.ListLibraryItems)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/facets", wrapper.ListLibraryFacets)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/letters", wrapper.ListLibraryLetters)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/folders", wrapper.ListLibraryFolders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}/children", wrapper.ListItemChildren)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify/search", wrapper.SearchIdentifyCandidates)
@@ -3482,6 +4640,86 @@ func (response UpdateLibrarydefaultApplicationProblemPlusJSONResponse) VisitUpda
 	return err
 }
 
+type ListLibraryFacetsRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Params    ListLibraryFacetsParams
+}
+
+type ListLibraryFacetsResponseObject interface {
+	VisitListLibraryFacetsResponse(w http.ResponseWriter) error
+}
+
+type ListLibraryFacets200JSONResponse FacetList
+
+func (response ListLibraryFacets200JSONResponse) VisitListLibraryFacetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryFacetsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibraryFacetsdefaultApplicationProblemPlusJSONResponse) VisitListLibraryFacetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryFoldersRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Params    ListLibraryFoldersParams
+}
+
+type ListLibraryFoldersResponseObject interface {
+	VisitListLibraryFoldersResponse(w http.ResponseWriter) error
+}
+
+type ListLibraryFolders200JSONResponse LibraryFolderListing
+
+func (response ListLibraryFolders200JSONResponse) VisitListLibraryFoldersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryFoldersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibraryFoldersdefaultApplicationProblemPlusJSONResponse) VisitListLibraryFoldersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListLibraryItemsRequestObject struct {
 	LibraryID LibraryID `json:"libraryId"`
 	Params    ListLibraryItemsParams
@@ -3511,6 +4749,46 @@ type ListLibraryItemsdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListLibraryItemsdefaultApplicationProblemPlusJSONResponse) VisitListLibraryItemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryLettersRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Params    ListLibraryLettersParams
+}
+
+type ListLibraryLettersResponseObject interface {
+	VisitListLibraryLettersResponse(w http.ResponseWriter) error
+}
+
+type ListLibraryLetters200JSONResponse LetterIndex
+
+func (response ListLibraryLetters200JSONResponse) VisitListLibraryLettersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryLettersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibraryLettersdefaultApplicationProblemPlusJSONResponse) VisitListLibraryLettersResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -3952,9 +5230,18 @@ type StrictServerInterface interface {
 	// UpdateLibrary Change a library
 	// (PATCH /api/v1/libraries/{libraryId})
 	UpdateLibrary(ctx context.Context, request UpdateLibraryRequestObject) (UpdateLibraryResponseObject, error)
+	// ListLibraryFacets Count the filter values of a library's items
+	// (GET /api/v1/libraries/{libraryId}/facets)
+	ListLibraryFacets(ctx context.Context, request ListLibraryFacetsRequestObject) (ListLibraryFacetsResponseObject, error)
+	// ListLibraryFolders Browse a library by its folders
+	// (GET /api/v1/libraries/{libraryId}/folders)
+	ListLibraryFolders(ctx context.Context, request ListLibraryFoldersRequestObject) (ListLibraryFoldersResponseObject, error)
 	// ListLibraryItems Page through the items of a library
 	// (GET /api/v1/libraries/{libraryId}/items)
 	ListLibraryItems(ctx context.Context, request ListLibraryItemsRequestObject) (ListLibraryItemsResponseObject, error)
+	// ListLibraryLetters Find where each first letter starts in the title-sorted list
+	// (GET /api/v1/libraries/{libraryId}/letters)
+	ListLibraryLetters(ctx context.Context, request ListLibraryLettersRequestObject) (ListLibraryLettersResponseObject, error)
 	// RefreshLibraryMetadata Queue a metadata refresh of a library
 	// (POST /api/v1/libraries/{libraryId}/refresh)
 	RefreshLibraryMetadata(ctx context.Context, request RefreshLibraryMetadataRequestObject) (RefreshLibraryMetadataResponseObject, error)
@@ -4409,6 +5696,60 @@ func (sh *strictHandler) UpdateLibrary(w http.ResponseWriter, r *http.Request, l
 	}
 }
 
+// ListLibraryFacets operation middleware
+func (sh *strictHandler) ListLibraryFacets(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryFacetsParams) {
+	var request ListLibraryFacetsRequestObject
+
+	request.LibraryID = libraryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraryFacets(ctx, request.(ListLibraryFacetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraryFacets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibraryFacetsResponseObject); ok {
+		if err := validResponse.VisitListLibraryFacetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLibraryFolders operation middleware
+func (sh *strictHandler) ListLibraryFolders(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryFoldersParams) {
+	var request ListLibraryFoldersRequestObject
+
+	request.LibraryID = libraryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraryFolders(ctx, request.(ListLibraryFoldersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraryFolders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibraryFoldersResponseObject); ok {
+		if err := validResponse.VisitListLibraryFoldersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListLibraryItems operation middleware
 func (sh *strictHandler) ListLibraryItems(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryItemsParams) {
 	var request ListLibraryItemsRequestObject
@@ -4429,6 +5770,33 @@ func (sh *strictHandler) ListLibraryItems(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListLibraryItemsResponseObject); ok {
 		if err := validResponse.VisitListLibraryItemsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLibraryLetters operation middleware
+func (sh *strictHandler) ListLibraryLetters(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryLettersParams) {
+	var request ListLibraryLettersRequestObject
+
+	request.LibraryID = libraryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraryLetters(ctx, request.(ListLibraryLettersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraryLetters")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibraryLettersResponseObject); ok {
+		if err := validResponse.VisitListLibraryLettersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
