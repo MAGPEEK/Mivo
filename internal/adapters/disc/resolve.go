@@ -83,10 +83,15 @@ func resolveImageFile(ctx context.Context, imagePath string) (media.DiscTitle, e
 }
 
 // ResolveTree selects the main title of a folder disc. tree is rooted at the BDMV or VIDEO_TS
-// folder or at its parent; clip paths in the result are relative to that root.
+// folder or at its parent; clip paths in the result are relative to that root. A disc that
+// looks CSS or AACS protected fails with media.ErrDiscEncrypted.
 func ResolveTree(ctx context.Context, tree fs.FS, layout media.Layout) (media.DiscTitle, error) {
-	clips, err := selectTitle(newFileTree(ctx, tree), layout)
+	files := newFileTree(ctx, tree)
+	clips, err := selectTitle(files, layout)
 	if err != nil {
+		return nil, err
+	}
+	if err := files.checkEncryption(layout, clips); err != nil {
 		return nil, err
 	}
 

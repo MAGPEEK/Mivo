@@ -13,7 +13,8 @@ import (
 // ResolveImage selects the main title of a disc image (BDMV preferred over VIDEO_TS at the
 // image root) and returns it as image byte extents. A clip's duration is split over its
 // extents by length; extents that continue each other are merged, so a contiguous DVD feature
-// becomes one clip. Corrupt image structures met on the way are reported as disc_unsupported.
+// becomes one clip. A disc that looks CSS or AACS protected fails with media.ErrDiscEncrypted.
+// Corrupt image structures met on the way are reported as disc_unsupported.
 func ResolveImage(ctx context.Context, img Image) (media.DiscTitle, error) {
 	title, err := resolveImage(ctx, img)
 	if err != nil {
@@ -44,6 +45,9 @@ func resolveImage(ctx context.Context, img Image) (media.DiscTitle, error) {
 	}
 	clips, err := selectTitle(files, layout)
 	if err != nil {
+		return nil, err
+	}
+	if err := files.checkEncryption(layout, clips); err != nil {
 		return nil, err
 	}
 

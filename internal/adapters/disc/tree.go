@@ -100,6 +100,33 @@ func (files *fileTree) read(name string, limit int64) ([]byte, error) {
 	return data, nil
 }
 
+// prefix returns up to length bytes from the start of a file and charges the per-disc
+// budget; an exhausted budget is ErrDiscUnsupported.
+func (files *fileTree) prefix(name string, length int64) ([]byte, error) {
+	if err := files.ctx.Err(); err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+	// read() may leave the budget at -1 after an oversized file; clamping keeps the exhausted
+	// budget reported instead of an empty prefix that would skip the encryption check.
+	allowed := max(min(length, files.budget), 0)
+	handle, err := files.fsys.Open(name)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+	defer func() { _ = handle.Close() }() // read-only; a close error loses nothing
+
+	data, err := io.ReadAll(io.LimitReader(handle, allowed))
+	files.budget -= int64(len(data))
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+	if allowed < length && int64(len(data)) == allowed {
+		return nil, fmt.Errorf("read %s: read budget exhausted: %w", name, media.ErrDiscUnsupported)
+	}
+
+	return data, nil
+}
+
 // size returns the size of a regular file (following links inside the tree).
 func (files *fileTree) size(name string) (int64, error) {
 	if err := files.ctx.Err(); err != nil {
