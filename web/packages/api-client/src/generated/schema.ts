@@ -919,11 +919,11 @@ export interface components {
             apiVersion: string;
         };
         /**
-         * @description What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
+         * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
          * @example movies
          * @enum {string}
          */
-        LibraryKind: "movies" | "shows";
+        LibraryKind: "movies" | "shows" | "music";
         /** @description The configured libraries. */
         LibraryList: {
             /** @description Every configured library, ordered by name. */
@@ -1285,11 +1285,11 @@ export interface components {
             hdr?: components["schemas"]["HdrFormat"];
         };
         /**
-         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
          * @example movie
          * @enum {string}
          */
-        ItemKind: "movie" | "show" | "season" | "episode" | "extra";
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "artist" | "album" | "track";
         /**
          * @description What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
          * @example trailer
@@ -1297,11 +1297,11 @@ export interface components {
          */
         ExtraType: "trailer" | "featurette" | "behind_the_scenes" | "deleted_scene" | "interview" | "scene" | "short" | "other";
         /**
-         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo) or "banner". Clients must tolerate values added in later versions (for example a square cover for music).
+         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo), "banner" or "square" (1:1 album cover or artist image, rendered in the same ImageWidth set as posters). Clients must tolerate values added in later versions.
          * @example poster
          * @enum {string}
          */
-        ArtworkKind: "poster" | "backdrop" | "thumb" | "logo" | "banner";
+        ArtworkKind: "poster" | "backdrop" | "thumb" | "logo" | "banner" | "square";
         /**
          * @description Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
          * @example actor
@@ -1343,6 +1343,7 @@ export interface components {
             thumb?: components["schemas"]["ImageRef"];
             logo?: components["schemas"]["ImageRef"];
             banner?: components["schemas"]["ImageRef"];
+            square?: components["schemas"]["ImageRef"];
         };
         /** @description IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted. */
         ProviderIds: {
@@ -1397,7 +1398,7 @@ export interface components {
              */
             number?: number;
         };
-        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season). */
+        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album). */
         ItemSummary: {
             /**
              * Format: uuid
@@ -1419,19 +1420,19 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Release year of a movie or first-air year of a show.
+             * @description Release year of a movie or an album, or first-air year of a show.
              * @example 2008
              */
             year?: number;
             /**
              * Format: uuid
-             * @description ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra; omitted for top-level items.
+             * @description ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra, the artist of an album, the album of a track; omitted for top-level items.
              * @example 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
              */
             parentId?: string;
             /**
              * Format: int32
-             * @description Season number of a season (0 for specials) or episode number of an episode.
+             * @description Season number of a season (0 for specials), episode number of an episode or track number of a track on its disc.
              * @example 1
              */
             number?: number;
@@ -1443,6 +1444,12 @@ export interface components {
             numberEnd?: number;
             /**
              * Format: int32
+             * @description Disc number of a track on its album, from the disc tag (ADR 0027); omitted when unknown and for other kinds.
+             * @example 2
+             */
+            discNumber?: number;
+            /**
+             * Format: int32
              * @description Absolute episode number of an episode named by a bare number (Show - 130).
              * @example 130
              */
@@ -1450,18 +1457,19 @@ export interface components {
             extraType?: components["schemas"]["ExtraType"];
             /**
              * Format: int32
-             * @description Number of seasons of a show or of episodes of a season.
+             * @description Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
              * @example 5
              */
             childCount?: number;
             /**
              * Format: int32
-             * @description Number of episodes of a show across all its seasons.
+             * @description Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
              * @example 62
              */
             leafCount?: number;
             poster?: components["schemas"]["ImageRef"];
             thumb?: components["schemas"]["ImageRef"];
+            square?: components["schemas"]["ImageRef"];
             media?: components["schemas"]["MediaSummary"];
             matchState?: components["schemas"]["MatchState"];
             metadataSources?: components["schemas"]["MetadataSources"];
@@ -1744,7 +1752,7 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Release year of a movie or first-air year of a show.
+             * @description Release year of a movie or an album, or first-air year of a show.
              * @example 2008
              */
             year?: number;
@@ -1776,7 +1784,7 @@ export interface components {
             rows: components["schemas"]["Row"][];
             hint?: components["schemas"]["RowsHint"];
         };
-        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster. */
+        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album). */
         ItemDetail: {
             /**
              * Format: uuid
@@ -1798,7 +1806,7 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Season number of a season (0 for specials) or episode number of an episode.
+             * @description Season number of a season (0 for specials), episode number of an episode or track number of a track on its disc.
              * @example 1
              */
             number?: number;
@@ -1809,13 +1817,19 @@ export interface components {
              */
             numberEnd?: number;
             /**
+             * Format: int32
+             * @description Disc number of a track on its album, from the disc tag (ADR 0027); omitted when unknown and for other kinds.
+             * @example 2
+             */
+            discNumber?: number;
+            /**
              * @description Title in the original language when it differs from the title.
              * @example Big Buck Bunny
              */
             originalTitle?: string;
             /**
              * Format: int32
-             * @description Release year of a movie or first-air year of a show.
+             * @description Release year of a movie or an album, or first-air year of a show.
              * @example 2008
              */
             year?: number;
@@ -1890,17 +1904,17 @@ export interface components {
             extras?: components["schemas"]["ItemSummary"][];
             /**
              * Format: int32
-             * @description Number of seasons of a show or of episodes of a season.
+             * @description Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
              * @example 5
              */
             childCount?: number;
             /**
              * Format: int32
-             * @description Number of episodes of a show across all its seasons.
+             * @description Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
              * @example 62
              */
             leafCount?: number;
-            /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows and seasons have none. */
+            /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows, seasons, artists and albums have none. */
             files: components["schemas"]["MediaFile"][];
             matchState?: components["schemas"]["MatchState"];
             metadataSources?: components["schemas"]["MetadataSources"];
@@ -2451,7 +2465,7 @@ export interface components {
          * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
          */
         ImageId: string;
-        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
         ItemTypeFilter: components["schemas"]["ItemKind"];
         /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
         QuickFilter: components["schemas"]["ItemQuickFilter"];
@@ -2777,7 +2791,7 @@ export interface operations {
                 order?: components["schemas"]["SortOrder"];
                 /** @description Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort. */
                 seed?: number;
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2831,7 +2845,7 @@ export interface operations {
             query?: {
                 /** @description Fields to count; omitted counts every field. */
                 field?: components["schemas"]["FacetField"][];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2885,7 +2899,7 @@ export interface operations {
             query?: {
                 /** @description Direction of the title sort; omitted means ascending. */
                 order?: components["schemas"]["SortOrder"];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind. */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];

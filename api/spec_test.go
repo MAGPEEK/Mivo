@@ -935,9 +935,10 @@ func TestLibraryV2Enums(t *testing.T) {
 	spec := loadSpec(t)
 
 	tests := map[string][]any{
-		"ItemKind":    {"movie", "show", "season", "episode", "extra"},
+		"ItemKind":    {"movie", "show", "season", "episode", "extra", "artist", "album", "track"},
+		"LibraryKind": {"movies", "shows", "music"},
 		"ExtraType":   {"trailer", "featurette", "behind_the_scenes", "deleted_scene", "interview", "scene", "short", "other"},
-		"ArtworkKind": {"poster", "backdrop", "thumb", "logo", "banner"},
+		"ArtworkKind": {"poster", "backdrop", "thumb", "logo", "banner", "square"},
 		"PersonRole":  {"actor", "director", "writer", "producer", "guest_star"},
 		"ImageWidth":  {160, 320, 480, 640, 960, 1280, 1920},
 		"SortOrder":   {"asc", "desc"},
@@ -971,19 +972,19 @@ func libraryV2Shapes() map[string]schemaShape {
 		"ProviderIds":  {optional: []string{"tmdb", "imdb", "tvdb"}},
 		"ItemPerson":   {required: []string{"name", "role"}, optional: []string{"character"}},
 		"ItemAncestor": {required: []string{"id", "kind", "title"}, optional: []string{"number"}},
-		"Artwork":      {optional: []string{"poster", "backdrop", "thumb", "logo", "banner"}},
+		"Artwork":      {optional: []string{"poster", "backdrop", "thumb", "logo", "banner", "square"}},
 		"ItemSummary": {
 			required: []string{"id", "libraryId", "kind", "title"},
 			optional: []string{
-				"year", "parentId", "number", "numberEnd", "absoluteNumber", "extraType",
-				"childCount", "leafCount", "poster", "thumb", "media",
+				"year", "parentId", "number", "numberEnd", "discNumber", "absoluteNumber", "extraType",
+				"childCount", "leafCount", "poster", "thumb", "square", "media",
 			},
 		},
 		"ItemDetail": {
 			required: []string{"id", "libraryId", "kind", "title", "files"},
 			optional: []string{
-				"originalTitle", "year", "releaseDate", "summary", "tagline", "contentRating",
-				"genres", "studios", "countries", "people", "providerIds", "artwork", "ancestors",
+				"discNumber", "originalTitle", "year", "releaseDate", "summary", "tagline",
+				"contentRating", "genres", "studios", "countries", "people", "providerIds", "artwork", "ancestors",
 				"previousId", "nextId", "playItemId", "extras", "childCount", "leafCount",
 			},
 		},
@@ -1048,11 +1049,11 @@ func TestLibraryV2PropertyReferences(t *testing.T) {
 
 	references := map[string]string{
 		"ItemSummary.kind": "ItemKind", "ItemSummary.extraType": "ExtraType",
-		"ItemSummary.poster": "ImageRef", "ItemSummary.thumb": "ImageRef",
+		"ItemSummary.poster": "ImageRef", "ItemSummary.thumb": "ImageRef", "ItemSummary.square": "ImageRef",
 		"ItemDetail.kind": "ItemKind", "ItemDetail.providerIds": "ProviderIds",
 		"ItemDetail.artwork": "Artwork", "ItemAncestor.kind": "ItemKind", "ItemPerson.role": "PersonRole",
 		"Artwork.poster": "ImageRef", "Artwork.backdrop": "ImageRef", "Artwork.thumb": "ImageRef",
-		"Artwork.logo": "ImageRef", "Artwork.banner": "ImageRef",
+		"Artwork.logo": "ImageRef", "Artwork.banner": "ImageRef", "Artwork.square": "ImageRef",
 	}
 
 	for location, want := range references {
@@ -1090,6 +1091,30 @@ func TestArtworkIsKeyedByArtworkKind(t *testing.T) {
 
 	if !slices.Equal(wanted, slots) {
 		t.Errorf("Artwork properties %v, want the ArtworkKind values %v", slots, wanted)
+	}
+}
+
+// TestDiscNumberIsAPositiveInteger pins the music track position (task M3-13b): discs are
+// counted from one, so a client can show "Disc 2" without further checks.
+func TestDiscNumberIsAPositiveInteger(t *testing.T) {
+	spec := loadSpec(t)
+
+	for _, location := range []string{"ItemSummary.discNumber", "ItemDetail.discNumber"} {
+		property := propertySchema(spec, location)
+		if property == nil {
+			t.Errorf("%s is not declared", location)
+
+			continue
+		}
+
+		schema := property.Value
+		if !schema.Type.Is(openapi3.TypeInteger) || schema.Format != "int32" {
+			t.Errorf("%s = %v/%s, want an int32 integer", location, schema.Type, schema.Format)
+		}
+
+		if schema.Min == nil || *schema.Min != 1 {
+			t.Errorf("%s minimum = %v, want 1", location, schema.Min)
+		}
 	}
 }
 

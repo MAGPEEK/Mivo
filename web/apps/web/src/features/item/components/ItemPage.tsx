@@ -68,8 +68,14 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
       );
     case "episode":
       return <EpisodePage headingRef={headingRef} itemId={itemId} item={item} />;
+    // Music items get their own pages in M3-13h; until then the generic detail view shows
+    // them, as it does kinds added in later API versions (default).
     case "movie":
     case "extra":
+    case "artist":
+    case "album":
+    case "track":
+    default:
       return <ItemDetails headingRef={headingRef} item={item} />;
   }
 }

@@ -216,16 +216,23 @@ func (e InstallKind) Valid() bool {
 
 // Defines values for ItemKind.
 const (
+	ItemKindAlbum   ItemKind = "album"
+	ItemKindArtist  ItemKind = "artist"
 	ItemKindEpisode ItemKind = "episode"
 	ItemKindExtra   ItemKind = "extra"
 	ItemKindMovie   ItemKind = "movie"
 	ItemKindSeason  ItemKind = "season"
 	ItemKindShow    ItemKind = "show"
+	ItemKindTrack   ItemKind = "track"
 )
 
 // Valid indicates whether the value is a known member of the ItemKind enum.
 func (e ItemKind) Valid() bool {
 	switch e {
+	case ItemKindAlbum:
+		return true
+	case ItemKindArtist:
+		return true
 	case ItemKindEpisode:
 		return true
 	case ItemKindExtra:
@@ -235,6 +242,8 @@ func (e ItemKind) Valid() bool {
 	case ItemKindSeason:
 		return true
 	case ItemKindShow:
+		return true
+	case ItemKindTrack:
 		return true
 	default:
 		return false
@@ -340,6 +349,7 @@ func (e LibraryFolderEntryKind) Valid() bool {
 // Defines values for LibraryKind.
 const (
 	LibraryKindMovies LibraryKind = "movies"
+	LibraryKindMusic  LibraryKind = "music"
 	LibraryKindShows  LibraryKind = "shows"
 )
 
@@ -347,6 +357,8 @@ const (
 func (e LibraryKind) Valid() bool {
 	switch e {
 	case LibraryKindMovies:
+		return true
+	case LibraryKindMusic:
 		return true
 	case LibraryKindShows:
 		return true
@@ -726,6 +738,9 @@ type Artwork struct {
 	// Poster Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Poster *ImageRef `json:"poster,omitempty"`
 
+	// Square Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Square *ImageRef `json:"square,omitempty"`
+
 	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Thumb *ImageRef `json:"thumb,omitempty"`
 }
@@ -779,7 +794,7 @@ type BrowseQuery struct {
 	// SubtitleLanguage Subtitle languages, as the listLibraryItems parameter subtitleLanguage.
 	SubtitleLanguage *[]string `json:"subtitleLanguage,omitempty"`
 
-	// Type Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	// Type Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 	//
 	// Example: movie
 	Type *ItemKind `json:"type,omitempty"`
@@ -1046,7 +1061,7 @@ type HeroItem struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ItemID uuid.UUID `json:"itemId"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1069,7 +1084,7 @@ type HeroItem struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or first-air year of a show.
+	// Year Release year of a movie or an album, or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
@@ -1212,7 +1227,7 @@ type ItemAncestor struct {
 	// Example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1228,7 +1243,7 @@ type ItemAncestor struct {
 	Title string `json:"title"`
 }
 
-// ItemDetail An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster.
+// ItemDetail An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album).
 type ItemDetail struct {
 	// Ancestors The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra); empty or omitted for top-level items.
 	Ancestors *[]ItemAncestor `json:"ancestors,omitempty"`
@@ -1236,7 +1251,7 @@ type ItemDetail struct {
 	// Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
 	Artwork *Artwork `json:"artwork,omitempty"`
 
-	// ChildCount Number of seasons of a show or of episodes of a season.
+	// ChildCount Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
 	//
 	// Example: 5
 	ChildCount *int32 `json:"childCount,omitempty"`
@@ -1251,10 +1266,15 @@ type ItemDetail struct {
 	// Example: ["Netherlands"]
 	Countries *[]string `json:"countries,omitempty"`
 
+	// DiscNumber Disc number of a track on its album, from the disc tag (ADR 0027); omitted when unknown and for other kinds.
+	//
+	// Example: 2
+	DiscNumber *int32 `json:"discNumber,omitempty"`
+
 	// Extras Extras of a movie or show, ordered by type and title.
 	Extras *[]ItemSummary `json:"extras,omitempty"`
 
-	// Files Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows and seasons have none.
+	// Files Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows, seasons, artists and albums have none.
 	Files []MediaFile `json:"files"`
 
 	// Genres Genres in metadata order.
@@ -1267,12 +1287,12 @@ type ItemDetail struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
 
-	// LeafCount Number of episodes of a show across all its seasons.
+	// LeafCount Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
 	//
 	// Example: 62
 	LeafCount *int32 `json:"leafCount,omitempty"`
@@ -1297,7 +1317,7 @@ type ItemDetail struct {
 	// Example: 9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d
 	NextID *uuid.UUID `json:"nextId,omitempty"`
 
-	// Number Season number of a season (0 for specials) or episode number of an episode.
+	// Number Season number of a season (0 for specials), episode number of an episode or track number of a track on its disc.
 	//
 	// Example: 1
 	Number *int32 `json:"number,omitempty"`
@@ -1353,13 +1373,13 @@ type ItemDetail struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or first-air year of a show.
+	// Year Release year of a movie or an album, or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
 }
 
-// ItemKind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+// ItemKind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 //
 // Example: movie
 type ItemKind string
@@ -1408,17 +1428,22 @@ type ItemQuickFilter string
 // Example: dateAdded
 type ItemSort string
 
-// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season).
+// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album).
 type ItemSummary struct {
 	// AbsoluteNumber Absolute episode number of an episode named by a bare number (Show - 130).
 	//
 	// Example: 130
 	AbsoluteNumber *int32 `json:"absoluteNumber,omitempty"`
 
-	// ChildCount Number of seasons of a show or of episodes of a season.
+	// ChildCount Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
 	//
 	// Example: 5
 	ChildCount *int32 `json:"childCount,omitempty"`
+
+	// DiscNumber Disc number of a track on its album, from the disc tag (ADR 0027); omitted when unknown and for other kinds.
+	//
+	// Example: 2
+	DiscNumber *int32 `json:"discNumber,omitempty"`
 
 	// ExtraType What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
 	//
@@ -1430,12 +1455,12 @@ type ItemSummary struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
 
-	// LeafCount Number of episodes of a show across all its seasons.
+	// LeafCount Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
 	//
 	// Example: 62
 	LeafCount *int32 `json:"leafCount,omitempty"`
@@ -1463,7 +1488,7 @@ type ItemSummary struct {
 	// Example: 3
 	NewEpisodeCount *int32 `json:"newEpisodeCount,omitempty"`
 
-	// Number Season number of a season (0 for specials) or episode number of an episode.
+	// Number Season number of a season (0 for specials), episode number of an episode or track number of a track on its disc.
 	//
 	// Example: 1
 	Number *int32 `json:"number,omitempty"`
@@ -1473,7 +1498,7 @@ type ItemSummary struct {
 	// Example: 2
 	NumberEnd *int32 `json:"numberEnd,omitempty"`
 
-	// ParentID ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra; omitted for top-level items.
+	// ParentID ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra, the artist of an album, the album of a track; omitted for top-level items.
 	//
 	// Example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
 	ParentID *uuid.UUID `json:"parentId,omitempty"`
@@ -1491,6 +1516,9 @@ type ItemSummary struct {
 	// Example: Elephants Dream
 	ShowTitle *string `json:"showTitle,omitempty"`
 
+	// Square Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Square *ImageRef `json:"square,omitempty"`
+
 	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Thumb *ImageRef `json:"thumb,omitempty"`
 
@@ -1499,7 +1527,7 @@ type ItemSummary struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or first-air year of a show.
+	// Year Release year of a movie or an album, or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
@@ -1554,7 +1582,7 @@ type Library struct {
 	// Example: 42
 	ItemCount int64 `json:"itemCount"`
 
-	// Kind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
+	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 	//
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
@@ -1581,7 +1609,7 @@ type LibraryCreate struct {
 	// Folders The folders of the library, 1 to 16 entries; each names a root and path.
 	Folders []FolderRef `json:"folders"`
 
-	// Kind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
+	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 	//
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
@@ -1620,7 +1648,7 @@ type LibraryFolder struct {
 
 // LibraryFolderEntry One child of a library folder.
 type LibraryFolderEntry struct {
-	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder). media summarises the primary file and is omitted for containers (show, season).
+	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album).
 	Item *ItemSummary `json:"item,omitempty"`
 
 	// Kind What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
@@ -1675,7 +1703,7 @@ type LibraryFolderListing struct {
 	TotalCount *int64 `json:"totalCount,omitempty"`
 }
 
-// LibraryKind What a library contains: "movies" (movie items) or "shows" (show items with seasons and episodes). Clients must tolerate values added in later versions.
+// LibraryKind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 //
 // Example: movies
 type LibraryKind string
@@ -2508,7 +2536,7 @@ type ImageID = uuid.UUID
 // ItemID defines model for ItemId.
 type ItemID = uuid.UUID
 
-// ItemTypeFilter Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+// ItemTypeFilter Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
 //
 // Example: movie
 type ItemTypeFilter = ItemKind
@@ -2577,7 +2605,7 @@ type ListLibraryFacetsParams struct {
 	// Field Fields to count; omitted counts every field.
 	Field *[]FacetField `form:"field,omitempty" json:"field,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
@@ -2646,7 +2674,7 @@ type ListLibraryItemsParams struct {
 	// Seed Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort.
 	Seed *int32 `form:"seed,omitempty" json:"seed,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
@@ -2688,7 +2716,7 @@ type ListLibraryLettersParams struct {
 	// Order Direction of the title sort; omitted means ascending.
 	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library), else 400 "invalid". Omitted uses the library's top-level kind.
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
