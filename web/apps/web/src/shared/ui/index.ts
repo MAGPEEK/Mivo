@@ -3,6 +3,14 @@ export { MediaCard, stretchedLinkClass, type CardLinkProps, type MediaCardProps 
 export { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { ModalDialog, type ModalDialogProps } from "./ModalDialog";
+export { Menu, type MenuEntry, type MenuProps } from "./Menu";
+export { Sheet, type SheetProps } from "./Sheet";
+export { Tabs, type TabItem, type TabsProps } from "./Tabs";
+export {
+  SegmentedControl,
+  type SegmentOption,
+  type SegmentedControlProps,
+} from "./SegmentedControl";
 export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export {
   AlertIcon,
