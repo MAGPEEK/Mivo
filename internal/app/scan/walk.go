@@ -16,7 +16,7 @@ import (
 // skipped as a whole, so the plan keeps everything the catalog holds for it (ADR 0022). Only
 // when every folder is unavailable the scan fails, as a one-folder library always did.
 func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
-	files := walked{skipped: skipSet{}}
+	files := walked{skipped: skipSet{}, protectedDiscs: skipSet{}}
 
 	var (
 		unavailable    int
@@ -38,6 +38,7 @@ func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
 			files.mediaFiles = append(files.mediaFiles, found.mediaFiles...)
 			files.sidecars = append(files.sidecars, found.sidecars...)
 			files.skipped.add(folder.ID, skipped...)
+			files.protectedDiscs.add(folder.ID, found.protectedDiscs[folder.ID]...)
 		}
 	}
 
@@ -57,10 +58,7 @@ func (scanRun *run) walkAll(ctx context.Context) (walked, error) {
 // walkFolder walks one folder. Its result is only used when the whole walk succeeded, so a
 // folder lost halfway never yields a partial listing that would delete catalog entries.
 func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walked, []string, error) {
-	var (
-		found     walked
-		discPaths []string
-	)
+	found := walked{protectedDiscs: skipSet{}}
 
 	skipped, err := scanRun.service.walker.Walk(ctx, folder.Path, scanRun.library.Kind, func(state library.FileState) error {
 		state.RootID = folder.ID
@@ -68,7 +66,7 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 		switch scanRun.discHandling(state) {
 		case discDropped:
 		case discProtected:
-			discPaths = append(discPaths, state.RelativePath)
+			found.protectedDiscs.add(folder.ID, state.RelativePath)
 		case discNone, discPlaced:
 			// A disc (folder or image) is one video entry; placement and probing dispatch on
 			// its layout (placedFile.place, describe).
@@ -85,7 +83,7 @@ func (scanRun *run) walkFolder(ctx context.Context, folder library.Folder) (walk
 		return walked{}, nil, fmt.Errorf("walk folder %s: %w", folder.ID, err)
 	}
 
-	return found, append(skipped, discPaths...), nil
+	return found, skipped, nil
 }
 
 // discHandling says what the scan does with a walked entry that may be a disc.

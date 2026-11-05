@@ -35,6 +35,21 @@ func (skipped skipSet) add(rootID string, paths ...string) {
 	}
 }
 
+// with returns a new set holding the paths of both sets.
+func (skipped skipSet) with(other skipSet) skipSet {
+	union := make(skipSet, len(skipped)+len(other))
+
+	for rootID, paths := range skipped {
+		union.add(rootID, paths...)
+	}
+
+	for rootID, paths := range other {
+		union.add(rootID, paths...)
+	}
+
+	return union
+}
+
 // covers reports whether the file lies at or below a path its folder's walk could not read.
 func (skipped skipSet) covers(state library.FileState) bool {
 	return belowAny(state.RelativePath, skipped[state.RootID])

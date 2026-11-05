@@ -74,6 +74,7 @@
       "video_bit_depth_not_supported": "Farbtiefe von {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
       "audio_codec_not_supported": "Audio {{sourceCodec}} nicht unterstützt → {{targetCodec}}",
       "audio_track_not_default": "Die gewählte Audiospur ist nicht die Standardspur, und Browser können die Spuren einer Datei nicht wechseln",
+      "disc_source": "DVDs und Blu-rays werden nie direkt abgespielt → {{targetContainer}}",
       "unknown": "Anderer Grund ({{code}})"
     },
     "warning": {

@@ -24,6 +24,7 @@ export const knownReasonCodes = [
   "video_bit_depth_not_supported",
   "audio_codec_not_supported",
   "audio_track_not_default",
+  "disc_source",
 ] as const;
 
 /** Warning codes of ADR 0023: degradations of the result. */

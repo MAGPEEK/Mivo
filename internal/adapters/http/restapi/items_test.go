@@ -162,12 +162,14 @@ func TestGetItem(t *testing.T) {
 }
 
 // TestGetItemSendsFileNamesOnly pins the path rule: whatever separators the stored relative
-// path holds, the client gets the bare file name.
+// path holds, the client gets the bare file name; a disc folder is named after the folder
+// that holds BDMV or VIDEO_TS, so two DVDs are not both "VIDEO_TS".
 func TestGetItemSendsFileNamesOnly(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		relativePath string
+		layout       media.Layout
 		want         string
 	}{
 		{relativePath: "movie.mkv", want: "movie.mkv"},
@@ -175,6 +177,9 @@ func TestGetItemSendsFileNamesOnly(t *testing.T) {
 		{relativePath: `a/b\movie.mkv`, want: "movie.mkv"},
 		{relativePath: `a\b\movie.mkv`, want: "movie.mkv"},
 		{relativePath: "日本/映画 ファイル.mp4", want: "映画 ファイル.mp4"},
+		{relativePath: "Movies/Heat (1995)/VIDEO_TS", layout: media.LayoutVideoTS, want: "Heat (1995)"},
+		{relativePath: "Alien (1979)/BDMV", layout: media.LayoutBDMV, want: "Alien (1979)"},
+		{relativePath: "Alien (1979)/Alien.iso", layout: media.LayoutISO, want: "Alien.iso"},
 	}
 
 	for _, test := range tests {
@@ -183,6 +188,7 @@ func TestGetItemSendsFileNamesOnly(t *testing.T) {
 
 			file := unprobedFile()
 			file.RelativePath = test.relativePath
+			file.Layout = test.layout
 
 			libraries := &fakeLibraryService{detail: applibrary.ItemDetail{Item: testItem(testItemID, "x"), Files: []media.File{file}}}
 			handler, _ := newLibraryHandler(t, libraries, &fakeScanService{})

@@ -74,6 +74,7 @@
       "video_bit_depth_not_supported": "Video bit depth of {{sourceCodec}} not supported → {{targetCodec}}",
       "audio_codec_not_supported": "Audio {{sourceCodec}} not supported → {{targetCodec}}",
       "audio_track_not_default": "The selected audio track is not the default one, and browsers cannot switch the tracks of a file",
+      "disc_source": "DVDs and Blu-rays are never played directly → {{targetContainer}}",
       "unknown": "Other reason ({{code}})"
     },
     "warning": {

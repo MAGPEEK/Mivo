@@ -3,8 +3,10 @@ package scan
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
@@ -118,6 +120,30 @@ func discProbeFailure(ctx context.Context, job probeJob, err error) probeResult 
 
 func discFailure(job probeJob, code media.ProbeError, reason string) probeResult {
 	return probeResult{job: job, outcome: outcomeProbeFailed, probeError: code, reason: reason}
+}
+
+// unsupportedDiscsOf returns a copy of the discs of the library this server start probed as
+// disc_unsupported.
+func (service *Service) unsupportedDiscsOf(libraryID string) map[fileKey]struct{} {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	return maps.Clone(service.unsupportedDiscs[libraryID])
+}
+
+// rememberUnsupportedDisc records a disc probed as disc_unsupported. The code also stands for
+// an FFmpeg build that lacks a demuxer or protocol (ADR 0029), which only a restart can
+// change, so the disc is probed again by the first scan after the next start; a corrupt or
+// non-disc image then does not fail every scan in between.
+func (service *Service) rememberUnsupportedDisc(libraryID string, state library.FileState) {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	if service.unsupportedDiscs[libraryID] == nil {
+		service.unsupportedDiscs[libraryID] = map[fileKey]struct{}{}
+	}
+
+	service.unsupportedDiscs[libraryID][keyOf(state)] = struct{}{}
 }
 
 // folderRootOf returns the library folder of the job's file, or the result that ends the

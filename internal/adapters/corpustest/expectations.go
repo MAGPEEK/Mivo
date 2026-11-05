@@ -76,7 +76,26 @@ type caseExpectation struct {
 // Expected returns the expectation of a manifest case for a reference profile name. The
 // second result is false for an unknown case or profile. The caller owns the result.
 func Expected(caseName, profileName string) (Expectation, bool) {
-	entry, found := expectations()[caseName]
+	return expectedIn(expectations(), caseName, profileName)
+}
+
+// DiscVideoTS is the path of the clear DVD folder in the disc part of the library manifest
+// (testdata/library/manifest.json, M3-16i), the disc the playback smoke plays.
+const DiscVideoTS = "Movie (2019)/VIDEO_TS"
+
+// ExpectedDisc returns the expectation of a disc of the library manifest, named by its path,
+// for a reference profile name. A disc is never played directly (disc_source); the DVD's
+// MPEG-2 and AC-3 are re-encoded, and its bitmap subtitles are not shown yet. The second
+// result is false for an unknown disc or profile. The caller owns the result.
+func ExpectedDisc(discPath, profileName string) (Expectation, bool) {
+	return expectedIn(map[string]caseExpectation{
+		DiscVideoTS: both(transcode(playback.ActionTranscode, playback.ActionTranscode,
+			discSourceReason(), videoCodecReason(), audioCodecReason()).withWarnings(subtitlesWarning())),
+	}, discPath, profileName)
+}
+
+func expectedIn(table map[string]caseExpectation, caseName, profileName string) (Expectation, bool) {
+	entry, found := table[caseName]
 	if !found {
 		return Expectation{}, false
 	}
@@ -215,6 +234,10 @@ func transcodeAudioOnly() Expectation {
 
 func containerReason() playback.Reason {
 	return playback.Reason{Code: playback.ReasonContainerNotSupported, Scope: playback.ScopeContainer}
+}
+
+func discSourceReason() playback.Reason {
+	return playback.Reason{Code: playback.ReasonDiscSource, Scope: playback.ScopeContainer}
 }
 
 func videoCodecReason() playback.Reason {

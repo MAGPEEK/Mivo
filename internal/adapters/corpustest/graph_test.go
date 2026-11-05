@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/magpeek/mivo/internal/adapters/disc"
 	"github.com/magpeek/mivo/internal/adapters/ffmpeg"
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	"github.com/magpeek/mivo/internal/adapters/fs/transcodedir"
@@ -192,8 +193,8 @@ func waitForScan(t *testing.T, service *scan.Service, libraryID string) scan.Sta
 	}
 }
 
-// newPlaybackService wires the playback use case with the real adapters and the given
-// capabilities. It allows maxParallelSessions re-encoding sessions, so the bounded
+// newPlaybackService wires the playback use case with the real adapters, disc ports included,
+// and the given capabilities. It allows maxParallelSessions re-encoding sessions, so the bounded
 // parallelism of the test never trips a session limit. The service is closed when the test
 // ends.
 func (graph *corpusGraph) newPlaybackService(t *testing.T, capabilities playback.ServerCapabilities) *appplayback.Service {
@@ -213,6 +214,7 @@ func (graph *corpusGraph) newPlaybackService(t *testing.T, capabilities playback
 		Files: sqlite.NewCatalogReader(graph.database), Paths: graph.files, Keyframes: graph.prober,
 		Producer: producer, Workspace: workspace, URLs: stream.NewURLBuilder(), IDs: uuidgen.New(),
 		Clock: time.Now, After: time.After, Logger: graph.logger,
+		Discs: appplayback.DiscPorts{Directories: graph.files, Titles: disc.NewResolver(), Keyframes: graph.prober},
 	}, appplayback.Options{
 		Capabilities:         capabilities,
 		Policy:               playback.Policy{MaxTranscodeHeight: maxTranscodeHeight},

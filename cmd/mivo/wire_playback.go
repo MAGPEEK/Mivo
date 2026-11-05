@@ -79,7 +79,8 @@ func (app application) newPlaybackService(ctx context.Context, db *sqlite.DB, ad
 	service, err := appplayback.NewService(appplayback.Dependencies{
 		Files: sqlite.NewCatalogReader(db), Paths: adapters.files, Keyframes: adapters.prober,
 		Producer: producer, Workspace: adapters.workspace, URLs: stream.NewURLBuilder(),
-		IDs: uuidgen.New(), Clock: time.Now, After: time.After, Logger: app.logger,
+		Discs: playbackDiscPorts(adapters.files, adapters.prober),
+		IDs:   uuidgen.New(), Clock: time.Now, After: time.After, Logger: app.logger,
 	}, appplayback.Options{
 		Capabilities:         adapters.tools.capabilities,
 		Policy:               playback.Policy{MaxTranscodeHeight: maxTranscodeHeight},

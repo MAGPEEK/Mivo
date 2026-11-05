@@ -34,6 +34,12 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 		return err
 	}
 
+	discs, err := discCases(opts.discManifest, opts.profile)
+	if err != nil {
+		return err
+	}
+
+	cases = append(cases, discs...)
 	client := newAPIClient(opts.base, dependencies.httpClient)
 
 	info, err := client.systemInfo(ctx)

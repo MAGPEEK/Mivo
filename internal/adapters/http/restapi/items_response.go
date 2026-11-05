@@ -142,9 +142,10 @@ func mediaFileResponse(file media.File) (apigen.MediaFile, error) {
 		streams = append(streams, response)
 	}
 
+	// A disc folder is named after the folder holding BDMV or VIDEO_TS, not "VIDEO_TS".
 	return apigen.MediaFile{
 		ID:              id,
-		FileName:        fileName(file.RelativePath),
+		FileName:        fileName(file.Layout.DiscRoot(file.RelativePath)),
 		SizeBytes:       file.Size,
 		ModifiedAt:      apiTimestamp(file.ModifiedAt),
 		Available:       file.Probed(),

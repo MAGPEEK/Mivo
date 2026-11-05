@@ -134,6 +134,7 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		Music: appscan.MusicPorts{Tags: adapters.prober, Catalog: catalog},
 		// ffprobe also reads the chapter markers; the catalog stores them per part file.
 		Audiobooks: appscan.AudiobookPorts{Tags: adapters.prober, Chapters: adapters.prober, Catalog: catalog},
+		Discs:      scanDiscPorts(adapters.files, adapters.prober),
 		Finished: func(ctx context.Context, _ string) {
 			app.purgeImageCache(ctx, adapters.images)
 		},

@@ -2056,7 +2056,7 @@ export interface components {
              */
             id: string;
             /**
-             * @description Name of the file without any directory, for example "movie.mkv". A forward slash and a backslash both count as a directory separator.
+             * @description Name of the file without any directory, for example "movie.mkv". A forward slash and a backslash both count as a directory separator. A DVD or Blu-ray folder is named after the folder that holds VIDEO_TS or BDMV, for example "Heat (1995)".
              * @example Big.Buck.Bunny.mkv
              */
             fileName: string;
@@ -2078,7 +2078,7 @@ export interface components {
              */
             available: boolean;
             /**
-             * @description Machine-readable reason the file cannot be played, for example "probe_failed"; omitted when available. Clients show a generic text for unknown codes.
+             * @description Machine-readable reason the file cannot be played; omitted when available. Known codes: "probe_failed" (the file could not be read), "probe_timed_out" (reading the file took too long), "disc_encrypted" (the main title of the disc is copy protected), "disc_unsupported" (the disc cannot be read) and "disc_no_title" (the disc has no playable title). Clients show a generic text for unknown codes.
              * @example probe_failed
              */
             errorCode?: string;
@@ -2413,7 +2413,7 @@ export interface components {
         /** @description A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes. */
         PlaybackReason: {
             /**
-             * @description Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_track_not_default". Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
+             * @description Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_track_not_default", "disc_source" (a DVD or Blu-ray disc is never played directly). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
              * @example audio_codec_not_supported
              */
             code: string;

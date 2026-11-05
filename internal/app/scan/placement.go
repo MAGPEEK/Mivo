@@ -154,6 +154,8 @@ type placementInput struct {
 	wanted       []placedFile
 	skipped      skipSet
 	withoutVideo map[fileKey]library.FileState
+	// unsupportedDiscs are the discs this server start probed as disc_unsupported (needsProbe).
+	unsupportedDiscs map[fileKey]struct{}
 }
 
 // planPlacements sorts the wanted files into probes (new or changed), moves (unchanged with
@@ -174,7 +176,7 @@ func planPlacements(input placementInput) placementPlan {
 		}
 
 		wantedPaths[keyOf(video.state)] = true
-		plan.add(video, storedByPath, input.withoutVideo)
+		plan.add(video, storedByPath, input)
 	}
 
 	for _, file := range input.stored {
@@ -186,14 +188,14 @@ func planPlacements(input placementInput) placementPlan {
 	return plan
 }
 
-func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]PlacedFileState,
-	withoutVideo map[fileKey]library.FileState,
-) {
+func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]PlacedFileState, input placementInput) {
 	state := video.state
 
 	if previous, found := storedByPath[keyOf(state)]; found {
+		_, probedThisStart := input.unsupportedDiscs[keyOf(state)]
+
 		switch {
-		case needsProbe(previous, state):
+		case needsProbe(previous, state, probedThisStart):
 			plan.probes = append(plan.probes, probeJob{state: state, placement: video.placement, placed: &previous})
 		case previous.PlacementKey != video.placement.Key():
 			plan.moves = append(plan.moves, moveJob{stored: previous, placement: video.placement})
@@ -205,7 +207,7 @@ func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]Placed
 		return
 	}
 
-	if known, remembered := withoutVideo[keyOf(state)]; remembered && !library.Changed(known, state) {
+	if known, remembered := input.withoutVideo[keyOf(state)]; remembered && !library.Changed(known, state) {
 		plan.withoutVideo[keyOf(state)] = state
 
 		return
@@ -215,10 +217,12 @@ func (plan *placementPlan) add(video placedFile, storedByPath map[fileKey]Placed
 }
 
 // needsProbe reports a stored file that must be probed again: it changed, or it is a disc
-// stored as disc_unsupported. That code also stands for an FFmpeg build without the needed
-// demuxers or protocols (ADR 0029), which an update may add, and an unchanged disc would
-// otherwise stay unavailable for good; the cost is one probe per such disc and scan.
-func needsProbe(previous PlacedFileState, current library.FileState) bool {
+// stored as disc_unsupported that this server start has not probed yet. That code also
+// stands for an FFmpeg build without the needed demuxers or protocols (ADR 0029), which an
+// update may add, and an unchanged disc would otherwise stay unavailable for good. The
+// build only changes with a restart, so one probe per start is enough; a corrupt or non-disc
+// image does not fail every scan.
+func needsProbe(previous PlacedFileState, current library.FileState, probedThisStart bool) bool {
 	return library.Changed(previous.State, current) ||
-		(current.Layout.IsDisc() && previous.ProbeError == media.ProbeErrorDiscUnsupported)
+		(current.Layout.IsDisc() && previous.ProbeError == media.ProbeErrorDiscUnsupported && !probedThisStart)
 }

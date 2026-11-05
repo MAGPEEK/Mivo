@@ -313,10 +313,12 @@ func TestDiscsWaitForTheDiscPorts(t *testing.T) {
 	assertSavedDisc(t, h.catalogV2, savedDisc("Heat (1995)/VIDEO_TS", media.LayoutVideoTS, media.ProbeErrorNone))
 }
 
-// TestUnsupportedDiscIsProbedAgain: disc_unsupported also stands for an FFmpeg build that
-// lacks a demuxer or protocol, so an unchanged disc with that code is probed on every scan
-// and becomes available once the probe succeeds.
-func TestUnsupportedDiscIsProbedAgain(t *testing.T) {
+// TestUnsupportedDiscIsProbedAgainAfterARestart: disc_unsupported also stands for an FFmpeg
+// build that lacks a demuxer or protocol, so an unchanged disc with that code is probed again
+// by the first scan of every server start (the FFmpeg build only changes with a restart),
+// and becomes available once the probe succeeds. Within one start it is unchanged, so a
+// corrupt or non-disc image does not fail every scan.
+func TestUnsupportedDiscIsProbedAgainAfterARestart(t *testing.T) {
 	t.Parallel()
 
 	h, _, prober := discHarness(t)
@@ -325,12 +327,18 @@ func TestUnsupportedDiscIsProbedAgain(t *testing.T) {
 
 	disc := discAt("Movie (2019)/BDMV", 1, media.LayoutBDMV)
 	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, disc), scan.Counts{Failed: 1})
+	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, disc), scan.Counts{Unchanged: 1})
+
+	h.start(t)
 	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, disc), scan.Counts{Failed: 1})
 
 	prober.mutex.Lock()
 	delete(prober.errs, "Movie (2019)")
 	prober.mutex.Unlock()
 
+	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, disc), scan.Counts{Unchanged: 1})
+
+	h.start(t)
 	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, disc), scan.Counts{Updated: 1})
 	assertSavedDisc(t, h.catalogV2, savedDisc("Movie (2019)/BDMV", media.LayoutBDMV, media.ProbeErrorNone))
 
@@ -341,29 +349,70 @@ func TestUnsupportedDiscIsProbedAgain(t *testing.T) {
 	}
 }
 
+// TestChangedUnsupportedDiscIsProbedAgain: a disc stored as disc_unsupported that changed on
+// disk is probed like any changed file, also after this start probed it once.
+func TestChangedUnsupportedDiscIsProbedAgain(t *testing.T) {
+	t.Parallel()
+
+	h, _, prober := discHarness(t)
+	prober.errs["Movie (2019)"] = fmt.Errorf("probe: %w", media.ErrDiscUnsupported)
+	h.start(t)
+
+	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, discAt("Movie (2019)/BDMV", 1, media.LayoutBDMV)), scan.Counts{Failed: 1})
+
+	prober.mutex.Lock()
+	delete(prober.errs, "Movie (2019)")
+	prober.mutex.Unlock()
+
+	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, discAt("Movie (2019)/BDMV", 2, media.LayoutBDMV)), scan.Counts{Updated: 1})
+	assertSavedDisc(t, h.catalogV2, savedDisc("Movie (2019)/BDMV", media.LayoutBDMV, media.ProbeErrorNone))
+}
+
+// TestDiscsWaitingForThePortsDoNotKeepOrphanExtras: a disc skipped for missing disc ports is
+// no unreadable path, so the walk is still complete and an extra whose movie is gone is
+// removed like in a library without discs.
+func TestDiscsWaitingForThePortsDoNotKeepOrphanExtras(t *testing.T) {
+	t.Parallel()
+
+	h := newHarness(t)
+	h.start(t)
+
+	movie, trailer := fileAt("Up (2009)/Up (2009).mkv", 1), fileAt("Up (2009)/Trailers/Teaser.mkv", 2)
+	assertCounts(t, h.scanFiles(t, moviesID, moviesRoot, movie, trailer), scan.Counts{Added: 2})
+
+	status := h.scanFiles(t, moviesID, moviesRoot, trailer, discAt("Heat (1995)/VIDEO_TS", 3, media.LayoutVideoTS))
+
+	assertCounts(t, status, scan.Counts{Removed: 2, Skipped: 1})
+
+	if id, _ := h.catalogV2.fileOf(trailer.RelativePath); id != "" {
+		t.Errorf("the orphan extra %s survived a complete walk", trailer.RelativePath)
+	}
+}
+
 // TestDiscsAreNoEntriesOfOtherLibraryKinds: the walker reports images and disc folders in
-// every library; only movies and shows libraries take them.
+// every library; only movies and shows libraries take them, and the kind's own file next to
+// them is still added.
 func TestDiscsAreNoEntriesOfOtherLibraryKinds(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name  string
-		setup func(t *testing.T) (*harness, string, string)
+		setup func(t *testing.T) (*harness, string, string, library.FileState)
 	}{
-		{name: "music", setup: func(t *testing.T) (*harness, string, string) {
+		{name: "music", setup: func(t *testing.T) (*harness, string, string, library.FileState) {
 			h, _, _ := newMusicHarness(t)
 
-			return h, musicID, musicRoot
+			return h, musicID, musicRoot, audioAt("Album/01 Intro.flac", 3)
 		}},
-		{name: "audiobooks", setup: func(t *testing.T) (*harness, string, string) {
+		{name: "audiobooks", setup: func(t *testing.T) (*harness, string, string, library.FileState) {
 			h, _, _ := newAudiobookHarness(t)
 
-			return h, booksID, booksRoot
+			return h, booksID, booksRoot, h.bookAt("Album/Dune.m4b", 3)
 		}},
-		{name: "photos", setup: func(t *testing.T) (*harness, string, string) {
+		{name: "photos", setup: func(t *testing.T) (*harness, string, string, library.FileState) {
 			h, _, _ := newPhotoHarness(t)
 
-			return h, photosID, photosRoot
+			return h, photosID, photosRoot, fileAt("Album/IMG_1.jpg", 3)
 		}},
 	}
 
@@ -371,22 +420,26 @@ func TestDiscsAreNoEntriesOfOtherLibraryKinds(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			h, libraryID, root := test.setup(t)
+			h, libraryID, root, sibling := test.setup(t)
 			titles, prober := &fakeTitles{}, &fakeDiscProber{}
 			h.discs = scan.DiscPorts{Directories: fakeDirectories{}, Titles: titles, Prober: prober}
 			h.start(t)
 
-			status := h.scanFiles(t, libraryID, root,
+			status := h.scanFiles(t, libraryID, root, sibling,
 				discAt("Album/Album.iso", 1, media.LayoutISO), discAt("Concert (2019)/VIDEO_TS", 2, media.LayoutVideoTS))
 
 			assertState(t, status, scan.StateIdle, scan.ErrorCodeNone)
 
-			if status.Counts.Added != 0 || status.Counts.Failed != 0 {
-				t.Errorf("counts = %+v, want no disc added or failed", status.Counts)
+			if status.Counts.Added != 1 || status.Counts.Failed != 0 {
+				t.Errorf("counts = %+v, want only %s added and nothing failed", status.Counts, sibling.RelativePath)
 			}
 
-			if len(titles.resolved) != 0 || len(prober.sources) != 0 || len(h.prober.probedPaths()) != 0 {
-				t.Errorf("resolved %v, probed discs %v and files %v, want nothing", titles.resolved, prober.sources, h.prober.probedPaths())
+			if _, found := h.catalogV2.savedFile(sibling.RelativePath); !found {
+				t.Errorf("%s next to the discs was not stored", sibling.RelativePath)
+			}
+
+			if len(titles.resolved) != 0 || len(prober.sources) != 0 {
+				t.Errorf("resolved %v, probed discs %v, want nothing", titles.resolved, prober.sources)
 			}
 		})
 	}

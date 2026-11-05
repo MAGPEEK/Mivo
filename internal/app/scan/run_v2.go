@@ -17,7 +17,19 @@ type walked struct {
 	// mediaFiles are the videos, or the audio files of an audio library.
 	mediaFiles []library.FileState
 	sidecars   []library.FileState
-	skipped    skipSet
+	// skipped are the paths the walk could not read (unreadable or unavailable).
+	skipped skipSet
+	// protectedDiscs are the discs skipped because the disc ports are missing (discProtected).
+	// Like skipped paths, their stored entries survive; unlike them, they are readable, so
+	// they neither keep orphan extras nor block the refresh of items (protectOrphans,
+	// carryOverUnreadable).
+	protectedDiscs skipSet
+}
+
+// kept returns the paths whose stored entries the scan keeps although the walk did not
+// report them: the unreadable paths and the discs waiting for the disc ports.
+func (files walked) kept() skipSet {
+	return files.skipped.with(files.protectedDiscs)
 }
 
 // runV2 is one scan of one library with the v2 pipeline (placement, versions, extras,
@@ -147,8 +159,9 @@ func (scanRun *runV2) plan(ctx context.Context, files walked) (placementPlan, er
 	}
 
 	plan := planPlacements(placementInput{
-		stored: stored, wanted: wanted, skipped: protectOrphans(files.skipped, orphans),
-		withoutVideo: base.service.filesWithoutVideo(base.library.ID),
+		stored: stored, wanted: wanted, skipped: protectOrphans(files.skipped, orphans).with(files.protectedDiscs),
+		withoutVideo:     base.service.filesWithoutVideo(base.library.ID),
+		unsupportedDiscs: base.service.unsupportedDiscsOf(base.library.ID),
 	})
 	scanRun.withoutVideo = plan.withoutVideo
 	scanRun.carryOverUnreadable(files.skipped, stored)
@@ -234,7 +247,7 @@ func (scanRun *runV2) finishSidecars(ctx context.Context, files walked) error {
 		return catalogFailure("load sidecar states", err)
 	}
 
-	diff := diffSidecars(storedSidecars, files.sidecars, files.skipped)
+	diff := diffSidecars(storedSidecars, files.sidecars, files.kept())
 	scanRun.refresh.addBelowChangedSidecars(diff.changedSidecars(), scanRun.chains)
 
 	if scanRun.optionsChanged {
@@ -384,6 +397,10 @@ func (scanRun *runV2) record(ctx context.Context, result probeResult) error {
 
 		if err := scanRun.save(ctx, result.job, media.Description{}, result.probeError); err != nil {
 			return err
+		}
+
+		if result.probeError == media.ProbeErrorDiscUnsupported {
+			scanRun.base.service.rememberUnsupportedDisc(scanRun.base.library.ID, result.job.state)
 		}
 
 		scanRun.base.tracker.count(func(counts *Counts) { counts.Failed++ })

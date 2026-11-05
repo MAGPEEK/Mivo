@@ -104,6 +104,32 @@ func TestExpectedRejectsUnknownCasesAndProfiles(t *testing.T) {
 	}
 }
 
+// TestExpectedDiscCoversTheDVDForEveryProfile: the disc table is separate from the media
+// table (its keys are disc paths of the library manifest) and covers both reference profiles.
+func TestExpectedDiscCoversTheDVDForEveryProfile(t *testing.T) {
+	t.Parallel()
+
+	for _, profile := range referenceProfileNames() {
+		expected, found := corpustest.ExpectedDisc(corpustest.DiscVideoTS, profile)
+		if !found || expected.Mode != playback.ModeTranscode || len(expected.Reasons) == 0 ||
+			expected.Reasons[0].Code != playback.ReasonDiscSource {
+			t.Errorf("ExpectedDisc(%q, %q) = %+v, %t; want a transcode for disc_source", corpustest.DiscVideoTS, profile, expected, found)
+		}
+	}
+
+	lookups := []struct{ discPath, profile string }{
+		{discPath: "Unknown (2000)/VIDEO_TS", profile: corpustest.ChromiumDesktop},
+		{discPath: corpustest.DiscVideoTS, profile: "safari-ios"},
+		{discPath: corpustest.CaseNames()[0], profile: corpustest.ChromiumDesktop},
+	}
+
+	for _, lookup := range lookups {
+		if expected, found := corpustest.ExpectedDisc(lookup.discPath, lookup.profile); found {
+			t.Errorf("ExpectedDisc(%q, %q) = %+v, true; want not found", lookup.discPath, lookup.profile, expected)
+		}
+	}
+}
+
 // TestExpectedReturnsIndependentValues guards the promise that callers own the result: a
 // test that appends to the reasons of one lookup must not change the next.
 func TestExpectedReturnsIndependentValues(t *testing.T) {

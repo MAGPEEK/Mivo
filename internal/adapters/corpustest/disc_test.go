@@ -349,8 +349,8 @@ func assertDiscStreams(t *testing.T, description media.Description, want discStr
 
 // TestCorpusDVDTitlePlays decides the DVD main title for the Chromium reference profile and
 // produces it as HLS through the FFmpeg producer, the way a session does: MPEG-2 and AC-3 are
-// transcoded, and the joined output lasts the whole title. The session API itself reaches
-// discs with the scan and composition-root wiring (M3-16h, M3-16k).
+// transcoded, and the joined output lasts the whole title. TestCorpusDVDSessionPlays plays
+// the same title through a session.
 func TestCorpusDVDTitlePlays(t *testing.T) {
 	t.Parallel()
 
@@ -403,6 +403,18 @@ func (corpus discCorpus) firstDisc(t *testing.T, layout media.Layout) discRow {
 	t.Fatalf("the manifest lists no playable %s disc", layout)
 
 	return discRow{}
+}
+
+// disc returns the manifest row of the disc at discPath.
+func (corpus discCorpus) disc(t *testing.T, discPath string) discRow {
+	t.Helper()
+
+	index := slices.IndexFunc(corpus.discs, func(row discRow) bool { return row.Path == discPath })
+	if index < 0 {
+		t.Fatalf("the manifest lists no disc at %q", discPath)
+	}
+
+	return corpus.discs[index]
 }
 
 // produce runs the job to its end and returns the output directory.

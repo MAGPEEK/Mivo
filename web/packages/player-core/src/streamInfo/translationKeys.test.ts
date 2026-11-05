@@ -21,6 +21,7 @@ describe("streamInfoTranslationKeys", () => {
       "streamInfo.reason.video_bit_depth_not_supported",
       "streamInfo.reason.audio_codec_not_supported",
       "streamInfo.reason.audio_track_not_default",
+      "streamInfo.reason.disc_source",
       "streamInfo.reason.unknown",
       "streamInfo.warning.hdr_not_tone_mapped",
       "streamInfo.warning.subtitles_not_supported",

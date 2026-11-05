@@ -172,11 +172,19 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
     to `BDMV` is seen, or the image) and probed; it is not stored. A disc that cannot be
     played is stored with its code as `probe_error` (`disc_encrypted`, `disc_unsupported`,
     `disc_no_title`) and listed as unavailable with that `errorCode`. An unchanged disc
-    stored as `disc_unsupported` is probed again on every scan, since the code also stands
-    for an FFmpeg build that lacks a demuxer or protocol. Without the disc ports discs are
-    skipped (nothing stored, entries at or below them kept) until a scan has the ports.
-    Only movies and shows libraries take discs; other kinds drop what the walker reports.
-    Discs in the library root stay unmatched.
+    stored as `disc_unsupported` is probed again by the first scan of every server start,
+    since the code also stands for an FFmpeg build that lacks a demuxer or protocol and that
+    build only changes with a restart (M3-16k); within one start it counts as unchanged, so
+    a corrupt or non-disc image does not fail every scan. Without the disc ports discs are
+    skipped (nothing stored, entries at or below them kept) until a scan has the ports; such
+    a disc is no unreadable path, so it neither keeps orphan extras nor blocks the metadata
+    refresh. Only movies and shows libraries take discs; other kinds drop what the walker
+    reports. Discs in the library root stay unmatched.
+  - The composition root wires the disc ports for scan and playback (M3-16k): libraryfs
+    resolves the disc folder, `disc.Resolver` selects the title and refuses protected discs,
+    the ffprobe `Prober` describes the title and finds seek keyframes. The API names a disc
+    folder after the folder that holds `VIDEO_TS`/`BDMV` (`MediaFile.fileName`), an image by
+    its file name.
   - A session resolves the title again (directory or image resolved inside the library
     root first) and hands it to the producer. The decision engine never plays a disc
     directly: its one source reason is `disc_source` (container and direct-play codec checks

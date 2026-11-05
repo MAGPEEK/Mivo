@@ -14,9 +14,12 @@
 //	go run ./scripts/playback-smoke -base http://localhost:8460 [-manifest testdata/media/manifest.json]
 //	                                [-profile chromium-desktop] [-ffprobe ffprobe]
 //	                                [-case-timeout 2m] [-scan-timeout 5m]
+//	                                [-disc-manifest testdata/library/manifest.json]
 //
 // The server must serve the same corpus, for example the Docker image with
-// testdata/media mounted at /media (packaging/docker/README.md).
+// testdata/media mounted at /media (packaging/docker/README.md). With -disc-manifest it also
+// plays the clear DVD folder of the disc corpus (testdata/library/discs, M3-16k), which the
+// server must serve as well.
 package main
 
 import (
@@ -66,12 +69,14 @@ func main() {
 
 // options holds the parsed command line.
 type options struct {
-	base        *url.URL
-	manifest    string
-	profile     string
-	ffprobe     string
-	caseTimeout time.Duration
-	scanTimeout time.Duration
+	base     *url.URL
+	manifest string
+	// discManifest is the library manifest whose clear DVD is played too; empty: no disc.
+	discManifest string
+	profile      string
+	ffprobe      string
+	caseTimeout  time.Duration
+	scanTimeout  time.Duration
 }
 
 // run executes the command with the given arguments and returns the process exit code.
@@ -119,6 +124,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.SetOutput(stderr)
 	flags.StringVar(&base, "base", "", "base URL of the running server, e.g. http://localhost:8460 (required)")
 	flags.StringVar(&opts.manifest, "manifest", defaultManifest, "corpus manifest of the files the server serves")
+	flags.StringVar(&opts.discManifest, "disc-manifest", "",
+		"library manifest (testdata/library/manifest.json) whose clear DVD the server also serves and the smoke plays; empty: no disc case")
 	flags.StringVar(&opts.profile, "profile", defaultProfile, "reference client profile: chromium-desktop or firefox-desktop")
 	flags.StringVar(&opts.ffprobe, "ffprobe", defaultFFprobe, "local ffprobe executable (name on PATH or path)")
 	flags.DurationVar(&opts.caseTimeout, "case-timeout", defaultCaseTimeout, "time limit of one case")

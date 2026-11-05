@@ -97,7 +97,10 @@ type Service struct {
 	// (audiobook chapters, photo details) could not be written; the next scan reads them again
 	// although they are unchanged.
 	detailRetries map[string]map[fileKey]struct{}
-	closed        bool
+	// unsupportedDiscs holds, per library ID, the discs this server start probed as
+	// disc_unsupported; an unchanged one is probed again only after a restart (needsProbe).
+	unsupportedDiscs map[string]map[fileKey]struct{}
+	closed           bool
 }
 
 // NewService validates the dependencies and returns a Service. A missing dependency is a
@@ -141,6 +144,8 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		pendingRefresh: map[string]map[string]struct{}{},
 		detailRetries:  map[string]map[fileKey]struct{}{},
 		withoutVideo:   map[string]map[fileKey]library.FileState{},
+
+		unsupportedDiscs: map[string]map[fileKey]struct{}{},
 	}, nil
 }
 
@@ -342,8 +347,8 @@ func (service *Service) WaitIdle(ctx context.Context, libraryID string) error {
 }
 
 // Forget drops what the service remembers in memory about a library that was deleted: the
-// options of its last scan, the refresh waiting for an unavailable folder and the files known
-// to have no video. Call it after Cancel/WaitIdle, or a scan that is still ending stores them
+// options of its last scan, the refresh waiting for an unavailable folder, the files known
+// to have no video and the discs probed as unsupported. Call it after Cancel/WaitIdle, or a scan that is still ending stores them
 // again. It never touches the catalog.
 func (service *Service) Forget(libraryID string) {
 	service.mutex.Lock()
@@ -353,6 +358,7 @@ func (service *Service) Forget(libraryID string) {
 	delete(service.pendingRefresh, libraryID)
 	delete(service.withoutVideo, libraryID)
 	delete(service.detailRetries, libraryID)
+	delete(service.unsupportedDiscs, libraryID)
 }
 
 func (service *Service) trackerOf(libraryID string) *tracker {
