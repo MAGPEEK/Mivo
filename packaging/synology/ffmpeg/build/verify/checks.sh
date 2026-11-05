@@ -1,6 +1,7 @@
 #!/bin/sh
-# checks.sh - capability, corpus, hostile-input, HLS and folder-disc checks of one FFmpeg build, run by
-# verify.sh inside a debian:bookworm-slim container of the family's platform, under kernelsim.
+# checks.sh - capability, corpus, hostile-input, HLS, folder-disc and disc-image checks of one
+# FFmpeg build, run by verify.sh inside a debian:bookworm-slim container of the family's platform,
+# under kernelsim.
 #
 # Environment (set by verify.sh):
 #   FAMILY      x86_64, armv8 or armv7
@@ -121,7 +122,7 @@ check_components() {
 	done
 	ffmpeg -hide_banner -protocols 2>/dev/null | awk '/^Input:/{i=1;next}/^Output:/{i=0}i{print $1}' >"$scratch/protocols"
 	printf 'INFO input protocols: %s\n' "$(tr '\n' ' ' <"$scratch/protocols")"
-	check "input protocols are exactly concat, file, pipe" test "$(sort "$scratch/protocols" | tr '\n' ' ')" = "concat file pipe "
+	check "input protocols are exactly concat, file, pipe, subfile" test "$(sort "$scratch/protocols" | tr '\n' ' ')" = "concat file pipe subfile "
 	for tool in ffmpeg ffprobe; do
 		"$tool" -hide_banner -h full >"$scratch/help-$tool" 2>/dev/null
 		check "$tool -h full lists format_whitelist" grep -q 'format_whitelist' "$scratch/help-$tool"
@@ -275,6 +276,8 @@ corpus_duration() {
 check_dvd_title() {
 	vob=/corpus/video/mpeg2_ac3.vob
 	sectors=$(($(wc -c <"$vob") / 2048))
+	# Half the sectors, rounded down to a whole sector on purpose.
+	# shellcheck disable=SC2017
 	half=$((sectors / 2 * 2048))
 	head -c "$half" "$vob" >"$disc/VTS_01_1.VOB"
 	tail -c +"$((half + 1))" "$vob" >"$disc/VTS_01_2.VOB"
@@ -311,13 +314,57 @@ check_bluray_title() {
 		-i "file:$list" -map 0 -c copy -f null -
 }
 
-# check_discs reads folder-disc titles with the server's disc arguments (disc_input.go). The
-# corpus has no disc folders, so the parts are made here from single corpus files.
+# append_to_image <file>: appends the file to $image and prints "start end" of its byte range
+# (end exclusive, as subfile's end option counts), then a sector of zeros, so the next file of
+# the image does not follow directly.
+append_to_image() {
+	start=$(wc -c <"$image")
+	cat "$1" >>"$image"
+	end=$(wc -c <"$image")
+	head -c 2048 /dev/zero >>"$image"
+	printf '%s %s\n' "$start" "$end"
+}
+
+# subfile_url <start end>: the server's form of a byte range inside the image (M3-16g).
+subfile_url() { printf 'subfile,,start,%s,end,%s,,:file:%s' "$1" "$2" "$image"; }
+
+# check_iso_image reads titles inside an ISO-like image the way ISO playback does (M3-16g, task
+# M3-16j-b): through subfile byte ranges, never mounted. The image is 16 empty sectors (the ISO
+# system area), the two VOB parts of check_dvd_title with a gap between them and an m2ts clip.
+check_iso_image() {
+	image="$disc/image.iso"
+	head -c 32768 /dev/zero >"$image"
+	# Word splitting of "start end" into the two arguments is intended.
+	# shellcheck disable=SC2046
+	{
+		first=$(subfile_url $(append_to_image "$disc/VTS_01_1.VOB"))
+		second=$(subfile_url $(append_to_image "$disc/VTS_01_2.VOB"))
+		clip_url=$(subfile_url $(append_to_image /corpus/video/h264_ac3.m2ts))
+	}
+	want=$(whole "$(corpus_duration /corpus/video/mpeg2_ac3.vob)")
+	got=$(whole "$(probe_duration -f mpeg -format_whitelist mpeg -protocol_whitelist file,subfile,concat \
+		"concat:$first|$second")")
+	printf 'INFO ISO DVD title (concat of 2 subfile ranges): %s s, source %s s %s\n' "${got:-?}" "${want:-?}" "$(tr '\n' ' ' <"$scratch/disc.err")"
+	check "ISO DVD title through concat and subfile has the source's duration" test -n "$got" -a "${got:-x}" = "${want:-y}"
+	want=$(whole "$(corpus_duration /corpus/video/h264_ac3.m2ts)")
+	got=$(whole "$(probe_duration -f mpegts -format_whitelist mpegts -protocol_whitelist file,subfile "$clip_url")")
+	printf 'INFO ISO Blu-ray clip (subfile range): %s s, source %s s %s\n' "${got:-?}" "${want:-?}" "$(tr '\n' ' ' <"$scratch/disc.err")"
+	check "ISO Blu-ray clip through subfile has the source's duration" test -n "$got" -a "${got:-x}" = "${want:-y}"
+	check "ISO Blu-ray clip remuxes through subfile" ffmpeg -hide_banner -nostdin -v error -f mpegts \
+		-format_whitelist mpegts -protocol_whitelist file,subfile -i "$clip_url" -map 0 -c copy -f null -
+	check "subfile is refused when it is not on the protocol whitelist" refused ffprobe -v error -hide_banner \
+		-show_streams -f mpegts -format_whitelist mpegts -protocol_whitelist file "$clip_url"
+}
+
+# check_discs reads folder-disc titles with the server's disc arguments (disc_input.go) and
+# titles inside an ISO-like image. The corpus has no disc folders, so the parts are made here
+# from single corpus files.
 check_discs() {
 	disc=/tmp/disc
 	mkdir -p "$disc"
 	check_dvd_title
 	check_bluray_title
+	check_iso_image
 }
 
 # render_poster <format> <encoder args...>: the image renderer's arguments (image_args.go) on a

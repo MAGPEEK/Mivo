@@ -278,6 +278,8 @@ pkg_share_link_prefix() {
 # "required ...: ok" lines are left out to keep that log short; the version, the optional
 # decoders, anything missing and the summary stay. It reports only and never fails: the
 # server's own capability probe decides at start what it uses.
+# ffmpeg-capabilities.sh limits every ffmpeg call with timeout(1) when the system has one, so a
+# hanging binary cannot hold up the installation (M3-16j-b).
 pkg_report_ffmpeg_capabilities() {
 	# Callers run under set -e: neither the failing check nor an empty filter result may end them.
 	pkg_capabilities_status=0

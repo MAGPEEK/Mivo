@@ -32,9 +32,11 @@ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -f packaging
 and `web/` (without `node_modules`, build output, coverage and Playwright output), plus the
 FFmpeg capability check `packaging/synology/package/scripts/ffmpeg-capabilities.sh`.
 
-The build fails when Debian's FFmpeg lacks a capability that folder discs or photo thumbnails
-need (task M3-16j): the `concat`, `mpeg` and `mpegts` demuxers, the `file` and `concat` input
-protocols, or one of the decoders `mjpeg`, `png`, `webp`, `gif`, `tiff`. The same step reports,
+The build fails when Debian's FFmpeg lacks a capability that folder discs, ISO images or photo
+thumbnails need (tasks M3-16j, M3-16j-b): the `concat`, `mpeg` and `mpegts` demuxers, the
+`file`, `concat` and `subfile` input protocols, or one of the decoders `mjpeg`, `png`, `webp`,
+`gif`, `tiff` (Debian 13's FFmpeg 7.1.5 has all of them). The script is bind-mounted for that
+step only, so no image layer keeps it. The same step reports,
 without failing, whether `hevc`, HEIF (`mov` demuxer plus `hevc`) and `libdav1d` decode is
 available; the report is in the build log and in the image:
 

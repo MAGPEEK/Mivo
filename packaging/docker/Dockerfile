@@ -97,14 +97,14 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # The build fails when Debian's FFmpeg lacks what folder discs and photo thumbnails need
-# (concat, mpeg and mpegts demuxers, file and concat protocols, the photo decoders; task
-# M3-16j). The same script checks the SPK builds; it also reports whether HEVC, HEIF and
-# libdav1d decode is available. The report shows in the build log and stays in the image.
-COPY packaging/synology/package/scripts/ffmpeg-capabilities.sh /usr/local/share/ffmpeg-capabilities.sh
-RUN install -d -m 0755 /usr/local/share/doc \
+# (concat, mpeg and mpegts demuxers, file, concat and subfile protocols, the photo decoders;
+# tasks M3-16j, M3-16j-b). The same script checks the SPK builds; it also reports whether HEVC,
+# HEIF and libdav1d decode is available. The report shows in the build log and stays in the
+# image; the script itself is only bind-mounted for this step, so no layer keeps it.
+RUN --mount=type=bind,source=packaging/synology/package/scripts/ffmpeg-capabilities.sh,target=/run/ffmpeg-capabilities.sh \
+    install -d -m 0755 /usr/local/share/doc \
  && report=/usr/local/share/doc/ffmpeg-capabilities.txt \
- && if sh /usr/local/share/ffmpeg-capabilities.sh ffmpeg >"$report"; then cat "$report"; else cat "$report"; exit 1; fi \
- && rm /usr/local/share/ffmpeg-capabilities.sh
+ && if sh /run/ffmpeg-capabilities.sh ffmpeg >"$report"; then cat "$report"; else cat "$report"; exit 1; fi
 
 # Docker copies ownership and mode of these directories into new named or anonymous volumes,
 # so the default user can write /config and /transcode without a bind mount. /media is read

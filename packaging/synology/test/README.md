@@ -41,7 +41,8 @@ regular expression over the test names) runs a subset.
   templates (JSON syntax, privilege, resource, service file, the info-only install wizard and
   no media folder question), `ffmpeg-capabilities.bats` the FFmpeg capability check
   `scripts/ffmpeg-capabilities.sh` of task M3-16j (required disc demuxers and protocols and photo
-  decoders, the reported HEIC/AVIF decoders) that postinst runs into the package log.
+  decoders, the reported HEIC/AVIF decoders, the timeout(1) limit of every ffmpeg call; task
+  M3-16j-b) that postinst runs into the package log.
 - `scripts/helpers.bash` – shared setup: a DSM-like package tree per test in `$BATS_TEST_TMPDIR`
   (`target`, `var`, `tmp` and `home` are links into `volume1/@appstore|@appdata|@apptemp|@apphome/<id>`
   as on DSM; `scripts/` with every package script and the fixture `package.env`), reached
@@ -59,7 +60,8 @@ regular expression over the test names) runs a subset.
 - `fake-server.bash` – the fake server.
 - `fake-ffmpeg.sh` – the fake `bin/ffmpeg`: answers `-version`, `-demuxers`, `-decoders` and
   `-protocols` in FFmpeg's layout; `FAKE_FFMPEG_MISSING` leaves names out, `FAKE_FFMPEG_SILENT`
-  makes it list nothing.
+  makes it list nothing, `FAKE_FFMPEG_HANG` makes it hang (with `FFMPEG_CAPABILITIES_TIMEOUT=1`
+  the tests show the timeout stops it).
 
 ### Shells
 

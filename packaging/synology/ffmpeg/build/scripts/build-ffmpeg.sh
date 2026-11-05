@@ -69,8 +69,11 @@ readonly FILTERS="buffer,buffersink,abuffer,abuffersink,format,aformat,null,anul
 scale,aresample,trim,atrim,crop,hflip,vflip,transpose,rotate,setpts,asetpts,fps,pad,setsar,\
 apad,volume"
 # The server opens every input as file: and writes HLS to files; pipe feeds the photo renderer's
-# embedded previews; concat joins the VOBs of a DVD title (concat:file:a|file:b, ADR 0029).
-readonly PROTOCOLS="file,pipe,concat"
+# embedded previews; concat joins the VOBs of a DVD title (concat:file:a|file:b, ADR 0029);
+# subfile reads a byte range of a disc image without mounting it
+# (subfile,,start,<offset>,end,<offset>,,:file:<image>, M3-16g). concat and subfile open only
+# what the protocol whitelist allows below them; --disable-network keeps network protocols out.
+readonly PROTOCOLS="file,pipe,concat,subfile"
 
 configure_ffmpeg() {
 	PKG_CONFIG_LIBDIR="$prefix/lib/pkgconfig" PKG_CONFIG_PATH="" ./configure \

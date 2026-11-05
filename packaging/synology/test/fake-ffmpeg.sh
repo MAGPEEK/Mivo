@@ -5,9 +5,12 @@
 #
 # Environment: FAKE_FFMPEG_MISSING  blank-separated component names left out of every listing
 #              FAKE_FFMPEG_SILENT   when set, prints nothing (a binary that lists nothing)
+#              FAKE_FFMPEG_HANG     when set, hangs for 60 s (a binary the timeout must stop);
+#                                   exec, so the process timeout(1) started is the one sleeping
 set -u
 
 [ -z "${FAKE_FFMPEG_SILENT:-}" ] || exit 0
+[ -z "${FAKE_FFMPEG_HANG:-}" ] || exec sleep 60
 
 # row <name> <line>: prints the listing row unless the name is to be left out.
 row() {
@@ -40,7 +43,7 @@ for argument in "$@"; do
 	-protocols)
 		# Output lists concat too: only the Input: section counts.
 		printf 'Supported file protocols:\nInput:\n'
-		for protocol in concat file pipe; do row "$protocol" "  $protocol"; done
+		for protocol in concat file pipe subfile; do row "$protocol" "  $protocol"; done
 		printf 'Output:\n  concat\n  file\n'
 		exit 0
 		;;

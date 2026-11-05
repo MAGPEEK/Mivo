@@ -177,7 +177,6 @@ case_postinst_reports_missing_ffmpeg_capabilities_and_succeeds() {
 	refute_error_words
 	[[ ! -s $TEMP_LOGFILE ]] || fail "postinst showed a dialog message: $(cat "$TEMP_LOGFILE")"
 	assert_mode "$SYNOPKG_PKGVAR/data" 750
-	unset FAKE_FFMPEG_MISSING
 }
 
 case_postinst_succeeds_when_ffmpeg_lists_nothing() {
@@ -191,6 +190,15 @@ case_postinst_succeeds_when_ffmpeg_lists_nothing() {
 	run_lifecycle postinst
 	assert_success
 	assert_stderr_contains "the bundled FFmpeg lacks capabilities named above"
+}
+
+case_postinst_is_not_held_up_by_a_hanging_ffmpeg() {
+	export SYNOPKG_PKG_STATUS=INSTALL FAKE_FFMPEG_HANG=1 FFMPEG_CAPABILITIES_TIMEOUT=1
+	local started=$SECONDS
+	run_lifecycle postinst
+	assert_success
+	assert_stderr_contains "the bundled FFmpeg lacks capabilities named above"
+	((SECONDS - started < 20)) || fail "postinst took $((SECONDS - started)) s"
 }
 
 case_postinst_fails_without_dsm_variables() {
@@ -769,6 +777,7 @@ register_cases \
 	postinst_reports_directories_it_cannot_create \
 	postinst_reports_missing_ffmpeg_capabilities_and_succeeds \
 	postinst_succeeds_when_ffmpeg_lists_nothing \
+	postinst_is_not_held_up_by_a_hanging_ffmpeg \
 	postinst_fails_without_dsm_variables \
 	preupgrade_records_the_targets_of_the_share_links \
 	preupgrade_records_nothing_without_links \

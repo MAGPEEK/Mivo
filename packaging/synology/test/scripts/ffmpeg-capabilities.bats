@@ -13,7 +13,7 @@ setup() {
 	FAKE_FFMPEG=$BATS_TEST_TMPDIR/ffmpeg
 	cp "$TEST_DIR/fake-ffmpeg.sh" "$FAKE_FFMPEG"
 	chmod 0755 "$FAKE_FFMPEG"
-	unset FAKE_FFMPEG_MISSING FAKE_FFMPEG_SILENT
+	unset FAKE_FFMPEG_MISSING FAKE_FFMPEG_SILENT FAKE_FFMPEG_HANG FFMPEG_CAPABILITIES_TIMEOUT
 }
 
 # run_capabilities runs the script under the shell of the current case with the given arguments.
@@ -26,7 +26,7 @@ case_complete_build_passes() {
 	assert_success
 	assert_line --index 0 "ffmpeg capabilities of $FAKE_FFMPEG: ffmpeg version 9.9-fake Copyright (c) 2000-2026 the FFmpeg developers"
 	local name
-	for name in "demuxer concat" "demuxer mpeg" "demuxer mpegts" "protocol file" "protocol concat" \
+	for name in "demuxer concat" "demuxer mpeg" "demuxer mpegts" "protocol file" "protocol concat" "protocol subfile" \
 		"decoder mjpeg" "decoder png" "decoder webp" "decoder gif" "decoder tiff"; do
 		assert_line "required $name: ok"
 	done
@@ -38,16 +38,19 @@ case_complete_build_passes() {
 }
 
 case_missing_disc_and_photo_capabilities_fail() {
-	export FAKE_FFMPEG_MISSING="concat mpegts tiff"
+	export FAKE_FFMPEG_MISSING="concat mpegts subfile tiff"
 	run_capabilities "$FAKE_FFMPEG"
 	assert_failure 1
 	assert_line "required demuxer concat: MISSING"
 	assert_line "required demuxer mpegts: MISSING"
 	# The fake still lists concat under Output:; only the Input: section counts.
 	assert_line "required protocol concat: MISSING"
+	# ISO images are read through subfile (M3-16g).
+	assert_line "required protocol subfile: MISSING"
 	assert_line "required decoder tiff: MISSING"
 	assert_line "required demuxer mpeg: ok"
-	assert_line "summary: required capabilities missing: demuxer:concat demuxer:mpegts protocol:concat decoder:tiff"
+	assert_line "required protocol file: ok"
+	assert_line "summary: required capabilities missing: demuxer:concat demuxer:mpegts protocol:concat protocol:subfile decoder:tiff"
 }
 
 case_missing_optional_decoders_only_report() {
@@ -86,6 +89,18 @@ case_a_binary_that_lists_nothing_is_a_usage_error() {
 	assert_failure 2
 }
 
+case_a_hanging_binary_is_stopped_by_the_timeout() {
+	# The image's BusyBox provides timeout(1); without one the script could not limit a listing.
+	command -v timeout >/dev/null || fail "the test image has no timeout command"
+	export FAKE_FFMPEG_HANG=1 FFMPEG_CAPABILITIES_TIMEOUT=1
+	local started=$SECONDS
+	run_capabilities "$FAKE_FFMPEG"
+	assert_failure 2
+	assert_stderr_contains "cannot list its demuxers, decoders and protocols"
+	# Three listings of at most 1 s each, not the fake's 60 s sleep.
+	((SECONDS - started < 20)) || fail "the check took $((SECONDS - started)) s"
+}
+
 case_wrong_argument_count_is_a_usage_error() {
 	run_capabilities
 	assert_failure 2
@@ -100,4 +115,5 @@ register_cases \
 	missing_optional_decoders_only_report \
 	device_rows_and_aliases_are_read_by_name \
 	a_binary_that_lists_nothing_is_a_usage_error \
+	a_hanging_binary_is_stopped_by_the_timeout \
 	wrong_argument_count_is_a_usage_error

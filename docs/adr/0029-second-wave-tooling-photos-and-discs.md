@@ -123,8 +123,8 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   `png`, `webp`, `gif`, `tiff`) is missing, and reports `hevc`, HEIF (`mov` plus `hevc`) and
   `libdav1d`: in the image build log and `/usr/local/share/doc/ffmpeg-capabilities.txt`, and on
   the NAS from postinst in `/var/log/packages/<id>.log`. The SPK build is `--disable-network`;
-  the `subfile` protocol the ISO input of M3-16g needs is not in it yet, adding it is a further
-  recipe revision (follow-up).
+  the `subfile` protocol the ISO input of M3-16g needs was added in recipe revision 4
+  (M3-16j-b, below).
 - Playlist spans and disc images (M3-16g):
   - `media.DiscClip.Start` carries a Blu-ray play item's IN_time (a timestamp of the clip,
     45 kHz ticks). A clip with a start and a duration gets `inpoint`/`outpoint` (and
@@ -153,3 +153,14 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   - Fallback if `subfile` cannot be shipped: feed the title to FFmpeg on `pipe:0`
     sequentially (`-protocol_whitelist pipe`). It cannot seek, so it would allow only
     transcoding from the start (no resume, no remux seeks); not implemented.
+- Packaging (M3-16j-b): M3-16g reads an ISO title as byte ranges of the image through FFmpeg's
+  `subfile` protocol (`subfile,,start,A,end,B,,:file:<image>`, protocol whitelist
+  `file,subfile`, a DVD title also `concat`) instead of the loopback `http` input, so the SPK
+  build stays without network protocols. Recipe revision 4 (`9.0.2-static4`) adds
+  `--enable-protocol=subfile` (input protocols exactly concat, file, pipe, subfile; 0 to 64 KiB
+  more per binary); `ffmpeg-capabilities.sh` requires `subfile` in every shipped build, Debian's
+  FFmpeg in the image (7.1.5) has it. `verify/checks.sh` reads an ISO-like image through
+  subfile ranges (DVD title through concat of two ranges, Blu-ray clip through one) and shows
+  subfile is refused when it is not on the protocol whitelist. Every ffmpeg call of the
+  capability script runs under `timeout(1)` when the system has one, so a hanging binary cannot
+  hold up postinst; whether DSM 7.2 ships `timeout` is not documented.

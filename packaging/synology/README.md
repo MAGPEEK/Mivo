@@ -340,8 +340,9 @@ prebuilt builds in [`ffmpeg/README.md`](ffmpeg/README.md)):
   FFmpeg's native AAC encoder, dav1d (AV1 decoder) and zlib; **no** libfdk-aac and nothing
   non-free, so the binaries are redistributable;
 - reduced to what the server uses: the demuxers of the server's format whitelist, all decoders,
-  the HLS and MP4 muxers, the libx264 and AAC encoders, local files only (protocols file, pipe and
-  concat; no network protocols), plus the concat demuxer for folder discs (task M3-16j);
+  the HLS and MP4 muxers, the libx264 and AAC encoders, local files only (protocols file, pipe,
+  concat and subfile; no network protocols), plus the concat demuxer for folder discs (task
+  M3-16j) and subfile for titles inside ISO images (task M3-16j-b);
 - baselines x86-64 v1, ARMv8-A and ARMv7-A with VFPv3-D16 hard-float; NEON and newer x86
   instruction sets only through run-time CPU detection, so the same binary runs on Armada 38x
   (whose NEON support is unconfirmed) and on Alpine.

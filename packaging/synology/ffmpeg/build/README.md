@@ -27,7 +27,7 @@ docker build --output type=local,dest=out packaging/synology/ffmpeg/build   # ta
 | Target | Output |
 |---|---|
 | `x86_64`, `armv8`, `armv7` | `ffmpeg`, `ffprobe` (0755), licence texts, `SOURCE.txt` |
-| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static3-source.tar`) |
+| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static4-source.tar`) |
 | `all` | `x86_64/`, `armv8/`, `armv7/`, `source/` |
 
 Build argument `JOBS` limits the parallel compile jobs per stage (default: all CPUs). Keep build
@@ -106,7 +106,7 @@ notice, `-version` prints the configure line. Reduced to what the server needs
 | Muxers | hls, mp4, null, image2pipe (hls selects mov, mpegts, webvtt; image2pipe writes the M3-08 posters) | fMP4 HLS of ADR 0024; `null` for diagnostics |
 | Encoders | libx264, aac, mjpeg, png | software transcode targets of ADR 0023; mjpeg and png for the M3-08 image renderer (`image_args.go`), checked by `recipecheck` and rendered by `verify/checks.sh` (JPEG and PNG poster of `testdata/library`) |
 | Filters | buffer, buffersink, abuffer, abuffersink, format, aformat, null, anull, scale, aresample, trim, atrim, crop, hflip, vflip, transpose, rotate, setpts, asetpts, fps, pad, setsar, apad, volume | graph endpoints, what `ffmpeg` inserts itself (format conversion, `-t`/`-ss`, display-matrix rotation, crop metadata, `-r`, `-apad`, `-vol`) and the producer's `scale` |
-| Protocols | file, pipe, concat; `--disable-network` | the server passes `-protocol_whitelist file`; `pipe` feeds the photo renderer's embedded previews; `concat` joins a DVD title's VOBs (`-protocol_whitelist file,concat`, ADR 0029). `recipecheck` keeps `DISC_DEMUXERS` and `PROTOCOLS` in step with `disc_input.go` |
+| Protocols | file, pipe, concat, subfile; `--disable-network` | the server passes `-protocol_whitelist file`; `pipe` feeds the photo renderer's embedded previews; `concat` joins a DVD title's VOBs (`-protocol_whitelist file,concat`, ADR 0029); `subfile` (revision 4, M3-16j-b) reads a title's byte range inside an ISO image without mounting it (`subfile,,start,A,end,B,,:file:<image>` with `-protocol_whitelist file,subfile`, a DVD title also `concat`; M3-16g). `recipecheck` keeps `DISC_DEMUXERS` and `PROTOCOLS` in step with `disc_input.go` and builds every protocol `ffmpeg-capabilities.sh` requires |
 | Libraries | zlib 1.3.2 (PNG decoder, compressed Matroska/MP4 headers), x264 (8-bit 4:2:0 only, the ADR 0023 target), dav1d 1.5.4 (FFmpeg's own AV1 decoder needs a hardware decoder), iconv from musl | `--disable-autodetect`: nothing else is picked up |
 | Off | ffplay, avdevice, docs, debug symbols, every hardware API | no hardware acceleration on DSM (ADR 0026 §4) |
 
@@ -187,7 +187,7 @@ without downloading the sources (the base image and Debian's build tools still c
 network):
 
 ```sh
-tar -xf ffmpeg-9.0.2-static3-source.tar && cd ffmpeg-9.0.2-static3-source
+tar -xf ffmpeg-9.0.2-static4-source.tar && cd ffmpeg-9.0.2-static4-source
 docker build --build-context sources=sources --target all --output type=local,dest=out recipe
 ```
 
@@ -217,11 +217,11 @@ toolchains) under these conditions, as in SPK-02:
   `-L` (GPL version 3 or later);
 - `-encoders` lists `libx264` and `aac`, `-muxers` lists `hls` and `mp4`, `-demuxers` lists
   every demuxer of probe.go's whitelist plus `image2` and none of hls, dash, imf, vobsub; the
-  input protocols are exactly concat, file and pipe; `-h full` of ffmpeg and ffprobe lists
-  `format_whitelist`;
+  input protocols are exactly concat, file, pipe and subfile; `-h full` of ffmpeg and ffprobe
+  lists `format_whitelist`;
 - the capability check every shipped build runs (`../../package/scripts/ffmpeg-capabilities.sh`,
-  task M3-16j): the `concat`, `mpeg` and `mpegts` demuxers, the `file` and `concat` input
-  protocols and the decoders `mjpeg`, `png`, `webp`, `gif`, `tiff` are required; whether `hevc`,
+  tasks M3-16j, M3-16j-b): the `concat`, `mpeg` and `mpegts` demuxers, the `file`, `concat` and
+  `subfile` input protocols and the decoders `mjpeg`, `png`, `webp`, `gif`, `tiff` are required; whether `hevc`,
   HEIF (`mov` plus `hevc`) and `libdav1d` decode is available is printed as `INFO`;
 - every file of `testdata/media` probed with the server's arguments (`-format_whitelist <list>
   -protocol_whitelist file file:<path>`), and its `format_name` compared with the manifest;
@@ -241,6 +241,13 @@ toolchains) under these conditions, as in SPK-02:
   `option protocol_whitelist file` and `duration` lines, read with `-f concat -safe 0
   -format_whitelist concat -protocol_whitelist file`, lasts both clips, its last video packet
   lies in the second clip, and it remuxes to `null`;
+- disc images the way ISO playback reads them (M3-16g, task M3-16j-b): an ISO-like image of 16
+  empty sectors, the two VOB parts above with a sector gap between them and the m2ts clip; the
+  two VOB ranges joined with `-f mpeg -format_whitelist mpeg -protocol_whitelist
+  file,subfile,concat "concat:subfile,,start,A,end,B,,:file:<image>|subfile,…"` have the
+  source's duration, the clip range read with `-f mpegts -protocol_whitelist file,subfile` has
+  the clip's duration and remuxes to `null`, and the same range is refused when `subfile` is not
+  on the protocol whitelist;
 - finally the **server's own FFmpeg adapter tests** (`go test ./internal/adapters/ffmpeg`,
   cross-compiled with the pinned Go image and run in the same container): corpus probe against
   the manifest, hostile inputs, keyframe lookup, HLS argument plans with FFmpeg, producer.
@@ -276,6 +283,16 @@ revision 2 (the binaries of 0.1.0-alpha.4) in bytes:
 | x86_64 | 24.60 MB | 24.38 MB | +16 384 | +12 288 |
 | armv8 | 18.95 MB | 18.68 MB | +65 536 | ±0 |
 | armv7 | 16.16 MB | 15.96 MB | +12 288 | +12 288 |
+
+Recipe revision 4 (2026-11-05, task M3-16j-b: subfile protocol for ISO images; the current pins
+of `../sources.lock`), built the same way; growth against revision 3 in bytes (the executables
+are padded to whole pages, so a small addition can leave the size unchanged):
+
+| Family | `ffmpeg` | `ffprobe` | `ffmpeg` vs. rev. 3 | `ffprobe` vs. rev. 3 |
+|---|---|---|---|---|
+| x86_64 | 24.60 MB | 24.38 MB | ±0 | +4 096 |
+| armv8 | 18.95 MB | 18.75 MB | ±0 | +65 536 |
+| armv7 | 16.16 MB | 15.96 MB | ±0 | +4 096 |
 
 For comparison (SPK-02): jellyfin-ffmpeg 109.5 MB, johnvansickle 79.8 / 51.1 / 31.8 MB per
 `ffmpeg`. armv7 build checks: 0 VFPv4 instructions; 10542 `vld1` (NEON behind detection) per
@@ -343,6 +360,13 @@ passed 51 of 52: the server's adapter tests report 149 passed, 3 skipped, 7 fail
 because the test generates its input with `-f lavfi` (or the disc fixtures of
 `disc_corpus_test.go`) through the ffmpeg under test, and this build has no avdevice (lavfi) by
 design; none of them is a capability gap of the build.
+
+Revision 4 (2026-11-05, M3-16j-b), same conditions and CPU models, with `VERIFY_GO_TESTS=0`
+(the adapter tests did not change with the subfile protocol): 55 of 55 checks per row on
+x86_64 Opteron_G1, armv8 cortex-a53 and the three armv7 models. Input protocols exactly concat,
+file, pipe, subfile; the capability check requires subfile and passes; ISO-like image: DVD title
+through two subfile ranges joined by concat 2 s = source 2 s, Blu-ray clip through one subfile
+range 2 s = source 2 s and remuxed, subfile refused when it is not on the protocol whitelist.
 
 ## Pins
 
