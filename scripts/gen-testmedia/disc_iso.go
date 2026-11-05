@@ -78,8 +78,9 @@ const (
 	isoFirstDataSector  = 20
 )
 
-// discFile is one file of a disc tree; name is slash-separated and relative to the disc root.
-type discFile struct {
+// assembledFile is one file written in Go (a disc tree file, a photo); name is
+// slash-separated and relative to the disc root or the assembly folder.
+type assembledFile struct {
 	name string
 	data []byte
 }
@@ -87,14 +88,14 @@ type discFile struct {
 // isoDirectory is one folder of the image and its files.
 type isoDirectory struct {
 	name   string
-	files  []discFile
+	files  []assembledFile
 	sector int
 	size   int
 }
 
 // isoImage writes an ISO 9660 image of files, which may lie in the root or in one level of
 // folders. volumeID must be a valid d-character identifier.
-func isoImage(volumeID string, files []discFile) ([]byte, error) {
+func isoImage(volumeID string, files []assembledFile) ([]byte, error) {
 	root, folders, err := isoTree(files)
 	if err != nil {
 		return nil, err
@@ -139,7 +140,7 @@ func isoImage(volumeID string, files []discFile) ([]byte, error) {
 }
 
 // isoTree groups files into the root and its folders, both in name order.
-func isoTree(files []discFile) (*isoDirectory, []*isoDirectory, error) {
+func isoTree(files []assembledFile) (*isoDirectory, []*isoDirectory, error) {
 	root := &isoDirectory{}
 	byName := map[string]*isoDirectory{}
 
@@ -169,7 +170,7 @@ func isoTree(files []discFile) (*isoDirectory, []*isoDirectory, error) {
 	slices.SortFunc(folders, func(a, b *isoDirectory) int { return strings.Compare(a.name, b.name) })
 
 	for _, dir := range append([]*isoDirectory{root}, folders...) {
-		slices.SortFunc(dir.files, func(a, b discFile) int { return strings.Compare(a.name, b.name) })
+		slices.SortFunc(dir.files, func(a, b assembledFile) int { return strings.Compare(a.name, b.name) })
 	}
 
 	return root, folders, nil

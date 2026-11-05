@@ -14,10 +14,12 @@ import (
 
 // catalogFiles lists every file the catalog names, relative to the -library directory. It
 // walks the catalog independently of contentOf, so the tests do not trust the derivation.
-func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expectedDiscs, audiobooks expectedAudiobooks) []string {
+func catalogFiles(catalog libraryManifest) []string {
 	var files []string
 
-	for _, library := range catalog {
+	music, discs, audiobooks, photos := catalog.Music, catalog.Discs, catalog.Audiobooks, catalog.Photos
+
+	for _, library := range catalog.Libraries {
 		for _, item := range library.Items {
 			for _, file := range itemCatalogFiles(item) {
 				files = append(files, path.Join(library.Path, file))
@@ -32,6 +34,10 @@ func catalogFiles(catalog []expectedLibrary, music expectedMusic, discs expected
 		for _, file := range disc.Files {
 			files = append(files, path.Join(discs.Path, file))
 		}
+	}
+
+	for _, photo := range photos.Photos {
+		files = append(files, path.Join(photos.Path, photo.File))
 	}
 
 	return files
@@ -164,21 +170,24 @@ func libraryItem(t *testing.T, libraryKind, title string) expectedItem {
 func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 	t.Parallel()
 
-	names := map[string]bool{}
+	outputs := map[string]string{}
 	owners := map[string]string{}
 
 	for _, c := range libraryCases() {
-		if names[c.Name] {
+		// Cases of one name and output are encoder alternatives; one of them runs.
+		if output, seen := outputs[c.Name]; seen && output == c.Output {
+			continue
+		} else if seen {
 			t.Errorf("case name %s is used twice", c.Name)
 		}
 
-		names[c.Name] = true
+		outputs[c.Name] = c.Output
 
 		if !strings.HasPrefix(c.Name, libraryCasePrefix) || c.Muxer == "" || len(c.Encoders) == 0 || c.isGap() {
 			t.Errorf("%s: library cases need the prefix, a muxer and encoders and are never gaps", c.Name)
 		}
 
-		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryAudiobooks, categoryDiscs}, c.Category) {
+		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryAudiobooks, categoryDiscs, categoryPhotos}, c.Category) {
 			t.Errorf("%s: unexpected category %q", c.Name, c.Category)
 		}
 
@@ -199,32 +208,36 @@ func checkLibraryPath(t *testing.T, name, file string) {
 
 	roots := []string{
 		moviesLibraryPath, showsLibraryPath, musicLibraryPath, audiobooksLibraryPath, discsLibraryPath, discSourcesPath,
+		photosLibraryPath, photoSourcesPath,
 	}
 	inLibrary := slices.ContainsFunc(roots, func(root string) bool {
 		return strings.HasPrefix(file, root+"/")
 	})
 	if !inLibrary || path.Clean(file) != file || strings.Contains(file, `\`) || path.Ext(file) == "" {
-		t.Errorf("%s: %q must be a clean path below a library root or the disc sources, with forward slashes and an extension", name, file)
+		t.Errorf("%s: %q must be a clean path below a library root or the staging sources, with forward slashes and an extension", name, file)
 	}
 }
 
 // TestLibraryCatalogIsBackedByCases checks both directions: every file of the manifest is
-// written by a case, and no case writes a file the manifest does not describe. The disc
-// sources are staging files outside every library root, so the catalog does not list them.
+// written by a case, and no case writes a file the manifest does not describe. The disc and
+// photo sources are staging files outside every library root, so the catalog does not list them.
 func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 	t.Parallel()
 
 	written := map[string]bool{}
 
-	for _, c := range slices.Concat(libraryCases(), discAssemblyCases()) {
+	for _, c := range slices.Concat(libraryCases(), discAssemblyCases(), photoAssemblyCases()) {
 		for _, file := range c.files() {
-			written[file] = !strings.HasPrefix(file, discSourcesPath+"/")
+			written[file] = !strings.HasPrefix(file, discSourcesPath+"/") && !strings.HasPrefix(file, photoSourcesPath+"/")
 		}
 	}
 
 	described := map[string]bool{}
 
-	for _, file := range catalogFiles(libraryCatalog(), musicCatalog(), discCatalog(), audiobookCatalog()) {
+	for _, file := range catalogFiles(libraryManifest{
+		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Audiobooks: audiobookCatalog(),
+		Photos: photoCatalog(),
+	}) {
 		if described[file] {
 			t.Errorf("the catalog names %s twice", file)
 		}
@@ -270,7 +283,9 @@ func TestLibraryCopiesShareOneFFmpegRunPerItem(t *testing.T) {
 	// album cover and one per track (14), because every track carries its own tags, and the
 	// audiobook tree one for the book cover (and its copy) and one per part (6). The
 	// discs are assembled from five source runs (two DVD title sets, three Blu-ray clips).
-	const wantRuns, wantFiles = 47, 193
+	// The photo tree adds WebP, the video, AVIF (three encoder alternatives, one of them
+	// runs) and two HEVC sources; its other files are written in Go.
+	const wantRuns, wantFiles = 54, 200
 	if len(cases) != wantRuns || files != wantFiles {
 		t.Errorf("%d FFmpeg runs for %d media files, want %d runs for %d files", len(cases), files, wantRuns, wantFiles)
 	}

@@ -32,7 +32,7 @@ func fakeBluraySources() [][]byte {
 }
 
 // mapTree turns disc files into an in-memory tree rooted at the folder holding the disc.
-func mapTree(files []discFile) fstest.MapFS {
+func mapTree(files []assembledFile) fstest.MapFS {
 	tree := fstest.MapFS{}
 	for _, file := range files {
 		tree[file.name] = &fstest.MapFile{Data: file.data}
@@ -41,7 +41,7 @@ func mapTree(files []discFile) fstest.MapFS {
 	return tree
 }
 
-func mustBuild(t *testing.T, build func([][]byte) ([]discFile, error), sources [][]byte) []discFile {
+func mustBuild(t *testing.T, build func([][]byte) ([]assembledFile, error), sources [][]byte) []assembledFile {
 	t.Helper()
 
 	files, err := build(sources)
@@ -57,7 +57,7 @@ func TestDiscTreesResolveToTheCatalogTitle(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		tree   []discFile
+		tree   []assembledFile
 		layout media.Layout
 		want   expectedDiscTitle
 	}{
@@ -196,7 +196,7 @@ func TestDiscBuildersRefuseUnusableSources(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		build   func([][]byte) ([]discFile, error)
+		build   func([][]byte) ([]assembledFile, error)
 		sources [][]byte
 	}{
 		{name: "VOB below two sectors", build: dvdTree, sources: [][]byte{tiny, tiny}},
@@ -237,7 +237,7 @@ func TestISOTreeAcceptsOnlyLevelOneNames(t *testing.T) {
 	}
 
 	for _, name := range []string{"A/B/C.TXT", "lower.txt", "DIR/lower.txt"} {
-		if _, err := isoImage(isoVolumeID, []discFile{{name: name, data: []byte("x")}}); err == nil {
+		if _, err := isoImage(isoVolumeID, []assembledFile{{name: name, data: []byte("x")}}); err == nil {
 			t.Errorf("isoImage accepted %q", name)
 		}
 	}
@@ -245,9 +245,9 @@ func TestISOTreeAcceptsOnlyLevelOneNames(t *testing.T) {
 	// Two sectors' worth of directory records do not fit the one sector a folder gets.
 	const crowdedFolder = 100
 
-	var crowded []discFile
+	var crowded []assembledFile
 	for index := range crowdedFolder {
-		crowded = append(crowded, discFile{name: fmt.Sprintf("DIR/F%05d.TXT", index), data: []byte("x")})
+		crowded = append(crowded, assembledFile{name: fmt.Sprintf("DIR/F%05d.TXT", index), data: []byte("x")})
 	}
 
 	if _, err := isoImage(isoVolumeID, crowded); err == nil {
@@ -304,11 +304,11 @@ func TestAssembleDiscSkipsWithoutSourcesAndHonoursTheFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if entry := gen.assembleDisc(t.Context(), assembly, only); entry.Status != statusSkipped || entry.SkipKind != skipNotSelected {
+	if entry := gen.assemble(t.Context(), assembly.generic(), only); entry.Status != statusSkipped || entry.SkipKind != skipNotSelected {
 		t.Errorf("unselected disc = %s/%s, want skipped as not selected", entry.Status, entry.SkipKind)
 	}
 
-	entry := gen.assembleDisc(t.Context(), assembly, caseFilter{})
+	entry := gen.assemble(t.Context(), assembly.generic(), caseFilter{})
 	if entry.Status != statusSkipped || entry.SkipKind != skipMissingInput || !strings.Contains(entry.Reason, dvdMainSource) {
 		t.Errorf("disc without sources = %+v, want skipped for the missing %s", entry, dvdMainSource)
 	}
@@ -316,7 +316,7 @@ func TestAssembleDiscSkipsWithoutSourcesAndHonoursTheFilter(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	if entry := gen.assembleDisc(cancelled, assembly, caseFilter{}); entry.SkipKind != skipInterrupted {
+	if entry := gen.assemble(cancelled, assembly.generic(), caseFilter{}); entry.SkipKind != skipInterrupted {
 		t.Errorf("interrupted disc = %+v, want skipped as interrupted", entry)
 	}
 }
@@ -333,11 +333,11 @@ func TestAssembleDiscRebuildsWithForceAndKeepsOtherwise(t *testing.T) {
 		}
 	}
 
-	if entry := gen.assembleDisc(t.Context(), assembly, caseFilter{}); entry.Status != statusGenerated || entry.kept {
+	if entry := gen.assemble(t.Context(), assembly.generic(), caseFilter{}); entry.Status != statusGenerated || entry.kept {
 		t.Fatalf("first assembly = %+v, want built", entry)
 	}
 
-	if entry := gen.assembleDisc(t.Context(), assembly, caseFilter{}); !entry.kept {
+	if entry := gen.assemble(t.Context(), assembly.generic(), caseFilter{}); !entry.kept {
 		t.Errorf("second assembly = %+v, want kept", entry)
 	}
 
@@ -348,7 +348,7 @@ func TestAssembleDiscRebuildsWithForceAndKeepsOtherwise(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if entry := gen.assembleDisc(t.Context(), assembly, caseFilter{}); entry.Status != statusGenerated || entry.kept {
+	if entry := gen.assemble(t.Context(), assembly.generic(), caseFilter{}); entry.Status != statusGenerated || entry.kept {
 		t.Errorf("forced assembly = %+v, want rebuilt", entry)
 	}
 
@@ -364,16 +364,16 @@ func TestWriteDiscRefusesFilesTheCatalogDoesNotList(t *testing.T) {
 
 	gen := &generator{outDir: t.TempDir()}
 	assembly := discAssemblies()[0]
-	assembly.build = func([][]byte) ([]discFile, error) {
-		return []discFile{{name: "VIDEO_TS/EXTRA.VOB", data: []byte("x")}}, nil
+	assembly.build = func([][]byte) ([]assembledFile, error) {
+		return []assembledFile{{name: "VIDEO_TS/EXTRA.VOB", data: []byte("x")}}, nil
 	}
 
-	if err := gen.writeDisc(assembly, nil); err == nil {
-		t.Fatal("writeDisc accepted a file the catalog does not list")
+	if err := gen.writeAssembly(assembly.generic(), nil); err == nil {
+		t.Fatal("writeAssembly accepted a file the catalog does not list")
 	}
 
 	if entries, err := os.ReadDir(gen.outDir); err != nil || len(entries) != 0 {
-		t.Errorf("writeDisc left %d entries (%v), want none", len(entries), err)
+		t.Errorf("writeAssembly left %d entries (%v), want none", len(entries), err)
 	}
 }
 

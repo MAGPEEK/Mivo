@@ -65,7 +65,9 @@ type libraryManifest struct {
 	Discs expectedDiscs `json:"discs"`
 	// Audiobooks is the audiobook library (task M3-14f), kept apart for the same reason.
 	Audiobooks expectedAudiobooks `json:"audiobooks"`
-	Cases      []libraryCaseEntry `json:"cases"`
+	// Photos is the photo library (task M3-15g), kept apart for the same reason.
+	Photos expectedPhotos     `json:"photos"`
+	Cases  []libraryCaseEntry `json:"cases"`
 }
 
 // Music cover sources: an attached picture in the file, an image in the album folder, none.
@@ -231,7 +233,7 @@ func newLibraryManifest(ffmpegVersion string, cases []mediaCase, entries []manif
 
 	result := libraryManifest{
 		SchemaVersion: libraryManifestSchemaVersion, FFmpegVersion: ffmpegVersion,
-		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Audiobooks: audiobookCatalog(),
+		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Audiobooks: audiobookCatalog(), Photos: photoCatalog(),
 		Cases: make([]libraryCaseEntry, 0, len(entries)),
 	}
 

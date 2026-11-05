@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -142,10 +143,14 @@ const (
 )
 
 // fakeContent is what an encode writes: the disc assembly reads the structure of its source
-// program streams (dvd muxer) and m2ts clips, so those get a minimal valid layout; every
-// other output gets fakeMediaContent.
+// program streams (dvd muxer) and m2ts clips and the HEIC assembly its HEVC streams, so those
+// get a minimal valid layout; every other output gets fakeMediaContent.
 func fakeContent(args []string) []byte {
 	isDiscSource := strings.Contains(filepath.ToSlash(args[len(args)-1]), discSourcesPath+"/")
+
+	if strings.Contains(filepath.ToSlash(args[len(args)-1]), photoSourcesPath+"/") {
+		return fakeHEVCStream(framesOf(args))
+	}
 
 	switch {
 	case isDiscSource && slices.Contains(args, "dvd"):
@@ -179,3 +184,38 @@ func fakeSourcePacketStream() []byte {
 
 	return stream
 }
+
+// framesOf returns the -frames:v value of an encode, one without it.
+func framesOf(args []string) int {
+	index := slices.Index(args, "-frames:v")
+	if index < 0 || index+1 >= len(args) {
+		return 1
+	}
+
+	frames, err := strconv.Atoi(args[index+1])
+	if err != nil {
+		return 1
+	}
+
+	return frames
+}
+
+// fakeHEVCStream is an Annex B stream of a VPS, an SPS long enough to hold a profile, a PPS
+// and one IDR slice per picture that starts its picture.
+func fakeHEVCStream(pictures int) []byte {
+	startCode := []byte{0, 0, 0, 1}
+	stream := slices.Concat(
+		startCode, []byte{nalVPS << nalTypeShift, 1, 0x0C, 0x01},
+		startCode, []byte{nalSPS << nalTypeShift, 1, 0x01, 0x01, 0x60, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x5D, 0xA0},
+		startCode, []byte{nalPPS << nalTypeShift, 1, 0xC1},
+	)
+
+	for picture := range pictures {
+		stream = slices.Concat(stream, startCode, []byte{fakeIDRSlice << nalTypeShift, 1, firstSliceFlag, byte(picture + 1)})
+	}
+
+	return stream
+}
+
+// fakeIDRSlice is the NAL unit type IDR_W_RADL.
+const fakeIDRSlice = 19

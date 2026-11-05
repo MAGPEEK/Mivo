@@ -56,11 +56,14 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(result.Libraries, libraryCatalog()) || !reflect.DeepEqual(result.Music, musicCatalog()) ||
-		!reflect.DeepEqual(result.Discs, discCatalog()) || !reflect.DeepEqual(result.Audiobooks, audiobookCatalog()) {
-		t.Error("the manifest catalog differs from libraryCatalog(), musicCatalog(), discCatalog() or audiobookCatalog()")
+		!reflect.DeepEqual(result.Discs, discCatalog()) || !reflect.DeepEqual(result.Audiobooks, audiobookCatalog()) ||
+		!reflect.DeepEqual(result.Photos, photoCatalog()) {
+		t.Error("the manifest catalog differs from the catalog functions")
 	}
 
-	wantCases := len(libraryCases()) + len(discAssemblyCases())
+	// Encoder alternatives (AVIF) share a name and run once.
+	runs := len(groupByName(libraryCases()))
+	wantCases := runs + len(discAssemblyCases()) + len(photoAssemblyCases())
 	if len(result.Cases) != wantCases || result.count(statusGenerated) != len(result.Cases) {
 		t.Errorf("cases = %+v, want every library case and disc generated", result.Cases)
 	}
@@ -69,8 +72,8 @@ func TestGenerateLibraryWritesTheTreeWithFakeFFmpeg(t *testing.T) {
 
 	// One run per case (discs are assembled without FFmpeg); the cover runs read the poster
 	// or the album cover image as input, the subtitled disc sources the generated PGS stream.
-	if encodes := len(ffmpeg.encodedOutputs()); encodes != len(libraryCases()) {
-		t.Errorf("%d FFmpeg runs, want %d", encodes, len(libraryCases()))
+	if encodes := len(ffmpeg.encodedOutputs()); encodes != runs {
+		t.Errorf("%d FFmpeg runs, want %d", encodes, runs)
 	}
 
 	checkCoverInputs(t, ffmpeg.textInputs())
@@ -125,7 +128,7 @@ func checkCoverInputs(t *testing.T, inputs []seenInput) {
 func checkCatalogFilesExist(t *testing.T, dir string, result libraryManifest) {
 	t.Helper()
 
-	for _, file := range catalogFiles(result.Libraries, result.Music, result.Discs, result.Audiobooks) {
+	for _, file := range catalogFiles(result) {
 		if _, err := fs.Stat(os.DirFS(dir), file); err != nil {
 			t.Errorf("catalog file missing on disk: %v", err)
 		}

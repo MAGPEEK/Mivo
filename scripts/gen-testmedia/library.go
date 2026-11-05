@@ -78,7 +78,7 @@ type itemFiles struct {
 
 // libraryCases returns every case of the library tree: the artwork images first, then the
 // clips of each item in catalog order, then the music and audiobook covers and files, then
-// the disc sources.
+// the disc sources, then the photo sources (WebP, AVIF, video, HEVC).
 func libraryCases() []mediaCase {
 	var (
 		items   []itemFiles
@@ -100,7 +100,7 @@ func libraryCases() []mediaCase {
 		cases = append(cases, itemCases(item, cover)...)
 	}
 
-	return slices.Concat(cases, musicCases(), libraryAudiobookCases(), discSourceCases())
+	return slices.Concat(cases, musicCases(), libraryAudiobookCases(), discSourceCases(), libraryPhotoCases())
 }
 
 // posterOutput is the built poster image, the cover art source of embedded-artwork cases.
@@ -361,7 +361,7 @@ func (g *generator) requireCovers(plans []plannedCase) []plannedCase {
 }
 
 // generateLibrary builds the library tree into s.opts.libraryDir in two FFmpeg phases (cover
-// art needs the poster image), assembles the discs from their sources and writes the manifest
+// art needs the poster image), assembles the discs and the Go-built photos and writes the manifest
 // and summary. It returns the manifest.
 func (s session) generateLibrary(ctx context.Context) (libraryManifest, error) {
 	cases := libraryCases()
@@ -374,7 +374,8 @@ func (s session) generateLibrary(ctx context.Context) (libraryManifest, error) {
 	entries := gen.generateAll(ctx, first)
 	entries = append(entries, gen.generateAll(ctx, gen.requireCovers(covers))...)
 	entries = append(entries, gen.assembleDiscs(ctx, s.opts.only)...)
-	result := newLibraryManifest(s.caps.version, slices.Concat(cases, discAssemblyCases()), entries)
+	entries = append(entries, gen.assemblePhotos(ctx, s.opts.only)...)
+	result := newLibraryManifest(s.caps.version, slices.Concat(cases, discAssemblyCases(), photoAssemblyCases()), entries)
 
 	if err := writeLibraryManifest(s.opts.libraryDir, result); err != nil {
 		return libraryManifest{}, err
@@ -412,6 +413,7 @@ func writeLibrarySummary(output io.Writer, m libraryManifest, manifestPath strin
 	writeMusicSummary(&text, m.Music)
 	writeAudiobookSummary(&text, m.Audiobooks)
 	writeDiscSummary(&text, m.Discs)
+	writePhotoSummary(&text, m.Photos)
 
 	fmt.Fprintf(&text, "manifest: %s\n", manifestPath)
 

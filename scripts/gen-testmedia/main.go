@@ -43,6 +43,16 @@
 // to a chapterless M4B whose cover is the image named after it. The MP3 parts of the folder
 // book carry an explicit narrator (ID3 TXXX "narrator"); the M4B files carry only a
 // composer, which is no narrator, so they expect none. All names are invented. Audiobook cases start with "library-audiobooks-".
+// <library>/photos (task M3-15g, ADR 0029) holds photos with EXIF written by the generator
+// (FFmpeg writes none): JPEGs with camera, lens, exposure, capture time and the Eiffel Tower
+// as the only GPS position, the nested album "Holidays 2024/Lake Shore" with a portrait
+// (orientation 6), a RAW+JPEG pair (a DNG stand-in with a JPEG preview) and a short MP4, a
+// lone DNG (orientation 8) and a RAW name over unreadable bytes, PNG, WebP, GIF, an RGB TIFF,
+// a JPEG without EXIF and a corrupt one (both with a fixed modification time), one JPEG per
+// orientation 1-8, and, when FFmpeg has the encoders, a HEIC picture, a 2x2 HEIC grid (Go
+// wraps libx265 streams from <library>/.photo-sources in HEIF) and an AVIF. Cameras and
+// names are invented. Photo cases start with "library-photos-"; "library-photos-source-*" are
+// the HEVC runs.
 //
 // <library>/manifest.json describes the expected catalog (what a scan must produce) and the
 // build result. Paths are relative to the library root (Path of the library) unless noted,
@@ -105,8 +115,25 @@
 //	  chapters[]     play order: file, title, startSeconds, endSeconds (relative to the
 //	                 file), embedded (false: the whole-file chapter a scan derives; its end
 //	                 is the probed length)
-//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"audiobooks"|"discs"),
-//	               status
+//	photos         path (below <library>), photos[] (added in M3-15g without a version bump,
+//	               kept out of libraries[] like music), one per file in catalog order:
+//	  file, album    file and its folder (the album a scan creates), relative to the root
+//	  format         "jpeg"|"png"|"webp"|"gif"|"tiff"|"dng"|"nef"|"heic"|"avif"|"mp4"
+//	  alternateOf    primary file of a RAW+JPEG pair (the RAW is filed under it)
+//	  optional       HEIC and AVIF: only built when FFmpeg has the encoder
+//	  metadata       photometa ReadInfo outcome: "read"|"unsupported"|"corrupt"
+//	  exif           the Info it returns: takenAt (wall clock "2006-01-02T15:04:05", no
+//	                 zone), make, model, lens, exposureSeconds, fNumber, focalLengthMM, iso,
+//	                 orientation, gps{latitude, longitude}, width, height; zero values and a
+//	                 zero Info are omitted
+//	  takenAtSource  "exif"|"file" (the modification time stands in)
+//	  modifiedAt     modification time the generator sets (RFC 3339 UTC), omitted for
+//	                 FFmpeg outputs
+//	  thumbnailState "ready"|"unsupported" as a scan stores it
+//	  renders        whether the photo renderer produces a thumbnail; displayWidth and
+//	                 displayHeight are the upright size of a still (orientations 5-8 swap)
+//	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"audiobooks"|"discs"|
+//	               "photos"), status
 //	               ("generated"|"skipped"|"failed"), skipKind, reason, files[] (relative to
 //	               <library>); "library-discs-source-*" cases are the FFmpeg runs, the other
 //	               "library-discs-*" cases the assembled discs
