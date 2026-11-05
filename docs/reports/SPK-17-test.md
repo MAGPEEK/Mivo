@@ -1,66 +1,59 @@
 # SPK-17 test report
 
-Status: FAIL (round 2 of 3; round 1 aborted)
+Status: FAIL (round 3 of 3; HEAD 527ae55 rebased on main incl. M3-19l)
 
 ## Gates
 
 | Gate | Result |
 |---|---|
-| spk-script-test bats (lifecycle, package-files, start-stop-status; busybox sh, bash --posix, bash, dash) | PASS, 381/381 ok |
-| spk-inspect bats | PASS, 61/61 ok (exit 0) |
-| shellcheck (package scripts `-s sh`, test scripts, inspect/smoke scripts) | PASS |
+| spk-script-test bats (busybox sh, bash --posix, bash, dash) | PASS, 381/381 ok |
+| spk-inspect bats | PASS, 61/61 ok |
+| shellcheck (package scripts `-s sh`, test scripts) | PASS |
 | `go test ./packaging/synology/...` | PASS (4 packages) |
-| SPK build (`build.sh --test 0.1.0-alpha.3`, x86_64 + armv8 + armv7) | PASS, 98 s |
-| `inspect-spk.sh` on the three real SPKs | PASS each: 95 checks, 0 failed, 2 warnings (known "no GNU ABI note" for ffmpeg/ffprobe) |
-| Emulated smoke x86_64, scenario 1 (fresh install) | FAIL |
-| Emulated smoke x86_64, scenario 2 (alpha.2 upgrade) | FAIL (harness defect; conversion itself ok) |
+| SPK build `build.sh --test 0.1.0-alpha.3` (x86_64, armv8, armv7) | PASS, 143 s |
+| `inspect-spk.sh` on the three SPKs | PASS each: 95 checks, 0 failed, 2 warnings (known ffmpeg ABI-note warnings) |
+| Smoke x86_64 | 27 passed, 1 failed |
+| Smoke armv8 (cortex-a53, QEMU) | 27 passed, 1 failed |
+| Smoke armv7 (cortex-a9 only, QEMU) | 27 passed, 1 failed |
 
-## Failures
+## What passed in every family
 
-1. Smoke scenario 1, `packaging/synology/test/smoke/smoke.sh:402` (`check_first_start_state`):
-   `GET /api/v1/folder-roots` returns 503. Server log:
-   `listFolderRoots: library management is not configured: unavailable`.
-   `GET /api/v1/libraries` returned `{"libraries":[]}` (that part is ok). Cause: the server built
-   from this base (HEAD b4e96a8, also main) is not wired for library management; the composition
-   root task M3-19l (`docs/tasks/M3-19l-composition-root-library-management.md`) has no commit
-   (`git grep 'Folders:' main -- cmd` is empty; `restapi/folders.go:40` hits `api.folders == nil`).
-   Not a packaging defect, but it blocks the whole SPK-17 smoke (POST library, scan, playback
-   smoke) and the AC "first start state". SPK-17 needs M3-19l merged first.
-2. Smoke scenario 2, `packaging/synology/test/smoke/dsm.sh:463` (`cmd_upgrade`):
-   `FAIL the upgrade lost /var/packages/mivo/var/data`. The alpha.2 scenario seeds an installation
-   with "no database yet" (smoke.sh:467), so `var/data` holds no files and the unconditional
-   "files kept in var/data" check fails. The packaging logic itself worked in that run:
-   `preupgrade` recorded `share-links-before-upgrade.tsv`, `library path of share video:
-   /var/packages/mivo/shares/video -> /volume1/video`, `postupgrade` exit 0,
-   `config.yaml now: path:"/volume1/video", backup kept`. Fix: skip the data check when
-   `$STATE_DIR/alpha2-seeded` exists (or seed a data file). The later steps of scenario 2
-   (library listed with `/volume1/<share>`, which also needs M3-19l) did not run.
+Fresh install: `GET /api/v1/libraries` = `[]`, folder root `/volume1`, installKind `synology`;
+`POST /api/v1/libraries` with the corpus share; scan; playback smoke chromium-desktop 30/30 and
+firefox-desktop 28/28. Alpha.2 upgrade scenario: `preupgrade` records the link, `postupgrade`
+rewrites the path, library listed with `/volume1/video` (all steps PASS, including the data
+check that failed in round 2).
 
-## Not run
+## Failure (same in all three families)
 
-- Smoke for armv8 and armv7 (QEMU): x86_64 smoke already fails; not worth the time before the fixes.
-- Playback smoke, POST library, scan: blocked by failure 1.
-- Node/Go/web gates: out of scope (packaging only).
+`packaging/synology/test/smoke/smoke.sh:371-372` (`check_kept_catalogue`), step "upgrade"
+of scenario 1 (plain upgrade of the fresh install):
+`FAIL <family> upgrade: catalogue not kept or scan unfinished`. The library JSON shows
+`"itemCount":22` and scan counts `"unchanged":28,"added":0`. The check requires
+`unchanged == itemCount`, but the library now also scans extras (`scanExtras:true`), so
+the scan counts 28 files for 22 items. The catalogue is in fact kept (added 0, nothing
+failed, state idle); this is a harness assumption broken by the new library options, not a
+packaging defect. Fix: in `check_kept_catalogue` require `added == 0`, `failed == 0` and
+`unchanged >= items` (or compare against the first scan's `unchanged` from before the upgrade).
 
-## Acceptance criteria (evidence)
+## Not covered
 
-- Wizard without input / no `wizard_media_share`, `conf/resource` only `port-config`, preinst/postinst,
-  start-stop-status browse roots, upgrade rewrite, fixtures removed: met (package-files, lifecycle,
-  start-stop-status bats green; 381 ok).
-- Inspect expectations (fails on `data-share` / `wizard_media_share`): met (inspect bats 61 ok; real SPKs 0 failed).
-- Build for all families + inspection: met.
-- Emulated smoke (both scenarios): NOT met, see failures.
-- First start state `GET /api/v1/libraries` = `[]`: met at the HTTP level; web empty state and folder roots: not verifiable (503).
-- Docs and ADR notes, owner device test: not part of this gate (device test is the owner's).
-
-## Cleanup
-
-Removed: smoke containers `spk-smoke-x86_64-native` and `...-alpha2`, scratch files, the
-temporary `testdata/media` copy in the worktree. `packaging/synology/dist/` (git-ignored) holds the
-rebuilt test SPKs. Could not remove (blocked by the permission classifier): the two `/tmp/spk-smoke-x86_64.*`
-work directories of this run (`DjeUjq` and the newest other one); older ones stem from earlier runs.
+armv7 ran only `cortex-a9`, not `cortex-a15` and the NEON-off worst case.
+Containers and `/tmp/spk-smoke-*` removed; nothing committed. `testdata/media` was
+regenerated (untracked/ignored).
 
 ## History
 
 - Round 1: aborted.
-- Round 2: FAIL as above.
+- Round 2: FAIL: smoke blocked by missing M3-19l wiring (503 folder-roots); upgrade data check defect.
+- Round 3: all packaging gates PASS; both round 2 defects fixed; one remaining smoke
+  harness assertion (above) fails in every family.
+
+REPORT
+status: FAIL
+task: SPK-17
+files: docs/reports/SPK-17-test.md
+tests: bats 381/381, inspect bats 61/61, shellcheck, go test packaging/synology, 3 SPKs built, inspect 0 failed x3; smoke 27 pass / 1 fail per family
+findings:
+- smoke.sh:371 check_kept_catalogue asserts unchanged == itemCount; extras make unchanged 28 vs itemCount 22 (added 0). Relax to added==0, failed==0, unchanged>=items.
+next: fix the harness assertion (hard limit of 3 tester runs reached; orchestrator to decide / ask owner)
