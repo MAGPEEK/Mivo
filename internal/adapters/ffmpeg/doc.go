@@ -9,7 +9,8 @@
 //
 // Process rules, enforced by the runner in process.go: every tool runs through
 // exec.CommandContext with an argument slice, never a shell; standard input is the null
-// device; standard output is read with a size limit; standard error is kept as a bounded
+// device, except for the photo renderer, which pipes a RAW file's embedded JPEG preview
+// (whitelists: jpeg_pipe demuxer, pipe protocol only); standard output is read with a size limit; standard error is kept as a bounded
 // tail; the process is killed when its context ends, and with the server where the system
 // allows it (Linux parent-death signal, Windows job object; lifetime_*.go). Every input path
 // is absolute and passed as file:<path>, so FFmpeg never reads a file name as an option or a

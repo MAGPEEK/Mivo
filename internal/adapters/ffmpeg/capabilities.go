@@ -35,7 +35,7 @@ const (
 	// capabilities still count.
 	unknownVersion = "unknown"
 
-	// encoderKindVideo and encoderKindAudio are the first flag of an -encoders entry.
+	// encoderKindVideo and encoderKindAudio are the first flag of an -encoders or -decoders entry.
 	encoderKindVideo = 'V'
 	encoderKindAudio = 'A'
 	// experimentalFlag marks encoders FFmpeg uses only with -strict experimental.
@@ -183,11 +183,11 @@ func (o capabilityOutputs) parse() (playback.ServerCapabilities, error) {
 		HLSMuxing:     hasMuxer(muxers, muxerHLS) && hasMuxer(muxers, muxerMP4),
 	}
 
-	if hasEncoder(encoders, playback.EncoderLibx264, encoderKindVideo) {
+	if hasCodec(encoders, playback.EncoderLibx264, encoderKindVideo) {
 		capabilities.H264Encoder = playback.EncoderLibx264
 	}
 
-	if hasEncoder(encoders, playback.EncoderAAC, encoderKindAudio) {
+	if hasCodec(encoders, playback.EncoderAAC, encoderKindAudio) {
 		capabilities.AACEncoder = playback.EncoderAAC
 	}
 
@@ -310,10 +310,10 @@ func isFlagColumn(flags string) bool {
 	return true
 }
 
-// hasEncoder reports a usable encoder: listed under name, of the given kind and not
-// experimental (an experimental encoder would need -strict experimental, which the HLS
-// arguments never pass).
-func hasEncoder(entries []listingEntry, name string, kind byte) bool {
+// hasCodec reports a usable encoder or decoder of an -encoders or -decoders listing: listed
+// under name, of the given kind and not experimental (an experimental codec would need
+// -strict experimental, which Mivo never passes).
+func hasCodec(entries []listingEntry, name string, kind byte) bool {
 	return slices.ContainsFunc(entries, func(entry listingEntry) bool {
 		return entry.flags[0] == kind &&
 			!strings.ContainsRune(entry.flags, experimentalFlag) &&

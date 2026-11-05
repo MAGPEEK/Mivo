@@ -50,3 +50,16 @@ func Tag(input TagInput) string {
 
 	return hex.EncodeToString(digest[:])[:TagLength]
 }
+
+// PhotoTag returns the cache tag of the thumbnails of a photo (ADR 0029): a photo is the
+// picture of itself, so its identity is that of a local image file at relativePath with the
+// file's size and modification time. The item ID, not the tag, separates the photo from
+// artwork that happens to use the same file.
+func PhotoTag(relativePath string, size int64, modifiedAt time.Time) string {
+	return Tag(TagInput{
+		Source:     SourceLocal,
+		Location:   LocalLocation(relativePath),
+		Size:       size,
+		ModifiedAt: modifiedAt,
+	})
+}

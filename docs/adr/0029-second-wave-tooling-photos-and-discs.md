@@ -67,3 +67,18 @@ build in SPK-15/16, and licence duties (Mivo is GPL-3.0).
   `disc_unsupported`); 0-byte stream clips count as missing; corrupt ISO structures are
   `disc_unsupported`, cancellation is not. AVCHD nesting (`PRIVATE/AVCHD/BDMV`) is found only
   when the walker reports that BDMV folder itself, not inside ISO images.
+- Photo thumbnails (M3-15d, `internal/adapters/ffmpeg` `PhotoRenderer`): JPEG, PNG, WebP,
+  GIF and TIFF are decoded directly with `-noautorotate` and the EXIF orientation applied as
+  explicit `transpose`/`hflip`/`vflip` filters before scaling, so the result does not depend
+  on what an FFmpeg version does with EXIF. HEIC/AVIF are decoded directly only when the
+  startup probe (`-decoders`, `-demuxers`) lists the `mov` demuxer and `hevc` (HEIC) or
+  `libdav1d`/`libaom-av1` (AVIF; FFmpeg's own `av1` decoder needs hardware); FFmpeg then
+  applies the container's `irot`/`imir` itself and picks the (grid) picture without `-map`.
+  RAW files, undecodable HEIC/AVIF, files over 256 MiB and every direct decode that fails as
+  unsupported fall back to the embedded JPEG preview piped to FFmpeg (`jpeg_pipe`, protocol
+  `pipe` only); without a preview the render fails with `ErrPhotoUnsupported`
+  (`domain.ErrUnsupported`). The image endpoint accepts a photo item ID (`app/images`
+  `PhotoSource`), renders photos as JPEG, keys the cache with `artwork.PhotoTag` (path, size,
+  mtime) and the width, shares the two-render limit with artwork and keeps current photo
+  thumbnails when purging. Wiring (`DetectPhotoDecoders`, `NewPhotoRenderer`, the sqlite
+  `PhotoSource`) follows in M3-15e/M3-15h.

@@ -39,13 +39,26 @@ type Image struct {
 	Immutable   bool
 }
 
-// Dependencies are the ports the service needs. Logger may be nil.
+// Dependencies are the ports the service needs. Logger may be nil. Photos and
+// PhotoRenderer are optional together: without them the service serves artwork only and a
+// photo item ID is unknown.
 type Dependencies struct {
-	Source   ArtworkSource
-	Resolver PathResolver
-	Renderer Renderer
-	Cache    Cache
-	Logger   *slog.Logger
+	Source        ArtworkSource
+	Resolver      PathResolver
+	Renderer      Renderer
+	Cache         Cache
+	Logger        *slog.Logger
+	Photos        PhotoSource
+	PhotoRenderer Renderer
+}
+
+// renderTarget is everything a render needs, whatever the ID named: the cache key, where
+// the picture is read from and the renderer that decodes it.
+type renderTarget struct {
+	key         Key
+	libraryRoot string
+	location    artwork.Location
+	renderer    Renderer
 }
 
 // Service serves rendered artwork.
@@ -67,21 +80,21 @@ func newServiceWithLimits(dependencies Dependencies, maxConcurrent int, timeout 
 	return &Service{dependencies: dependencies, flights: newFlightGroup(maxConcurrent, timeout)}
 }
 
-// Image returns the artwork of request rendered in the requested width, from the cache when
-// possible. Errors wrap domain.ErrNotFound for an unknown artwork or vanished source,
-// domain.ErrUnsupported for an undecodable source and domain.ErrUnavailable when rendering
-// is not possible right now.
+// Image returns the artwork or photo thumbnail of request rendered in the requested width,
+// from the cache when possible. Errors wrap domain.ErrNotFound for an unknown ID or vanished
+// source, domain.ErrUnsupported for an undecodable source and domain.ErrUnavailable when
+// rendering is not possible right now.
 func (service *Service) Image(ctx context.Context, request Request) (Image, error) {
-	stored, err := service.dependencies.Source.Artwork(ctx, request.ID)
+	target, err := service.target(ctx, request)
 	if err != nil {
 		return Image{}, fmt.Errorf("image %s: %w", request.ID, err)
 	}
 
-	key := Key{ID: stored.ID, Tag: stored.Tag, Width: request.Width, Format: artwork.OutputFormat(stored.Kind)}
+	key := target.key
 	image := Image{
 		ContentType: key.Format.ContentType(),
-		ETag:        `"` + stored.Tag + "-" + request.Width.String() + `"`,
-		Immutable:   request.Tag == stored.Tag,
+		ETag:        `"` + key.Tag + "-" + request.Width.String() + `"`,
+		Immutable:   request.Tag == key.Tag,
 	}
 
 	cached, err := service.dependencies.Cache.Open(ctx, key)
@@ -95,8 +108,10 @@ func (service *Service) Image(ctx context.Context, request Request) (Image, erro
 		return Image{}, fmt.Errorf("image %s: open cache: %w", request.ID, err)
 	}
 
+	// Photos share the flight group, so photo thumbnails and artwork together stay within
+	// the server-wide render limit.
 	data, err := service.flights.do(ctx, key, func(renderCtx context.Context) ([]byte, error) {
-		return service.renderAndStore(renderCtx, stored, key)
+		return service.renderAndStore(renderCtx, target)
 	})
 	if err != nil {
 		return Image{}, fmt.Errorf("image %s width %s: %w", request.ID, request.Width, err)
@@ -109,15 +124,17 @@ func (service *Service) Image(ctx context.Context, request Request) (Image, erro
 
 // renderAndStore renders one picture and stores it. A failed store is logged only: the
 // picture is still served and rendered again on the next request.
-func (service *Service) renderAndStore(ctx context.Context, stored artwork.Stored, key Key) ([]byte, error) {
-	path, err := service.sourcePath(stored)
+func (service *Service) renderAndStore(ctx context.Context, target renderTarget) ([]byte, error) {
+	path, err := service.sourcePath(target)
 	if err != nil {
 		return nil, err
 	}
 
-	rendered, err := service.dependencies.Renderer.Render(ctx, artwork.RenderRequest{
+	key := target.key
+
+	rendered, err := target.renderer.Render(ctx, artwork.RenderRequest{
 		AbsolutePath: path,
-		StreamIndex:  stored.Location.StreamIndex,
+		StreamIndex:  target.location.StreamIndex,
 		MaxWidth:     key.Width,
 		Format:       key.Format,
 	})
@@ -135,17 +152,48 @@ func (service *Service) renderAndStore(ctx context.Context, stored artwork.Store
 
 // sourcePath resolves the file a picture is read from. It is the one place that switches on
 // the source location: data-directory pictures (milestone 6) need their own resolver.
-func (service *Service) sourcePath(stored artwork.Stored) (string, error) {
-	if stored.Location.DataPath != "" {
-		return "", fmt.Errorf("resolve data-directory picture %q: %w", stored.Location.DataPath, domain.ErrUnsupported)
+func (service *Service) sourcePath(target renderTarget) (string, error) {
+	if target.location.DataPath != "" {
+		return "", fmt.Errorf("resolve data-directory picture %q: %w", target.location.DataPath, domain.ErrUnsupported)
 	}
 
-	path, err := service.dependencies.Resolver.Resolve(stored.LibraryRoot, stored.Location.RelativePath)
+	path, err := service.dependencies.Resolver.Resolve(target.libraryRoot, target.location.RelativePath)
 	if err != nil {
-		return "", fmt.Errorf("resolve %q: %w", stored.Location.RelativePath, err)
+		return "", fmt.Errorf("resolve %q: %w", target.location.RelativePath, err)
 	}
 
 	return path, nil
+}
+
+// target looks the ID of request up: artwork first, then, with a photo source, a photo
+// item. An ID neither knows wraps domain.ErrNotFound.
+func (service *Service) target(ctx context.Context, request Request) (renderTarget, error) {
+	stored, err := service.dependencies.Source.Artwork(ctx, request.ID)
+	if err == nil {
+		return renderTarget{
+			key: Key{
+				ID: stored.ID, Tag: stored.Tag, Width: request.Width, Format: artwork.OutputFormat(stored.Kind),
+			},
+			libraryRoot: stored.LibraryRoot,
+			location:    stored.Location,
+			renderer:    service.dependencies.Renderer,
+		}, nil
+	}
+
+	if !errors.Is(err, domain.ErrNotFound) || service.dependencies.Photos == nil {
+		return renderTarget{}, err
+	}
+
+	file, err := service.dependencies.Photos.PhotoFile(ctx, request.ID)
+	if err != nil {
+		return renderTarget{}, fmt.Errorf("photo: %w", err)
+	}
+
+	if service.dependencies.PhotoRenderer == nil {
+		return renderTarget{}, fmt.Errorf("photo: no photo renderer configured: %w", domain.ErrUnavailable)
+	}
+
+	return photoTarget(file, request.Width, service.dependencies.PhotoRenderer), nil
 }
 
 // Purge removes cached renderings of artwork that no longer exists or changed. It is safe to
@@ -157,8 +205,17 @@ func (service *Service) Purge(ctx context.Context) error {
 		return fmt.Errorf("purge image cache: read tags: %w", err)
 	}
 
+	photoTags, err := service.photoTags(ctx)
+	if err != nil {
+		return fmt.Errorf("purge image cache: %w", err)
+	}
+
 	keep := func(id, tag string) bool {
-		current, ok := tags[id]
+		if current, ok := tags[id]; ok {
+			return current == tag
+		}
+
+		current, ok := photoTags[id]
 
 		return ok && current == tag
 	}

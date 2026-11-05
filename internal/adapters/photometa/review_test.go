@@ -21,6 +21,10 @@ func heifWithIloc(iloc []byte) []byte {
 	return append(isoBox("ftyp", []byte("heic"), be32(0)), meta...)
 }
 
+// cappedEntriesBudget is a generous wall-clock bound for parsing 65535 iloc entries: it only
+// catches a quadratic regression, so a loaded CI runner under -race must not trip it.
+const cappedEntriesBudget = 10 * time.Second
+
 func TestIlocZeroWidthExtentsAreBounded(t *testing.T) {
 	hostile := []byte{0, 0, 0, 0, 0x00, 0x00}
 	hostile = append(hostile, be16(1)...)
@@ -50,7 +54,7 @@ func TestIlocZeroWidthExtentsAreBounded(t *testing.T) {
 		t.Errorf("capped entries = %+v, %v; want zero Info", info, err)
 	}
 
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
+	if elapsed := time.Since(start); elapsed > cappedEntriesBudget {
 		t.Errorf("capped entries took %v", elapsed)
 	}
 

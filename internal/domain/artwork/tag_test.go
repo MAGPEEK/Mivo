@@ -111,3 +111,19 @@ func TestCandidateTagMatchesTag(t *testing.T) {
 		t.Errorf("Candidate.Tag() = %q, want %q", got, want)
 	}
 }
+
+func TestPhotoTagIsTheTagOfTheLocalFile(t *testing.T) {
+	t.Parallel()
+
+	input := baseTagInput()
+
+	got := artwork.PhotoTag(input.Location.RelativePath, input.Size, input.ModifiedAt)
+	if want := artwork.Tag(input); got != want {
+		t.Errorf("PhotoTag = %q, want %q", got, want)
+	}
+
+	later := input.ModifiedAt.Add(time.Second)
+	if changed := artwork.PhotoTag(input.Location.RelativePath, input.Size, later); changed == got {
+		t.Error("PhotoTag did not change with the modification time")
+	}
+}

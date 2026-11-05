@@ -118,13 +118,7 @@ func checkSourceSize(request artwork.RenderRequest) error {
 	}
 
 	if err != nil {
-		// The *fs.PathError text holds the absolute path; keep only its cause.
-		var pathError *fs.PathError
-		if errors.As(err, &pathError) {
-			err = pathError.Err
-		}
-
-		return fmt.Errorf("source file: %w: %w", errSourceUnreadable, err)
+		return fmt.Errorf("source file: %w: %w", errSourceUnreadable, unwrapPathError(err))
 	}
 
 	if !info.Mode().IsRegular() {
@@ -155,16 +149,40 @@ func describeRendered(output []byte, format artwork.Format) (artwork.Rendered, e
 	return artwork.Rendered{Data: output, Width: config.Width, Height: config.Height, Format: format}, nil
 }
 
+// unwrapPathError keeps only the cause of an *fs.PathError, whose text holds the absolute
+// path.
+func unwrapPathError(err error) error {
+	var pathError *fs.PathError
+	if errors.As(err, &pathError) {
+		return pathError.Err
+	}
+
+	return err
+}
+
 // logRunFailure writes ffmpeg's error output of a failed run to the debug log, like
 // Prober.logRunFailure; the tail never reaches the returned error.
 func (r *ImageRenderer) logRunFailure(ctx context.Context, name string, err error) {
+	logImageRunFailure(ctx, r.logger, imageRun{operation: renderOperation, name: name}, err)
+}
+
+// imageRun names a failed image render in the debug log: the operation and the file's base
+// name.
+type imageRun struct {
+	operation string
+	name      string
+}
+
+// logImageRunFailure writes the exit code and error output tail of a failed ffmpeg run to
+// the debug log; other errors are not logged.
+func logImageRunFailure(ctx context.Context, logger *slog.Logger, run imageRun, err error) {
 	attributes := exitAttributes(err)
 	if attributes == nil {
 		return
 	}
 
 	attributes = append([]slog.Attr{
-		slog.String("operation", renderOperation), slog.String("file", name),
+		slog.String("operation", run.operation), slog.String("file", run.name),
 	}, attributes...)
-	r.logger.LogAttrs(ctx, slog.LevelDebug, "ffmpeg failed on an image", attributes...)
+	logger.LogAttrs(ctx, slog.LevelDebug, "ffmpeg failed on an image", attributes...)
 }

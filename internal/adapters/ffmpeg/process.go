@@ -102,12 +102,25 @@ func (t tool) output(ctx context.Context, arguments []string) ([]byte, error) {
 // boundedOutput is output with a caller-chosen size limit, for outputs such as an embedded
 // picture whose sensible bound differs from that of ffprobe's JSON.
 func (t tool) boundedOutput(ctx context.Context, arguments []string, limit int) ([]byte, error) {
+	return t.pipedOutput(ctx, arguments, nil, limit)
+}
+
+// pipedOutput is boundedOutput with input as the tool's standard input, for data that only
+// exists in memory (a RAW file's embedded preview). A nil input reads from the null device.
+// A tool that exits before reading all of input is not an error by itself: exec ignores the
+// broken pipe, and the exit status tells whether the tool succeeded.
+func (t tool) pipedOutput(ctx context.Context, arguments []string, input []byte, limit int) ([]byte, error) {
 	runContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	stdout := &limitedBuffer{limit: limit, exceeded: cancel}
 
-	started, err := t.start(runContext, arguments, processFiles{stdout: stdout})
+	files := processFiles{stdout: stdout}
+	if input != nil {
+		files.stdin = bytes.NewReader(input)
+	}
+
+	started, err := t.start(runContext, arguments, files)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +143,9 @@ func (t tool) boundedOutput(ctx context.Context, arguments []string, limit int) 
 
 // processFiles are the files a started tool gets besides its error output.
 type processFiles struct {
+	// stdin feeds the standard input; nil reads from the null device, so a tool never
+	// waits for console input.
+	stdin io.Reader
 	// stdout receives the standard output; nil discards it.
 	stdout io.Writer
 	// inherited become the descriptors 3, 4, … of the process (unix only). The caller keeps
@@ -146,8 +162,7 @@ func (t tool) start(ctx context.Context, arguments []string, files processFiles)
 	command := exec.CommandContext(ctx, t.executable, arguments...) //nolint:gosec // see above
 
 	stderr := newTailBuffer(maxStderrTailBytes)
-	// A nil Stdin reads from the null device, so a tool never waits for console input.
-	command.Stdin = nil
+	command.Stdin = files.stdin
 	command.Stdout = files.stdout
 	command.Stderr = stderr
 	command.ExtraFiles = files.inherited

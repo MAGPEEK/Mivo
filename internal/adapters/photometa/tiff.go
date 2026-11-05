@@ -18,6 +18,7 @@ const (
 	// maxIFDEntries bounds one IFD; real files have well under 100 entries.
 	maxIFDEntries = 1024
 	// maxIFDsPerStream bounds the IFDs read from one TIFF stream (chain, SubIFDs, Exif, GPS).
+	// Cache hits do not count against the budget: an IFD several pointers share is read once.
 	maxIFDsPerStream = 32
 	// maxStringBytes bounds ASCII values; Make, Model, Lens and dates are short.
 	maxStringBytes = 256
