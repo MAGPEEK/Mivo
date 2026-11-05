@@ -36,9 +36,15 @@ function unmatchedRoute(unmatched: readonly ItemSummary[]): FakeRoute {
   return filteredItemsRoute(() => jsonResponse({ items: unmatched }));
 }
 
+// Opens the filter menu and chooses a quick filter; the menu button names the active one.
+async function chooseQuick(name: string): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: /^Filter/ }));
+  fireEvent.click(await screen.findByRole("menuitemradio", { name }));
+}
+
 async function chooseUnmatched(): Promise<void> {
   await screen.findByText("Matched Film");
-  fireEvent.click(screen.getByRole("radio", { name: "Unmatched" }));
+  await chooseQuick("Unmatched");
 }
 
 function filteredRequests(server: FakeServer): URL[] {
@@ -69,7 +75,7 @@ describe("LibraryPage unmatched filter", () => {
     await chooseUnmatched();
     await screen.findByText("Everything is matched");
 
-    fireEvent.click(screen.getByRole("radio", { name: "All" }));
+    await chooseQuick("All");
 
     expect(await screen.findByText("Matched Film")).toBeTruthy();
   });

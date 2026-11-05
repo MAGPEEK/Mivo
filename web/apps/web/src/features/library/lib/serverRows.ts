@@ -30,8 +30,8 @@ export function rowCardFormat(format: string): CardFormat {
 /**
  * The "See all" target of a row: the Browse pivot (`view=browse`) of its library with the
  * row's sort and filters. The query goes through the route's own validation, so the link
- * carries exactly what Browse understands (parameters of later filter tasks join once Browse
- * reads them). Rows across libraries have no Browse pivot and get no link.
+ * carries exactly what Browse understands (sort, type, quick and field filters; parameters of
+ * later API versions join once Browse reads them). Rows across libraries get no link.
  */
 export function seeAllTarget(
   row: Pick<Row, "libraryId" | "seeAllQuery">,

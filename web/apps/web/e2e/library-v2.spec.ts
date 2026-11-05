@@ -243,6 +243,40 @@ test("sorts the movies from the toolbar and keeps the sort in the URL (M5-31)", 
   await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
 });
 
+test("filters the movies by a counted field value and clears it from the chips (M5-32)", async ({
+  page,
+}) => {
+  const movieCount = expectedLibrary("movies").items.length;
+  const grid = await openLibraryByName(page, moviesLibraryName);
+  const toolbar = page.getByRole("group", { name: "Browse options" });
+  await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
+
+  await toolbar.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("menuitem", { name: "Container" }).click();
+  const values = page.getByRole("menu", { name: "Container" }).getByRole("menuitemcheckbox");
+  const first = values.first();
+  await expect(first).toBeVisible();
+  // The accessible name carries the count: "MKV, 12 items".
+  const name = (await first.getAttribute("aria-label")) ?? "";
+  const match = /^(.+), (\d+) items?$/.exec(name);
+  expect(match).not.toBeNull();
+  const [, label = "", count = "0"] = match ?? [];
+  await first.click();
+  await expect(first).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+
+  await expect(page).toHaveURL(/[?&]container=/);
+  const chips = page.getByRole("group", { name: "Active filters" });
+  await expect(
+    chips.getByRole("button", { name: `Remove filter Container: ${label}` }),
+  ).toBeVisible();
+  await expect(grid.getByRole("listitem")).toHaveCount(Number(count));
+
+  await chips.getByRole("button", { name: "Clear all" }).click();
+  await expect(chips).toHaveCount(0);
+  await expect(grid.getByRole("listitem")).toHaveCount(movieCount);
+});
+
 test("answers a repeated image request from the cache or with 304", async ({ page }) => {
   const postered = expectedLibrary("movies").items.filter(
     (movie) => (movie.artwork ?? []).length > 0,

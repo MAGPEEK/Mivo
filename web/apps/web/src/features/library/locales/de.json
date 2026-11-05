@@ -63,6 +63,10 @@
       "title": "Alles zugeordnet",
       "hint": "Jedes Video dieser Bibliothek ist einem Eintrag des Anbieters zugeordnet."
     },
+    "emptyFiltered": {
+      "title": "Nichts passt zu diesen Filtern",
+      "hint": "Entferne einen Filter oder setze alle Filter zurück, um mehr zu sehen."
+    },
     "filterNotSupported": "Dieser Server kann die Liste noch nicht so sortieren oder filtern."
   },
   "browse": {
@@ -116,9 +120,50 @@
     }
   },
   "filter": {
-    "label": "Filter",
-    "all": "Alle",
-    "unmatched": "Nicht zugeordnet"
+    "trigger": "Filter",
+    "triggerQuick": "Filter: {{quick}}",
+    "menuLabel": "Filter",
+    "quickHeading": "Schnellfilter",
+    "fieldHeading": "Feldfilter",
+    "back": "Alle Filter",
+    "loading": "Werte werden geladen…",
+    "loadFailed": "Die Werte konnten nicht geladen werden.",
+    "notSupported": "Dieser Server kann noch keine Werte zählen.",
+    "noValues": "Keine Werte zum Filtern",
+    "count": "{{count, number}}",
+    "valueWithCount_one": "{{label}}, {{count, number}} Titel",
+    "valueWithCount_other": "{{label}}, {{count, number}} Titel",
+    "fieldWithSelection_one": "{{label}}, {{count, number}} gewählt",
+    "fieldWithSelection_other": "{{label}}, {{count, number}} gewählt",
+    "decadeValue": "{{decade}}er",
+    "unknownLanguage": "Unbekannte Sprache",
+    "chipsLabel": "Aktive Filter",
+    "chip": "{{field}}: {{value}}",
+    "removeChip": "Filter {{label}} entfernen",
+    "clearAll": "Alle zurücksetzen",
+    "quick": {
+      "all": "Alle",
+      "hdr": "HDR",
+      "dolbyVision": "Dolby Vision",
+      "hdr10plus": "HDR10+",
+      "atmos": "Dolby Atmos",
+      "uhd": "4K",
+      "unavailable": "Nicht verfügbar",
+      "duplicates": "Duplikate",
+      "unmatched": "Nicht zugeordnet"
+    },
+    "field": {
+      "genre": "Genre",
+      "year": "Jahr",
+      "decade": "Jahrzehnt",
+      "contentRating": "Altersfreigabe",
+      "resolution": "Auflösung",
+      "videoCodec": "Videocodec",
+      "audioCodec": "Audiocodec",
+      "container": "Container",
+      "audioLanguage": "Audiosprache",
+      "subtitleLanguage": "Untertitelsprache"
+    }
   },
   "errors": {
     "rootUnavailable": "Der Bibliotheksordner fehlt oder kann nicht gelesen werden.",

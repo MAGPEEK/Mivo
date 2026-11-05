@@ -27,13 +27,25 @@ describe("seeAllTarget", () => {
     });
   });
 
-  it("keeps a random seed and leaves out what Browse does not read yet", () => {
+  it("keeps a random seed, the genre and the quick filter and drops empty filters", () => {
     const target = seeAllTarget({
       libraryId,
-      seeAllQuery: { sort: "random", seed: 42, genre: ["Comedy"], year: [] },
+      seeAllQuery: { sort: "random", seed: 42, genre: ["Comedy"], year: [], quick: "hdr" },
     });
 
-    expect(target?.search).toEqual({ view: "browse", sort: "random", seed: 42 });
+    expect(target?.search).toEqual({
+      view: "browse",
+      sort: "random",
+      seed: 42,
+      genre: ["Comedy"],
+      quick: "hdr",
+    });
+  });
+
+  it("carries years and decades as URL text", () => {
+    const target = seeAllTarget({ libraryId, seeAllQuery: { year: [2008], decade: [1990] } });
+
+    expect(target?.search).toEqual({ view: "browse", year: ["2008"], decade: ["1990"] });
   });
 
   it("opens Browse even when the query names a pivot", () => {

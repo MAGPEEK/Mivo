@@ -63,6 +63,10 @@
       "title": "Everything is matched",
       "hint": "Every video of this library is matched with a provider entry."
     },
+    "emptyFiltered": {
+      "title": "Nothing matches these filters",
+      "hint": "Remove a filter or clear all filters to see more."
+    },
     "filterNotSupported": "This server cannot sort or filter the list this way yet."
   },
   "browse": {
@@ -116,9 +120,50 @@
     }
   },
   "filter": {
-    "label": "Filter",
-    "all": "All",
-    "unmatched": "Unmatched"
+    "trigger": "Filter",
+    "triggerQuick": "Filter: {{quick}}",
+    "menuLabel": "Filters",
+    "quickHeading": "Quick filters",
+    "fieldHeading": "Field filters",
+    "back": "All filters",
+    "loading": "Loading values…",
+    "loadFailed": "The values could not be loaded.",
+    "notSupported": "This server cannot count values yet.",
+    "noValues": "No values to filter by",
+    "count": "{{count, number}}",
+    "valueWithCount_one": "{{label}}, {{count, number}} item",
+    "valueWithCount_other": "{{label}}, {{count, number}} items",
+    "fieldWithSelection_one": "{{label}}, {{count, number}} chosen",
+    "fieldWithSelection_other": "{{label}}, {{count, number}} chosen",
+    "decadeValue": "{{decade}}s",
+    "unknownLanguage": "Unknown language",
+    "chipsLabel": "Active filters",
+    "chip": "{{field}}: {{value}}",
+    "removeChip": "Remove filter {{label}}",
+    "clearAll": "Clear all",
+    "quick": {
+      "all": "All",
+      "hdr": "HDR",
+      "dolbyVision": "Dolby Vision",
+      "hdr10plus": "HDR10+",
+      "atmos": "Dolby Atmos",
+      "uhd": "4K",
+      "unavailable": "Unavailable",
+      "duplicates": "Duplicates",
+      "unmatched": "Unmatched"
+    },
+    "field": {
+      "genre": "Genre",
+      "year": "Year",
+      "decade": "Decade",
+      "contentRating": "Content rating",
+      "resolution": "Resolution",
+      "videoCodec": "Video codec",
+      "audioCodec": "Audio codec",
+      "container": "Container",
+      "audioLanguage": "Audio language",
+      "subtitleLanguage": "Subtitle language"
+    }
   },
   "errors": {
     "rootUnavailable": "The library folder is missing or cannot be read.",

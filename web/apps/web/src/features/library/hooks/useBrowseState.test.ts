@@ -128,11 +128,83 @@ describe("useBrowseState", () => {
     const { result, onSearchChange } = renderBrowse({});
 
     act(() => {
-      result.current.selectFilter("unmatched");
+      result.current.selectQuick("unmatched");
     });
 
     expect(onSearchChange).toHaveBeenCalledWith(
-      expect.objectContaining({ matchState: "unmatched" }),
+      expect.objectContaining({ matchState: "unmatched", quick: undefined }),
+      undefined,
+    );
+  });
+
+  it("replaces the unmatched filter with a server quick filter (single choice)", () => {
+    const { result, onSearchChange } = renderBrowse({ matchState: "unmatched" });
+    expect(result.current.filter).toBe("unmatched");
+
+    act(() => {
+      result.current.selectQuick("hdr");
+    });
+
+    expect(onSearchChange).toHaveBeenCalledWith(
+      expect.objectContaining({ quick: "hdr", matchState: undefined }),
+      undefined,
+    );
+  });
+
+  it("ignores unknown and unchanged quick filters", () => {
+    const { result, onSearchChange } = renderBrowse({ quick: "atmos" });
+
+    act(() => {
+      result.current.selectQuick("unwatched");
+      result.current.selectQuick("atmos");
+    });
+
+    expect(onSearchChange).not.toHaveBeenCalled();
+  });
+
+  it("adds and removes field values and keeps the other filters", () => {
+    const { result, onSearchChange } = renderBrowse({ quick: "uhd", genre: ["Drama"] });
+    expect(result.current).toMatchObject({
+      filter: "filtered",
+      query: { quick: "uhd", genre: ["Drama"] },
+      facetQuery: { quick: "uhd", genre: ["Drama"] },
+    });
+
+    act(() => {
+      result.current.toggleFieldValue("genre", "Comedy");
+    });
+    expect(onSearchChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ quick: "uhd", genre: ["Drama", "Comedy"] }),
+      undefined,
+    );
+
+    act(() => {
+      result.current.toggleFieldValue("genre", "Drama");
+    });
+    expect(onSearchChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ quick: "uhd", genre: undefined }),
+      undefined,
+    );
+  });
+
+  it("clears every filter but keeps sort and type", () => {
+    const { result, onSearchChange } = renderBrowse(
+      { type: "album", sort: "year", quick: "hdr", decade: ["1990"] },
+      "music",
+    );
+
+    act(() => {
+      result.current.clearFilters();
+    });
+
+    expect(onSearchChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "album",
+        sort: "year",
+        quick: undefined,
+        matchState: undefined,
+        decade: undefined,
+      }),
       undefined,
     );
   });

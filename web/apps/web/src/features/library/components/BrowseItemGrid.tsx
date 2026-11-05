@@ -36,7 +36,7 @@ export interface BrowseCardProps {
 /** Props of {@link BrowseItemGrid}. */
 export interface BrowseItemGridProps {
   readonly items: LibraryItems;
-  /** The toolbar filter, which picks the empty texts. */
+  /** What the filters narrow, which picks the empty texts. */
   readonly filter: LibraryItemFilter;
   /** Renders one card; defaults to the poster card of a video. */
   readonly renderCard?: ((card: BrowseCardProps) => ReactNode) | undefined;
@@ -90,16 +90,32 @@ export function BrowseItemGrid({
     return <ItemsLoadError items={items} texts={shown} />;
   }
   if (items.items.length === 0) {
-    const unmatched = filter === "unmatched";
-    return (
-      <EmptyState
-        icon={emptyIcon ?? <LibraryIcon className="size-10" />}
-        title={unmatched ? shown.emptyUnmatchedTitle : shown.emptyTitle}
-        description={unmatched ? shown.emptyUnmatchedHint : shown.emptyHint}
-      />
-    );
+    return <ItemsEmpty filter={filter} texts={shown} icon={emptyIcon} />;
   }
   return <ItemList items={items} texts={shown} renderCard={renderCard} />;
+}
+
+interface ItemsEmptyProps {
+  readonly filter: LibraryItemFilter;
+  readonly texts: BrowseItemTexts;
+  readonly icon: ReactNode;
+}
+
+function ItemsEmpty({ filter, texts, icon }: ItemsEmptyProps) {
+  const { t } = useTranslation(libraryNamespace);
+  // Any filter but Unmatched speaks of the filters, whatever kind of item is listed.
+  const shown = {
+    all: { title: texts.emptyTitle, hint: texts.emptyHint },
+    unmatched: { title: texts.emptyUnmatchedTitle, hint: texts.emptyUnmatchedHint },
+    filtered: { title: t("items.emptyFiltered.title"), hint: t("items.emptyFiltered.hint") },
+  }[filter];
+  return (
+    <EmptyState
+      icon={icon ?? <LibraryIcon className="size-10" />}
+      title={shown.title}
+      description={shown.hint}
+    />
+  );
 }
 
 interface ItemsLoadErrorProps {

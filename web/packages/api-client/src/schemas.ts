@@ -198,6 +198,23 @@ export type ItemQuickFilter = Schemas["ItemQuickFilter"];
 /** Query parameters of `GET /api/v1/libraries/{libraryId}/items`: sort, filters and paging. */
 export type LibraryItemsQuery = NonNullable<operations["listLibraryItems"]["parameters"]["query"]>;
 
+/** Query parameters of `GET /api/v1/libraries/{libraryId}/facets`: fields and filters. */
+export type LibraryFacetsQuery = NonNullable<
+  operations["listLibraryFacets"]["parameters"]["query"]
+>;
+
+/** A filter field facet counts are given for. Later API versions may add values. */
+export type FacetField = Schemas["FacetField"];
+
+/** One value of a filter field with its item count. */
+export type FacetValue = Schemas["FacetValue"];
+
+/** The counted values of one filter field. */
+export type Facet = Schemas["Facet"];
+
+/** Facet counts of a library listing; the body of `GET /api/v1/libraries/{libraryId}/facets`. */
+export type FacetList = Schemas["FacetList"];
+
 /** One row of Home or of a library's Overview pivot with its first items. */
 export type Row = Schemas["Row"];
 

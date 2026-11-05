@@ -1,20 +1,28 @@
-import type { ItemSort, LibraryKind } from "@mivo/api-client";
+import type { ItemSort, LibraryFacetsQuery, LibraryKind } from "@mivo/api-client";
 import { useCallback, useEffect, useMemo } from "react";
 
 import {
   browseSortsFor,
   browseTypesFor,
   defaultSort,
+  itemFilterOf,
   maxSeed,
   resolveBrowse,
   toBrowseSearch,
-  toItemFilter,
+  toFacetQuery,
   toListQuery,
   type BrowseListQuery,
   type BrowseSearch,
   type BrowseState,
   type BrowseType,
+  type LibraryItemFilter,
 } from "../lib/browseQuery";
+import {
+  quickFilterById,
+  toggleFieldValue,
+  type FieldFilterId,
+  type FieldFilterSelection,
+} from "../lib/filterRegistry";
 
 /** How a search change enters the history. */
 export interface BrowseNavigation {
@@ -34,22 +42,37 @@ export interface BrowseStateOptions {
   readonly nextSeed?: () => number;
 }
 
+/** The filter actions of the Browse toolbar (LB-20). */
+export interface BrowseFilterActions {
+  /** Chooses a quick filter by id; unknown ids and the current one are ignored. */
+  readonly selectQuick: (id: string) => void;
+  /** Adds the value to the field's filter, or removes it when it is chosen already. */
+  readonly toggleFieldValue: (field: FieldFilterId, value: string) => void;
+  /** Removes every quick and field filter. */
+  readonly clearFilters: () => void;
+}
+
 /** The Browse toolbar state from the URL and the actions that change it. */
-export interface BrowseControls extends BrowseState {
+export interface BrowseControls extends BrowseState, BrowseFilterActions {
   /** The item kinds the library can list; the type switch shows only with more than one. */
   readonly types: readonly BrowseType[];
   readonly sorts: readonly ItemSort[];
+  /** What the filters narrow, for the texts of an empty result. */
+  readonly filter: LibraryItemFilter;
   /**
    * The listing query of the state; a new value starts again at the first page. `undefined`
    * while a random sort waits for its seed, so no unseeded listing is requested.
    */
   readonly query: BrowseListQuery | undefined;
+  /** The facet query of the current type and filters, for the counts of the filter menu. */
+  readonly facetQuery: LibraryFacetsQuery;
   readonly selectType: (type: string) => void;
   /** Choosing "random" again shuffles again with a new seed. */
   readonly selectSort: (sort: string) => void;
   readonly toggleOrder: () => void;
-  readonly selectFilter: (filter: string) => void;
 }
+
+const noFields: FieldFilterSelection = {};
 
 function randomSeed(): number {
   return Math.floor(Math.random() * (maxSeed + 1));
@@ -57,6 +80,26 @@ function randomSeed(): number {
 
 function isOneOf<Value extends string>(values: readonly Value[], id: string): id is Value {
   return (values as readonly string[]).includes(id);
+}
+
+function filterActions(
+  state: BrowseState,
+  apply: (next: BrowseState) => void,
+): BrowseFilterActions {
+  return {
+    selectQuick: (id) => {
+      const quick = quickFilterById(id)?.id;
+      if (quick !== undefined && quick !== state.quick) {
+        apply({ ...state, quick });
+      }
+    },
+    toggleFieldValue: (field, value) => {
+      apply({ ...state, fields: toggleFieldValue(state.fields, field, value) });
+    },
+    clearFilters: () => {
+      apply({ ...state, quick: "all", fields: noFields });
+    },
+  };
 }
 
 /**
@@ -77,6 +120,7 @@ export function useBrowseState({
     () => (missingSeed ? undefined : toListQuery(state, libraryKind)),
     [missingSeed, state, libraryKind],
   );
+  const facetQuery = useMemo(() => toFacetQuery(state, libraryKind), [state, libraryKind]);
   const apply = useCallback(
     (next: BrowseState, navigation?: BrowseNavigation) => {
       onSearchChange(toBrowseSearch(next, libraryKind), navigation);
@@ -92,9 +136,12 @@ export function useBrowseState({
   const sorts = browseSortsFor(state.type);
   return {
     ...state,
+    ...filterActions(state, apply),
     types,
     sorts,
+    filter: itemFilterOf(state),
     query,
+    facetQuery,
     selectType: (id) => {
       if (isOneOf(types, id) && id !== state.type) {
         const sort = browseSortsFor(id).includes(state.sort) ? state.sort : defaultSort;
@@ -108,9 +155,6 @@ export function useBrowseState({
     },
     toggleOrder: () => {
       apply({ ...state, order: state.order === "asc" ? "desc" : "asc" });
-    },
-    selectFilter: (id) => {
-      apply({ ...state, filter: toItemFilter(id) });
     },
   };
 }

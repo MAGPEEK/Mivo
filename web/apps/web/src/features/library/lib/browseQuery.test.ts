@@ -4,14 +4,18 @@ import { describe, expect, it } from "vitest";
 import {
   browseSortsFor,
   browseTypesFor,
+  itemFilterOf,
   maxSeed,
   resolveBrowse,
   toBrowseSearch,
+  toFacetQuery,
   toListQuery,
   validateBrowseSearch,
   type BrowseSearch,
   type BrowseState,
+  type LibraryItemFilter,
 } from "./browseQuery";
+import { fieldFilters } from "./filterRegistry";
 
 const emptySearch: BrowseSearch = {
   view: undefined,
@@ -19,8 +23,12 @@ const emptySearch: BrowseSearch = {
   sort: undefined,
   order: undefined,
   seed: undefined,
+  quick: undefined,
   matchState: undefined,
+  ...Object.fromEntries(fieldFilters.map(({ id }) => [id, undefined])),
 };
+
+const allFields = fieldFilters.map(({ id }) => id);
 
 describe("validateBrowseSearch", () => {
   it.each<{ name: string; raw: Record<string, unknown>; expected: BrowseSearch }>([
@@ -95,6 +103,29 @@ describe("validateBrowseSearch", () => {
       raw: { sort: "random", seed: " " },
       expected: { ...emptySearch, sort: "random" },
     },
+    { name: "a quick filter", raw: { quick: "hdr" }, expected: { ...emptySearch, quick: "hdr" } },
+    { name: "the default quick filter", raw: { quick: "all" }, expected: emptySearch },
+    { name: "an unknown quick filter", raw: { quick: "unwatched" }, expected: emptySearch },
+    {
+      name: "a quick filter next to the match state (single choice)",
+      raw: { quick: "atmos", matchState: "unmatched" },
+      expected: { ...emptySearch, quick: "atmos" },
+    },
+    {
+      name: "field values",
+      raw: { genre: ["Drama", "Comedy"], decade: [1990], audioLanguage: "ger" },
+      expected: {
+        ...emptySearch,
+        genre: ["Drama", "Comedy"],
+        decade: ["1990"],
+        audioLanguage: ["ger"],
+      },
+    },
+    {
+      name: "invalid field values",
+      raw: { genre: ["", 3.5, {}], year: ["99", 1999, "20000"], decade: [1995, "2000"] },
+      expected: { ...emptySearch, year: ["1999"], decade: ["2000"] },
+    },
   ])("keeps only the valid values of $name", ({ raw, expected }) => {
     expect(validateBrowseSearch(raw)).toEqual(expected);
   });
@@ -107,7 +138,8 @@ describe("resolveBrowse", () => {
       sort: "title",
       order: "asc",
       seed: undefined,
-      filter: "all",
+      quick: "all",
+      fields: {},
     });
   });
 
@@ -175,7 +207,7 @@ describe("toBrowseSearch and toListQuery", () => {
     },
     {
       name: "the unmatched filter",
-      state: { ...defaults, filter: "unmatched" },
+      state: { ...defaults, quick: "unmatched" },
       kind: "movies",
       query: { matchState: "unmatched" },
     },
@@ -192,6 +224,105 @@ describe("toBrowseSearch and toListQuery", () => {
       ...emptySearch,
       ...url,
     });
+  });
+
+  it.each<{ name: string; state: Partial<BrowseState>; search: BrowseSearch; query: object }>([
+    {
+      name: "a server quick filter",
+      state: { quick: "dolbyVision" },
+      search: { quick: "dolbyVision" },
+      query: { quick: "dolbyVision" },
+    },
+    {
+      name: "text values",
+      state: { fields: { genre: ["Drama", "Comedy"] } },
+      search: { genre: ["Drama", "Comedy"] },
+      query: { genre: ["Drama", "Comedy"] },
+    },
+    {
+      name: "years and decades as numbers",
+      state: { fields: { year: ["2008"], decade: ["1990", "2000"] } },
+      search: { year: ["2008"], decade: ["1990", "2000"] },
+      query: { year: [2008], decade: [1990, 2000] },
+    },
+    {
+      name: "a field without values",
+      state: { fields: { container: [] } },
+      search: {},
+      query: {},
+    },
+    {
+      name: "a quick filter and fields together",
+      state: { quick: "uhd", fields: { audioLanguage: ["ger"], resolution: ["4k"] } },
+      search: { quick: "uhd", resolution: ["4k"], audioLanguage: ["ger"] },
+      query: { quick: "uhd", resolution: ["4k"], audioLanguage: ["ger"] },
+    },
+  ])("maps $name to the URL and the listing", ({ state, search, query }) => {
+    const full = { ...defaults, ...state };
+
+    expect(toBrowseSearch(full, "movies")).toEqual({ ...emptySearch, ...search });
+    expect(toListQuery(full, "movies")).toStrictEqual(query);
+    // The URL survives the route's validation and the way back into the state.
+    const url = toBrowseSearch(full, "movies");
+    expect(
+      toBrowseSearch(resolveBrowse(validateBrowseSearch({ ...url }), "movies"), "movies"),
+    ).toEqual(url);
+  });
+
+  it("orders the field parameters like the registry, so equal filters share a cache key", () => {
+    const first = toListQuery({ ...defaults, fields: { genre: ["A"], year: ["2001"] } }, "movies");
+    const second = toListQuery({ ...defaults, fields: { year: ["2001"], genre: ["A"] } }, "movies");
+
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+  });
+});
+
+describe("toFacetQuery", () => {
+  const defaults: BrowseState = resolveBrowse(emptySearch, "music");
+
+  it("asks for every field under the type and filters, without sort and match state", () => {
+    const state: BrowseState = {
+      ...defaults,
+      type: "album",
+      sort: "year",
+      order: "desc",
+      quick: "duplicates",
+      fields: { genre: ["Jazz"], decade: ["1960"] },
+    };
+
+    expect(toFacetQuery(state, "music")).toStrictEqual({
+      field: allFields,
+      type: "album",
+      quick: "duplicates",
+      genre: ["Jazz"],
+      decade: [1960],
+    });
+  });
+
+  it("leaves the Unmatched filter out, which facets cannot count", () => {
+    expect(toFacetQuery({ ...defaults, quick: "unmatched" }, "music")).toStrictEqual({
+      field: allFields,
+    });
+  });
+});
+
+describe("itemFilterOf", () => {
+  it.each<{
+    name: string;
+    state: Pick<BrowseState, "quick" | "fields">;
+    expected: LibraryItemFilter;
+  }>([
+    { name: "no filter", state: { quick: "all", fields: {} }, expected: "all" },
+    { name: "only Unmatched", state: { quick: "unmatched", fields: {} }, expected: "unmatched" },
+    { name: "a quick filter", state: { quick: "hdr", fields: {} }, expected: "filtered" },
+    {
+      name: "Unmatched with a field",
+      state: { quick: "unmatched", fields: { genre: ["Drama"] } },
+      expected: "filtered",
+    },
+    { name: "an emptied field", state: { quick: "all", fields: { genre: [] } }, expected: "all" },
+  ])("says $expected for $name", ({ state, expected }) => {
+    expect(itemFilterOf(state)).toBe(expected);
   });
 });
 

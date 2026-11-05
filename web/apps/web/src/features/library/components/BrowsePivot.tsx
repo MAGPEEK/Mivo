@@ -6,6 +6,7 @@ import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
 import type { BrowseSearch, BrowseType, LibraryItemFilter } from "../lib/browseQuery";
 import { BrowseItemGrid } from "./BrowseItemGrid";
 import { BrowseToolbar } from "./BrowseToolbar";
+import { FilterChips } from "./FilterChips";
 
 /** Props of {@link BrowsePivot}. */
 export interface BrowsePivotProps {
@@ -22,7 +23,7 @@ export interface BrowsePivotProps {
 export interface LibraryItemsView {
   readonly type: BrowseType;
   readonly items: LibraryItems;
-  /** The toolbar filter; an empty Unmatched result needs other texts than an empty library. */
+  /** What the filters narrow; an empty filtered result needs other texts than an empty library. */
   readonly filter: LibraryItemFilter;
 }
 
@@ -52,7 +53,8 @@ export function BrowsePivot({
   const key = browse.query === undefined ? pendingQueryKey : JSON.stringify(browse.query);
   return (
     <>
-      <BrowseToolbar browse={browse} totalCount={items.totalCount} />
+      <BrowseToolbar libraryId={libraryId} browse={browse} totalCount={items.totalCount} />
+      <FilterChips browse={browse} />
       <Fragment key={key}>
         {renderItems?.({ type: browse.type, items, filter: browse.filter }) ?? (
           <BrowseItemGrid items={items} filter={browse.filter} />

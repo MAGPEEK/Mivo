@@ -73,3 +73,4 @@ export {
   type MetadataAttributionProps,
 } from "./MetadataAttribution";
 export { useRowTitle } from "./useRowTitle";
+export { useMenu, type MenuOptions, type MenuPlacement, type MenuRefs } from "./useMenu";

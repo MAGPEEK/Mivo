@@ -1,14 +1,32 @@
-import type { ItemKind, ItemSort, LibraryItemsQuery, LibraryKind } from "@mivo/api-client";
+import type {
+  ItemKind,
+  ItemSort,
+  LibraryFacetsQuery,
+  LibraryItemsQuery,
+  LibraryKind,
+} from "@mivo/api-client";
 
-// URL contract of the Browse pivot (task M5-31). The search parameter names are the query
-// parameter names of `listLibraryItems`, so a "See all" link or a later filter task (M5-32...36)
-// can build the URL from the API query and back. Defaults are left out of the URL.
+import {
+  fieldFilters,
+  fieldQueryValues,
+  parseFieldValues,
+  quickFilterById,
+  quickFilters,
+  type FieldFilterId,
+  type FieldFilterSelection,
+  type QuickFilterId,
+  type ServerQuickFilter,
+} from "./filterRegistry";
 
-/** Quick filter of the library grid; "unmatched" is the `matchState` filter (LB-20). */
-export type LibraryItemFilter = "all" | "unmatched";
+// URL contract of the Browse pivot (tasks M5-31, M5-32). The search parameter names are the
+// query parameter names of `listLibraryItems`, so a "See all" link can build the URL from the
+// API query and back. Defaults are left out of the URL.
 
-/** Every quick filter, in display order. */
-export const libraryItemFilters: readonly LibraryItemFilter[] = ["all", "unmatched"];
+/**
+ * What the filters narrow, so an empty result can say why: nothing, only the Unmatched quick
+ * filter, or any other filter.
+ */
+export type LibraryItemFilter = "all" | "unmatched" | "filtered";
 
 /** The top-level item kinds a library listing accepts as `type`. */
 export type BrowseType = Extract<
@@ -29,7 +47,7 @@ export const libraryPivots: readonly LibraryPivot[] = ["overview", "browse"];
 export type BrowseListingSearch = Omit<BrowseSearch, "view">;
 
 /** Validated search parameters of the library route; absent keys are the defaults. */
-export interface BrowseSearch {
+export interface BrowseSearch extends FieldFilterSelection {
   /** Pivot of the page; absent opens the pivot remembered for the library (task M5-30). */
   readonly view?: LibraryPivot | undefined;
   /** Item kind to list; absent lists the library's top-level kind. */
@@ -40,7 +58,9 @@ export interface BrowseSearch {
   readonly order?: "desc" | undefined;
   /** Seed of sort "random", so a reload or the way back shows the same order. */
   readonly seed?: number | undefined;
-  /** Only `unmatched` ("Unmatched" quick filter). */
+  /** Quick filter of the server; absent is "all". */
+  readonly quick?: ServerQuickFilter | undefined;
+  /** Only `unmatched` ("Unmatched" quick filter); absent while `quick` is set (single choice). */
   readonly matchState?: "unmatched" | undefined;
 }
 
@@ -50,7 +70,8 @@ export interface BrowseState {
   readonly sort: ItemSort;
   readonly order: BrowseOrder;
   readonly seed: number | undefined;
-  readonly filter: LibraryItemFilter;
+  readonly quick: QuickFilterId;
+  readonly fields: FieldFilterSelection;
 }
 
 /** The listing query of a Browse state, without paging. */
@@ -95,6 +116,9 @@ const sortsByType: Readonly<Record<BrowseType, readonly ItemSort[]>> = {
 
 const browsableTypes = new Set<string>(Object.values(typesByLibraryKind).flat());
 const knownSorts = new Set<string>(Object.values(sortsByType).flat());
+const serverQuickFilters = new Set<string>(
+  quickFilters.flatMap(({ parameter }) => (parameter?.name === "quick" ? [parameter.value] : [])),
+);
 
 /** The item kinds a library of `kind` can list, the default first; unknown kinds list none. */
 export function browseTypesFor(kind: LibraryKind): readonly BrowseType[] {
@@ -120,6 +144,21 @@ function parseSort(value: unknown): ItemSort | undefined {
     : undefined;
 }
 
+function parseQuick(value: unknown): ServerQuickFilter | undefined {
+  return typeof value === "string" && serverQuickFilters.has(value)
+    ? (value as ServerQuickFilter)
+    : undefined;
+}
+
+// Every registry field, `undefined` where nothing valid is given.
+function parseFieldSelection(search: Readonly<Record<string, unknown>>): FieldFilterSelection {
+  const entries = fieldFilters.map((definition) => [
+    definition.id,
+    parseFieldValues(definition, search[definition.id]),
+  ]);
+  return Object.fromEntries(entries) as FieldFilterSelection;
+}
+
 /**
  * Validates the parsed search of the library route. Unknown values and defaults are dropped, so
  * a hand-edited link still opens the page and the URL stays short. Every key is returned: the
@@ -130,14 +169,43 @@ export function validateBrowseSearch(search: Readonly<Record<string, unknown>>):
   const sort = parseSort(search["sort"]);
   const random = sort === "random";
   const view = search["view"];
+  const quick = parseQuick(search["quick"]);
   return {
     view: libraryPivots.find((pivot) => pivot === view),
     type: typeof type === "string" && browsableTypes.has(type) ? (type as BrowseType) : undefined,
     sort,
     order: !random && search["order"] === "desc" ? "desc" : undefined,
     seed: random ? parseSeed(search["seed"]) : undefined,
-    matchState: search["matchState"] === "unmatched" ? "unmatched" : undefined,
+    quick,
+    // Quick filters are a single choice; a link with both keeps the server quick filter.
+    matchState:
+      quick === undefined && search["matchState"] === "unmatched" ? "unmatched" : undefined,
+    ...parseFieldSelection(search),
   };
+}
+
+function quickFilterOf(search: BrowseSearch): QuickFilterId {
+  const chosen = quickFilters.find(
+    ({ parameter }) => parameter !== undefined && search[parameter.name] === parameter.value,
+  );
+  return chosen?.id ?? "all";
+}
+
+function quickFilterSearch(id: QuickFilterId): Pick<BrowseSearch, "quick" | "matchState"> {
+  const parameter = quickFilterById(id)?.parameter;
+  return {
+    quick: parameter?.name === "quick" ? parseQuick(parameter.value) : undefined,
+    matchState: parameter?.name === "matchState" ? "unmatched" : undefined,
+  };
+}
+
+function fieldSelectionOf(search: BrowseSearch): FieldFilterSelection {
+  return Object.fromEntries(
+    fieldFilters.flatMap(({ id }) => {
+      const values = search[id];
+      return values === undefined ? [] : [[id, values] as const];
+    }),
+  );
 }
 
 /**
@@ -157,8 +225,18 @@ export function resolveBrowse(search: BrowseSearch, kind: LibraryKind): BrowseSt
     sort,
     order: sort !== "random" && search.order === "desc" ? "desc" : "asc",
     seed: sort === "random" ? search.seed : undefined,
-    filter: search.matchState === "unmatched" ? "unmatched" : "all",
+    quick: quickFilterOf(search),
+    fields: fieldSelectionOf(search),
   };
+}
+
+/** What the filters of `state` narrow; picks the texts of an empty result. */
+export function itemFilterOf(state: Pick<BrowseState, "quick" | "fields">): LibraryItemFilter {
+  const fieldFiltered = fieldFilters.some(({ id }) => (state.fields[id]?.length ?? 0) > 0);
+  if (fieldFiltered || (state.quick !== "all" && state.quick !== "unmatched")) {
+    return "filtered";
+  }
+  return state.quick;
 }
 
 /**
@@ -167,29 +245,63 @@ export function resolveBrowse(search: BrowseSearch, kind: LibraryKind): BrowseSt
  */
 export function toBrowseSearch(state: BrowseState, kind: LibraryKind): BrowseListingSearch {
   const random = state.sort === "random";
+  const fields = Object.fromEntries(
+    fieldFilters.map(({ id }) => {
+      const values = state.fields[id];
+      return [id, values === undefined || values.length === 0 ? undefined : values];
+    }),
+  ) as FieldFilterSelection;
   return {
     type: state.type === browseTypesFor(kind)[0] ? undefined : state.type,
     sort: state.sort === defaultSort ? undefined : state.sort,
     order: !random && state.order === "desc" ? "desc" : undefined,
     seed: random ? state.seed : undefined,
-    matchState: state.filter === "unmatched" ? "unmatched" : undefined,
+    ...quickFilterSearch(state.quick),
+    ...fields,
   };
+}
+
+type FieldListQuery = Pick<BrowseListQuery, FieldFilterId>;
+
+// The listing parameters of the chosen field values, in registry order, so equal selections give
+// equal query keys.
+function fieldListQuery(fields: FieldFilterSelection): FieldListQuery {
+  const entries = fieldFilters.flatMap((definition) => {
+    const values = fields[definition.id];
+    return values === undefined || values.length === 0
+      ? []
+      : [[definition.id, fieldQueryValues(definition, values)]];
+  });
+  // Each entry holds the parameter type of its field (years and decades as numbers).
+  return Object.fromEntries(entries) as FieldListQuery;
 }
 
 /** The `listLibraryItems` query of `state`; only values other than the defaults are sent. */
 export function toListQuery(state: BrowseState, kind: LibraryKind): BrowseListQuery {
-  const { type, sort, order, seed, matchState } = toBrowseSearch(state, kind);
+  const { type, sort, order, seed, quick, matchState } = toBrowseSearch(state, kind);
   // Absent keys instead of `undefined` values, so the query key stays equal to the URL.
   return {
     ...(type === undefined ? {} : { type }),
     ...(sort === undefined ? {} : { sort }),
     ...(order === undefined ? {} : { order }),
     ...(seed === undefined ? {} : { seed }),
+    ...(quick === undefined ? {} : { quick }),
     ...(matchState === undefined ? {} : { matchState }),
+    ...fieldListQuery(state.fields),
   };
 }
 
-/** The quick filter with this id; unknown ids choose "all". */
-export function toItemFilter(id: string): LibraryItemFilter {
-  return id === "unmatched" ? "unmatched" : "all";
+/**
+ * The `listLibraryFacets` query of `state`: every registry field under the current type and
+ * filters. The facets endpoint has no match state filter, so "Unmatched" does not narrow the
+ * counts.
+ */
+export function toFacetQuery(state: BrowseState, kind: LibraryKind): LibraryFacetsQuery {
+  const { type, quick } = toBrowseSearch(state, kind);
+  return {
+    field: fieldFilters.map(({ id }) => id),
+    ...(type === undefined ? {} : { type }),
+    ...(quick === undefined ? {} : { quick }),
+    ...fieldListQuery(state.fields),
+  };
 }

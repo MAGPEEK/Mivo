@@ -169,9 +169,7 @@ describe("BrowseToolbar", () => {
     const { server } = renderBrowse("?matchState=unmatched");
     const toolbar = await openToolbar();
 
-    expect(
-      within(toolbar).getByRole("radio", { name: "Unmatched" }).getAttribute("aria-checked"),
-    ).toBe("true");
+    expect(within(toolbar).getByRole("button", { name: "Filter: Unmatched" })).toBeTruthy();
     await waitFor(() => {
       expect(listQueries(server)).toEqual([{ matchState: "unmatched" }]);
     });

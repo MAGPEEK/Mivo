@@ -3,6 +3,7 @@ import {
   requestData,
   type ApiClient,
   type Library,
+  type LibraryFacetsQuery,
   type ScanStatus,
 } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -140,6 +141,41 @@ export function libraryItemsQueryOptions(
       ),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.nextCursor,
+    retry: shouldRetryLibraryQuery,
+  });
+}
+
+/**
+ * Cache key of `GET /api/v1/libraries/{libraryId}/facets`. Below the library key, so a finished
+ * scan refreshes the counts too.
+ */
+export function libraryFacetsQueryKey(libraryId: string) {
+  return [...libraryQueryKey(libraryId), "facets"] as const;
+}
+
+// Counts change only with a scan, which invalidates them; reopening the menu within this time
+// shows the cached counts without a request.
+const facetsStaleTimeMs = 30_000;
+
+/**
+ * Query options for the facet counts of the filter menu under `facetQuery`. Each query is its
+ * own cache entry, so the answer to an older filter can never replace the current counts.
+ */
+export function libraryFacetsQueryOptions(
+  client: ApiClient,
+  libraryId: string,
+  facetQuery: LibraryFacetsQuery,
+) {
+  return queryOptions({
+    queryKey: [...libraryFacetsQueryKey(libraryId), facetQuery] as const,
+    queryFn: ({ signal }) =>
+      requestData(
+        client.GET("/api/v1/libraries/{libraryId}/facets", {
+          params: { path: { libraryId }, query: facetQuery },
+          signal,
+        }),
+      ),
+    staleTime: facetsStaleTimeMs,
     retry: shouldRetryLibraryQuery,
   });
 }

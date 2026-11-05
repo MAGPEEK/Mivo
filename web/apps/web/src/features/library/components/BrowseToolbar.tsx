@@ -2,14 +2,15 @@ import { belowBreakpointQuery } from "@mivo/ui-tokens";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Menu, SegmentedControl, Sheet, useMediaQuery } from "../../../shared/ui";
+import { Menu, Sheet, useMediaQuery } from "../../../shared/ui";
 import type { BrowseControls } from "../hooks/useBrowseState";
-import { libraryItemFilters } from "../lib/browseQuery";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
+import { FilterMenu } from "./FilterMenu";
 
 /** Props of {@link BrowseToolbar}. */
 export interface BrowseToolbarProps {
+  readonly libraryId: string;
   readonly browse: BrowseControls;
   /** Items matching the current query; absent hides the count. */
   readonly totalCount: number | undefined;
@@ -18,11 +19,16 @@ export interface BrowseToolbarProps {
 // Phones get the controls in a sheet, as in the approved prototype (`browse.html`).
 const phoneScreenQuery = belowBreakpointQuery("sm");
 
+interface ControlsProps {
+  readonly libraryId: string;
+  readonly browse: BrowseControls;
+}
+
 /**
- * Toolbar of the Browse pivot (LB-20...23): quick filter, type switch, sort with direction and
+ * Toolbar of the Browse pivot (LB-20...23): filter menu, type switch, sort with direction and
  * the item count. One line on wider screens; on phones the controls sit in a sheet.
  */
-export function BrowseToolbar({ browse, totalCount }: BrowseToolbarProps) {
+export function BrowseToolbar({ libraryId, browse, totalCount }: BrowseToolbarProps) {
   const { t } = useTranslation(libraryNamespace);
   const phone = useMediaQuery(phoneScreenQuery);
   return (
@@ -31,13 +37,17 @@ export function BrowseToolbar({ browse, totalCount }: BrowseToolbarProps) {
       aria-label={t("browse.label")}
       className="mb-6 flex flex-wrap items-center gap-3"
     >
-      {phone ? <PhoneControls browse={browse} /> : <BrowseControlsLine browse={browse} />}
+      {phone ? (
+        <PhoneControls libraryId={libraryId} browse={browse} />
+      ) : (
+        <BrowseControlsLine libraryId={libraryId} browse={browse} />
+      )}
       <ItemCount type={browse.type} totalCount={totalCount} />
     </div>
   );
 }
 
-function PhoneControls({ browse }: { readonly browse: BrowseControls }) {
+function PhoneControls({ libraryId, browse }: ControlsProps) {
   const { t } = useTranslation(libraryNamespace);
   const [open, setOpen] = useState(false);
   return (
@@ -61,7 +71,7 @@ function PhoneControls({ browse }: { readonly browse: BrowseControls }) {
           }}
         >
           <div className="flex flex-col items-start gap-4 p-5">
-            <BrowseControlsLine browse={browse} />
+            <BrowseControlsLine libraryId={libraryId} browse={browse} />
           </div>
         </Sheet>
       )}
@@ -69,16 +79,11 @@ function PhoneControls({ browse }: { readonly browse: BrowseControls }) {
   );
 }
 
-function BrowseControlsLine({ browse }: { readonly browse: BrowseControls }) {
+function BrowseControlsLine({ libraryId, browse }: ControlsProps) {
   const { t } = useTranslation(libraryNamespace);
   return (
     <>
-      <SegmentedControl
-        label={t("filter.label")}
-        options={libraryItemFilters.map((id) => ({ id, label: t(`filter.${id}`) }))}
-        value={browse.filter}
-        onChange={browse.selectFilter}
-      />
+      <FilterMenu libraryId={libraryId} browse={browse} />
       {browse.types.length > 1 && (
         <Menu
           trigger={t("browse.typeTrigger", { type: t(`browse.type.${browse.type}`) })}
