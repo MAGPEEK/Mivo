@@ -362,12 +362,17 @@ check_kept_catalogue() {
 		if [[ "$libraries" == *'"state":"idle"'* && "$libraries" == *'"finishedAt"'* ]]; then break; fi
 		sleep 2
 	done
-	local items unchanged added
+	# Files outnumber items: extras (trailers, featurettes) and the parts of one movie are files
+	# of the same item. A kept catalogue therefore means no file added or failed and at least one
+	# unchanged file per item.
+	local items unchanged added failed
 	items=$(sed -n 's/.*"itemCount":\([0-9]*\).*/\1/p' <<<"$libraries")
 	unchanged=$(sed -n 's/.*"unchanged":\([0-9]*\).*/\1/p' <<<"$libraries")
 	added=$(sed -n 's/.*"added":\([0-9]*\).*/\1/p' <<<"$libraries")
-	if [ -n "$items" ] && [ "${items:-0}" -gt 0 ] && [ "$added" = 0 ] && [ "$unchanged" = "$items" ]; then
-		record PASS "$label $what: catalogue kept ($items items, scan after start: $unchanged unchanged, 0 added)"
+	failed=$(sed -n 's/.*"failed":\([0-9]*\).*/\1/p' <<<"$libraries")
+	if [ -n "$items" ] && [ "${items:-0}" -gt 0 ] && [ "$added" = 0 ] && [ "${failed:-0}" = 0 ] &&
+		[ -n "$unchanged" ] && [ "$unchanged" -ge "$items" ]; then
+		record PASS "$label $what: catalogue kept ($items items, scan after start: $unchanged files unchanged, 0 added, 0 failed)"
 	else
 		record FAIL "$label $what: catalogue not kept or scan unfinished: ${libraries:-no answer}"
 		return 1
