@@ -9,9 +9,15 @@ import (
 
 	"github.com/magpeek/mivo/internal/app/enrich"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/metadata"
 	"github.com/magpeek/mivo/internal/domain/metadata/match"
 )
+
+// ErrProvider marks a failure of the provider call itself, so callers can tell "the provider
+// is unreachable or rate limiting" (it wraps domain.ErrUnavailable or ErrRateLimited too)
+// from an unavailable store or a shutdown.
+var ErrProvider = errors.New("metadata provider failed")
 
 // MaxCandidates bounds the candidates one search returns (API contract: at most 25).
 const MaxCandidates = 25
@@ -65,7 +71,7 @@ func (service *Service) searchTitle(ctx context.Context, current target, query Q
 		Title: title, Year: query.Year, Language: current.language,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("search %s %q: %w", current.family.kind, title, err)
+		return nil, fmt.Errorf("search %s %q: %w: %w", current.family.kind, title, ErrProvider, err)
 	}
 
 	return match.Rank(match.Query{Title: title, Year: query.Year}, found), nil
@@ -108,7 +114,7 @@ func (service *Service) lookUpRef(ctx context.Context, current target, text stri
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("look up %s %s: %w", ref.Provider, ref.ID, err)
+		return nil, fmt.Errorf("look up %s %s: %w: %w", ref.Provider, ref.ID, ErrProvider, err)
 	}
 
 	candidate := match.Candidate{
@@ -116,6 +122,8 @@ func (service *Service) lookUpRef(ctx context.Context, current target, text stri
 		Title:         details.Record.Title,
 		OriginalTitle: details.Record.OriginalTitle,
 		Year:          details.Record.Year,
+		Overview:      details.Record.Summary,
+		Poster:        tmdbPoster(details.Artwork),
 	}
 
 	return []match.Scored{{Candidate: candidate, Confidence: exactConfidence, ExactID: true}}, nil
@@ -151,6 +159,19 @@ func fitRef(itemFamily family, ref match.ProviderRef) (match.ProviderRef, error)
 	}
 
 	return ref, nil
+}
+
+// tmdbPoster returns the best TMDB poster of the details, empty when there is none. Only TMDB
+// pictures are offered as candidate previews (M6-13: the preview proxy fetches from the TMDB
+// image host only).
+func tmdbPoster(pictures []enrich.ArtworkRef) string {
+	for _, picture := range pictures {
+		if picture.Provider == enrich.ArtworkProviderTMDB && picture.Kind == artwork.KindPoster {
+			return picture.Path
+		}
+	}
+
+	return ""
 }
 
 // preferTMDB replaces an IMDb reference by the TMDB ID of the same entry when the details

@@ -54,6 +54,7 @@ const (
 	fieldSubtitleLanguage = "subtitleLanguage"
 	fieldFacetField       = "field"
 	fieldPath             = "path"
+	fieldMatchState       = "matchState"
 )
 
 // listingFilters are the filters listLibraryItems, listLibraryFacets and listLibraryLetters

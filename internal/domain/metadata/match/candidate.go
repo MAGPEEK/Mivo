@@ -25,6 +25,13 @@ type Candidate struct {
 	// Popularity is the provider's own popularity number; it only breaks ties between
 	// equal confidences and never raises one.
 	Popularity float64
+	// Overview is the provider's plot summary as plain text, empty when it has none. Only
+	// the identify dialog shows it; matching never reads it.
+	Overview string
+	// Poster is the provider-side address of the entry's poster (a TMDB file path such as
+	// "/abc.jpg"), empty when the entry has none. It is never sent to a client as is: the
+	// HTTP adapter turns it into a Mivo URL (ADR 0010).
+	Poster string
 }
 
 // Scored is a candidate with its confidence in [0, 1].

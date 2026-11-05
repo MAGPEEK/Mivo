@@ -51,6 +51,9 @@ func plainHandlerTags() []string {
 // imagePath is the route of the image endpoint (ADR 0027 section 8).
 const imagePath = "/api/v1/images/{imageId}"
 
+// candidatePosterPath is the poster proxy of the identify dialog (M6-13).
+const candidatePosterPath = "/api/v1/metadata/posters/{posterId}"
+
 // versionedPathPrefix is the path prefix every operation must carry: /api/v<major>/ with the
 // major version the server reports as SystemInfo.apiVersion (system.APIVersion).
 const versionedPathPrefix = "/api/v" + system.APIVersion + "/"
@@ -250,6 +253,9 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: metadataSettingsPath, operationID: "getMetadataSettings", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataSettings"},
 		{method: http.MethodPut, path: metadataSettingsPath, operationID: "updateMetadataSettings", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataSettings"},
 		{method: http.MethodGet, path: "/api/v1/metadata/status", operationID: "getMetadataStatus", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "MetadataStatus"},
+		{method: http.MethodGet, path: candidatePosterPath, operationID: "getCandidatePoster", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes"},
+		{method: http.MethodGet, path: candidatePosterPath, operationID: "getCandidatePoster", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/webp", schema: "ImageBytes"},
+		{method: http.MethodGet, path: candidatePosterPath, operationID: "getCandidatePoster", tag: imagesTag, statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem"},
 	}
 }
 
@@ -1440,6 +1446,7 @@ func TestMetadataManagementOperationsNameTheGuard(t *testing.T) {
 		{http.MethodPost, "/api/v1/libraries/{libraryId}/refresh"},
 		{http.MethodGet, metadataSettingsPath},
 		{http.MethodPut, metadataSettingsPath},
+		{http.MethodGet, candidatePosterPath},
 	}
 
 	for _, key := range managed {
@@ -1451,8 +1458,9 @@ func TestMetadataManagementOperationsNameTheGuard(t *testing.T) {
 }
 
 // TestMetadataErrorResponses pins the documented failures (task M6-01): every online
-// operation answers 409 when online metadata is off; the live provider calls also answer
-// 503 with Retry-After, while the refreshes only queue and so work offline.
+// operation answers 409 when online metadata is off; the live provider call (the search)
+// also answers 503 with Retry-After, while identify and the refreshes only store and queue
+// and so work offline (M6-13: identify never calls the provider).
 func TestMetadataErrorResponses(t *testing.T) {
 	spec := loadSpec(t)
 
@@ -1460,8 +1468,9 @@ func TestMetadataErrorResponses(t *testing.T) {
 		{http.MethodPost, "/api/v1/items/{itemId}/refresh"}, {http.MethodPost, "/api/v1/libraries/{libraryId}/refresh"},
 	}
 	live := []specOperationKey{
-		{http.MethodPost, "/api/v1/items/{itemId}/identify/search"}, {http.MethodPost, "/api/v1/items/{itemId}/identify"},
+		{http.MethodPost, "/api/v1/items/{itemId}/identify/search"},
 	}
+	assertNoProviderCall(t, getOperation(t, spec, http.MethodPost, "/api/v1/items/{itemId}/identify"))
 
 	for _, key := range slices.Concat(live, queued) {
 		operation := getOperation(t, spec, key.method, key.path)
@@ -1496,6 +1505,22 @@ func TestMetadataErrorResponses(t *testing.T) {
 	}
 }
 
+// assertNoProviderCall pins an online operation that only stores and queues: it answers 409
+// when online metadata is off, never provider_unavailable.
+func assertNoProviderCall(t *testing.T, operation *openapi3.Operation) {
+	t.Helper()
+
+	assertResponseSchema(t, operation.Responses.Status(http.StatusConflict), problemMediaType, "Problem")
+
+	if !strings.Contains(operation.Description, `"not_found"`) {
+		t.Errorf("%s does not document 404 not_found", operation.OperationID)
+	}
+
+	if operation.Responses.Status(http.StatusServiceUnavailable) != nil || strings.Contains(operation.Description, "provider_unavailable") {
+		t.Errorf("%s never calls the provider and must not fail with provider_unavailable", operation.OperationID)
+	}
+}
+
 // TestMetadataSettingsLanguage: a malformed language answers the existing language_invalid
 // code and an empty one means the server default, as in updateLibrary.
 func TestMetadataSettingsLanguage(t *testing.T) {
@@ -1527,6 +1552,7 @@ func TestUnmatchedFilterAndPosterProxy(t *testing.T) {
 	posterPattern := regexp.MustCompile(poster.Value.Pattern)
 	posterTests := map[string]bool{
 		"/api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320": true,
+		"/api/v1/metadata/posters/5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c":     true,
 		"https://image.tmdb.org/t/p/w500/x.jpg":                         false,
 		"//image.tmdb.org/x.jpg":                                        false,
 		"api/v1/images/x":                                               false,

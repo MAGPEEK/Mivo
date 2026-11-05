@@ -419,7 +419,7 @@ export interface paths {
         put?: never;
         /**
          * Match an item with a provider candidate
-         * @description Stores the provider and its ID for the item, locks the provider IDs, sets the match state to "matched" and queues the enrichment of the item (for a show also its seasons and episodes); other field locks stay. The answer is the item as it is at once, before the enrichment ran. Management operation (ADR 0028). Problem codes: "not_found" (404, unknown item), "invalid" (400, for example an ID that does not fit the item's kind), "online_disabled" (409) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+         * @description Stores the provider and its ID for the item, locks the provider IDs, sets the match state to "matched" and queues the enrichment of the item (for a show also its seasons and episodes); other field locks stay. The answer is the item as it is at once, before the enrichment ran. It does not contact the provider itself: the queued enrichment does, and retries while the provider is unreachable. Management operation (ADR 0028). Problem codes: "not_found" (404, unknown item), "invalid" (400, for example an ID that does not fit the item's kind) and "online_disabled" (409).
          */
         post: operations["identifyItem"];
         delete?: never;
@@ -542,6 +542,32 @@ export interface paths {
          * @description Returns the length of the enrichment queue and the state of each provider, so the UI can show "TMDB is busy, will retry" or offline.
          */
         get: operations["getMetadataStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/metadata/posters/{posterId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque ID of a candidate poster from IdentifyCandidate.posterUrl. Clients take the whole URL from posterUrl and never build it.
+                 * @example 5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
+                 */
+                posterId: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download the poster preview of an identify candidate
+         * @description Serves the poster of a candidate from the last identify searches, fetched by the server from the TMDB image host and kept in memory for a short time, so the browser never contacts a provider (ADR 0010, ADR 0031). The server sends no client header or cookie to the provider. An ID expires about an hour after the search that issued it. Management operation (ADR 0028): until accounts exist only local peers of the same origin may load it; like getImage the endpoint is unauthenticated, because an img element cannot send credentials (milestone 7 protects it by cookie). Problem codes: "not_found" (404, an unknown or expired ID, or the provider has no such picture), "invalid" (400, a malformed ID), "online_disabled" (409, online metadata or TMDB is switched off: the server serves only a picture it already holds and opens no connection) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+         */
+        get: operations["getCandidatePoster"];
         put?: never;
         post?: never;
         delete?: never;
@@ -772,8 +798,8 @@ export interface components {
             overview?: string;
             /**
              * Format: uri-reference
-             * @description Server URL of a poster preview, relative to the API origin. It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
-             * @example /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+             * @description Server URL of a poster preview, relative to the API origin, served by getCandidatePoster (since API 1.11.0). It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
+             * @example /api/v1/metadata/posters/5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
              */
             posterUrl?: string;
             /**
@@ -3296,7 +3322,6 @@ export interface operations {
                 };
             };
             409: components["responses"]["OnlineDisabled"];
-            503: components["responses"]["ProviderUnavailable"];
             default: components["responses"]["Problem"];
         };
     };
@@ -3443,6 +3468,39 @@ export interface operations {
                     "application/json": components["schemas"]["MetadataStatus"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCandidatePoster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description Opaque ID of a candidate poster from IdentifyCandidate.posterUrl. Clients take the whole URL from posterUrl and never build it.
+                 * @example 5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
+                 */
+                posterId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The poster as the provider serves it. */
+            200: {
+                headers: {
+                    /** @description Always "private, max-age=3600"; the ID never names another picture. */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": components["schemas"]["ImageBytes"];
+                    "image/png": components["schemas"]["ImageBytes"];
+                    "image/webp": components["schemas"]["ImageBytes"];
+                };
+            };
+            409: components["responses"]["OnlineDisabled"];
+            503: components["responses"]["ProviderUnavailable"];
             default: components["responses"]["Problem"];
         };
     };

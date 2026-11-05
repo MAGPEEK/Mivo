@@ -10,6 +10,7 @@ import (
 	"github.com/magpeek/mivo/internal/app/enrich"
 	"github.com/magpeek/mivo/internal/app/identify"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/metadata"
 	"github.com/magpeek/mivo/internal/domain/metadata/match"
@@ -105,7 +106,17 @@ func TestSearchCapsCandidates(t *testing.T) {
 }
 
 func TestSearchByPastedReference(t *testing.T) {
-	matrix := enrich.Details{Record: metadata.Record{Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999, ProviderIDs: []metadata.ProviderID{tmdbID("603")}}}
+	matrix := enrich.Details{
+		Record: metadata.Record{
+			Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999, Summary: "A hacker.",
+			ProviderIDs: []metadata.ProviderID{tmdbID("603")},
+		},
+		Artwork: []enrich.ArtworkRef{
+			{Provider: enrich.ArtworkProviderTMDB, Kind: artwork.KindBackdrop, Path: "/backdrop.jpg"},
+			{Provider: enrich.ArtworkProviderCoverArt, Kind: artwork.KindPoster, Path: "https://coverartarchive.org/x.jpg"},
+			{Provider: enrich.ArtworkProviderTMDB, Kind: artwork.KindPoster, Path: "/poster.jpg"},
+		},
+	}
 
 	tests := []struct {
 		name        string
@@ -147,7 +158,10 @@ func TestSearchByPastedReference(t *testing.T) {
 			}
 
 			want := match.Scored{
-				Candidate:  match.Candidate{Ref: test.wantRef, Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999},
+				Candidate: match.Candidate{
+					Ref: test.wantRef, Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999,
+					Overview: "A hacker.", Poster: "/poster.jpg",
+				},
 				Confidence: 1, ExactID: true,
 			}
 			if len(got) != 1 || got[0] != want {
@@ -241,8 +255,8 @@ func TestSearchOfflineReturnsUnavailable(t *testing.T) {
 		h.addItem("movie", library.ItemKindMovie, enrich.ItemSnapshot{})
 		h.movies.searchErr, h.movies.detailsErr = offline, offline
 
-		if _, err := h.service().Search(context.Background(), "movie", query); !errors.Is(err, domain.ErrUnavailable) {
-			t.Fatalf("Search(%+v) error = %v, want ErrUnavailable", query, err)
+		if _, err := h.service().Search(context.Background(), "movie", query); !errors.Is(err, domain.ErrUnavailable) || !errors.Is(err, identify.ErrProvider) {
+			t.Fatalf("Search(%+v) error = %v, want ErrUnavailable and ErrProvider", query, err)
 		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
@@ -13,8 +14,23 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 )
 
-// manageRefusalDetail is the fixed detail of the management guard's 403 problem.
-const manageRefusalDetail = "Library management is only available from the local network until accounts exist."
+// Fixed details of the management guard's 403 problem, one per guarded area, so the client
+// can tell the user what is refused.
+const (
+	manageRefusalDetail           = "Library management is only available from the local network until accounts exist."
+	metadataSettingsRefusalDetail = "Metadata settings are only available from the local network until accounts exist."
+	metadataRefusalDetail         = "Metadata management is only available from the local network until accounts exist."
+)
+
+// manageArea is the guarded area a request belongs to; areaNone is not guarded.
+type manageArea int
+
+const (
+	areaNone manageArea = iota
+	areaLibraries
+	areaMetadataSettings
+	areaMetadata
+)
 
 // Request headers and values the management guard reads.
 const (
@@ -34,13 +50,22 @@ const (
 
 // Paths of the guarded routes (api/openapi.yaml).
 const (
-	apiV1Libraries = "/api/v1/libraries"
-	apiV1Roots     = "/api/v1/folder-roots"
+	apiV1Libraries        = "/api/v1/libraries"
+	apiV1Roots            = "/api/v1/folder-roots"
+	apiV1Items            = "/api/v1/items"
+	apiV1MetadataSettings = "/api/v1/settings/metadata"
+	apiV1Posters          = "/api/v1/metadata/posters"
+
+	// settingsSegments and posterSegments are the path segments of the settings route and of
+	// one poster ("api", "v1", ... and the poster ID).
+	settingsSegments = 4
+	posterSegments   = 5
 )
 
-// manageGuard protects the library management operations until accounts exist (milestone 7,
-// ADR 0028): creating, changing and deleting libraries, starting a scan and browsing the
-// server's folders. It refuses a request with 403 forbidden when
+// manageGuard protects the management operations until accounts exist (milestone 7,
+// ADR 0028): creating, changing and deleting libraries, starting a scan, browsing the
+// server's folders and the online metadata operations (see managementArea). It refuses a
+// request with 403 forbidden when
 //
 //   - the socket peer is not in the local network, also when server.lan_only is off: that
 //     setting opens the media endpoints to the internet, never the administration;
@@ -68,17 +93,18 @@ func newManageGuard(settings chainSettings, lan lanGuard) manageGuard {
 
 func (guard manageGuard) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if !isManagementRequest(request) {
+		area := managementArea(request)
+		if area == areaNone {
 			next.ServeHTTP(writer, request)
 
 			return
 		}
 
 		if reason := guard.refusal(request); reason != "" {
-			guard.logger.DebugContext(request.Context(), "library management request refused",
+			guard.logger.DebugContext(request.Context(), "management request refused",
 				logtext.RequestAttributes(request, slog.String("reason", reason),
 					slog.String("remote_address", logtext.Truncate(request.RemoteAddr)))...)
-			restapi.WriteProblem(writer, manageRefusalProblem())
+			restapi.WriteProblem(writer, manageRefusalProblem(area))
 
 			return
 		}
@@ -103,33 +129,84 @@ func (guard manageGuard) refusal(request *http.Request) string {
 	}
 }
 
-func manageRefusalProblem() apigen.Problem {
+func manageRefusalProblem(area manageArea) apigen.Problem {
 	problem := restapi.NewProblem(http.StatusForbidden, restapi.CodeForbidden)
+
 	detail := manageRefusalDetail
+
+	switch area {
+	case areaMetadataSettings:
+		detail = metadataSettingsRefusalDetail
+	case areaMetadata:
+		detail = metadataRefusalDetail
+	case areaNone, areaLibraries:
+	}
+
 	problem.Detail = &detail
 
 	return problem
 }
 
-// isManagementRequest reports the requests the guard protects: every write to the library
-// collection, to one library and to its scan trigger, and every request to the folder
-// browser, which shows the server's directory tree. Reads of the libraries stay open to the
-// normal clients. The decoded path is matched, like the router does, so an encoded variant
-// of a path cannot slip past.
-func isManagementRequest(request *http.Request) bool {
+// managementArea names the area of a request the guard protects, areaNone for the rest:
+//
+//   - libraries: every write to the library collection, to one library and to its scan
+//     trigger, and every request to the folder browser, which shows the server's directory
+//     tree. Reads of the libraries stay open to the normal clients.
+//   - metadata settings: reading and changing the online metadata settings (ADR 0031).
+//   - metadata: identify search and apply, removing a match, the item and library refreshes
+//     and the candidate poster previews (M6-13). The metadata status stays open.
+//
+// The decoded path is matched, like the router does, so an encoded variant of a path cannot
+// slip past.
+func managementArea(request *http.Request) manageArea {
 	segments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 	isRead := request.Method == http.MethodGet || request.Method == http.MethodHead
 
 	switch {
 	case isPrefixOf(segments, apiV1Roots):
 		// /api/v1/folder-roots and /api/v1/folder-roots/{rootId}/folders
-		return len(segments) == 3 || (len(segments) == 5 && segments[4] == "folders")
+		return areaIf(len(segments) == 3 || (len(segments) == 5 && segments[4] == "folders"), areaLibraries)
 	case isPrefixOf(segments, apiV1Libraries):
-		// /api/v1/libraries, /api/v1/libraries/{id} and /api/v1/libraries/{id}/scan
-		return !isRead && (len(segments) == 3 || len(segments) == 4 || (len(segments) == 5 && segments[4] == "scan"))
+		return libraryArea(segments, isRead)
+	case isPrefixOf(segments, apiV1Items):
+		// /api/v1/items/{id}/identify, .../identify/search, .../match and .../refresh
+		return areaIf(!isRead && len(segments) >= 5 && slices.Contains(itemMetadataSegments(), segments[4]), areaMetadata)
+	case isPrefixOf(segments, apiV1MetadataSettings):
+		return areaIf(len(segments) == settingsSegments, areaMetadataSettings)
+	case isPrefixOf(segments, apiV1Posters):
+		// /api/v1/metadata/posters/{posterId}
+		return areaIf(len(segments) == posterSegments, areaMetadata)
 	default:
-		return false
+		return areaNone
 	}
+}
+
+// libraryArea classifies writes below /api/v1/libraries: the collection, one library and
+// its scan trigger are library management, its metadata refresh is metadata management.
+func libraryArea(segments []string, isRead bool) manageArea {
+	switch {
+	case isRead:
+		return areaNone
+	case len(segments) == 3 || len(segments) == 4 || (len(segments) == 5 && segments[4] == "scan"):
+		return areaLibraries
+	case len(segments) == 5 && segments[4] == "refresh":
+		return areaMetadata
+	default:
+		return areaNone
+	}
+}
+
+// itemMetadataSegments are the item sub-routes that change an item's online metadata.
+func itemMetadataSegments() []string {
+	return []string{"identify", "match", "refresh"}
+}
+
+func areaIf(condition bool, area manageArea) manageArea {
+	if condition {
+		return area
+	}
+
+	return areaNone
 }
 
 // isPrefixOf reports whether the leading segments spell prefix, a slash-separated path.

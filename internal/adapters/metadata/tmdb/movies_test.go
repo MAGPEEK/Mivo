@@ -25,7 +25,11 @@ func TestMovieSearchSendsOnlyTitleYearLanguage(t *testing.T) {
 	}
 
 	want := []match.Candidate{
-		{Ref: tmdbRef(match.RefKindMovie, "603"), Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999, Popularity: 85.3},
+		{
+			Ref: tmdbRef(match.RefKindMovie, "603"), Title: "The Matrix", OriginalTitle: "The Matrix", Year: 1999, Popularity: 85.3,
+			Overview: "A hacker learns the truth about his reality.", Poster: "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
+		},
+		// The poster path that would leave the image base is dropped.
 		{Ref: tmdbRef(match.RefKindMovie, "604"), Title: "The Matrix Reloaded", OriginalTitle: "The Matrix Reloaded", Year: 2003, Popularity: 40.1},
 		{Ref: tmdbRef(match.RefKindMovie, "1000001"), Title: "The Matrix Revisited", OriginalTitle: "The Matrix Revisited", Popularity: 2.5},
 	}

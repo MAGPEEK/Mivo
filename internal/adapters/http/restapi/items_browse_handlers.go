@@ -24,6 +24,8 @@ type listingOptions struct {
 	order   *apigen.SortOrder
 	seed    *int32
 	filters listingFilters
+	// matchState filters listLibraryItems only; facets and letters do not take it.
+	matchState *apigen.MatchState
 }
 
 // The generated parameter types of listLibraryItems, listLibraryFacets and
@@ -32,7 +34,7 @@ type listingOptions struct {
 
 func listingOptionsOf(params apigen.ListLibraryItemsParams) listingOptions {
 	return listingOptions{
-		sort: params.Sort, order: params.Order, seed: params.Seed,
+		sort: params.Sort, order: params.Order, seed: params.Seed, matchState: params.MatchState,
 		filters: listingFilters{
 			kind: params.Type, quick: params.Quick, genre: params.Genre, year: params.Year,
 			decade: params.Decade, contentRating: params.ContentRating, resolution: params.Resolution,
@@ -66,12 +68,17 @@ func (options listingOptions) validate() error {
 		seedErr = invalidParameter(fieldSeed, "negative seed")
 	}
 
-	return errors.Join(checkEnum(fieldSort, options.sort), checkSortOrder(options.order), seedErr, options.filters.validate())
+	return errors.Join(checkEnum(fieldSort, options.sort), checkSortOrder(options.order), seedErr,
+		checkEnum(fieldMatchState, options.matchState), options.filters.validate())
 }
 
 // query converts checked options to the use case's query. The seed only counts for "random".
 func (options listingOptions) query() library.ListingQuery {
 	query := library.ListingQuery{Filter: options.filters.domainFilter()}
+
+	if options.matchState != nil {
+		query.Filter.MatchState = library.MatchStateFilter(*options.matchState)
+	}
 
 	if options.sort != nil {
 		query.Order.Sort = library.ItemSort(*options.sort)

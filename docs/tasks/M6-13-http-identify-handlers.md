@@ -21,3 +21,17 @@ Serve the M6-01 contract.
 
 ## Notes
 The poster proxy reuses the outbound client; do not forward client headers or cookies.
+
+Implementation (M6-13):
+- The metadata services are optional `restapi.Options.Metadata` fields; an unwired operation
+  answers 501 `not_implemented` as the stubs did, so M6-14 can wire them step by step.
+- Candidate posters: API 1.11.0 adds `GET /api/v1/metadata/posters/{posterId}` (tag images,
+  plain handler in `adapters/http/posterproxy`). The search registers each TMDB poster and gets
+  an opaque 32-hex ID that lives one hour; the bytes come from `artworkfetch.Fetcher.Preview`
+  (TMDB image host only, validated, not stored) and stay in memory within a 32 MiB budget.
+- The runtime settings live in the new `app/metadatasettings.Service`, which is the
+  `enrich.SettingsSource` and the TMDB key provider, so a change counts from the next job.
+- `matchState`/`metadataSources` come from `EnrichmentStore.ItemMatchStatuses`; the filter
+  `matchState` is a `library.ListingFilter` field with an SQL condition (no row = unmatched).
+- identifyItem never contacts the provider, so its 503 was removed from the contract.
+- Wiring and remaining notes: BACKLOG rows "m6-13 wiring" and "m6-13 notes".

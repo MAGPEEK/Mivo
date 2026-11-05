@@ -17,6 +17,8 @@ type searchResult struct {
 	OriginalName  string  `json:"original_name"`
 	FirstAirDate  string  `json:"first_air_date"`
 	Popularity    float64 `json:"popularity"`
+	Overview      string  `json:"overview"`
+	PosterPath    string  `json:"poster_path"`
 }
 
 type findResponse struct {

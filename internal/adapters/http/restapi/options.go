@@ -11,8 +11,8 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// Options are the dependencies of the REST API. The logger and every service except Rows are
-// required.
+// Options are the dependencies of the REST API. The logger and every service except Rows and
+// Metadata are required.
 type Options struct {
 	// System serves the health and system info endpoints.
 	System SystemService
@@ -36,6 +36,9 @@ type Options struct {
 	Install InstallInfo
 	// LibraryKinds are the kinds createLibrary accepts (SystemInfo.libraryKinds).
 	LibraryKinds []library.Kind
+	// Metadata serves the online metadata endpoints (milestone 6). Every service in it is
+	// optional; see MetadataServices.
+	Metadata MetadataServices
 	// Logger records failures; request details are logged, never sent to clients.
 	Logger *slog.Logger
 	// Mounts are extra routes on the API mux for handlers the generated strict server

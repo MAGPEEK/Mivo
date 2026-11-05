@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.10.0"
+  version: "1.11.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -711,10 +711,11 @@ paths:
         Stores the provider and its ID for the item, locks the provider IDs, sets the match
         state to "matched" and queues the enrichment of the item (for a show also its
         seasons and episodes); other field locks stay. The answer is the item as it is at
-        once, before the enrichment ran. Management operation (ADR 0028). Problem codes:
-        "not_found" (404, unknown item), "invalid" (400, for example an ID that does not
-        fit the item's kind), "online_disabled" (409) and "provider_unavailable" (503 with
-        retryAfterSeconds and Retry-After).
+        once, before the enrichment ran. It does not contact the provider itself: the
+        queued enrichment does, and retries while the provider is unreachable. Management
+        operation (ADR 0028). Problem codes: "not_found" (404, unknown item), "invalid"
+        (400, for example an ID that does not fit the item's kind) and "online_disabled"
+        (409).
       tags:
         - metadata
       requestBody:
@@ -732,8 +733,6 @@ paths:
                 $ref: "#/components/schemas/ItemDetail"
         "409":
           $ref: "#/components/responses/OnlineDisabled"
-        "503":
-          $ref: "#/components/responses/ProviderUnavailable"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/items/{itemId}/match:
@@ -862,6 +861,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MetadataStatus"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/metadata/posters/{posterId}:
+    parameters:
+      - name: posterId
+        in: path
+        required: true
+        description: >-
+          Opaque ID of a candidate poster from IdentifyCandidate.posterUrl. Clients take the
+          whole URL from posterUrl and never build it.
+        schema:
+          type: string
+          pattern: "^[0-9a-f]{32}$"
+        example: 5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
+    get:
+      operationId: getCandidatePoster
+      summary: Download the poster preview of an identify candidate
+      description: >-
+        Serves the poster of a candidate from the last identify searches, fetched by the
+        server from the TMDB image host and kept in memory for a short time, so the browser
+        never contacts a provider (ADR 0010, ADR 0031). The server sends no client header or
+        cookie to the provider. An ID expires about an hour after the search that issued
+        it. Management operation (ADR 0028): until accounts exist only local peers of the
+        same origin may load it; like getImage the endpoint is unauthenticated, because an
+        img element cannot send credentials (milestone 7 protects it by cookie). Problem
+        codes: "not_found" (404, an unknown or expired ID, or the provider has no such
+        picture), "invalid" (400, a malformed ID), "online_disabled" (409, online metadata
+        or TMDB is switched off: the server serves only a picture it already holds and opens
+        no connection) and "provider_unavailable" (503 with retryAfterSeconds and
+        Retry-After).
+      tags:
+        - images
+      security: []
+      responses:
+        "200":
+          description: The poster as the provider serves it.
+          headers:
+            Cache-Control:
+              description: Always "private, max-age=3600"; the ID never names another picture.
+              schema:
+                type: string
+          content:
+            image/jpeg:
+              schema:
+                $ref: "#/components/schemas/ImageBytes"
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ImageBytes"
+            image/webp:
+              schema:
+                $ref: "#/components/schemas/ImageBytes"
+        "409":
+          $ref: "#/components/responses/OnlineDisabled"
+        "503":
+          $ref: "#/components/responses/ProviderUnavailable"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/images/{imageId}:
@@ -1569,10 +1623,10 @@ components:
           maxLength: 512
           pattern: "^/api/v1/"
           description: >-
-            Server URL of a poster preview, relative to the API origin. It never points at a
-            provider host, so the browser contacts no third party (ADR 0010); omitted when
-            the entry has no poster.
-          example: /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+            Server URL of a poster preview, relative to the API origin, served by
+            getCandidatePoster (since API 1.11.0). It never points at a provider host, so the
+            browser contacts no third party (ADR 0010); omitted when the entry has no poster.
+          example: /api/v1/metadata/posters/5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
         confidence:
           type: number
           format: double

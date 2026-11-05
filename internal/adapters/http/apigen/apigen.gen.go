@@ -1212,9 +1212,9 @@ type IdentifyCandidate struct {
 	// Example: A giant rabbit takes revenge on three bullying rodents.
 	Overview *string `json:"overview,omitempty"`
 
-	// PosterURL Server URL of a poster preview, relative to the API origin. It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
+	// PosterURL Server URL of a poster preview, relative to the API origin, served by getCandidatePoster (since API 1.11.0). It never points at a provider host, so the browser contacts no third party (ADR 0010); omitted when the entry has no poster.
 	//
-	// Example: /api/v1/images/7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4?width=320
+	// Example: /api/v1/metadata/posters/5f2b9c0e7d1a4e3f8b6c2d9a0e1f3b4c
 	PosterURL *string `json:"posterUrl,omitempty"`
 
 	// Provider An online metadata provider (ADR 0031). Clients must tolerate new values.
@@ -4871,25 +4871,6 @@ func (response IdentifyItem409ApplicationProblemPlusJSONResponse) VisitIdentifyI
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type IdentifyItem503ApplicationProblemPlusJSONResponse struct {
-	ProviderUnavailableApplicationProblemPlusJSONResponse
-}
-
-func (response IdentifyItem503ApplicationProblemPlusJSONResponse) VisitIdentifyItemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	if response.Headers.RetryAfter != nil {
-		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
-	}
-	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }

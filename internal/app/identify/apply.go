@@ -3,6 +3,7 @@ package identify
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/magpeek/mivo/internal/app/enrich"
 	"github.com/magpeek/mivo/internal/domain"
@@ -78,7 +79,8 @@ func identification(snapshot enrich.ItemSnapshot, ref match.ProviderRef) MatchCh
 	if id, ok := ref.ProviderID(); ok {
 		record.ProviderIDs = []metadata.ProviderID{id}
 	} else {
-		record.ProviderIDs = snapshot.Record.ProviderIDs
+		// A copy, so the change never shares its backing array with the snapshot.
+		record.ProviderIDs = slices.Clone(snapshot.Record.ProviderIDs)
 	}
 
 	return MatchChange{

@@ -83,6 +83,7 @@ func fullFilter() library.ListingFilter {
 		Decades: []int{2000}, ContentRatings: []string{"PG"}, Resolutions: []library.Resolution{library.Resolution4K},
 		VideoCodecs: []string{"hevc"}, AudioCodecs: []string{"aac"}, Containers: []string{"mkv"},
 		AudioLanguages: []string{"eng"}, SubtitleLanguages: []string{"ger"}, OfflineRootIDs: []string{"root"},
+		MatchState: library.MatchFilterUnmatched,
 	}
 }
 
@@ -116,6 +117,24 @@ func TestListingFilterWithoutClearsOnlyItsField(t *testing.T) {
 				t.Errorf("Without(%q) = %+v, want %+v", test.field, got, want)
 			}
 		})
+	}
+}
+
+func TestMatchStateFilterIsValid(t *testing.T) {
+	t.Parallel()
+
+	tests := map[library.MatchStateFilter]bool{
+		library.MatchFilterAll:       true,
+		library.MatchFilterMatched:   true,
+		library.MatchFilterUnmatched: true,
+		library.MatchFilterDisabled:  true,
+		"Matched":                    false,
+		"pending":                    false,
+	}
+	for filter, want := range tests {
+		if got := filter.IsValid(); got != want {
+			t.Errorf("MatchStateFilter(%q).IsValid() = %v, want %v", filter, got, want)
+		}
 	}
 }
 

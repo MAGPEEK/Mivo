@@ -1,0 +1,269 @@
+// Package metadatasettings holds the online metadata settings that can change at runtime in
+// Settings › Metadata (ADR 0031 §2, §3): the global switch, the provider switches, the
+// metadata language and the user's own TMDB key. The service is the one source the
+// enrichment queue, the identify use cases and the TMDB adapter read, so a change counts
+// from the next job on. The own key is write-only: no read path returns it except APIKey,
+// which only the TMDB adapter calls.
+package metadatasettings
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/magpeek/mivo/internal/app/enrich"
+	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/library"
+)
+
+// MaxKeyLength is the longest own TMDB key accepted (api/openapi.yaml, tmdbApiKey).
+const MaxKeyLength = 128
+
+// Printable ASCII bounds a key must stay in: keys travel in a query parameter or header.
+const (
+	firstPrintable = '!'
+	lastPrintable  = '~'
+)
+
+// KeyStatus names which TMDB key applies, never the key itself.
+type KeyStatus string
+
+// Key statuses (api/openapi.yaml, ProviderKeyStatus).
+const (
+	KeyNone    KeyStatus = "none"
+	KeyBundled KeyStatus = "bundled"
+	KeyOwn     KeyStatus = "own"
+)
+
+// State is the complete settings state the Store persists. Language is empty for the
+// server default; OwnTMDBKey is empty when the user set none.
+type State struct {
+	Online      bool
+	TMDB        bool
+	MusicBrainz bool
+	Language    string
+	OwnTMDBKey  string
+}
+
+// Settings are the settings as clients see them: the key only as its status, the language
+// with the default filled in.
+type Settings struct {
+	Online      bool
+	TMDB        bool
+	MusicBrainz bool
+	Language    string
+	TMDBKey     KeyStatus
+}
+
+// Change lists the settings to change; nil fields stay. An empty Language resets it to the
+// server default, an empty TMDBKey removes the own key so the bundled one applies again.
+type Change struct {
+	Online      *bool
+	TMDB        *bool
+	MusicBrainz *bool
+	Language    *string
+	TMDBKey     *string
+}
+
+// Store persists the state, so a restart keeps the user's changes. The adapter must keep
+// the key out of logs.
+type Store interface {
+	// SaveMetadataSettings replaces the stored state.
+	SaveMetadataSettings(ctx context.Context, state State) error
+}
+
+// ChangeListener hears about every effective change; *enrich.Health implements it, so a
+// provider disabled by a refused key is tried again after the key changed.
+type ChangeListener interface {
+	// SettingsChanged is called after a change was stored.
+	SettingsChanged()
+}
+
+// Options configure the Service. Initial is the state at start (configuration plus the
+// stored changes, merged by the wiring); DefaultLanguage is the language an empty Language
+// stands for; BundledTMDBKey is the key shipped with the build, empty in development
+// builds. Store and Listener are optional.
+type Options struct {
+	Initial         State
+	DefaultLanguage string
+	BundledTMDBKey  string
+	Store           Store
+	Listener        ChangeListener
+}
+
+// Service holds the current settings. It is safe for concurrent use.
+type Service struct {
+	mutex   sync.RWMutex
+	state   State
+	options Options
+}
+
+// Compile-time check: the enrichment queue and the identify use cases read the switches here.
+var _ enrich.SettingsSource = (*Service)(nil)
+
+// NewService returns a Service starting with options.Initial.
+func NewService(options Options) *Service {
+	return &Service{state: options.Initial, options: options}
+}
+
+// Settings returns the current settings without any key.
+func (service *Service) Settings(_ context.Context) (Settings, error) {
+	return service.view(service.current()), nil
+}
+
+// OnlineSettings returns the switches and the effective language; it implements
+// enrich.SettingsSource.
+func (service *Service) OnlineSettings(_ context.Context) (enrich.OnlineSettings, error) {
+	state := service.current()
+
+	return enrich.OnlineSettings{
+		Enabled: state.Online, TMDB: state.TMDB, MusicBrainz: state.MusicBrainz,
+		Language: service.language(state),
+	}, nil
+}
+
+// APIKey returns the TMDB key to use: the own key, else the bundled one, else "". It is
+// meant for the TMDB adapter only (tmdb.KeyProvider); never log it.
+func (service *Service) APIKey(_ context.Context) (string, error) {
+	return service.key(service.current()), nil
+}
+
+// Update applies the change, stores the new state and tells the listener. A malformed
+// language or key wraps domain.ErrInvalid (FieldError names the field); a failed store
+// leaves the settings unchanged.
+func (service *Service) Update(ctx context.Context, change Change) (Settings, error) {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+
+	next, err := applyChange(service.state, change)
+	if err != nil {
+		return Settings{}, fmt.Errorf("update metadata settings: %w", err)
+	}
+
+	if next == service.state {
+		return service.view(next), nil
+	}
+
+	if service.options.Store != nil {
+		if err := service.options.Store.SaveMetadataSettings(ctx, next); err != nil {
+			return Settings{}, fmt.Errorf("update metadata settings: %w", err)
+		}
+	}
+
+	service.state = next
+	if service.options.Listener != nil {
+		service.options.Listener.SettingsChanged()
+	}
+
+	return service.view(next), nil
+}
+
+func (service *Service) current() State {
+	service.mutex.RLock()
+	defer service.mutex.RUnlock()
+
+	return service.state
+}
+
+func (service *Service) view(state State) Settings {
+	return Settings{
+		Online: state.Online, TMDB: state.TMDB, MusicBrainz: state.MusicBrainz,
+		Language: service.language(state), TMDBKey: service.keyStatus(state),
+	}
+}
+
+func (service *Service) language(state State) string {
+	if state.Language == "" {
+		return service.options.DefaultLanguage
+	}
+
+	return state.Language
+}
+
+func (service *Service) key(state State) string {
+	if state.OwnTMDBKey != "" {
+		return state.OwnTMDBKey
+	}
+
+	return service.options.BundledTMDBKey
+}
+
+func (service *Service) keyStatus(state State) KeyStatus {
+	switch {
+	case state.OwnTMDBKey != "":
+		return KeyOwn
+	case service.options.BundledTMDBKey != "":
+		return KeyBundled
+	default:
+		return KeyNone
+	}
+}
+
+// Field names a setting in a FieldError.
+type Field string
+
+// Fields Update can reject.
+const (
+	FieldLanguage Field = "language"
+	FieldTMDBKey  Field = "tmdbApiKey"
+)
+
+// FieldError reports a malformed setting. It wraps domain.ErrInvalid; the reason never
+// quotes a key.
+type FieldError struct {
+	Field  Field
+	Reason string
+}
+
+// Error implements error.
+func (err *FieldError) Error() string { return fmt.Sprintf("setting %s: %s", err.Field, err.Reason) }
+
+// Unwrap lets errors.Is match domain.ErrInvalid.
+func (err *FieldError) Unwrap() error { return domain.ErrInvalid }
+
+// applyChange returns state with the change applied, or a FieldError.
+func applyChange(state State, change Change) (State, error) {
+	if change.Language != nil {
+		language, err := library.ParseMetadataLanguage(*change.Language)
+		if err != nil {
+			return State{}, &FieldError{Field: FieldLanguage, Reason: "not a language tag"}
+		}
+
+		state.Language = language
+	}
+
+	if change.TMDBKey != nil {
+		if !validKey(*change.TMDBKey) {
+			return State{}, &FieldError{Field: FieldTMDBKey, Reason: "too long or not printable ASCII"}
+		}
+
+		state.OwnTMDBKey = *change.TMDBKey
+	}
+
+	setIfPresent(&state.Online, change.Online)
+	setIfPresent(&state.TMDB, change.TMDB)
+	setIfPresent(&state.MusicBrainz, change.MusicBrainz)
+
+	return state, nil
+}
+
+func setIfPresent(target, value *bool) {
+	if value != nil {
+		*target = *value
+	}
+}
+
+// validKey accepts the empty key (removal) and printable ASCII up to MaxKeyLength.
+func validKey(key string) bool {
+	if len(key) > MaxKeyLength {
+		return false
+	}
+
+	for index := range len(key) {
+		if key[index] < firstPrintable || key[index] > lastPrintable {
+			return false
+		}
+	}
+
+	return true
+}

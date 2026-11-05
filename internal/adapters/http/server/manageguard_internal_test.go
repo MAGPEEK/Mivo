@@ -206,12 +206,39 @@ func TestManageGuardRefusalDetailIsFixed(t *testing.T) {
 	}
 }
 
+// TestManageGuardRefusalDetailNamesTheMetadataArea: the metadata routes are refused with
+// their own fixed details, so the client does not talk about libraries.
+func TestManageGuardRefusalDetailNamesTheMetadataArea(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"/api/v1/settings/metadata":                           "Metadata settings are only available from the local network until accounts exist.",
+		"/api/v1/metadata/posters/" + strings.Repeat("a", 32): "Metadata management is only available from the local network until accounts exist.",
+	}
+	for target, want := range tests {
+		logger, _ := newDebugLogger()
+		options := Options{Logger: logger, APIHandler: textHandler(http.StatusOK, "api"), AllowPublicClients: true}
+
+		recorder := serveChain(t, options, newGuardedRequest(t, guardedRequest{
+			method: http.MethodGet, target: target, remoteAddr: publicPeer, allowPublic: true,
+		}))
+
+		var problem apigen.Problem
+		decodeJSON(t, recorder.Body.Bytes(), &problem)
+
+		if recorder.Code != http.StatusForbidden || problem.Detail == nil || *problem.Detail != want {
+			t.Errorf("%s = %d %v, want 403 with %q", target, recorder.Code, problem.Detail, want)
+		}
+	}
+}
+
 // TestManageGuardCoversExactlyTheManagementRoutes pins which routes the guard protects: the
 // five management operations and the scan trigger, but not the read endpoints.
 func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 	t.Parallel()
 
 	libraryPath := "/api/v1/libraries/" + manageLibraryID
+	itemPath := "/api/v1/items/" + manageLibraryID
 	routes := []struct {
 		method, target string
 		guarded        bool
@@ -222,6 +249,18 @@ func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 		{http.MethodPost, libraryPath + "/scan", true},
 		{http.MethodGet, "/api/v1/folder-roots", true},
 		{http.MethodGet, "/api/v1/folder-roots/" + manageLibraryID + "/folders?path=a", true},
+		{http.MethodPost, libraryPath + "/refresh", true},
+		{http.MethodPost, itemPath + "/identify/search", true},
+		{http.MethodPost, itemPath + "/identify", true},
+		{http.MethodDelete, itemPath + "/match", true},
+		{http.MethodPost, itemPath + "/refresh", true},
+		{http.MethodGet, "/api/v1/settings/metadata", true},
+		{http.MethodPut, "/api/v1/settings/metadata", true},
+		{http.MethodGet, "/api/v1/metadata/posters/" + strings.Repeat("a", 32), true},
+		{http.MethodGet, "/api/v1/metadata/status", false},
+		{http.MethodGet, itemPath, false},
+		{http.MethodGet, itemPath + "/children", false},
+		{http.MethodGet, libraryPath + "/refresh", false},
 		{http.MethodGet, "/api/v1/libraries", false},
 		{http.MethodHead, "/api/v1/libraries", false},
 		{http.MethodGet, libraryPath, false},

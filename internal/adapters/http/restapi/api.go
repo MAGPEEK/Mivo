@@ -36,6 +36,7 @@ type API struct {
 	folders   FolderBrowsing
 	install   InstallInfo
 	kinds     []library.Kind
+	metadata  MetadataServices
 	logger    *slog.Logger
 	mounts    []Mount
 }
@@ -62,6 +63,7 @@ func NewAPI(options Options) (*API, error) {
 		folders:   options.Folders,
 		install:   options.Install,
 		kinds:     options.LibraryKinds,
+		metadata:  options.Metadata,
 		logger:    options.Logger,
 		mounts:    options.Mounts,
 	}, nil

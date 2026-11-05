@@ -121,6 +121,34 @@ type ListingFilter struct {
 	// OfflineRootIDs are the library folders that cannot be reached now; QuickUnavailable
 	// also matches the items whose primary file lies in one of them. The use case fills it.
 	OfflineRootIDs []string
+	// MatchState keeps only the items in one online match state; empty keeps every item.
+	MatchState MatchStateFilter
+}
+
+// MatchStateFilter is the online match state a listing is narrowed to. Its values are the
+// texts of match.MatchState, which this package cannot import (match depends on library).
+type MatchStateFilter string
+
+// Match states a listing can be narrowed to (ADR 0031 §9).
+const (
+	// MatchFilterAll keeps every item.
+	MatchFilterAll MatchStateFilter = ""
+	// MatchFilterMatched keeps the items linked to a provider entry.
+	MatchFilterMatched MatchStateFilter = "matched"
+	// MatchFilterUnmatched keeps the items without a match, also those never looked up.
+	MatchFilterUnmatched MatchStateFilter = "unmatched"
+	// MatchFilterDisabled keeps the items whose match was removed on purpose.
+	MatchFilterDisabled MatchStateFilter = "disabled"
+)
+
+// IsValid reports whether the filter is one of the known states or empty.
+func (filter MatchStateFilter) IsValid() bool {
+	switch filter {
+	case MatchFilterAll, MatchFilterMatched, MatchFilterUnmatched, MatchFilterDisabled:
+		return true
+	default:
+		return false
+	}
 }
 
 // Without returns the filter with the given facet field cleared, the filter a facet count of

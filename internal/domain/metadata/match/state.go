@@ -43,6 +43,23 @@ func (state MatchState) IsValid() bool {
 	}
 }
 
+// ItemStatus is what item answers show of an item's match: its state and, for a match, the
+// provider it came from (ADR 0031 §9). The zero Provider means none.
+type ItemStatus struct {
+	State    MatchState
+	Provider RefProvider
+}
+
+// Sources names where the item's online metadata came from: the provider of a match, none
+// otherwise. Local sources such as NFO files are not recorded per item yet.
+func (status ItemStatus) Sources() []string {
+	if status.State != MatchStateMatched || status.Provider == "" {
+		return nil
+	}
+
+	return []string{string(status.Provider)}
+}
+
 // String returns the text value of the state.
 func (state MatchState) String() string {
 	return string(state)

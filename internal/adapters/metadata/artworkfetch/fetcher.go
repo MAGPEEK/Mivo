@@ -99,6 +99,38 @@ func (fetcher *Fetcher) Fetch(ctx context.Context, ref enrich.ArtworkRef) (enric
 	return enrich.Stored{DataPath: file.DataPath, Size: file.Size, ModifiedAt: file.ModifiedAt}, nil
 }
 
+// Preview downloads and validates a TMDB picture without storing it: the poster preview of
+// an identify candidate (M6-13), which the HTTP adapter caches briefly in memory. Only TMDB
+// references are accepted, so a preview never reaches another host than the TMDB image host
+// of the allow-list; other providers fail with domain.ErrInvalid, a TMDB provider without
+// client with domain.ErrConflict (switched off, no outage). Other errors are those of Fetch.
+func (fetcher *Fetcher) Preview(ctx context.Context, ref enrich.ArtworkRef) ([]byte, error) {
+	if ref.Provider != enrich.ArtworkProviderTMDB {
+		return nil, fmt.Errorf("preview %s artwork: only tmdb pictures: %w", ref.Provider, domain.ErrInvalid)
+	}
+
+	// A provider switched off in the wiring is no outage: the caller must not suggest a retry.
+	if fetcher.opts.TMDB.Client == nil || fetcher.opts.TMDB.ImageURL == nil {
+		return nil, fmt.Errorf("preview %s artwork: provider disabled: %w", ref.Provider, domain.ErrConflict)
+	}
+
+	target, client, err := fetcher.resolve(ref)
+	if err != nil {
+		return nil, fmt.Errorf("preview %s artwork: %w", ref.Provider, err)
+	}
+
+	body, err := get(ctx, client, target)
+	if err != nil {
+		return nil, fmt.Errorf("preview %s artwork: %w", ref.Provider, err)
+	}
+
+	if _, err := validateImage(body); err != nil {
+		return nil, fmt.Errorf("preview %s: %w", outbound.RedactURL(target), err)
+	}
+
+	return body, nil
+}
+
 // Remove deletes stored provider pictures, for example on "Remove match". The caller passes
 // only data paths no other item still references, since one picture can serve several
 // items. Paths this package did not write are refused with domain.ErrInvalid; missing files

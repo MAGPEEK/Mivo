@@ -17,7 +17,8 @@ compatibility:
 output-options:
   # The stream routes (tag "stream", ADR 0024) serve files with Range support and
   # long-lived writes, and the image route (tag "images", ADR 0027) serves rendered files
-  # with conditional caching; the strict server can express neither. They are plain
+  # with conditional caching; the strict server can express neither. The candidate poster
+  # route (tag "images", M6-13) serves proxied picture bytes the same way. They are plain
   # net/http handlers mounted on the REST API mux through restapi.Options.Mounts.
   # api/spec_test.go checks that this list equals the operations of both tags.
   exclude-operation-ids:
@@ -26,6 +27,7 @@ output-options:
     - getPlaybackHlsFile
     - headPlaybackHlsFile
     - getImage
+    - getCandidatePoster
   type-mapping:
     string:
       formats:

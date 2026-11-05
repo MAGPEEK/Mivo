@@ -31,6 +31,25 @@ func TestParseMatchState(t *testing.T) {
 	}
 }
 
+func TestItemStatusSources(t *testing.T) {
+	tests := []struct {
+		name   string
+		status ItemStatus
+		want   []string
+	}{
+		{"matched names its provider", ItemStatus{State: MatchStateMatched, Provider: RefMusicBrainz}, []string{"musicbrainz"}},
+		{"matched without provider", ItemStatus{State: MatchStateMatched}, nil},
+		{"unmatched", ItemStatus{State: MatchStateUnmatched, Provider: RefTMDB}, nil},
+		{"disabled", ItemStatus{State: MatchStateDisabled, Provider: RefTMDB}, nil},
+	}
+	for _, test := range tests {
+		got := test.status.Sources()
+		if strings.Join(got, ",") != strings.Join(test.want, ",") || (got == nil) != (test.want == nil) {
+			t.Errorf("%s: Sources() = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
 func TestNormalizeTitle(t *testing.T) {
 	tests := []struct{ name, in, want string }{
 		{"case", "THE MATRIX", "matrix"},

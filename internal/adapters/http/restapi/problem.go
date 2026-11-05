@@ -136,6 +136,10 @@ func ProblemForError(err error) apigen.Problem {
 		return problem
 	}
 
+	if problem, ok := settingsProblem(err); ok {
+		return problem
+	}
+
 	for _, mapping := range domainErrorMappings() {
 		if errors.Is(err, mapping.target) {
 			return NewProblem(mapping.status, mapping.code)

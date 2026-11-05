@@ -87,7 +87,31 @@ func (scope listingScope) itemConditions(filter library.ListingFilter) []filterC
 		conditions = append(conditions, filterCondition{field: library.FacetContentRating, sql: "items.content_rating IN (" + list(builder, filter.ContentRatings) + ")"})
 	}
 
+	if condition, found := matchStateCondition(builder, filter.MatchState); found {
+		conditions = append(conditions, condition)
+	}
+
 	return conditions
+}
+
+// matchStateCondition narrows the items to one match state. An item without an item_match
+// row counts as unmatched (migration 00005), so "unmatched" is the absence of any other
+// state. It reports false for MatchFilterAll.
+func matchStateCondition(builder *sqlBuilder, state library.MatchStateFilter) (filterCondition, bool) {
+	switch state {
+	case library.MatchFilterAll:
+		return filterCondition{}, false
+	case library.MatchFilterUnmatched:
+		return filterCondition{field: noFacetField, sql: "items.id NOT IN (SELECT item_match.item_id FROM item_match" +
+			" WHERE item_match.state <> " + builder.arg(string(library.MatchFilterUnmatched)) + ")"}, true
+	case library.MatchFilterMatched, library.MatchFilterDisabled:
+		return filterCondition{field: noFacetField, sql: "items.id IN (SELECT item_match.item_id FROM item_match" +
+			" WHERE item_match.state = " + builder.arg(string(state)) + ")"}, true
+	default:
+		// The HTTP adapter rejects other values; an unknown state matches nothing rather
+		// than everything.
+		return filterCondition{field: noFacetField, sql: neverMatches}, true
+	}
 }
 
 // fileConditions filter by the primary files and videos of the deciding members (facts).

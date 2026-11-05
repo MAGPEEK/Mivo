@@ -53,6 +53,8 @@ func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibrary
 		return nil, operationFailure(operationListLibraryItems, err)
 	}
 
+	api.applySummaryMatches(ctx, response.Items)
+
 	return apigen.ListLibraryItems200JSONResponse(response), nil
 }
 
@@ -68,6 +70,8 @@ func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject
 	if err != nil {
 		return nil, operationFailure(operationGetItem, err)
 	}
+
+	api.applyDetailMatch(ctx, &response)
 
 	return apigen.GetItem200JSONResponse(response), nil
 }
@@ -96,6 +100,8 @@ func (api *API) ListItemChildren(ctx context.Context, request apigen.ListItemChi
 	if err != nil {
 		return nil, operationFailure(operationListItemChildren, err)
 	}
+
+	api.applySummaryMatches(ctx, response.Items)
 
 	return apigen.ListItemChildren200JSONResponse(response), nil
 }

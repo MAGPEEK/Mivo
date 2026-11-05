@@ -79,6 +79,12 @@ func candidates(kind match.RefKind, results []searchResult) []match.Candidate {
 			Title:         result.Title,
 			OriginalTitle: result.OriginalTitle,
 			Popularity:    result.Popularity,
+			Overview:      result.Overview,
+		}
+		// Only a plain TMDB file name may become a poster reference; ImageURL and the
+		// artwork fetcher check it again before any request.
+		if isFilePath(result.PosterPath) {
+			candidate.Poster = result.PosterPath
 		}
 		date := result.ReleaseDate
 
