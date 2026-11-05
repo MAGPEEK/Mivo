@@ -94,5 +94,5 @@ SPK: `mivo-0.1.0-alpha.4-x86_64.spk` from the GitHub release v0.1.0-alpha.4.
 
 | Step | Result |
 |---|---|
-| Install / upgrade, start, web app, playback (TESTING A3–A5, B2, D3a, E1–E2) | **pass** – owner: no difference to alpha.3, nothing broke |
+| Install / upgrade, start, web app, playback (TESTING A3–A5, B2, D3a, E1–E2) | **pass** – owner: no difference to alpha.3, nothing broke; the web UI is "very limited" (expected: alpha.4 has only the M2 video UI – Home rows, browse toolbar, music, audiobooks and photos land with M3/M5 after alpha.4) |
 | B6a FFmpeg capabilities log lines | not recorded; alpha.4 ships FFmpeg recipe revision 2, the `9.0.2-static4` build (subfile protocol, timeout wrapper) comes with the next SPK release – check B6a there |
