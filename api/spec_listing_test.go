@@ -127,7 +127,7 @@ func TestBrowseEnums(t *testing.T) {
 	tests := map[string][]any{
 		"ItemSort": {
 			"title", "year", "releaseDate", "contentRating", "duration", "dateAdded",
-			"resolution", "bitrate", "fileSize", "random",
+			"resolution", "bitrate", "fileSize", "takenAt", "random",
 		},
 		"ItemQuickFilter": {"all", "hdr", "dolbyVision", "hdr10plus", "atmos", "uhd", "unavailable", "duplicates"},
 		"VideoResolution": {"sd", "720p", "1080p", "4k", "8k"},

@@ -935,13 +935,18 @@ func TestLibraryV2Enums(t *testing.T) {
 	spec := loadSpec(t)
 
 	tests := map[string][]any{
-		"ItemKind":    {"movie", "show", "season", "episode", "extra", "artist", "album", "track", "audiobook"},
-		"LibraryKind": {"movies", "shows", "music", "audiobooks"},
-		"ExtraType":   {"trailer", "featurette", "behind_the_scenes", "deleted_scene", "interview", "scene", "short", "other"},
-		"ArtworkKind": {"poster", "backdrop", "thumb", "logo", "banner", "square"},
-		"PersonRole":  {"actor", "director", "writer", "producer", "guest_star", "author", "narrator"},
-		"ImageWidth":  {160, 320, 480, 640, 960, 1280, 1920},
-		"SortOrder":   {"asc", "desc"},
+		"ItemKind": {
+			"movie", "show", "season", "episode", "extra", "artist", "album", "track", "audiobook",
+			"photo_album", "photo",
+		},
+		"LibraryKind":     {"movies", "shows", "music", "audiobooks", "photos"},
+		"ThumbnailState":  {"ready", "unsupported"},
+		"PhotoTimeSource": {"exif", "file"},
+		"ExtraType":       {"trailer", "featurette", "behind_the_scenes", "deleted_scene", "interview", "scene", "short", "other"},
+		"ArtworkKind":     {"poster", "backdrop", "thumb", "logo", "banner", "square"},
+		"PersonRole":      {"actor", "director", "writer", "producer", "guest_star", "author", "narrator"},
+		"ImageWidth":      {160, 320, 480, 640, 960, 1280, 1920},
+		"SortOrder":       {"asc", "desc"},
 	}
 
 	for name, want := range tests {
@@ -977,7 +982,7 @@ func libraryV2Shapes() map[string]schemaShape {
 			required: []string{"id", "libraryId", "kind", "title"},
 			optional: []string{
 				"year", "parentId", "number", "numberEnd", "discNumber", "absoluteNumber", "extraType",
-				"childCount", "leafCount", "poster", "thumb", "square", "media",
+				"childCount", "leafCount", "poster", "thumb", "square", "media", "takenAt", "thumbnailState",
 			},
 		},
 		"ItemDetail": {
@@ -986,10 +991,18 @@ func libraryV2Shapes() map[string]schemaShape {
 				"discNumber", "originalTitle", "year", "releaseDate", "summary", "tagline",
 				"contentRating", "genres", "studios", "countries", "people", "providerIds", "artwork", "ancestors",
 				"previousId", "nextId", "playItemId", "extras", "childCount", "leafCount", "chapters",
+				"photo", "thumbnailState",
 			},
 		},
 		"MediaFile":   {optional: []string{"versionLabel", "partNumber"}},
 		"ItemChapter": {required: []string{"title", "startMs", "endMs", "fileId"}},
+		"ItemPhoto": {
+			required: []string{"takenAt", "takenAtSource"},
+			optional: []string{
+				"make", "model", "lens", "exposureTime", "fNumber", "iso", "focalLengthMm", "orientation",
+				"latitude", "longitude", "width", "height",
+			},
+		},
 	}
 }
 
@@ -1055,6 +1068,8 @@ func TestLibraryV2PropertyReferences(t *testing.T) {
 		"ItemDetail.artwork": "Artwork", "ItemAncestor.kind": "ItemKind", "ItemPerson.role": "PersonRole",
 		"Artwork.poster": "ImageRef", "Artwork.backdrop": "ImageRef", "Artwork.thumb": "ImageRef",
 		"Artwork.logo": "ImageRef", "Artwork.banner": "ImageRef", "Artwork.square": "ImageRef",
+		"ItemDetail.photo": "ItemPhoto", "ItemDetail.thumbnailState": "ThumbnailState",
+		"ItemSummary.thumbnailState": "ThumbnailState", "ItemPhoto.takenAtSource": "PhotoTimeSource",
 	}
 
 	for location, want := range references {

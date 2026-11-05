@@ -64,8 +64,10 @@ func itemKindResponse(kind library.ItemKind) (apigen.ItemKind, error) {
 		return apigen.ItemKindExtra, nil
 	case library.ItemKindArtist, library.ItemKindAlbum, library.ItemKindTrack:
 		return "", fmt.Errorf("music item kind %q not in the contract yet", kind)
-	case library.ItemKindPhotoAlbum, library.ItemKindPhoto:
-		return "", fmt.Errorf("photo item kind %q not in the contract yet", kind)
+	case library.ItemKindPhotoAlbum:
+		return apigen.ItemKindPhotoAlbum, nil
+	case library.ItemKindPhoto:
+		return apigen.ItemKindPhoto, nil
 	case library.ItemKindAudiobook:
 		return apigen.ItemKindAudiobook, nil
 	default:

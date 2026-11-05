@@ -18,7 +18,8 @@ func TestKindTopLevelItemKinds(t *testing.T) {
 		{library.KindShows, []library.ItemKind{library.ItemKindShow}},
 		{library.KindMusic, []library.ItemKind{library.ItemKindArtist, library.ItemKindAlbum}},
 		{library.KindAudiobooks, []library.ItemKind{library.ItemKindAudiobook}},
-		{library.KindPhotos, nil},
+		{library.KindPhotos, []library.ItemKind{library.ItemKindPhotoAlbum, library.ItemKindPhoto}},
+		{library.Kind("mixed"), nil},
 	}
 	for _, test := range tests {
 		if got := test.kind.TopLevelItemKinds(); !reflect.DeepEqual(got, test.want) {
@@ -28,7 +29,7 @@ func TestKindTopLevelItemKinds(t *testing.T) {
 
 	for kind, want := range map[library.ItemKind]bool{
 		library.ItemKindMovie: true, library.ItemKindAlbum: true, library.ItemKindAudiobook: true,
-		library.ItemKindEpisode: false, library.ItemKindTrack: false, library.ItemKindPhoto: false,
+		library.ItemKindEpisode: false, library.ItemKindTrack: false, library.ItemKindPhotoAlbum: true, library.ItemKindPhoto: true,
 	} {
 		if got := library.IsTopLevelItemKind(kind); got != want {
 			t.Errorf("IsTopLevelItemKind(%q) = %v, want %v", kind, got, want)

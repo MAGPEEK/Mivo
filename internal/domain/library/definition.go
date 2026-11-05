@@ -54,7 +54,8 @@ func (kind Kind) String() string {
 
 // TopLevelItemKinds returns the item kinds a library of this kind can list (API type
 // parameter), the default first: movie in a movies library, show in a shows library, artist
-// or album in a music library, audiobook in an audiobooks library. A photos library has none.
+// or album in a music library, audiobook in an audiobooks library, photo_album or photo in a
+// photos library ("photo" lists every photo of the library: the timeline, ADR 0029).
 func (kind Kind) TopLevelItemKinds() []ItemKind {
 	switch kind {
 	case KindMovies:
@@ -66,7 +67,7 @@ func (kind Kind) TopLevelItemKinds() []ItemKind {
 	case KindAudiobooks:
 		return []ItemKind{ItemKindAudiobook}
 	case KindPhotos:
-		return nil
+		return []ItemKind{ItemKindPhotoAlbum, ItemKindPhoto}
 	default:
 		return nil
 	}

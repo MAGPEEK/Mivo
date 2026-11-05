@@ -34,18 +34,40 @@ func TestAudiobookValuesMapToTheContract(t *testing.T) {
 	}
 }
 
-// TestKindsOutsideTheMappedContractFail keeps the kinds whose mapping later tasks add
-// (music: M3-13g, photos: M3-15) failing instead of leaking unlisted values.
+// TestPhotoValuesMapToTheContract pins the photo values API 1.9.0 added (task M3-15b): a
+// stored photo album, photo and photos library are sent instead of failing as values
+// outside the contract.
+func TestPhotoValuesMapToTheContract(t *testing.T) {
+	t.Parallel()
+
+	kinds := map[library.ItemKind]apigen.ItemKind{
+		library.ItemKindPhotoAlbum: apigen.ItemKindPhotoAlbum,
+		library.ItemKindPhoto:      apigen.ItemKindPhoto,
+	}
+
+	for kind, want := range kinds {
+		if got, err := itemKindResponse(kind); err != nil || got != want {
+			t.Errorf("itemKindResponse(%q) = %q, %v; want %q", kind, got, err, want)
+		}
+	}
+
+	if got, err := libraryKindResponse(library.KindPhotos); err != nil || got != apigen.LibraryKindPhotos {
+		t.Errorf("libraryKindResponse(photos) = %q, %v; want %q", got, err, apigen.LibraryKindPhotos)
+	}
+}
+
+// TestKindsOutsideTheMappedContractFail keeps the kinds whose mapping a later task adds
+// (music: M3-13g) failing instead of leaking unlisted values.
 func TestKindsOutsideTheMappedContractFail(t *testing.T) {
 	t.Parallel()
 
-	for _, kind := range []library.ItemKind{library.ItemKindTrack, library.ItemKindPhoto, "mixed"} {
+	for _, kind := range []library.ItemKind{library.ItemKindTrack, "mixed"} {
 		if _, err := itemKindResponse(kind); err == nil {
 			t.Errorf("itemKindResponse(%q) succeeded, want an error", kind)
 		}
 	}
 
-	for _, kind := range []library.Kind{library.KindMusic, library.KindPhotos, "mixed"} {
+	for _, kind := range []library.Kind{library.KindMusic, "mixed"} {
 		if _, err := libraryKindResponse(kind); err == nil {
 			t.Errorf("libraryKindResponse(%q) succeeded, want an error", kind)
 		}

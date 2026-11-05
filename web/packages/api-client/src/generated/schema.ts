@@ -189,7 +189,7 @@ export interface paths {
         };
         /**
          * Page through the items of a library
-         * @description Returns one page of the library's top-level items (movies and shows) in the order of sort and order (default: sort title ascending). Seasons and episodes are reached through listItemChildren; extras are never listed on their own, they belong to their parent's ItemDetail. The filters narrow the list: the values of one field filter combine with OR, different filters (and quick) combine with AND. Follow nextCursor until it is absent and repeat the same sort, order, seed and filters on every page; cursors stay opaque. totalCount counts the matching items across all pages. A limit outside 1–500, a cursor this server did not issue, or an unknown or malformed sort, order, type, quick or filter value answers 400 with the problem code "invalid" and field naming the parameter; an unknown library answers 404 "not_found". A server that cannot sort or filter yet answers 501 with the problem code "not_implemented" for any value other than the defaults.
+         * @description Returns one page of the library's top-level items (movies and shows; see the type parameter for the other library kinds and the photo timeline) in the order of sort and order (default: sort title ascending). Seasons and episodes are reached through listItemChildren; extras are never listed on their own, they belong to their parent's ItemDetail. The filters narrow the list: the values of one field filter combine with OR, different filters (and quick) combine with AND. Follow nextCursor until it is absent and repeat the same sort, order, seed and filters on every page; cursors stay opaque. totalCount counts the matching items across all pages. A limit outside 1–500, a cursor this server did not issue, or an unknown or malformed sort, order, type, quick or filter value answers 400 with the problem code "invalid" and field naming the parameter; an unknown library answers 404 "not_found". A server that cannot sort or filter yet answers 501 with the problem code "not_implemented" for any value other than the defaults.
          */
         get: operations["listLibraryItems"];
         put?: never;
@@ -365,7 +365,7 @@ export interface paths {
         };
         /**
          * Page through the children of an item
-         * @description Returns one page of the item's children: the seasons of a show or the episodes of a season. Seasons ascend by number with the specials (season 0) last; episodes ascend by number, episodes without a number last by sort title. Extras are never children; they belong to their parent's ItemDetail. order "desc" reverses the whole order. Follow nextCursor until it is absent. A leaf item (movie, episode, extra) answers an empty page. A limit outside 1–500 or a cursor this server did not issue answers 400 "invalid"; an unknown item answers 404 "not_found".
+         * @description Returns one page of the item's children: the seasons of a show or the episodes of a season, or the sub-albums and photos of a photo album. Seasons ascend by number with the specials (season 0) last; episodes ascend by number, episodes without a number last by sort title. A photo album lists its sub-albums first (by sort title), then its photos by capture time (ItemPhoto.takenAt) and file name. Extras are never children; they belong to their parent's ItemDetail. order "desc" reverses the whole order. Follow nextCursor until it is absent. A leaf item (movie, episode, extra, photo) answers an empty page. A limit outside 1–500 or a cursor this server did not issue answers 400 "invalid"; an unknown item answers 404 "not_found".
          */
         get: operations["listItemChildren"];
         put?: never;
@@ -565,7 +565,7 @@ export interface paths {
         };
         /**
          * Download an artwork image in a fixed width
-         * @description Serves the artwork image of an ImageRef rendered to the requested width, never upscaled: a narrower source is served at its own width. Logos are PNG to keep transparency, every other kind is JPEG. The endpoint is unauthenticated for now (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and never take values out of it. Caching: a request whose tag equals the current tag of the image is answered with Cache-Control "private, max-age=31536000, immutable", any other request (no tag or an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a source file deleted from disk), "unsupported" (422, the source cannot be decoded) and "unavailable" (503, for example the library folder is unreachable or too many images are rendered at once).
+         * @description Serves the artwork image of an ImageRef rendered to the requested width, never upscaled: a narrower source is served at its own width. Logos are PNG to keep transparency, every other kind is JPEG. imageId may also be the ID of a photo item (ADR 0029): the photo is served as JPEG in its own aspect ratio with its EXIF orientation applied; the lightbox uses the same reference at a large width. A photo whose thumbnailState is "unsupported" answers 422 "unsupported". Every rendered image is re-encoded and carries no EXIF, GPS or XMP metadata of its source. The endpoint is unauthenticated for now (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and never take values out of it. Caching: a request whose tag equals the current tag of the image is answered with Cache-Control "private, max-age=31536000, immutable", any other request (no tag or an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a source file deleted from disk), "unsupported" (422, the source cannot be decoded) and "unavailable" (503, for example the library folder is unreachable or too many images are rendered at once).
          */
         get: operations["getImage"];
         put?: never;
@@ -919,11 +919,11 @@ export interface components {
             apiVersion: string;
         };
         /**
-         * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks) or "audiobooks" (audiobook items with chapters). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+         * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks), "audiobooks" (audiobook items with chapters) or "photos" (photo albums following the folder tree with their photos, ADR 0029). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
          * @example movies
          * @enum {string}
          */
-        LibraryKind: "movies" | "shows" | "music" | "audiobooks";
+        LibraryKind: "movies" | "shows" | "music" | "audiobooks" | "photos";
         /** @description The configured libraries. */
         LibraryList: {
             /** @description Every configured library, ordered by name. */
@@ -1285,11 +1285,11 @@ export interface components {
             hdr?: components["schemas"]["HdrFormat"];
         };
         /**
-         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
+         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. In a photos library every folder is a "photo_album" (nested like the folder tree, a top-level album belongs to no parent) and every image or short video is a "photo" in its folder's album or, in the library root, top-level (ADR 0029). Movies, episodes, extras, tracks, audiobooks and photos own media files; shows, seasons, artists, albums and photo albums are containers without files. Clients must tolerate values added in later versions.
          * @example movie
          * @enum {string}
          */
-        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "artist" | "album" | "track" | "audiobook";
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "artist" | "album" | "track" | "audiobook" | "photo_album" | "photo";
         /**
          * @description What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
          * @example trailer
@@ -1297,7 +1297,7 @@ export interface components {
          */
         ExtraType: "trailer" | "featurette" | "behind_the_scenes" | "deleted_scene" | "interview" | "scene" | "short" | "other";
         /**
-         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo), "banner" or "square" (1:1 album cover or artist image, rendered in the same ImageWidth set as posters). An audiobook cover is a "poster" (2:3). Clients must tolerate values added in later versions.
+         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo), "banner" or "square" (1:1 album cover or artist image, rendered in the same ImageWidth set as posters). An audiobook cover is a "poster" (2:3). A photo and a photo album use the "square" slot for their 1:1 tile; the referenced image is the photo itself in its own aspect ratio, which the client crops to the tile. Clients must tolerate values added in later versions.
          * @example poster
          * @enum {string}
          */
@@ -1322,11 +1322,11 @@ export interface components {
          * @enum {integer}
          */
         ImageWidth: 160 | 320 | 480 | 640 | 960 | 1280 | 1920;
-        /** @description Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves. */
+        /** @description Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves. */
         ImageRef: {
             /**
              * Format: uuid
-             * @description ID of the image (getImage imageId).
+             * @description ID of the image (getImage imageId); for a photo the ID of the photo item.
              * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
              */
             id: string;
@@ -1398,7 +1398,7 @@ export interface components {
              */
             number?: number;
         };
-        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album); for an audiobook of several part files durationSeconds is the sum of its parts. */
+        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist, the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it has none). A photo whose thumbnailState is "unsupported" has no square; the client shows a placeholder. media summarises the primary file and is omitted for containers (show, season, artist, album, photo album); for an audiobook of several part files durationSeconds is the sum of its parts. A photo carries media only when it is a video (durationSeconds gives the duration badge of its tile); a still photo has no media, so media-based filters such as quick "unavailable" never match it. */
         ItemSummary: {
             /**
              * Format: uuid
@@ -1426,10 +1426,17 @@ export interface components {
             year?: number;
             /**
              * Format: uuid
-             * @description ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra, the artist of an album, the album of a track; omitted for top-level items.
+             * @description ID of the parent item: the show of a season, the season of an episode, the movie or show of an extra, the artist of an album, the album of a track, the photo album of a photo or of a nested photo album; omitted for top-level items.
              * @example 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
              */
             parentId?: string;
+            /**
+             * Format: date-time
+             * @description Capture time of a photo, as in ItemPhoto.takenAt; the timeline groups photos by its month and day. Omitted for other kinds.
+             * @example 2026-10-12T14:35:08Z
+             */
+            takenAt?: string;
+            thumbnailState?: components["schemas"]["ThumbnailState"];
             /**
              * Format: int32
              * @description Season number of a season (0 for specials), episode number of an episode or track number of a track on its disc.
@@ -1457,13 +1464,13 @@ export interface components {
             extraType?: components["schemas"]["ExtraType"];
             /**
              * Format: int32
-             * @description Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
+             * @description Number of seasons of a show, of episodes of a season, of albums of an artist, of tracks of an album or of the direct children (sub-albums and photos) of a photo album.
              * @example 5
              */
             childCount?: number;
             /**
              * Format: int32
-             * @description Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
+             * @description Number of episodes of a show across all its seasons, of tracks of an artist across all its albums or of photos of a photo album including its sub-albums (the "n photos" line of an album card).
              * @example 62
              */
             leafCount?: number;
@@ -1508,12 +1515,12 @@ export interface components {
             totalCount?: number;
         };
         /**
-         * @description Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+         * @description Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes), "takenAt" (capture time of a photo, ties by file name; for a photo album the capture time of its newest photo) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
          * @default title
          * @example dateAdded
          * @enum {string}
          */
-        ItemSort: "title" | "year" | "releaseDate" | "contentRating" | "duration" | "dateAdded" | "resolution" | "bitrate" | "fileSize" | "random";
+        ItemSort: "title" | "year" | "releaseDate" | "contentRating" | "duration" | "dateAdded" | "resolution" | "bitrate" | "fileSize" | "takenAt" | "random";
         /**
          * @description Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
          * @default all
@@ -1784,7 +1791,7 @@ export interface components {
             rows: components["schemas"]["Row"][];
             hint?: components["schemas"]["RowsHint"];
         };
-        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an audiobook carries its 2:3 cover in artwork.poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album). chapters lists the chapters of an audiobook. */
+        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an audiobook carries its 2:3 cover in artwork.poster, an album and an artist carry their image in artwork.square, a photo carries itself and a photo album its newest "ready" photo in artwork.square (ImageRef.id is the photo's item ID, the image keeps the photo's aspect ratio). files is empty for containers (show, season, artist, album, photo album). chapters lists the chapters of an audiobook. photo and thumbnailState describe a photo: its EXIF block and whether the server can render it (ADR 0029). The lightbox reads the file name and size from files[0]; for a RAW+JPEG pair the JPEG is files[0] and the RAW an alternative file. A video in a photos library is a photo with media files and a playItemId, played through the normal playback path. */
         ItemDetail: {
             /**
              * Format: uuid
@@ -1880,7 +1887,7 @@ export interface components {
             people?: components["schemas"]["ItemPerson"][];
             providerIds?: components["schemas"]["ProviderIds"];
             artwork?: components["schemas"]["Artwork"];
-            /** @description The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra); empty or omitted for top-level items. */
+            /** @description The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra; the nested photo albums of a photo, as in the folder breadcrumb); empty or omitted for top-level items. */
             ancestors?: components["schemas"]["ItemAncestor"][];
             /**
              * Format: uuid
@@ -1896,7 +1903,7 @@ export interface components {
             nextId?: string;
             /**
              * Format: uuid
-             * @description ID of the item Play starts: the item itself for a movie, episode, extra, track or audiobook; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
+             * @description ID of the item Play starts: the item itself for a movie, episode, extra, track or audiobook and for a photo that is a video; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play (for example a still photo or a photo album).
              * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
              */
             playItemId?: string;
@@ -1904,23 +1911,116 @@ export interface components {
             extras?: components["schemas"]["ItemSummary"][];
             /**
              * Format: int32
-             * @description Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
+             * @description Number of seasons of a show, of episodes of a season, of albums of an artist, of tracks of an album or of the direct children (sub-albums and photos) of a photo album.
              * @example 5
              */
             childCount?: number;
             /**
              * Format: int32
-             * @description Number of episodes of a show across all its seasons or of tracks of an artist across all its albums.
+             * @description Number of episodes of a show across all its seasons, of tracks of an artist across all its albums or of photos of a photo album including its sub-albums (the "n photos" line of an album card).
              * @example 62
              */
             leafCount?: number;
-            /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows, seasons, artists and albums have none. */
+            /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); a photo holds its image (for a RAW+JPEG pair the JPEG first, the RAW second); shows, seasons, artists, albums and photo albums have none. */
             files: components["schemas"]["MediaFile"][];
             /** @description Chapters of an audiobook in playback order, from the chapter markers of its files or one chapter per part file (ADR 0027); omitted for other kinds and when the book has no chapters. */
             chapters?: components["schemas"]["ItemChapter"][];
+            photo?: components["schemas"]["ItemPhoto"];
+            thumbnailState?: components["schemas"]["ThumbnailState"];
             matchState?: components["schemas"]["MatchState"];
             metadataSources?: components["schemas"]["MetadataSources"];
         };
+        /** @description Capture data of a photo for the lightbox info panel, read from its EXIF block (ADR 0029); present for photos only. Every field except takenAt and takenAtSource is omitted when the file does not carry it. latitude and longitude are present together or not at all. Privacy: until accounts exist (milestone 7) the GPS position is visible to every admitted client; a server setting or a later permission may omit it, so clients must expect it to be missing. It is never part of a signed or share URL. */
+        ItemPhoto: {
+            /**
+             * Format: date-time
+             * @description Capture time: the EXIF capture time (DateTimeOriginal), or the file's modification time when the file has none (takenAtSource "file"). EXIF times carry no time zone and OffsetTimeOriginal is not applied, so the value is the camera's wall-clock reading sent with offset Z; the modification time is likewise the server's local wall-clock reading sent with offset Z, so both order alike. Clients display and group it as UTC and never convert it to the viewer's time zone.
+             * @example 2026-10-12T14:35:08Z
+             */
+            takenAt: string;
+            takenAtSource: components["schemas"]["PhotoTimeSource"];
+            /**
+             * @description Camera manufacturer (EXIF Make).
+             * @example Alpha
+             */
+            make?: string;
+            /**
+             * @description Camera model (EXIF Model).
+             * @example Alpha Q2
+             */
+            model?: string;
+            /**
+             * @description Lens model (EXIF LensModel).
+             * @example 35 mm f/1.8
+             */
+            lens?: string;
+            /**
+             * Format: double
+             * @description Exposure time in seconds; the client formats it, for example 0.004 as "1/250 s".
+             * @example 0.004
+             */
+            exposureTime?: number;
+            /**
+             * Format: double
+             * @description Aperture as an f-number, shown as "f/1.8".
+             * @example 1.8
+             */
+            fNumber?: number;
+            /**
+             * Format: int32
+             * @description ISO speed rating.
+             * @example 200
+             */
+            iso?: number;
+            /**
+             * Format: double
+             * @description Focal length in millimetres.
+             * @example 35
+             */
+            focalLengthMm?: number;
+            /**
+             * Format: int32
+             * @description EXIF orientation (1 upright, 5-8 turned by a quarter). Informational: thumbnails and the lightbox image are already served upright.
+             * @example 1
+             */
+            orientation?: number;
+            /**
+             * Format: double
+             * @description GPS latitude in decimal degrees (north positive). Visible to every admitted client until accounts exist; may be omitted by a server setting or a later permission; never in a signed or share URL.
+             * @example 54.0924
+             */
+            latitude?: number;
+            /**
+             * Format: double
+             * @description GPS longitude in decimal degrees (east positive). Visible to every admitted client until accounts exist; may be omitted by a server setting or a later permission; never in a signed or share URL.
+             * @example 12.1407
+             */
+            longitude?: number;
+            /**
+             * Format: int32
+             * @description Width in pixels as displayed, with the orientation applied (a quarter turn swaps the stored width and height); with height it gives the aspect ratio the lightbox reserves before the image loads.
+             * @example 6000
+             */
+            width?: number;
+            /**
+             * Format: int32
+             * @description Height in pixels as displayed, with the orientation applied.
+             * @example 4000
+             */
+            height?: number;
+        };
+        /**
+         * @description Where ItemPhoto.takenAt comes from: "exif" (the capture time in the file) or "file" (the file's modification time, because the file carries none). The timeline shows both by takenAt; a client may mark "file" times as uncertain. Clients must tolerate values added in later versions.
+         * @example exif
+         * @enum {string}
+         */
+        PhotoTimeSource: "exif" | "file";
+        /**
+         * @description Whether the server can render a photo (ADR 0029); present for photos only. Thumbnails are rendered on demand, so "ready" means getImage is expected to serve it, from the file itself or from the embedded preview of a RAW or HEIC file; "unsupported" means the server knows that neither the file nor an embedded preview can be decoded (the photo stays listed, it has no image reference, getImage answers 422 and the client shows a placeholder). Clients must tolerate values added in later versions.
+         * @example ready
+         * @enum {string}
+         */
+        ThumbnailState: "ready" | "unsupported";
         /** @description One chapter of an audiobook. startMs and endMs are offsets in milliseconds within the media file fileId (one of ItemDetail.files), so a client jumps to the chapter by playing that file from startMs. */
         ItemChapter: {
             /**
@@ -2493,7 +2593,7 @@ export interface components {
          * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
          */
         ImageId: string;
-        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library, "photo_album" or "photo" in a photos library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library, "photo_album" in a photos library). In a photos library "photo" lists every photo of the library across all albums (the timeline, usually with sort "takenAt" and order "desc"), "photo_album" the top-level albums. */
         ItemTypeFilter: components["schemas"]["ItemKind"];
         /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
         QuickFilter: components["schemas"]["ItemQuickFilter"];
@@ -2819,7 +2919,7 @@ export interface operations {
                 order?: components["schemas"]["SortOrder"];
                 /** @description Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort. */
                 seed?: number;
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library, "photo_album" or "photo" in a photos library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library, "photo_album" in a photos library). In a photos library "photo" lists every photo of the library across all albums (the timeline, usually with sort "takenAt" and order "desc"), "photo_album" the top-level albums. */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2873,7 +2973,7 @@ export interface operations {
             query?: {
                 /** @description Fields to count; omitted counts every field. */
                 field?: components["schemas"]["FacetField"][];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library, "photo_album" or "photo" in a photos library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library, "photo_album" in a photos library). In a photos library "photo" lists every photo of the library across all albums (the timeline, usually with sort "takenAt" and order "desc"), "photo_album" the top-level albums. */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2927,7 +3027,7 @@ export interface operations {
             query?: {
                 /** @description Direction of the title sort; omitted means ascending. */
                 order?: components["schemas"]["SortOrder"];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library, "photo_album" or "photo" in a photos library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library, "photo_album" in a photos library). In a photos library "photo" lists every photo of the library across all albums (the timeline, usually with sort "takenAt" and order "desc"), "photo_album" the top-level albums. */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];

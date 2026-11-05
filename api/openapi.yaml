@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.8.0"
+  version: "1.9.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -32,8 +32,9 @@ tags:
   - name: items
     description: >-
       Items of a library (movies, shows with their seasons and episodes, extras, music
-      artists with their albums and tracks, audiobooks with their chapters) with their
-      local metadata, artwork references, files and technical streams (ADR 0027).
+      artists with their albums and tracks, audiobooks with their chapters, photo albums
+      with their photos) with their local metadata, artwork references, files and
+      technical streams (ADR 0027, ADR 0029).
   - name: playback
     description: >-
       Playback sessions: the server decides between direct play, remux and transcode for a
@@ -293,7 +294,8 @@ paths:
       operationId: listLibraryItems
       summary: Page through the items of a library
       description: >-
-        Returns one page of the library's top-level items (movies and shows) in the order of
+        Returns one page of the library's top-level items (movies and shows; see the type
+        parameter for the other library kinds and the photo timeline) in the order of
         sort and order (default: sort title ascending). Seasons and episodes are reached
         through listItemChildren; extras are never listed on their own, they belong to their
         parent's ItemDetail. The filters narrow the list: the values of one field filter
@@ -614,12 +616,14 @@ paths:
       summary: Page through the children of an item
       description: >-
         Returns one page of the item's children: the seasons of a show or the episodes of a
-        season. Seasons ascend by number with the specials (season 0) last; episodes ascend
-        by number, episodes without a number last by sort title. Extras are never children;
-        they belong to their parent's ItemDetail. order "desc" reverses the whole order.
-        Follow nextCursor until it is absent. A leaf item (movie, episode, extra) answers an
-        empty page. A limit outside 1–500 or a cursor this server did not issue answers 400
-        "invalid"; an unknown item answers 404 "not_found".
+        season, or the sub-albums and photos of a photo album. Seasons ascend by number with
+        the specials (season 0) last; episodes ascend by number, episodes without a number
+        last by sort title. A photo album lists its sub-albums first (by sort title), then
+        its photos by capture time (ItemPhoto.takenAt) and file name. Extras are never
+        children; they belong to their parent's ItemDetail. order "desc" reverses the whole
+        order. Follow nextCursor until it is absent. A leaf item (movie, episode, extra,
+        photo) answers an empty page. A limit outside 1–500 or a cursor this server did not
+        issue answers 400 "invalid"; an unknown item answers 404 "not_found".
       tags:
         - items
       parameters:
@@ -865,17 +869,22 @@ paths:
       description: >-
         Serves the artwork image of an ImageRef rendered to the requested width, never
         upscaled: a narrower source is served at its own width. Logos are PNG to keep
-        transparency, every other kind is JPEG. The endpoint is unauthenticated for now
-        (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL
-        only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and
-        never take values out of it. Caching: a request whose tag equals the current tag of
-        the image is answered with Cache-Control "private, max-age=31536000, immutable",
-        any other request (no tag or an outdated one) with "private, no-cache". Both carry
-        ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes:
-        "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an
-        unknown image or a source file deleted from disk), "unsupported" (422, the source
-        cannot be decoded) and "unavailable" (503, for example the library folder is
-        unreachable or too many images are rendered at once).
+        transparency, every other kind is JPEG. imageId may also be the ID of a photo item
+        (ADR 0029): the photo is served as JPEG in its own aspect ratio with its EXIF
+        orientation applied; the lightbox uses the same reference at a large width. A
+        photo whose thumbnailState is "unsupported" answers 422 "unsupported". Every
+        rendered image is re-encoded and carries no EXIF, GPS or XMP metadata of its
+        source. The endpoint is unauthenticated for now (milestone 7 protects it by cookie
+        or signed URL, ADR 0024). Clients build the URL only through the api-client helper
+        imageUrl (or imageSrcSet) from an ImageRef and never take values out of it.
+        Caching: a request whose tag equals the current tag of the image is answered with
+        Cache-Control "private, max-age=31536000, immutable", any other request (no tag or
+        an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and
+        answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width
+        outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a
+        source file deleted from disk), "unsupported" (422, the source cannot be decoded)
+        and "unavailable" (503, for example the library folder is unreachable or too many
+        images are rendered at once).
       tags:
         - images
       security: []
@@ -1210,8 +1219,11 @@ components:
       description: >-
         Kind of the items to list; it must be a top-level kind of the library ("movie" in a
         movies library, "show" in a shows library, "artist" or "album" in a music library,
-        "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the
-        library's top-level kind ("artist" in a music library).
+        "audiobook" in an audiobooks library, "photo_album" or "photo" in a photos library),
+        else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music
+        library, "photo_album" in a photos library). In a photos library "photo" lists every
+        photo of the library across all albums (the timeline, usually with sort "takenAt"
+        and order "desc"), "photo_album" the top-level albums.
       schema:
         $ref: "#/components/schemas/ItemKind"
     QuickFilter:
@@ -1795,14 +1807,16 @@ components:
       type: string
       description: >-
         What a library contains: "movies" (movie items), "shows" (show items with seasons
-        and episodes), "music" (artist items with albums and tracks) or "audiobooks"
-        (audiobook items with chapters). Clients must tolerate values added in later
-        versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+        and episodes), "music" (artist items with albums and tracks), "audiobooks"
+        (audiobook items with chapters) or "photos" (photo albums following the folder tree
+        with their photos, ADR 0029). Clients must tolerate values added in later versions.
+        SystemInfo.libraryKinds lists the kinds a new library may have.
       enum:
         - movies
         - shows
         - music
         - audiobooks
+        - photos
       example: movies
     LibraryList:
       type: object
@@ -2297,9 +2311,12 @@ components:
         a movie or a show. In a music library an "artist" is the top-level item, an "album"
         belongs to an artist and a "track" to an album. In an audiobooks library an
         "audiobook" is the top-level item; its chapters are not items but listed in
-        ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media
-        files; shows, seasons, artists and albums are containers without files. Clients
-        must tolerate values added in later versions (for example photo kinds).
+        ItemDetail.chapters. In a photos library every folder is a "photo_album" (nested
+        like the folder tree, a top-level album belongs to no parent) and every image or
+        short video is a "photo" in its folder's album or, in the library root, top-level
+        (ADR 0029). Movies, episodes, extras, tracks, audiobooks and photos own media files;
+        shows, seasons, artists, albums and photo albums are containers without files.
+        Clients must tolerate values added in later versions.
       enum:
         - movie
         - show
@@ -2310,6 +2327,8 @@ components:
         - album
         - track
         - audiobook
+        - photo_album
+        - photo
       example: movie
     ExtraType:
       type: string
@@ -2332,8 +2351,10 @@ components:
         Kind of an artwork image: "poster" (portrait), "backdrop" (wide background),
         "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo),
         "banner" or "square" (1:1 album cover or artist image, rendered in the same
-        ImageWidth set as posters). An audiobook cover is a "poster" (2:3). Clients must
-        tolerate values added in later versions.
+        ImageWidth set as posters). An audiobook cover is a "poster" (2:3). A photo and a
+        photo album use the "square" slot for their 1:1 tile; the referenced image is the
+        photo itself in its own aspect ratio, which the client crops to the tile. Clients
+        must tolerate values added in later versions.
       enum:
         - poster
         - backdrop
@@ -2385,8 +2406,9 @@ components:
     ImageRef:
       type: object
       description: >-
-        Reference to an artwork image. Clients pass it to the api-client helper imageUrl,
-        which builds the getImage URL; they never build that URL themselves.
+        Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the
+        api-client helper imageUrl, which builds the getImage URL; they never build that URL
+        themselves.
       required:
         - id
         - tag
@@ -2394,7 +2416,8 @@ components:
         id:
           type: string
           format: uuid
-          description: ID of the image (getImage imageId).
+          description: >-
+            ID of the image (getImage imageId); for a photo the ID of the photo item.
           example: 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
         tag:
           type: string
@@ -2488,10 +2511,15 @@ components:
         the item's kind, or that are unknown, are omitted. poster is the poster of a movie,
         show or season (a season without its own carries its show's poster) or the 2:3 cover
         of an audiobook; thumb is the still of an episode or extra (without one the client
-        shows a placeholder); square is the cover of an album or the image of an artist.
-        media summarises the primary file and is omitted for containers (show, season,
-        artist, album); for an audiobook of several part files durationSeconds is the sum
-        of its parts.
+        shows a placeholder); square is the cover of an album or the image of an artist,
+        the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or
+        of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it
+        has none). A photo whose thumbnailState is "unsupported" has no square; the client
+        shows a placeholder. media summarises the primary file and is omitted for
+        containers (show, season, artist, album, photo album); for an audiobook of several
+        part files durationSeconds is the sum of its parts. A photo carries media only when
+        it is a video (durationSeconds gives the duration badge of its tile); a still photo
+        has no media, so media-based filters such as quick "unavailable" never match it.
       required:
         - id
         - libraryId
@@ -2526,9 +2554,18 @@ components:
           format: uuid
           description: >-
             ID of the parent item: the show of a season, the season of an episode, the movie
-            or show of an extra, the artist of an album, the album of a track; omitted for
-            top-level items.
+            or show of an extra, the artist of an album, the album of a track, the photo
+            album of a photo or of a nested photo album; omitted for top-level items.
           example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
+        takenAt:
+          type: string
+          format: date-time
+          description: >-
+            Capture time of a photo, as in ItemPhoto.takenAt; the timeline groups photos by
+            its month and day. Omitted for other kinds.
+          example: "2026-10-12T14:35:08Z"
+        thumbnailState:
+          $ref: "#/components/schemas/ThumbnailState"
         number:
           type: integer
           format: int32
@@ -2564,16 +2601,18 @@ components:
           format: int32
           minimum: 0
           description: >-
-            Number of seasons of a show, of episodes of a season, of albums of an artist or
-            of tracks of an album.
+            Number of seasons of a show, of episodes of a season, of albums of an artist, of
+            tracks of an album or of the direct children (sub-albums and photos) of a photo
+            album.
           example: 5
         leafCount:
           type: integer
           format: int32
           minimum: 0
           description: >-
-            Number of episodes of a show across all its seasons or of tracks of an artist
-            across all its albums.
+            Number of episodes of a show across all its seasons, of tracks of an artist
+            across all its albums or of photos of a photo album including its sub-albums
+            (the "n photos" line of an album card).
           example: 62
         poster:
           $ref: "#/components/schemas/ImageRef"
@@ -2645,12 +2684,13 @@ components:
       description: >-
         Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release
         of a movie, first air date of a show), "contentRating" (rating text), "duration"
-        (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog),
-        "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the
-        primary file), "fileSize" (primary file; for a show the sum of its episodes) or
-        "random" (shuffled, stable per seed). Containers without a file (shows) have no
-        duration, resolution or bit rate. Clients must tolerate values added in later
-        versions.
+        (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the
+        item entered the catalog), "resolution" (pixel count of the primary video),
+        "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a
+        show the sum of its episodes), "takenAt" (capture time of a photo, ties by file
+        name; for a photo album the capture time of its newest photo) or "random" (shuffled,
+        stable per seed). Containers without a file (shows) have no duration, resolution or
+        bit rate. Clients must tolerate values added in later versions.
       enum:
         - title
         - year
@@ -2661,6 +2701,7 @@ components:
         - resolution
         - bitrate
         - fileSize
+        - takenAt
         - random
       default: title
       example: dateAdded
@@ -3221,9 +3262,15 @@ components:
         files and their technical streams. Fields that do not apply to the item's kind, or
         that are unknown, are omitted. artwork holds one image per kind; a season without
         its own poster carries its show's poster, an audiobook carries its 2:3 cover in
-        artwork.poster, an album and an artist carry their image in artwork.square. files is
-        empty for containers (show, season, artist, album). chapters lists the chapters of
-        an audiobook.
+        artwork.poster, an album and an artist carry their image in artwork.square, a photo
+        carries itself and a photo album its newest "ready" photo in artwork.square
+        (ImageRef.id is the photo's item ID, the image keeps the photo's aspect ratio).
+        files is empty for containers (show, season, artist, album, photo album). chapters
+        lists the chapters of an audiobook. photo and thumbnailState describe a photo: its
+        EXIF block and whether the server can render it (ADR 0029). The lightbox reads the
+        file name and size from files[0]; for a RAW+JPEG pair the JPEG is files[0] and the
+        RAW an alternative file. A video in a photos library is a photo with media files
+        and a playItemId, played through the normal playback path.
       required:
         - id
         - libraryId
@@ -3333,8 +3380,8 @@ components:
           type: array
           description: >-
             The items above this one, root first (the show of a season; the show and the
-            season of an episode; the movie or show of an extra); empty or omitted for
-            top-level items.
+            season of an episode; the movie or show of an extra; the nested photo albums
+            of a photo, as in the folder breadcrumb); empty or omitted for top-level items.
           items:
             $ref: "#/components/schemas/ItemAncestor"
         previousId:
@@ -3356,8 +3403,9 @@ components:
           format: uuid
           description: >-
             ID of the item Play starts: the item itself for a movie, episode, extra, track
-            or audiobook; the first episode of the first regular season for a show; the
-            first episode for a season. Omitted when there is nothing to play.
+            or audiobook and for a photo that is a video; the first episode of the first
+            regular season for a show; the first episode for a season. Omitted when there
+            is nothing to play (for example a still photo or a photo album).
           example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
         extras:
           type: array
@@ -3370,23 +3418,26 @@ components:
           format: int32
           minimum: 0
           description: >-
-            Number of seasons of a show, of episodes of a season, of albums of an artist or
-            of tracks of an album.
+            Number of seasons of a show, of episodes of a season, of albums of an artist, of
+            tracks of an album or of the direct children (sub-albums and photos) of a photo
+            album.
           example: 5
         leafCount:
           type: integer
           format: int32
           minimum: 0
           description: >-
-            Number of episodes of a show across all its seasons or of tracks of an artist
-            across all its albums.
+            Number of episodes of a show across all its seasons, of tracks of an artist
+            across all its albums or of photos of a photo album including its sub-albums
+            (the "n photos" line of an album card).
           example: 62
         files:
           type: array
           description: >-
             Media files of the item; the first one is the primary file. Several files are
-            alternative versions (versionLabel) or parts of one version (partNumber); shows,
-            seasons, artists and albums have none.
+            alternative versions (versionLabel) or parts of one version (partNumber); a
+            photo holds its image (for a RAW+JPEG pair the JPEG first, the RAW second);
+            shows, seasons, artists, albums and photo albums have none.
           items:
             $ref: "#/components/schemas/MediaFile"
         chapters:
@@ -3398,10 +3449,154 @@ components:
             the book has no chapters.
           items:
             $ref: "#/components/schemas/ItemChapter"
+        photo:
+          $ref: "#/components/schemas/ItemPhoto"
+        thumbnailState:
+          $ref: "#/components/schemas/ThumbnailState"
         matchState:
           $ref: "#/components/schemas/MatchState"
         metadataSources:
           $ref: "#/components/schemas/MetadataSources"
+    ItemPhoto:
+      type: object
+      description: >-
+        Capture data of a photo for the lightbox info panel, read from its EXIF block (ADR
+        0029); present for photos only. Every field except takenAt and takenAtSource is
+        omitted when the file does not carry it. latitude and longitude are present
+        together or not at all. Privacy: until accounts exist (milestone 7) the GPS
+        position is visible to every admitted client; a server setting or a later
+        permission may omit it, so clients must expect it to be missing. It is never part
+        of a signed or share URL.
+      required:
+        - takenAt
+        - takenAtSource
+      properties:
+        takenAt:
+          type: string
+          format: date-time
+          description: >-
+            Capture time: the EXIF capture time (DateTimeOriginal), or the file's
+            modification time when the file has none (takenAtSource "file"). EXIF times
+            carry no time zone and OffsetTimeOriginal is not applied, so the value is the
+            camera's wall-clock reading sent with offset Z; the modification time is
+            likewise the server's local wall-clock reading sent with offset Z, so both
+            order alike. Clients display and group it as UTC and never convert it to the
+            viewer's time zone.
+          example: "2026-10-12T14:35:08Z"
+        takenAtSource:
+          $ref: "#/components/schemas/PhotoTimeSource"
+        make:
+          type: string
+          maxLength: 200
+          description: Camera manufacturer (EXIF Make).
+          example: Alpha
+        model:
+          type: string
+          maxLength: 200
+          description: Camera model (EXIF Model).
+          example: Alpha Q2
+        lens:
+          type: string
+          maxLength: 200
+          description: Lens model (EXIF LensModel).
+          example: 35 mm f/1.8
+        exposureTime:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          description: >-
+            Exposure time in seconds; the client formats it, for example 0.004 as "1/250 s".
+          example: 0.004
+        fNumber:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          description: Aperture as an f-number, shown as "f/1.8".
+          example: 1.8
+        iso:
+          type: integer
+          format: int32
+          minimum: 1
+          description: ISO speed rating.
+          example: 200
+        focalLengthMm:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          description: Focal length in millimetres.
+          example: 35
+        orientation:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 8
+          description: >-
+            EXIF orientation (1 upright, 5-8 turned by a quarter). Informational: thumbnails
+            and the lightbox image are already served upright.
+          example: 1
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+          description: >-
+            GPS latitude in decimal degrees (north positive). Visible to every admitted
+            client until accounts exist; may be omitted by a server setting or a later
+            permission; never in a signed or share URL.
+          example: 54.0924
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+          description: >-
+            GPS longitude in decimal degrees (east positive). Visible to every admitted
+            client until accounts exist; may be omitted by a server setting or a later
+            permission; never in a signed or share URL.
+          example: 12.1407
+        width:
+          type: integer
+          format: int32
+          minimum: 1
+          description: >-
+            Width in pixels as displayed, with the orientation applied (a quarter turn
+            swaps the stored width and height); with height it gives the aspect ratio the
+            lightbox reserves before the image loads.
+          example: 6000
+        height:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Height in pixels as displayed, with the orientation applied.
+          example: 4000
+    PhotoTimeSource:
+      type: string
+      description: >-
+        Where ItemPhoto.takenAt comes from: "exif" (the capture time in the file) or "file"
+        (the file's modification time, because the file carries none). The timeline shows
+        both by takenAt; a client may mark "file" times as uncertain. Clients must tolerate
+        values added in later versions.
+      enum:
+        - exif
+        - file
+      example: exif
+    ThumbnailState:
+      type: string
+      description: >-
+        Whether the server can render a photo (ADR 0029); present for photos only.
+        Thumbnails are rendered on demand, so "ready" means getImage is expected to serve
+        it, from the file itself or from the embedded preview of a RAW or HEIC file;
+        "unsupported" means the server knows that neither the file nor an embedded preview
+        can be decoded (the photo stays listed, it has no image reference, getImage answers
+        422 and the client shows a placeholder). Clients must tolerate values added in
+        later versions.
+      enum:
+        - ready
+        - unsupported
+      example: ready
     ItemChapter:
       type: object
       description: >-

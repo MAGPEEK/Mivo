@@ -7,13 +7,13 @@ import (
 )
 
 // Every generated ItemKind value passes the type check exactly when some library kind lists it
-// at its top (movies, shows, music, audiobooks); the use case then checks the library.
+// at its top (movies, shows, music, audiobooks, photos); the use case then checks the library.
 func TestCheckItemKindAcceptsTheTopLevelKindsOfTheContract(t *testing.T) {
 	t.Parallel()
 
 	topLevel := map[apigen.ItemKind]bool{
 		apigen.ItemKindMovie: true, apigen.ItemKindShow: true, apigen.ItemKindArtist: true,
-		apigen.ItemKindAlbum: true, apigen.ItemKindAudiobook: true,
+		apigen.ItemKindAlbum: true, apigen.ItemKindAudiobook: true, apigen.ItemKindPhotoAlbum: true, apigen.ItemKindPhoto: true,
 		apigen.ItemKindSeason: false, apigen.ItemKindEpisode: false, apigen.ItemKindExtra: false, apigen.ItemKindTrack: false,
 	}
 

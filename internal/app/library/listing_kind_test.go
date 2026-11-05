@@ -29,7 +29,8 @@ func TestListItemsChecksTheKindPerLibraryKind(t *testing.T) {
 		{name: "music movie", libraryID: musicID, kind: library.ItemKindMovie, wantErr: true},
 		{name: "audiobooks default", libraryID: audiobooksID, wantKind: library.ItemKindAudiobook},
 		{name: "audiobooks album", libraryID: audiobooksID, kind: library.ItemKindAlbum, wantErr: true},
-		{name: "photos without kind", libraryID: photosID},
+		{name: "photos default", libraryID: photosID, wantKind: library.ItemKindPhotoAlbum},
+		{name: "photos timeline", libraryID: photosID, kind: library.ItemKindPhoto, wantKind: library.ItemKindPhoto},
 		{name: "photos movie", libraryID: photosID, kind: library.ItemKindMovie, wantErr: true},
 	}
 	for _, test := range tests {
