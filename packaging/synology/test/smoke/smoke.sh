@@ -378,13 +378,46 @@ check_kept_catalogue() {
 # installation with "Run after installation"; it fails at the first failed step.
 install_and_start() {
 	step "share snapshot" snapshot "$share" &&
-		step "install (preinst, postinst, resources)" install /input/package.spk "$share" &&
+		step "install (preinst, postinst, resources)" install /input/package.spk &&
 		step "probe (uname, hwcap, syscall filter)" probe &&
 		step "versions (<id> --version, ffmpeg -version, ffprobe -version)" versions &&
 		step "prestart" control INSTALL prestart &&
 		step "start" control INSTALL start &&
 		step "status exits 0" control START status &&
 		check_published_port
+}
+
+api_post() { curl -fsS --max-time 30 -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$host_port/api/v1/$1"; }
+
+# check_first_start_state passes when a fresh installation has zero libraries and the folder
+# browser starts at the volume (install kind synology, browse root /volume1): the state in which
+# the web app shows its empty state with "Add library". Sets volume_root_id.
+check_first_start_state() {
+	local libraries roots
+	libraries=$(api libraries) || { record FAIL "$label GET /api/v1/libraries failed"; return 1; }
+	if [ "$libraries" != '{"libraries":[]}' ]; then
+		record FAIL "$label a fresh installation has libraries: $libraries"
+		return 1
+	fi
+	roots=$(api folder-roots) || { record FAIL "$label GET /api/v1/folder-roots failed"; return 1; }
+	volume_root_id=$(grep -o '{[^{}]*"path":"/volume1"[^{}]*}' <<<"$roots" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -n 1)
+	if [ -z "$volume_root_id" ] || [[ "$roots" != *'"installKind":"synology"'* ]]; then
+		record FAIL "$label folder roots lack /volume1 or installKind synology: $roots"
+		return 1
+	fi
+	record PASS "$label first start: GET /api/v1/libraries is empty, folder root /volume1 ($volume_root_id), installKind synology"
+}
+
+# add_library_through_the_api creates the library of the corpus share below the browse root
+# /volume1, as the web app's folder browser does; the server scans it after creating it.
+add_library_through_the_api() {
+	local body response
+	body="{\"kind\":\"movies\",\"name\":\"Smoke\",\"folders\":[{\"rootId\":\"$volume_root_id\",\"path\":\"$share\"}]}"
+	if ! response=$(api_post libraries "$body"); then
+		record FAIL "$label POST /api/v1/libraries for /volume1/$share failed"
+		return 1
+	fi
+	record PASS "$label library added through POST /api/v1/libraries: $(cut -c1-200 <<<"$response")"
 }
 
 # stop_and_check stops the server as Package Center's "Stop" does and checks what is left.
@@ -405,7 +438,7 @@ lifecycle() {
 		check_kept_catalogue "upgrade" &&
 		step "collect logs" collect &&
 		step "uninstall keeping the data" uninstall false &&
-		step "reinstall (keeps config.yaml)" install /input/package.spk "$share" &&
+		step "reinstall (keeps var, with the library in the database)" install /input/package.spk &&
 		step "start after the reinstall" control INSTALL start &&
 		check_kept_catalogue "reinstall" &&
 		step "stop after the reinstall" stop STOP &&
@@ -430,6 +463,32 @@ uname_note() {
 	fi
 }
 
+# run_alpha2_upgrade is the second scenario of a CPU model, in a fresh container: an installation
+# shaped like 0.1.0-alpha.2's (its config.yaml with the share link as library path, no database
+# yet) is upgraded to this SPK; the library must then be listed with the path /volume1/<share>
+# and be scanned.
+run_alpha2_upgrade() {
+	local cpu=$1 libraries
+	label="$family/$cpu alpha.2 upgrade"
+	run_log="$run_dir/dsm-alpha2.log"
+	container="spk-smoke-$family-${cpu//[^A-Za-z0-9_.-]/-}-alpha2"
+	start_container "$cpu"
+	if step "install" install /input/package.spk &&
+		step "seed an alpha.2-shaped config.yaml and share link" seed-alpha2 "$share" &&
+		step "upgrade (preupgrade records the link, postupgrade rewrites the path)" upgrade /input/package.spk &&
+		step "start after the upgrade" control UPGRADE start &&
+		check_published_port; then
+		libraries=$(api libraries) || libraries=""
+		if [[ "$libraries" == *"\"path\":\"/volume1/$share\""* && "$libraries" != */shares/* ]]; then
+			record PASS "$label: library listed with the path /volume1/$share"
+		else
+			record FAIL "$label: library missing or still on the share link: ${libraries:-no answer}"
+		fi
+		step "stop" stop STOP || :
+	fi
+	finish_run
+}
+
 # run_cpu runs the whole smoke for one CPU model.
 run_cpu() {
 	local cpu=$1 started=$SECONDS profile ffmpeg_line
@@ -440,7 +499,7 @@ run_cpu() {
 	container="spk-smoke-$family-${cpu//[^A-Za-z0-9_.-]/-}"
 	log "=== $label ($(uname_note "$cpu"), syscall list $syscalls) ==="
 	start_container "$cpu"
-	if install_and_start; then
+	if install_and_start && check_first_start_state && add_library_through_the_api; then
 		for profile in "${PROFILES[@]}"; do smoke_profile "$profile" || :; done
 		stop_and_check
 		lifecycle || :
@@ -448,6 +507,7 @@ run_cpu() {
 	finish_run
 	ffmpeg_line=$(sed -n 's/^\[dsm\] ffmpeg -version: exit 0: //p' "$run_log" | head -n 1)
 	record INFO "$label FFmpeg: ${ffmpeg_line:-unknown}; SPK $(wc -c <"$spk") bytes; whole run $((SECONDS - started)) s"
+	run_alpha2_upgrade "$cpu"
 }
 
 print_summary() {

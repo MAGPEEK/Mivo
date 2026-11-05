@@ -11,7 +11,7 @@ against a fake server, so they need neither DSM nor the real server binary.
 ## Run
 
 From the repository root; Docker Desktop is enough, nothing else is installed. The test image
-(`Dockerfile` here) is `bats/bats:1.14.0`, pinned by digest, plus dash, jq and Node.js in pinned
+(`Dockerfile` here) is `bats/bats:1.14.0`, pinned by digest, plus dash and jq in pinned
 Alpine versions. The tests run as root in the throw-away container and write the link
 `/var/packages/demo` of the container (see `scripts/helpers.bash`); run them in the image, not
 on a host.
@@ -21,7 +21,7 @@ on a host.
 docker build -t spk-script-test:dev packaging/synology/test
 docker run --rm -v "${PWD}:/code" -w /code spk-script-test:dev packaging/synology/test/scripts
 docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 -s sh packaging/synology/package/scripts/start-stop-status packaging/synology/package/scripts/common.sh packaging/synology/package/scripts/preinst packaging/synology/package/scripts/postinst packaging/synology/package/scripts/preuninst packaging/synology/package/scripts/postuninst packaging/synology/package/scripts/preupgrade packaging/synology/package/scripts/postupgrade
-docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/scripts/start-stop-status.bats packaging/synology/test/scripts/lifecycle.bats packaging/synology/test/scripts/package-files.bats packaging/synology/test/scripts/helpers.bash packaging/synology/test/fake-server.bash packaging/synology/test/fixtures/package.env packaging/synology/test/fixtures/share-names.bash
+docker run --rm -v "${PWD}:/mnt" -w /mnt koalaman/shellcheck:v0.11.0 packaging/synology/test/scripts/start-stop-status.bats packaging/synology/test/scripts/lifecycle.bats packaging/synology/test/scripts/package-files.bats packaging/synology/test/scripts/helpers.bash packaging/synology/test/fake-server.bash packaging/synology/test/fixtures/package.env
 ```
 
 In Git Bash, prefix each command with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)"` instead of
@@ -36,10 +36,10 @@ regular expression over the test names) runs a subset.
 
 - `scripts/*.bats` – the test files; bats runs every `.bats` file of the directory.
   `start-stop-status.bats` covers SPK-05 and the SPK-06 hardening of `start-stop-status`,
-  `lifecycle.bats` the lifecycle scripts and the `common.sh` helpers they use (share-name check,
+  `lifecycle.bats` the lifecycle scripts and the `common.sh` helpers they use (browse roots, the alpha.2 upgrade rewrite (SPK-17),
   YAML quoting, the package-directory guard of every deletion), `package-files.bats` the static
-  templates (JSON syntax, privilege, resource, service file, wizard keys and the share-name
-  regex).
+  templates (JSON syntax, privilege, resource, service file, the info-only install wizard and
+  no media folder question).
 - `scripts/helpers.bash` – shared setup: a DSM-like package tree per test in `$BATS_TEST_TMPDIR`
   (`target`, `var`, `tmp` and `home` are links into `volume1/@appstore|@appdata|@apptemp|@apphome/<id>`
   as on DSM; `scripts/` with every package script and the fixture `package.env`), reached
@@ -54,10 +54,6 @@ regular expression over the test names) runs a subset.
   `spkmeta`'s `Package.PackageEnv` renders for that brand (Go test
   `TestScriptFixtureIsSpkmetaOutput` in `packaging/synology/cmd/spkstage`), so `common.sh` is
   tested against the format `spkstage` stages.
-- `fixtures/share-names.bash` – valid and invalid shared-folder names (DSM's naming rules); the
-  wizard regex and `pkg_check_share_name` must judge each the same way.
-- `share-name-check.js` – evaluates the wizard's validator regex with Node's JavaScript engine,
-  as the browser does.
 - `fake-server.bash` – the fake server.
 
 ### Shells
@@ -74,7 +70,7 @@ docker run --rm -v "${PWD}:/code:ro" -w /code -e SCRIPT_TEST_SHELLS=dash debian:
   bash -c 'apt-get update -qq && apt-get install -y -qq bats bats-assert bats-support >/dev/null && bats packaging/synology/test/scripts/start-stop-status.bats packaging/synology/test/scripts/lifecycle.bats'
 ```
 
-(`package-files.bats` needs jq and Node.js, which that one-off image lacks.)
+(`package-files.bats` needs jq, which that one-off image lacks.)
 
 ### The fake server
 

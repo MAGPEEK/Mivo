@@ -47,6 +47,8 @@ case_start_exports_package_environment() {
 	assert_file_line "$env" "DEMO_TOOLS_FFMPEG=$SYNOPKG_PKGDEST/bin/ffmpeg"
 	assert_file_line "$env" "DEMO_TOOLS_FFPROBE=$SYNOPKG_PKGDEST/bin/ffprobe"
 	assert_file_line "$env" "HOME=$SYNOPKG_PKGHOME"
+	assert_file_line "$env" "DEMO_INSTALL_KIND=synology"
+	assert_file_line "$env" "DEMO_BROWSE_ROOTS=/volume1"
 	# Port, LAN guard and libraries stay in config.yaml (ADR 0026 section 6).
 	run grep -E '^DEMO_(SERVER_|LIBRARIES|LOG_)' "$env"
 	assert_failure
@@ -59,6 +61,26 @@ case_start_exports_package_environment() {
 	assert_equal "$(cat "$FAKE_STATE_DIR/server.args")" ""
 	assert_file_line "$FAKE_STATE_DIR/healthcheck.env" "DEMO_CONFIG_DIR=$SYNOPKG_PKGVAR"
 	assert_equal "$(cat "$FAKE_STATE_DIR/healthcheck.args")" ""
+}
+
+# SPK-17: the folder browser starts at the volumes that exist at this start.
+case_start_exports_the_existing_volumes_as_browse_roots() {
+	mkdir "$BATS_TEST_TMPDIR/volume2" "$BATS_TEST_TMPDIR/volumeUSB1" "$BATS_TEST_TMPDIR/volume1x"
+	touch "$BATS_TEST_TMPDIR/volume3"
+	run_sss start
+	assert_success
+	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_BROWSE_ROOTS=/volume1:/volume2:/volumeUSB1"
+	run_sss stop
+	assert_success
+
+	# No volume at all: the variable is set and empty, which means no roots (not the defaults).
+	rm -rf "$BATS_TEST_TMPDIR/volume2" "$BATS_TEST_TMPDIR/volumeUSB1" "$BATS_TEST_TMPDIR/volume1x" \
+		"$BATS_TEST_TMPDIR/volume3"
+	export PKG_TEST_VOLUMES_ROOT=$BATS_TEST_TMPDIR/empty-root
+	mkdir "$PKG_TEST_VOLUMES_ROOT"
+	run_sss start
+	assert_success
+	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_BROWSE_ROOTS="
 }
 
 case_start_sends_server_output_to_its_log_only() {
@@ -924,6 +946,7 @@ case_spkmeta_package_env_works() {
 register_cases \
 	start_healthy_server \
 	start_exports_package_environment \
+	start_exports_the_existing_volumes_as_browse_roots \
 	start_sends_server_output_to_its_log_only \
 	start_creates_server_directories \
 	start_removes_stale_transcode_output \

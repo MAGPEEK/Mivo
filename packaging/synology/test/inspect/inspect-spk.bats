@@ -557,6 +557,20 @@ make_tree_notice_interim() {
 	expect_fail "conf/resource port-config names 'port_conf/other.sc', want port_conf/demo.sc"
 }
 
+@test "a data-share resource or a wizard_media_share key fails" {
+	printf '{"data-share": {"shares": []}, "port-config": {"protocol-file": "port_conf/demo.sc"}}\n' \
+		>"$tree/spk/conf/resource"
+	inspect x86_64
+	expect_fail "conf/resource has a data-share resource"
+}
+
+@test "a wizard that still asks for the media share fails" {
+	echo '[{"step_title": "x", "items": [{"type": "textfield", "subitems": [{"key": "wizard_media_share"}]}]}]' \
+		>"$tree/spk/WIZARD_UIFILES/install_uifile"
+	inspect x86_64
+	expect_fail "wizard_media_share is still used"
+}
+
 @test "icons of the wrong size or type fail" {
 	fake_png 128 >"$tree/spk/PACKAGE_ICON.PNG"
 	echo "not a png" >"$tree/spk/PACKAGE_ICON_256.PNG"

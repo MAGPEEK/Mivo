@@ -5,8 +5,11 @@
 #   dsm.sh probe                      uname, AT_HWCAP and kernelsim's syscall filter as the
 #                                     package user sees them (after install)
 #   dsm.sh snapshot <share>           records name, size, time and mode of every file of the share
-#   dsm.sh install <spk> <share>      INSTALL: preinst, package.tgz -> target, postinst, then the
+#   dsm.sh install <spk>              INSTALL: preinst, package.tgz -> target, postinst, then the
 #                                     resources DSM acquires before the first start
+#   dsm.sh seed-alpha2 <share>        turns the installation into an alpha.2-shaped one: the
+#                                     config.yaml alpha.2's postinst wrote and its share link
+#                                     (SPK-17 upgrade scenario)
 #   dsm.sh versions                   <id> --version, ffmpeg -version, ffprobe -version
 #   dsm.sh control <status> <action>  start-stop-status <action> with SYNOPKG_PKG_STATUS=<status>
 #   dsm.sh stop <status>              prestop and stop; fails unless stop exits 0 within 20 s
@@ -22,9 +25,9 @@
 # (conf/privilege "run-as": "package"), /var/packages/<id>/{target,var,tmp,home} as links to
 # /volume1/@appstore|@appdata|@apptemp|@apphome/<id> (owner <id>, home 0700, the rest 0755),
 # the SYNOPKG_* variables of section 5, the execution orders of section 5, script output
-# appended to /var/log/packages/<id>.log, the data-share link /var/packages/<id>/shares/<share>
-# created after postinst, and target/tmp removed on upgrade and uninstall while var and home
-# stay. Every package script and the server run as the package user under kernelsim with the
+# appended to /var/log/packages/<id>.log, the firewall file copied after postinst (the package
+# has no data-share resource since SPK-17), and target/tmp removed on upgrade and uninstall
+# while var and home stay. Every package script and the server run as the package user under kernelsim with the
 # syscall list of the family's oldest DSM 7.2 kernel.
 #
 # Environment (docker run -e, set by smoke.sh): SMOKE_SYSCALLS (kernelsim list), SMOKE_EMULATED
@@ -216,17 +219,40 @@ EOF
 }
 
 # acquire_resources does what DSM's resource workers do between postinst and the first start
-# (DSM-NOTES section 7): port-config copies the .sc file, data-share links the share.
+# (DSM-NOTES section 7): port-config copies the .sc file. The package has no data-share
+# resource, so no share link appears and the package user gets no access to any share.
 acquire_resources() {
 	protocol_file=$(sed -n 's/.*"protocol-file": *"\([^"]*\)".*/\1/p' "$PKG_ROOT/conf/resource")
 	[ -n "$protocol_file" ] && [ -f "$PKG_ROOT/target/$protocol_file" ] || die "port-config: no protocol-file in target"
 	mkdir -p "$SERVICE_DIR"
 	cp "$PKG_ROOT/target/$protocol_file" "$SERVICE_DIR/"
+	say "resources: $SERVICE_DIR/${protocol_file##*/}"
+}
+
+# cmd_seed_alpha2 makes the installation look like one made by 0.1.0-alpha.2: its config.yaml
+# (the format its postinst wrote, as the package user) and DSM's link /var/packages/<id>/shares/
+# <share> to the share, which alpha.2's data-share resource created. The share is mounted
+# read-only at /volume1/<share>, so the package user can read it, as after a DSM grant.
+cmd_seed_alpha2() {
+	[ "$#" -eq 1 ] || die "usage: seed-alpha2 <share>"
+	load_installed
 	mkdir -p "$PKG_ROOT/shares"
 	ln -sfn "$VOLUME/$1" "$PKG_ROOT/shares/$1"
-	say "resources: $SERVICE_DIR/${protocol_file##*/}, $PKG_ROOT/shares/$1 -> $VOLUME/$1 (read-only mount)"
-	# The data-share grant gives the package user read access; the read-only mount must allow it.
+	cat >"$PKG_ROOT/var/config.yaml" <<EOF
+# Settings of the package, written once at installation; later installs and upgrades keep this file.
+# More libraries: grant the package user read access to the shared folder in Control Panel,
+# add an entry below and restart the package.
+libraries:
+  - name: "$1"
+    path: "$PKG_ROOT/shares/$1"
+    kind: "movies"
+EOF
+	chown "$ID:$ID" "$PKG_ROOT/var/config.yaml"
+	chmod 0640 "$PKG_ROOT/var/config.yaml"
 	as_package_user /bin/ls "$PKG_ROOT/shares/$1/" >/dev/null || die "the package user cannot read the share $1"
+	: >"$STATE_DIR/alpha2-seeded"
+	config_hash >"$STATE_DIR/config.sha256"
+	say "seeded an alpha.2-shaped config.yaml and the link $PKG_ROOT/shares/$1 -> $VOLUME/$1"
 }
 
 # config_hash prints the SHA-256 of config.yaml, or "none".
@@ -235,7 +261,7 @@ config_hash() {
 }
 
 cmd_install() {
-	[ "$#" -eq 2 ] || die "usage: install <spk> <share>"
+	[ "$#" -eq 1 ] || die "usage: install <spk>"
 	INSTALL_TEMP_DIR=$STATE_DIR/install
 	mkdir -p "$STATE_DIR"
 	unpack_spk "$1" "$INSTALL_TEMP_DIR"
@@ -243,12 +269,10 @@ cmd_install() {
 	say "INSTALL $ID $VERSION (adminport $PORT) from $1"
 	ensure_package_user
 	create_package_dirs
-	run_script INSTALL "$INSTALL_TEMP_DIR/scripts/preinst" "wizard_media_share=$2" || die "preinst failed"
+	run_script INSTALL "$INSTALL_TEMP_DIR/scripts/preinst" || die "preinst failed"
 	install_files "$INSTALL_TEMP_DIR"
-	run_script INSTALL "$PKG_ROOT/scripts/postinst" "wizard_media_share=$2" || die "postinst failed"
-	acquire_resources "$2"
-	say "config.yaml:"
-	sed 's/^/  > /' "$PKG_ROOT/var/config.yaml"
+	run_script INSTALL "$PKG_ROOT/scripts/postinst" || die "postinst failed"
+	acquire_resources
 	if [ -f "$STATE_DIR/config.sha256" ]; then
 		[ "$(config_hash)" = "$(cat "$STATE_DIR/config.sha256")" ] || die "the reinstall changed the kept config.yaml"
 		say "ok the kept config.yaml is unchanged"
@@ -422,15 +446,36 @@ cmd_upgrade() {
 	run_script UPGRADE "$PKG_ROOT/scripts/preuninst" || die "old preuninst failed"
 	run_script UPGRADE "$PKG_ROOT/scripts/postuninst" || die "old postuninst failed"
 	VERSION=$new_version
+	# The new package has no data-share resource: DSM drops the old links with the old package.
+	rm -rf "${PKG_ROOT:?}/shares"
 	remove_replaced_dirs
 	create_package_dirs
 	run_script UPGRADE "$INSTALL_TEMP_DIR/scripts/preinst" || die "new preinst failed"
 	install_files "$INSTALL_TEMP_DIR"
 	run_script UPGRADE "$PKG_ROOT/scripts/postinst" || die "new postinst failed"
 	run_script UPGRADE "$PKG_ROOT/scripts/postupgrade" || die "new postupgrade failed"
+	if [ -f "$STATE_DIR/alpha2-seeded" ]; then
+		# The seeded installation never started, so var/data holds no database to keep.
+		check_alpha2_conversion "$old_config"
+		return 0
+	fi
 	[ "$(config_hash)" = "$old_config" ] || die "the upgrade changed config.yaml"
+	say "ok config.yaml unchanged"
 	[ -n "$(find "$PKG_ROOT/var/data" -mindepth 1 -type f)" ] || die "the upgrade lost $PKG_ROOT/var/data"
-	say "ok config.yaml unchanged, $(find "$PKG_ROOT/var/data" -mindepth 1 -type f | wc -l) files kept in var/data"
+	say "ok $(find "$PKG_ROOT/var/data" -mindepth 1 -type f | wc -l) files kept in var/data"
+}
+
+# check_alpha2_conversion ($1 = hash of the seeded config.yaml) fails unless postupgrade rewrote
+# the library path to /volume1/<share>, saved the original and removed its record file.
+check_alpha2_conversion() {
+	backup=$PKG_ROOT/var/config.yaml.bak-0.1.0-alpha.2
+	[ -f "$backup" ] || die "the upgrade left no $backup"
+	[ "$(sha256sum <"$backup" | cut -d' ' -f1)" = "$1" ] || die "$backup differs from the alpha.2 config.yaml"
+	grep -q "^    path: \"$VOLUME/[^\"]*\"\$" "$PKG_ROOT/var/config.yaml" || die "config.yaml has no path below $VOLUME"
+	! grep -q "$PKG_ROOT/shares/" "$PKG_ROOT/var/config.yaml" || die "config.yaml still names a share link"
+	[ ! -e "$PKG_ROOT/var/share-links-before-upgrade.tsv" ] || die "the record of the share links is left"
+	rm -f "$STATE_DIR/alpha2-seeded"
+	say "ok config.yaml now: $(grep '^    path:' "$PKG_ROOT/var/config.yaml" | tr -d ' '), backup kept"
 }
 
 cmd_uninstall() {
@@ -447,8 +492,8 @@ cmd_uninstall() {
 	rm -rf "$PKG_ROOT"
 	kept=$(find "$VOLUME/@appdata/$ID" "$VOLUME/@apphome/$ID" -mindepth 1 | wc -l)
 	if [ "$1" = false ]; then
-		[ -f "$VOLUME/@appdata/$ID/config.yaml" ] && [ -n "$(find "$VOLUME/@appdata/$ID/data" -mindepth 1 -type f)" ] ||
-			die "var lost config.yaml or data/ although the data was to be kept"
+		[ -n "$(find "$VOLUME/@appdata/$ID/data" -mindepth 1 -type f)" ] ||
+			die "var lost data/ (the database) although the data was to be kept"
 		say "ok var and home kept ($kept entries)"
 	else
 		[ "$kept" -eq 0 ] || die "$kept entries left in var and home although the data was to be deleted"
@@ -473,6 +518,7 @@ main() {
 	probe) cmd_probe "$@" ;;
 	snapshot) cmd_snapshot "$@" ;;
 	install) cmd_install "$@" ;;
+	seed-alpha2) cmd_seed_alpha2 "$@" ;;
 	versions) cmd_versions "$@" ;;
 	control) cmd_control "$@" ;;
 	stop) cmd_stop "$@" ;;

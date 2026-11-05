@@ -227,9 +227,7 @@ make_tree() {
 	fake_png 64 >"$spk/PACKAGE_ICON.PNG"
 	fake_png 256 >"$spk/PACKAGE_ICON_256.PNG"
 	echo '{"defaults": {"run-as": "package"}}' >"$spk/conf/privilege"
-	printf '{"data-share": {"shares": [{"name": "{{wizard_media_share}}", %s}]}, %s}\n' \
-		"\"permission\": {\"ro\": [\"$FIXTURE_ID\"]}" \
-		"\"port-config\": {\"protocol-file\": \"port_conf/$FIXTURE_ID.sc\"}" >"$spk/conf/resource"
+	printf '{"port-config": {"protocol-file": "port_conf/%s.sc"}}\n' "$FIXTURE_ID" >"$spk/conf/resource"
 	for script in preinst postinst preuninst postuninst preupgrade postupgrade start-stop-status; do
 		printf '#!/bin/sh\nexit 0\n' >"$spk/scripts/$script"
 	done

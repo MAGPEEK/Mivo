@@ -78,14 +78,18 @@ QEMU the first time).
 4. Steps (DSM-NOTES.md section 5 "Execution order"):
    - share snapshot; **install**: unpack the SPK, package user `<id>`, `/var/packages/<id>/`
      `target`, `var`, `tmp`, `home` as links to `/volume1/@appstore|@appdata|@apptemp|@apphome/<id>`
-     (owner `<id>`, `home` 0700, others 0755), `preinst` from the unpacked SPK with
-     `wizard_media_share=<share>`, `package.tgz` into `target`, scripts and `conf` into
-     `/var/packages/<id>/`, `postinst`, then the resources (`port-config` copies the `.sc` to
-     `/usr/local/etc/service.d/`, `data-share` links `/var/packages/<id>/shares/<share>`);
+     (owner `<id>`, `home` 0700, others 0755), `preinst` from the unpacked SPK (no wizard
+     keys: the install wizard asks nothing since SPK-17), `package.tgz` into `target`, scripts
+     and `conf` into `/var/packages/<id>/`, `postinst` (no `config.yaml`), then the resources
+     (`port-config` copies the `.sc` to `/usr/local/etc/service.d/`; there is no `data-share`);
    - **probe**: `uname` and `AT_HWCAP` as the package user, `sysprobe` proving the filter;
    - **versions**: `bin/<id> --version`, `bin/ffmpeg -version`, `bin/ffprobe -version`;
    - `prestart`, **`start`** (`SYNOPKG_PKG_STATUS=INSTALL`), **`status`** exits 0, the API
      answers on the published port;
+   - **first start state**: `GET /api/v1/libraries` is `{"libraries":[]}`, `GET
+     /api/v1/folder-roots` lists `/volume1` and `installKind` `synology` (from the
+     `start-stop-status` environment); then the corpus library is created through `POST
+     /api/v1/libraries` with that root and the share name, as the web app does;
    - **playback-smoke** with `chromium-desktop` and `firefox-desktop`
      (`-manifest testdata/media/manifest.json`), each scanning the library first;
    - `prestop`, **`stop`** exits 0 within 20 s; then `status` exits 3, no server or FFmpeg
@@ -95,14 +99,23 @@ QEMU the first time).
    - **upgrade** to the same SPK (there is no older one): old `prestop`/`stop`, new
      `preupgrade`, old `preuninst` and `postuninst` (with the old `SYNOPKG_PKGVER`), `target` and
      `tmp` replaced, new `preinst`, `postinst`, `postupgrade` (`UPGRADE`, `SYNOPKG_OLD_PKGVER`
-     set), `config.yaml` unchanged and `var/data` kept; `prestart`/`start`, `status` 0, and the
+     set), no `config.yaml` appears and `var/data` is kept; `prestart`/`start`, `status` 0, and the
      scan the server starts on its own finds every file **unchanged** (none added): the database
      was kept (a scan state `failed` ends the wait as a `FAIL`);
    - **uninstall keeping the data** (`wizard_delete_data=false`): `var` and `home` keep
-     `config.yaml` and `data/`; **reinstall**: `postinst` keeps `config.yaml`, the start finds
-     the catalogue again; stop and the checks after the stop;
+     `data/`; **reinstall**: the start finds the catalogue and the library again; stop and the
+     checks after the stop;
    - **uninstall deleting the data** (`wizard_delete_data=true`): `var` and `home` are empty, the
-     directories and the share stay.
+     directories and the share stay;
+   - **second scenario, a fresh container: upgrade from an alpha.2-shaped installation**: after
+     an install, `dsm.sh seed-alpha2 <share>` writes the `config.yaml` that 0.1.0-alpha.2's
+     `postinst` wrote (`path: "/var/packages/<id>/shares/<share>"`) and the link
+     `shares/<share>`; the upgrade then runs the new `preupgrade` (records the link target),
+     drops the link as DSM does without a `data-share` resource, and `postupgrade` rewrites the
+     path to `/volume1/<share>` and saves `config.yaml.bak-0.1.0-alpha.2`; after the start,
+     `GET /api/v1/libraries` lists the library with the path `/volume1/<share>`. It is the new
+     SPK on both sides (no alpha.2 SPK is at hand), so alpha.2's own scripts are not run; SPK-12
+     upgrades the real alpha.2 on the owner's NAS.
 
 Script output is appended to `/var/log/packages/<id>.log` as on DSM; the dialog text a script
 writes to `$SYNOPKG_TEMP_LOGFILE` is shown as `dialog:` lines.
@@ -152,9 +165,9 @@ the playback itself runs on the host CPU. FFmpeg on baseline x86_64 CPUs is cove
 - The package scripts themselves also run under the syscall filter, and Debian's `dash`,
   coreutils and `setpriv` stand in for DSM's shell and tools (DSM's `/bin/sh` is unconfirmed,
   DSM-NOTES.md section 5; the script tests in `../scripts` cover BusyBox, bash and dash).
-- The resource workers are modelled, not run: the `data-share` permission is the read-only
-  mount, the firewall is not involved, and the share link appears after `postinst` as the guide
-  describes. Boot (`prestart`/`start` with an empty status), the wizards themselves and Package
+- The resource workers are modelled, not run: the package user's read access to the share is
+  the read-only mount (on DSM the user grants it in Control Panel), and the firewall is not
+  involved. Boot (`prestart`/`start` with an empty status), the wizards themselves and Package
   Center's dialogs are not exercised; SPK-12 checks them on the owner's NAS.
 - The upgrade runs from an SPK to itself; a version-to-version upgrade on DSM is part of SPK-12.
 

@@ -6,7 +6,6 @@
 bats_require_minimum_version 1.11.0
 
 load helpers
-load ../fixtures/share-names
 
 PACKAGE_DIR=$REPO_ROOT/packaging/synology/package
 WIZARD_DIR=$PACKAGE_DIR/WIZARD_UIFILES
@@ -29,14 +28,6 @@ product_id() {
 # and port, as the staging step does with the brand values.
 render_template() {
 	sed -e "s/@ID@/$2/g" -e "s/@DISPLAY_NAME@/$FIXTURE_DISPLAY_NAME/g" -e "s/@PORT@/9999/g" "$1"
-}
-
-# share_name_verdicts prints "valid" or "invalid" for each argument, as the wizard file $1 judges
-# it in JavaScript.
-share_name_verdicts() {
-	local uifile=$1
-	shift
-	printf '%s\0' "$@" | node "$TEST_DIR/share-name-check.js" "$uifile"
 }
 
 # --- JSON ----------------------------------------------------------------------------------
@@ -85,13 +76,11 @@ share_name_verdicts() {
 	assert_output '{"defaults":{"run-as":"package"}}'
 }
 
-@test "resource grants the wizard's share read-only and registers the port file" {
-	run jq -c '."data-share"' "$PACKAGE_DIR/conf/resource"
-	assert_output '{"shares":[{"name":"{{wizard_media_share}}","permission":{"ro":["@ID@"]}}]}'
+@test "resource registers only the port file and grants no share" {
 	run jq -c '."port-config"' "$PACKAGE_DIR/conf/resource"
 	assert_output '{"protocol-file":"port_conf/@ID@.sc"}'
 	run jq -r 'keys | join(" ")' "$PACKAGE_DIR/conf/resource"
-	assert_output "data-share port-config"
+	assert_output "port-config"
 	run grep -rn -e '"rw"' -e 'root' "$PACKAGE_DIR/conf"
 	assert_failure 1
 }
@@ -122,47 +111,28 @@ share_name_verdicts() {
 
 # --- wizard --------------------------------------------------------------------------------
 
-@test "install wizards ask for the media share with default video" {
+# SPK-17: the install wizard is one info page; it asks nothing and sets no wizard key.
+@test "install wizards are info-only and name the web app, port and permission steps" {
 	local uifile
 	for uifile in install_uifile install_uifile_ger; do
-		run jq -c '[.[].items[] | select(.type == "textfield") | .subitems[]
-			| {key, defaultValue, allowBlank: .validator.allowBlank}]' "$WIZARD_DIR/$uifile"
-		assert_output '[{"key":"wizard_media_share","defaultValue":"video","allowBlank":false}]'
+		run jq -c '[.[].items[] | select(has("type") or has("subitems"))]' "$WIZARD_DIR/$uifile"
+		assert_output '[]'
+		run jq -r '.. | .key? // empty' "$WIZARD_DIR/$uifile"
+		assert_output ''
 		run jq -r '.[].items[].desc' "$WIZARD_DIR/$uifile"
 		assert_output --partial "@DISPLAY_NAME@"
 		assert_output --partial "@PORT@"
+		assert_output --partial "@ID@"
 	done
 }
 
-@test "English and German install wizards use the same validator regex" {
-	assert_equal "$(jq -r '.. | .regex? | .expr? // empty' "$WIZARD_DIR/install_uifile_ger")" \
-		"$(jq -r '.. | .regex? | .expr? // empty' "$WIZARD_DIR/install_uifile")"
-	run jq -r '.. | .regex? | .errorText? // empty' "$WIZARD_DIR/install_uifile_ger"
-	assert_output --regexp '.+'
-}
-
-@test "wizard regex accepts valid share names" {
-	local uifile index
-	for uifile in install_uifile install_uifile_ger; do
-		run share_name_verdicts "$WIZARD_DIR/$uifile" "${VALID_SHARE_NAMES[@]}"
-		assert_success
-		assert_equal "${#lines[@]}" "${#VALID_SHARE_NAMES[@]}"
-		for index in "${!VALID_SHARE_NAMES[@]}"; do
-			[[ ${lines[index]} == valid ]] || fail "$uifile rejects '${VALID_SHARE_NAMES[index]}'"
-		done
-	done
-}
-
-@test "wizard regex rejects invalid share names" {
-	local uifile index
-	for uifile in install_uifile install_uifile_ger; do
-		run share_name_verdicts "$WIZARD_DIR/$uifile" "${INVALID_SHARE_NAMES[@]}"
-		assert_success
-		assert_equal "${#lines[@]}" "${#INVALID_SHARE_NAMES[@]}"
-		for index in "${!INVALID_SHARE_NAMES[@]}"; do
-			[[ ${lines[index]} == invalid ]] || fail "$uifile accepts '${INVALID_SHARE_NAMES[index]}'"
-		done
-	done
+@test "the package has no media folder question left" {
+	# Comments in the scripts may name the old resource as history; no template may use it.
+	run grep -rlE 'wizard_media_share|data-share|"textfield"' "$PACKAGE_DIR/conf" "$WIZARD_DIR/install_uifile" \
+		"$WIZARD_DIR/install_uifile_ger"
+	assert_failure 1
+	run grep -rn 'wizard_media_share' "$PACKAGE_DIR"
+	assert_failure 1
 }
 
 @test "uninstall wizards offer deleting the data, unchecked by default" {

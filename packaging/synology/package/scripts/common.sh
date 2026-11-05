@@ -21,18 +21,15 @@ PKG_DIR_MODE=0750
 PKG_FILE_UMASK=027
 # Name of the server's configuration file in its config directory (config.FileName).
 PKG_CONFIG_FILE_NAME=config.yaml
-# DSM's directory of the installed packages; /var/packages/<id>/shares/<share> is the link
-# Package Center creates for each share of the data-share resource (DSM-NOTES section 7).
+# Value of <ENV_PREFIX>_INSTALL_KIND (config.InstallKindSynology).
+PKG_INSTALL_KIND=synology
+# DSM's directory of the installed packages; /var/packages/<id>/shares/<share> was the link
+# Package Center created for each share of 0.1.0-alpha.2's data-share resource (DSM-NOTES
+# section 7, unused since SPK-17).
 PKG_DSM_PACKAGES_DIR=/var/packages
 # Directory that holds DSM's volumes (/volume1, /volume2, ...): "" stands for /. The test-only
 # PKG_TEST_VOLUMES_ROOT (packaging/synology/test; DSM never sets it) moves it into a test tree.
 PKG_VOLUMES_ROOT=${PKG_TEST_VOLUMES_ROOT:-}
-# Longest shared-folder name DSM accepts, in characters (DSM-NOTES section 9); counted like the
-# wizard's validator, in UTF-16 code units (pkg_name_length).
-PKG_SHARE_NAME_MAX_CHARACTERS=32
-# Characters DSM forbids in shared-folder names, as a grep bracket expression (DSM-NOTES
-# section 9). Inside brackets "]" must come first and "\" is literal.
-PKG_SHARE_NAME_FORBIDDEN='[]!"#%&'\''()*+,/:;<=>?@[\^`{}|~]'
 
 # pkg_error prints a message on stderr. DSM appends the script output to
 # /var/log/packages/<id>.log.
@@ -128,6 +125,8 @@ pkg_derive_paths() {
 	PKG_DATA_DIR=$SYNOPKG_PKGVAR/data
 	PKG_CACHE_DIR=$SYNOPKG_PKGVAR/cache
 	PKG_TRANSCODE_DIR=$SYNOPKG_PKGTMP/transcode
+	# preupgrade records the targets of alpha.2's share links here for postupgrade.
+	PKG_SHARE_RECORD_FILE=$SYNOPKG_PKGVAR/share-links-before-upgrade.tsv
 	PKG_LOG_FILE=$SYNOPKG_PKGVAR/$ID.log
 	PKG_PID_FILE=$SYNOPKG_PKGVAR/$ID.pid
 	# The action lock of start-stop-status; in tmp, which DSM wipes on upgrade and uninstall.
@@ -136,8 +135,9 @@ pkg_derive_paths() {
 }
 
 # pkg_export_server_environment exports the settings the package owns (ADR 0018 names: brand
-# prefix plus key path). The environment wins over config.yaml, so port, server.lan_only, log
-# settings and libraries are deliberately not set here: they stay with config.yaml.
+# prefix plus key path). The environment wins over config.yaml, so port, server.lan_only and
+# log settings are deliberately not set here: they stay with config.yaml. The install kind and
+# the browse roots belong to the package like the paths; libraries are managed in the app.
 pkg_export_server_environment() {
 	export "${ENV_PREFIX}_CONFIG_DIR=$PKG_CONFIG_DIR"
 	export "${ENV_PREFIX}_PATHS_DATA=$PKG_DATA_DIR"
@@ -145,7 +145,27 @@ pkg_export_server_environment() {
 	export "${ENV_PREFIX}_PATHS_TRANSCODE=$PKG_TRANSCODE_DIR"
 	export "${ENV_PREFIX}_TOOLS_FFMPEG=$PKG_FFMPEG"
 	export "${ENV_PREFIX}_TOOLS_FFPROBE=$PKG_FFPROBE"
+	export "${ENV_PREFIX}_INSTALL_KIND=$PKG_INSTALL_KIND"
+	export "${ENV_PREFIX}_BROWSE_ROOTS=$(pkg_browse_roots)"
 	export HOME="$PKG_HOME_DIR"
+}
+
+# pkg_browse_roots prints the existing volume directories (/volume<N> and /volumeUSB<N>, N digits
+# only) joined by ":", sorted, empty when there are none. The folder browser starts there; a
+# shared folder is the unit of access on DSM. Evaluated at each start, so a new volume shows up.
+pkg_browse_roots() {
+	pkg_roots_list=''
+	for pkg_root_dir in "$PKG_VOLUMES_ROOT"/volume[0-9]* "$PKG_VOLUMES_ROOT"/volumeUSB[0-9]*; do
+		pkg_root_number=${pkg_root_dir##*/volume}
+		pkg_root_number=${pkg_root_number#USB}
+		case "$pkg_root_number" in
+		'' | *[!0-9]*) continue ;;
+		esac
+		if [ -d "$pkg_root_dir" ]; then
+			pkg_roots_list=$pkg_roots_list${pkg_roots_list:+:}${pkg_root_dir#"$PKG_VOLUMES_ROOT"}
+		fi
+	done
+	printf '%s\n' "$pkg_roots_list"
 }
 
 # pkg_create_server_dirs creates the data, cache and transcode directories that are missing,
@@ -226,35 +246,30 @@ pkg_resolve_package_directory() {
 	printf '%s\n' "$pkg_resolved_dir"
 }
 
-# pkg_name_length prints the length of the UTF-8 text $1 the way the install wizard's
-# JavaScript validator counts it, in UTF-16 code units: one per character, two for a character
-# outside the Basic Multilingual Plane (a four-byte UTF-8 sequence, lead byte 0xF0-0xF7), so
-# preinst and the wizard accept the same names. Independent of the locale DSM runs the script
-# in: the bytes that are not UTF-8 continuation bytes plus the four-byte lead bytes.
-pkg_name_length() {
-	pkg_length_characters=$(printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | wc -c) || return 1
-	pkg_length_astral=$(printf '%s' "$1" | LC_ALL=C tr -cd '\360-\367' | wc -c) || return 1
-	# Arithmetic drops the padding some wc implementations print.
-	printf '%s\n' "$((pkg_length_characters + pkg_length_astral))"
-}
-
-# pkg_check_share_name succeeds when $1 follows DSM's shared-folder naming rules (DSM-NOTES
-# section 9), the rules the install wizard's validator implements. A name that passes contains
-# no path separator and no control character, so it is safe in a path and in config.yaml.
-pkg_check_share_name() {
-	case "$1" in
-	'' | . | .. | [-\ ]* | *' ' | \$* | *\$?* | *[[:cntrl:]]*) return 1 ;;
-	esac
-	if printf '%s' "$1" | LC_ALL=C grep -q -- "$PKG_SHARE_NAME_FORBIDDEN"; then
+# pkg_is_volume_path succeeds when $1 is a path below /volume<N>/ or /volumeUSB<N>/ (N digits
+# only), the shape of a share's real location; it is what the upgrade accepts as a target.
+pkg_is_volume_path() {
+	pkg_volume_check=${1#/volume}
+	if [ "$pkg_volume_check" = "$1" ]; then
 		return 1
 	fi
-	[ "$(pkg_name_length "$1")" -le "$PKG_SHARE_NAME_MAX_CHARACTERS" ]
+	pkg_volume_check=${pkg_volume_check#USB}
+	pkg_volume_number=${pkg_volume_check%%/*}
+	case "$pkg_volume_number" in
+	'' | *[!0-9]*) return 1 ;;
+	esac
+	# Something must follow the volume directory, and no "." or ".." element.
+	case "$pkg_volume_check" in
+	"$pkg_volume_number" | "$pkg_volume_number"/ | */./* | */../* | */. | */.. | *//*) return 1 ;;
+	esac
 }
 
-# pkg_share_link prints the path of DSM's link to share $1 (DSM-NOTES section 7). It is the
-# library root: it survives moving the share to another volume (ADR 0026 section 7).
-pkg_share_link() {
-	printf '%s\n' "$PKG_DSM_PACKAGES_DIR/$ID/shares/$1"
+# pkg_share_link_prefix prints the start of the path of every DSM link to a share of this
+# package (DSM-NOTES section 7), the library paths 0.1.0-alpha.2 wrote to config.yaml. Only the
+# upgrade (preupgrade, postupgrade) uses it: the install wizard asks for no shared folder any
+# more (SPK-17), so the shared-folder naming rules are gone.
+pkg_share_link_prefix() {
+	printf '%s\n' "$PKG_DSM_PACKAGES_DIR/$ID/shares/"
 }
 
 # pkg_yaml_quote prints $1 as a YAML double-quoted scalar. Only "\" and """ need an escape there;

@@ -1,5 +1,134 @@
 #!/bin/sh
-# Runs last in an upgrade, after the new version's postinst (ADR 0026 section 10, task SPK-06),
-# as the package user. Nothing to do: postinst has created the directories again and left
-# config.yaml, data/ and the log as they were. A non-zero exit would mark the package as damaged.
+# shellcheck source-path=SCRIPTDIR
+# Runs last in an upgrade, after the new version's postinst (ADR 0026 section 10, task SPK-17),
+# as the package user. postinst has created the directories again and left config.yaml, data/
+# and the log as they were.
+#
+# The only job: 0.1.0-alpha.2 wrote its library as
+#     <four spaces>path: "/var/packages/<id>/shares/<share>"
+# in config.yaml. That link is gone once the package has no data-share resource, so each such
+# line is rewritten to the target preupgrade recorded (/volumeN/<share>); without a record, to
+# the one directory /volume*/<share> if there is exactly one. The original is saved first as
+# config.yaml.bak-0.1.0-alpha.2 (never overwritten). A line in any other form that points into
+# the shares directory is left alone and logged. The server then imports the library once.
+#
+# The recorded file is removed at the end. A failure is logged and the upgrade goes on: a
+# non-zero exit would mark the package as damaged, and a stale path only shows the library as
+# unavailable in the app.
+set -eu
+
+# The shared files live next to this script, wherever DSM keeps it.
+case "$0" in
+*/*) PKG_SCRIPT_DIR=${0%/*} ;;
+*) PKG_SCRIPT_DIR=. ;;
+esac
+if [ ! -r "$PKG_SCRIPT_DIR/common.sh" ]; then
+	exit 0
+fi
+# shellcheck source=common.sh
+. "$PKG_SCRIPT_DIR/common.sh"
+pkg_load_package_env || exit 0
+pkg_require_dsm_environment || exit 0
+pkg_derive_paths
+
+# Version whose configuration this script converts; part of the backup file name.
+readonly CONVERTED_VERSION=0.1.0-alpha.2
+
+# recorded_target prints the target preupgrade recorded for share $1; fails when there is none.
+recorded_target() {
+	[ -f "$PKG_SHARE_RECORD_FILE" ] || return 1
+	tab=$(printf '\t')
+	while IFS=$tab read -r record_name record_target; do
+		if [ "$record_name" = "$1" ] && pkg_is_volume_path "$record_target"; then
+			printf '%s\n' "$record_target"
+			return 0
+		fi
+	done <"$PKG_SHARE_RECORD_FILE"
+	return 1
+}
+
+# fallback_target prints /volume<N>/<share> when exactly one volume holds the directory $1.
+fallback_target() {
+	fallback_count=0
+	fallback_found=''
+	for fallback_dir in "$PKG_VOLUMES_ROOT"/volume[0-9]*/"$1"; do
+		if [ -d "$fallback_dir" ]; then
+			fallback_count=$((fallback_count + 1))
+			fallback_found=${fallback_dir#"$PKG_VOLUMES_ROOT"}
+		fi
+	done
+	[ "$fallback_count" -eq 1 ] || return 1
+	printf '%s\n' "$fallback_found"
+}
+
+# share_name_of_line prints the share of a line in exactly alpha.2's form; fails for any other
+# line. alpha.2 only wrote names that DSM allows: no quote, backslash or slash.
+share_name_of_line() {
+	line_prefix="    path: \"$(pkg_share_link_prefix)"
+	case "$1" in
+	"$line_prefix"*\") ;;
+	*) return 1 ;;
+	esac
+	line_name=${1#"$line_prefix"}
+	line_name=${line_name%\"}
+	case "$line_name" in
+	'' | . | .. | *[\"\\/]*) return 1 ;;
+	esac
+	printf '%s\n' "$line_name"
+}
+
+# rewrite_line prints the line $1 as it belongs in the new config.yaml and notes in
+# $rewritten_marker when it changed.
+rewrite_line() {
+	if share_name=$(share_name_of_line "$1"); then
+		if target=$(recorded_target "$share_name") || target=$(fallback_target "$share_name"); then
+			printf '    path: %s\n' "$(pkg_yaml_quote "$target")" || return 1
+			: >"$rewritten_marker"
+			echo "library path of share $share_name: $(pkg_share_link_prefix)$share_name -> $target" >&2
+			return 0
+		fi
+		echo "no folder known for the share link $share_name; the line is left as it is" >&2
+	else
+		case "$1" in
+		*"$(pkg_share_link_prefix)"*) echo "unusual line left as it is: $1" >&2 ;;
+		esac
+	fi
+	printf '%s\n' "$1"
+}
+
+# convert_config writes the rewritten config.yaml through a temporary file and keeps the backup.
+convert_config() {
+	new_file=$PKG_CONFIG_FILE.new
+	rewritten_marker=$PKG_CONFIG_FILE.rewritten
+	rm -f "$rewritten_marker"
+	# A failed write must never reach the mv below, so every failure returns here.
+	while IFS= read -r config_line || [ -n "$config_line" ]; do
+		rewrite_line "$config_line" || return 1
+	done <"$PKG_CONFIG_FILE" >"$new_file" || return 1
+	if [ ! -e "$rewritten_marker" ]; then
+		rm -f "$new_file"
+		return 0
+	fi
+	rm -f "$rewritten_marker"
+	# Only paths change, never the number of lines.
+	[ "$(grep -c '' "$new_file")" = "$(grep -c '' "$PKG_CONFIG_FILE")" ] || return 1
+	backup_file=$PKG_CONFIG_FILE.bak-$CONVERTED_VERSION
+	if [ ! -e "$backup_file" ]; then
+		cp -p "$PKG_CONFIG_FILE" "$backup_file" || return 1
+	fi
+	mv -f "$new_file" "$PKG_CONFIG_FILE"
+}
+
+case "${SYNOPKG_PKG_STATUS:-}" in
+INSTALL | UNINSTALL) convert_wanted=no ;;
+*) convert_wanted=yes ;;
+esac
+if [ "$convert_wanted" = yes ] && [ -f "$PKG_CONFIG_FILE" ] && [ ! -L "$PKG_CONFIG_FILE" ]; then
+	umask "$PKG_FILE_UMASK"
+	if ! convert_config; then
+		rm -f "$PKG_CONFIG_FILE.new" "$PKG_CONFIG_FILE.rewritten" 2>/dev/null || :
+		pkg_error "cannot convert $PKG_CONFIG_FILE; the library paths stay as they were"
+	fi
+fi
+rm -f "$PKG_SHARE_RECORD_FILE" 2>/dev/null || :
 exit 0

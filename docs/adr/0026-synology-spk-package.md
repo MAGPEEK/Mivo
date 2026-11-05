@@ -632,3 +632,35 @@ platform environments DSM 7.2.2 build 72723)**
 - **Verification**: two clean recipe builds give byte-identical binaries; each family runs the
   check set under emulation with the oldest DSM kernel's syscall surface (SPK-15). Static PIE
   (ASLR) is deferred until the device test (SPK-12).
+
+## Notes (SPK-17, 2026-11-04)
+
+Where a note contradicts the decision text above, the note wins (as in the earlier Notes). The
+decisions table keeps its rows; this section overrides OD-SPK-6 A.
+
+- **No media folder question.** Owner decision 2026-11-04 supersedes OD-SPK-6 A and §7: the
+  install wizard asks for no shared folder, `conf/resource` has no `data-share` resource (only
+  `port-config`), and `postinst` writes no `config.yaml`. Libraries are added in the web app
+  (ADR 0028, M3-19). Access to shared folders is granted by the user in Control Panel > Shared
+  Folder > Edit > Permissions, guided by the app. A fresh installation starts with zero libraries.
+- **§6 table, two rows.** `start-stop-status` exports `<PREFIX>_BROWSE_ROOTS` (the existing
+  `/volume<N>` and `/volumeUSB<N>` directories, `:`-joined, sorted, evaluated at each start) and
+  `<PREFIX>_INSTALL_KIND=synology`. The sentence "libraries come from `config.yaml`" reads
+  "libraries are managed in the app; `libraries` in `config.yaml` is a one-time import seed".
+- **§10 install and upgrade.** Install: no wizard input; `postinst` creates the directories
+  only. Upgrade from 0.1.0-alpha.2: `preupgrade` records the resolved target of every
+  `/var/packages/<id>/shares/*` link in `var/share-links-before-upgrade.tsv`; `postupgrade`
+  rewrites only the library `path` lines in exactly the form alpha.2 wrote to the recorded
+  `/volumeN/<share>` (fallback: the single `/volume*/<share>` directory), after saving the
+  original as `config.yaml.bak-0.1.0-alpha.2`. Other lines are left alone and logged. The server
+  then imports the library once.
+- **Consequences.** "Library management on DSM needs SSH until milestone 7; the wizard covers
+  the first library" is replaced by "libraries are managed in the web app from the release
+  after 0.1.0-alpha.2; granting share access stays a DSM step".
+- **Wizard.** The classic wizard is uninstall-only plus one info page (what to open, Settings >
+  Libraries, the permission steps). Whether DSM 7.2.2 accepts an install wizard without an input
+  is unconfirmed (DSM-NOTES §9); the device test decides, and the install wizard files are
+  removed if DSM refuses the page.
+- **Resources.** `data-share` is no longer used. alpha.2's grant is expected to persist after the
+  upgrade because `Release()` does nothing (DSM-NOTES §7); the device test confirms it
+  (`TESTING.md` D3a). If it does not, the library shows as unavailable with the permission help.

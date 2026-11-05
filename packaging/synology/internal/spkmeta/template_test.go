@@ -32,7 +32,7 @@ func TestRenderTemplateKeepsOtherSyntaxUnchanged(t *testing.T) {
 
 	build := demoBuild(t, "0.1.0", "x86_64")
 	template := strings.Join([]string{
-		`{"shares": "{{wizard_media_share}}"}`,
+		`{"key": "{{wizard_example_key}}"}`,
 		`HOME="${SYNOPKG_PKGHOME}"; echo "$SYNOPKG_PKGVAR" $1 $@`,
 		"mail user@example.invalid, @lower@ @Mixed@ @ID @_ID@ @@ @1A@ @ ID@",
 		"no trailing newline",

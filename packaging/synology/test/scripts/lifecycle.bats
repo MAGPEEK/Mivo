@@ -6,7 +6,6 @@
 bats_require_minimum_version 1.11.0
 
 load helpers
-load ../fixtures/share-names
 
 setup() {
 	setup_package_tree
@@ -27,19 +26,6 @@ run_lifecycle() {
 # create_share creates the shared folder $1 on volume $2 (default 1) below the fake NAS root.
 create_share() {
 	mkdir -p "$BATS_TEST_TMPDIR/volume${2:-1}/$1"
-}
-
-# expected_config prints the config.yaml postinst writes for share $1 with the fixture package.
-expected_config() {
-	cat <<EOF
-# Settings of $FIXTURE_DISPLAY_NAME, written once at installation; later installs and upgrades keep this file.
-# More libraries: grant the package user read access to the shared folder in Control Panel,
-# add an entry below and restart the package.
-libraries:
-  - name: "$1"
-    path: "/var/packages/$FIXTURE_ID/shares/$1"
-    kind: "movies"
-EOF
 }
 
 # fill_user_data creates what a used installation has in var and home.
@@ -87,131 +73,49 @@ assert_no_output() {
 
 # --- preinst -------------------------------------------------------------------------------
 
-case_preinst_accepts_existing_share() {
-	export SYNOPKG_PKG_STATUS=INSTALL
-	local share
-	create_share video
-	create_share 'Filme und Serien' 2
-	create_share 'Videos äöü ß$' 3
-	for share in video 'Filme und Serien' 'Videos äöü ß$'; do
-		export wizard_media_share=$share
+case_preinst_asks_nothing() {
+	local status
+	for status in INSTALL UPGRADE ''; do
+		export SYNOPKG_PKG_STATUS=$status
 		run_lifecycle preinst
 		assert_success
 		assert_no_output
+		# A leftover wizard key of an earlier version changes nothing.
+		export wizard_media_share=missing
+		run_lifecycle preinst
+		assert_success
+		assert_no_output
+		unset wizard_media_share
 	done
 	[[ ! -s $TEMP_LOGFILE ]] || fail "preinst wrote a message: $(cat "$TEMP_LOGFILE")"
 }
 
-case_preinst_rejects_empty_share() {
-	export SYNOPKG_PKG_STATUS=INSTALL
-	create_share video
-	run_lifecycle preinst
-	assert_failure 1
-	assert_file_line "$TEMP_LOGFILE" "Enter the name of the shared folder that holds your videos."
-	refute_error_words
-
-	export wizard_media_share=
-	run_lifecycle preinst
-	assert_failure 1
-}
-
-case_preinst_rejects_missing_share() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=movies
-	create_share video
-	# A file is no shared folder.
-	touch "$BATS_TEST_TMPDIR/volume1/movies"
-	run_lifecycle preinst
-	assert_failure 1
-	assert_stderr_contains 'The shared folder "movies" does not exist.'
-	assert_file_line "$TEMP_LOGFILE" "$stderr"
-	refute_error_words
-	[[ ! -e $BATS_TEST_TMPDIR/volume1/movies/ ]] || fail "preinst created the share"
-}
-
-# A path that exists is still no share name: "/" and ".." would point the data-share resource
-# and config.yaml at another directory.
-case_preinst_rejects_invalid_share_name_even_if_the_path_exists() {
-	export SYNOPKG_PKG_STATUS=INSTALL
-	local share
-	create_share video/movies
-	for share in video/movies .. . ' video' $'video\n'; do
-		export wizard_media_share=$share
-		: >"$TEMP_LOGFILE"
-		run_lifecycle preinst
-		assert_failure 1
-		assert_stderr_contains "is not a valid shared folder name"
-	done
-}
-
-case_preinst_speaks_german() {
-	export SYNOPKG_PKG_STATUS=INSTALL SYNOPKG_DSM_LANGUAGE=ger wizard_media_share=Filme
-	run_lifecycle preinst
-	assert_failure 1
-	assert_file_line "$TEMP_LOGFILE" \
-		'Der freigegebene Ordner "Filme" existiert nicht. Legen Sie ihn zuerst unter Systemsteuerung > Freigegebener Ordner an oder geben Sie den Namen eines vorhandenen freigegebenen Ordners ein.'
-}
-
-case_preinst_without_temp_logfile_still_refuses() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=movies
-	unset SYNOPKG_TEMP_LOGFILE
-	run_lifecycle preinst
-	assert_failure 1
-	assert_stderr_contains "does not exist"
-}
-
-case_preinst_skips_the_check_on_upgrade() {
-	local status
-	for status in UPGRADE ''; do
-		export SYNOPKG_PKG_STATUS=$status
-		unset wizard_media_share
-		run_lifecycle preinst
-		assert_success
-		assert_no_output
-		export wizard_media_share=missing
-		run_lifecycle preinst
-		assert_success
-	done
-}
-
 # --- postinst ------------------------------------------------------------------------------
 
-case_postinst_writes_config_on_install() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
-	run_lifecycle postinst
-	assert_success
-	assert_output "wrote $CONFIG with the library \"video\" (/var/packages/$FIXTURE_ID/shares/video)"
-	assert_equal "$stderr" ""
-	refute_error_words
-	assert_equal "$(cat "$CONFIG")" "$(expected_config video)"
-	assert_mode "$CONFIG" 640
-	assert_mode "$SYNOPKG_PKGVAR/data" 750
-	assert_mode "$SYNOPKG_PKGVAR/cache" 750
-	assert_mode "$SYNOPKG_PKGTMP/transcode" 750
-	[[ ! -e $CONFIG.new ]] || fail "the temporary file is left"
-}
-
-case_postinst_quotes_special_share_names() {
-	export SYNOPKG_PKG_STATUS=INSTALL
-	local share
-	for share in 'Filme und Serien' 'Videos äöü ß' 'Médiathèque$' '日本語'; do
-		rm -f "$CONFIG"
-		export wizard_media_share=$share
+case_postinst_creates_the_directories_and_writes_no_config() {
+	local status
+	for status in INSTALL UPGRADE ''; do
+		rm -rf "$SYNOPKG_PKGVAR/data" "$SYNOPKG_PKGVAR/cache" "$SYNOPKG_PKGTMP/transcode"
+		export SYNOPKG_PKG_STATUS=$status wizard_media_share=video
 		run_lifecycle postinst
 		assert_success
-		assert_equal "$(cat "$CONFIG")" "$(expected_config "$share")"
+		assert_no_output
+		[[ ! -e $CONFIG && ! -L $CONFIG && ! -e $CONFIG.new ]] || fail "postinst wrote config.yaml with status '$status'"
+		assert_mode "$SYNOPKG_PKGVAR/data" 750
+		assert_mode "$SYNOPKG_PKGVAR/cache" 750
+		assert_mode "$SYNOPKG_PKGTMP/transcode" 750
 	done
 }
 
 case_postinst_keeps_existing_config() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
+	export SYNOPKG_PKG_STATUS=INSTALL
 	printf 'server:\n  port: 8460\n# the user edited this\n' >"$CONFIG"
 	chmod 0600 "$CONFIG"
 	local before
 	before=$(tree_snapshot "$SYNOPKG_PKGVAR")
 	run_lifecycle postinst
 	assert_success
-	assert_output "keeping the existing $CONFIG"
-	refute_error_words
+	assert_no_output
 	assert_equal "$(tree_snapshot "$SYNOPKG_PKGVAR" | grep -v -e '^./data ' -e '^./cache ')" "$before"
 
 	# A link the user made stays a link, even a dangling one.
@@ -220,18 +124,6 @@ case_postinst_keeps_existing_config() {
 	run_lifecycle postinst
 	assert_success
 	assert_equal "$(readlink "$CONFIG")" /nonexistent/config.yaml
-}
-
-case_postinst_writes_nothing_on_upgrade() {
-	local status
-	for status in UPGRADE ''; do
-		export SYNOPKG_PKG_STATUS=$status wizard_media_share=video
-		run_lifecycle postinst
-		assert_success
-		assert_no_output
-		[[ ! -e $CONFIG ]] || fail "postinst wrote config.yaml with status '$status'"
-		assert_mode "$SYNOPKG_PKGTMP/transcode" 750
-	done
 }
 
 case_postinst_keeps_existing_directories() {
@@ -244,36 +136,15 @@ case_postinst_keeps_existing_directories() {
 	assert_equal "$(cat "$SYNOPKG_PKGVAR/data/library.db")" database
 }
 
-case_postinst_rejects_invalid_share_name() {
+case_postinst_reports_directories_it_cannot_create() {
 	export SYNOPKG_PKG_STATUS=INSTALL
-	local share
-	for share in '' $'video\nlibraries: []' 'a"b' 'video/../..'; do
-		export wizard_media_share=$share
-		run_lifecycle postinst
-		assert_failure 1
-		assert_stderr_contains "was not written"
-		[[ ! -e $CONFIG && ! -e $CONFIG.new ]] || fail "postinst wrote a config for '$share'"
-	done
-}
-
-case_postinst_fails_when_config_cannot_be_written() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
-	mkdir "$CONFIG.new"
-	run_lifecycle postinst
-	assert_failure 1
-	assert_file_line "$TEMP_LOGFILE" "cannot write $CONFIG"
-	[[ ! -e $CONFIG ]] || fail "a config.yaml was written"
-}
-
-case_postinst_speaks_german() {
-	export SYNOPKG_PKG_STATUS=INSTALL SYNOPKG_DSM_LANGUAGE=ger wizard_media_share=video
-	mkdir "$CONFIG.new"
-	run_lifecycle postinst
-	assert_failure 1
-	assert_file_line "$TEMP_LOGFILE" "$CONFIG konnte nicht geschrieben werden"
-	rmdir "$CONFIG.new"
-	: >"$TEMP_LOGFILE"
 	rm "$SYNOPKG_PKGTMP"
+	run_lifecycle postinst
+	assert_failure 1
+	assert_file_line "$TEMP_LOGFILE" \
+		"cannot create the directories of $FIXTURE_DISPLAY_NAME in $SYNOPKG_PKGVAR and $SYNOPKG_PKGTMP"
+	: >"$TEMP_LOGFILE"
+	export SYNOPKG_DSM_LANGUAGE=ger
 	run_lifecycle postinst
 	assert_failure 1
 	assert_file_line "$TEMP_LOGFILE" \
@@ -281,11 +152,280 @@ case_postinst_speaks_german() {
 }
 
 case_postinst_fails_without_dsm_variables() {
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
+	export SYNOPKG_PKG_STATUS=INSTALL
 	unset SYNOPKG_PKGVAR
 	run_lifecycle postinst
 	assert_failure 1
 	assert_stderr_contains "SYNOPKG_PKGVAR is not set"
+}
+
+# --- upgrade from 0.1.0-alpha.2 (preupgrade, postupgrade) ------------------------------------
+
+# alpha2_config prints the config.yaml 0.1.0-alpha.2's postinst wrote for share $1.
+alpha2_config() {
+	cat <<EOF
+# Settings of $FIXTURE_DISPLAY_NAME, written once at installation; later installs and upgrades keep this file.
+# More libraries: grant the package user read access to the shared folder in Control Panel,
+# add an entry below and restart the package.
+libraries:
+  - name: "$1"
+    path: "/var/packages/$FIXTURE_ID/shares/$1"
+    kind: "movies"
+EOF
+}
+
+# link_share creates the share directory $1 on volume $2 (default 1) and DSM's link to it, as
+# the data-share resource of alpha.2 did.
+link_share() {
+	create_share "$1" "${2:-1}"
+	mkdir -p "$PKG_ROOT/shares"
+	ln -sfn "$BATS_TEST_TMPDIR/volume${2:-1}/$1" "$PKG_ROOT/shares/$1"
+}
+
+RECORD_FILE_NAME='share-links-before-upgrade.tsv'
+BACKUP_FILE_NAME='config.yaml.bak-0.1.0-alpha.2'
+
+case_preupgrade_records_the_targets_of_the_share_links() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	link_share video
+	link_share 'Filme und Serien' 2
+	link_share 'Médiathèque' 3
+	run_lifecycle preupgrade
+	assert_success
+	refute_error_words
+	assert_short_output
+	local record=$SYNOPKG_PKGVAR/$RECORD_FILE_NAME
+	assert_equal "$(wc -l <"$record" | tr -d ' ')" 3
+	assert_file_line "$record" $'video\t/volume1/video'
+	assert_file_line "$record" $'Filme und Serien\t/volume2/Filme und Serien'
+	assert_file_line "$record" $'Médiathèque\t/volume3/Médiathèque'
+	[[ ! -e $record.new ]] || fail "the temporary file is left"
+}
+
+case_preupgrade_records_nothing_without_links() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	echo stale >"$SYNOPKG_PKGVAR/$RECORD_FILE_NAME"
+	create_share video
+	# A directory in shares/ is no link, and without shares/ there is nothing to record.
+	run_lifecycle preupgrade
+	assert_success
+	assert_no_output
+	# The old record goes only when a new one replaces it.
+	assert_file_line "$SYNOPKG_PKGVAR/$RECORD_FILE_NAME" stale
+	mkdir -p "$PKG_ROOT/shares/plain-directory"
+	run_lifecycle preupgrade
+	assert_success
+	assert_no_output
+	refute_file_line "$SYNOPKG_PKGVAR/$RECORD_FILE_NAME" "plain-directory"
+}
+
+case_preupgrade_survives_a_record_it_cannot_write() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	link_share video
+	# A directory in place of the temporary file makes every write to it fail.
+	mkdir "$SYNOPKG_PKGVAR/$RECORD_FILE_NAME.new"
+	run_lifecycle preupgrade
+	assert_success
+	assert_stderr_contains "cannot write"
+	[[ ! -e $SYNOPKG_PKGVAR/$RECORD_FILE_NAME ]] || fail "a partial record was written"
+}
+
+case_preupgrade_ignores_targets_outside_the_volumes() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	mkdir -p "$PKG_ROOT/shares" "$BATS_TEST_TMPDIR/elsewhere/x"
+	ln -s "$BATS_TEST_TMPDIR/elsewhere/x" "$PKG_ROOT/shares/outside"
+	ln -s "$BATS_TEST_TMPDIR/volume1" "$PKG_ROOT/shares/whole-volume"
+	run_lifecycle preupgrade
+	assert_success
+	assert_no_output
+	[[ ! -e $SYNOPKG_PKGVAR/$RECORD_FILE_NAME ]] || fail "a foreign target was recorded"
+}
+
+case_postupgrade_keeps_config_when_the_new_file_cannot_be_written() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video
+	alpha2_config video >"$CONFIG"
+	mkdir "$CONFIG.new"
+	run_lifecycle postupgrade
+	assert_success
+	assert_stderr_contains "cannot convert"
+	assert_equal "$(cat "$CONFIG")" "$(alpha2_config video)"
+	[[ ! -e $SYNOPKG_PKGVAR/$BACKUP_FILE_NAME ]] || fail "a backup was made for a failed conversion"
+}
+
+case_postupgrade_ignores_dot_names_and_foreign_targets() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video 2
+	local link=/var/packages/$FIXTURE_ID/shares
+	printf 'libraries:\n  - name: "a"\n    path: "%s/."\n  - name: "b"\n    path: "%s/.."\n' \
+		"$link" "$link" >"$CONFIG"
+	run_lifecycle postupgrade
+	assert_success
+	assert_equal "$(grep -c '/volume' "$CONFIG")" 0
+	# A recorded target outside the volumes is not used; the volume directory is.
+	alpha2_config video >"$CONFIG"
+	printf 'video\t/etc\nvideo\t/volume1/../etc\n' >"$SYNOPKG_PKGVAR/$RECORD_FILE_NAME"
+	run_lifecycle postupgrade
+	assert_success
+	assert_file_line "$CONFIG" '    path: "/volume2/video"'
+}
+
+case_postupgrade_rewrites_the_alpha2_path_and_keeps_a_backup() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	link_share video
+	alpha2_config video >"$CONFIG"
+	local original old_path=/var/packages/$FIXTURE_ID/shares/video
+	original=$(cat "$CONFIG")
+	run_lifecycle preupgrade
+	assert_success
+	# DSM removes the link when the data-share resource goes away.
+	rm -rf "$PKG_ROOT/shares"
+	run_lifecycle postupgrade
+	assert_success
+	refute_error_words
+	assert_stderr_contains "-> /volume1/video"
+	assert_equal "$(cat "$CONFIG")" "${original/"$old_path"//volume1/video}"
+	assert_equal "$(cat "$SYNOPKG_PKGVAR/$BACKUP_FILE_NAME")" "$original"
+	[[ ! -e $SYNOPKG_PKGVAR/$RECORD_FILE_NAME && ! -e $CONFIG.new && ! -e $CONFIG.rewritten ]] ||
+		fail "a temporary or record file is left"
+	assert_mode "$CONFIG" 640
+
+	# A second run finds nothing to rewrite and keeps the first backup.
+	run_lifecycle postupgrade
+	assert_success
+	assert_no_output
+	assert_equal "$(cat "$SYNOPKG_PKGVAR/$BACKUP_FILE_NAME")" "$original"
+}
+
+case_postupgrade_handles_names_with_spaces_and_non_ascii_letters() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	local share
+	for share in 'Filme und Serien' 'Médiathèque$' '日本語'; do
+		rm -rf "${PKG_ROOT:?}/shares" "${SYNOPKG_PKGVAR:?}/$BACKUP_FILE_NAME"
+		link_share "$share" 2
+		alpha2_config "$share" >"$CONFIG"
+		run_lifecycle preupgrade
+		assert_success
+		rm -rf "$PKG_ROOT/shares"
+		run_lifecycle postupgrade
+		assert_success
+		assert_file_line "$CONFIG" "    path: \"/volume2/$share\""
+		refute_file_line "$CONFIG" "    path: \"/var/packages/$FIXTURE_ID/shares/$share\""
+		assert_file_line "$CONFIG" "  - name: \"$share\""
+	done
+}
+
+case_postupgrade_without_a_record_uses_the_one_directory_of_that_name() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video 2
+	alpha2_config video >"$CONFIG"
+	run_lifecycle postupgrade
+	assert_success
+	assert_file_line "$CONFIG" '    path: "/volume2/video"'
+	assert_file_line "$SYNOPKG_PKGVAR/$BACKUP_FILE_NAME" "    path: \"/var/packages/$FIXTURE_ID/shares/video\""
+}
+
+case_postupgrade_leaves_an_ambiguous_or_missing_share_alone() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video 1
+	create_share video 2
+	alpha2_config video >"$CONFIG"
+	alpha2_config video >"$BATS_TEST_TMPDIR/expected"
+	run_lifecycle postupgrade
+	assert_success
+	assert_stderr_contains "no folder known for the share link video"
+	assert_equal "$(cat "$CONFIG")" "$(cat "$BATS_TEST_TMPDIR/expected")"
+	[[ ! -e $SYNOPKG_PKGVAR/$BACKUP_FILE_NAME ]] || fail "a backup was made without a change"
+
+	alpha2_config gone >"$CONFIG"
+	run_lifecycle postupgrade
+	assert_success
+	assert_equal "$(cat "$CONFIG")" "$(alpha2_config gone)"
+}
+
+case_postupgrade_rewrites_only_lines_in_alpha2_form() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video
+	local link=/var/packages/$FIXTURE_ID/shares
+	cat >"$CONFIG" <<EOF
+libraries:
+  - name: "hand edited"
+    path: $link/video
+  - name: "indented"
+    path: "$link/video"
+  - name: "quote"
+    path: '$link/video'
+  - name: "other package"
+    path: "/var/packages/other/shares/video"
+  - name: "nested"
+    path: "$link/video/sub"
+  - name: "alpha2"
+    path: "$link/video" # note
+  - name: "exact"
+    path: "$link/video"
+    kind: "movies"
+  - name: "elsewhere"
+    path: "/volume1/video"
+EOF
+	# The entry "indented" gets two more spaces than alpha.2 wrote.
+	sed -i '5s/^    path/      path/' "$CONFIG"
+	local before old_text new_text
+	before=$(cat "$CONFIG")
+	old_text=$'\n'"    path: \"$link/video\""$'\n'"    kind"
+	new_text=$'\n'"    path: \"/volume1/video\""$'\n'"    kind"
+	run_lifecycle postupgrade
+	assert_success
+	assert_stderr_contains "unusual line left as it is"
+	assert_equal "$(cat "$CONFIG")" "${before//"$old_text"/"$new_text"}"
+	assert_equal "$(cat "$SYNOPKG_PKGVAR/$BACKUP_FILE_NAME")" "$before"
+}
+
+case_postupgrade_without_config_does_nothing() {
+	export SYNOPKG_PKG_STATUS=UPGRADE
+	create_share video
+	run_lifecycle postupgrade
+	assert_success
+	assert_no_output
+	[[ ! -e $CONFIG && ! -e $SYNOPKG_PKGVAR/$BACKUP_FILE_NAME ]] || fail "postupgrade created a file"
+}
+
+case_postupgrade_skips_install_and_uninstall() {
+	local status
+	create_share video
+	for status in INSTALL UNINSTALL; do
+		export SYNOPKG_PKG_STATUS=$status
+		alpha2_config video >"$CONFIG"
+		run_lifecycle postupgrade
+		assert_success
+		assert_equal "$(cat "$CONFIG")" "$(alpha2_config video)"
+	done
+}
+
+# Whole upgrade from alpha.2 in DSM's order: the new preupgrade runs while the old links exist,
+# the old package is removed (links gone), the new one is installed.
+case_upgrade_from_alpha2_keeps_the_library() {
+	link_share video
+	fill_user_data
+	alpha2_config video >"$CONFIG"
+	export SYNOPKG_PKG_STATUS=UPGRADE wizard_delete_data=true
+	local script
+	for script in preupgrade preuninst postuninst; do
+		run_lifecycle "$script"
+		assert_success
+	done
+	rm -rf "$PKG_ROOT/shares" "${SYNOPKG_PKGTMP:?}"/*
+	unset wizard_delete_data
+	for script in preinst postinst postupgrade; do
+		run_lifecycle "$script"
+		assert_success
+	done
+	assert_file_line "$CONFIG" '    path: "/volume1/video"'
+	assert_equal "$(cat "$SYNOPKG_PKGVAR/data/library.db")" database
+	run_sss start
+	assert_success
+	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_BROWSE_ROOTS=/volume1"
+	run_sss stop
+	assert_success
 }
 
 # --- postuninst ----------------------------------------------------------------------------
@@ -444,18 +584,17 @@ case_other_scripts_keep_everything() {
 # --- whole operations in DSM's order (DSM-NOTES section 5 "Execution order") ---------------
 
 case_install_then_start() {
-	create_share video
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=video
+	export SYNOPKG_PKG_STATUS=INSTALL
 	run_lifecycle preinst
 	assert_success
 	run_lifecycle postinst
 	assert_success
-	# DSM passes no wizard keys to start-stop-status.
-	unset wizard_media_share
 	run_sss start
 	assert_success
 	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_CONFIG_DIR=$SYNOPKG_PKGVAR"
-	assert_equal "$(cat "$CONFIG")" "$(expected_config video)"
+	assert_file_line "$FAKE_STATE_DIR/server.env" "DEMO_INSTALL_KIND=synology"
+	# A fresh installation has no config.yaml: the server starts with zero libraries.
+	[[ ! -e $CONFIG ]] || fail "installation left a config.yaml"
 	run_sss stop
 	assert_success
 }
@@ -485,11 +624,10 @@ case_upgrade_order_keeps_user_data() {
 	assert_mode "$SYNOPKG_PKGTMP/transcode" 750
 }
 
-# Uninstall with the box unchecked, then a new installation with another share: the old
-# settings and database are used again.
+# Uninstall with the box unchecked, then a new installation: the old settings and database are
+# used again.
 case_uninstall_keeping_data_then_reinstall() {
 	fill_user_data
-	create_share Filme
 	local before script
 	before=$(user_data_snapshot)
 	export SYNOPKG_PKG_STATUS=UNINSTALL wizard_delete_data=false
@@ -500,7 +638,7 @@ case_uninstall_keeping_data_then_reinstall() {
 	assert_equal "$(user_data_snapshot)" "$before"
 
 	unset wizard_delete_data
-	export SYNOPKG_PKG_STATUS=INSTALL wizard_media_share=Filme
+	export SYNOPKG_PKG_STATUS=INSTALL
 	for script in preinst postinst; do
 		run_lifecycle "$script"
 		assert_success
@@ -510,27 +648,20 @@ case_uninstall_keeping_data_then_reinstall() {
 
 # --- common.sh helpers ---------------------------------------------------------------------
 
-case_share_name_check_follows_dsm_rules() {
-	local name
-	for name in "${VALID_SHARE_NAMES[@]}"; do
-		run_common pkg_check_share_name "$name"
-		[[ $status -eq 0 ]] || fail "pkg_check_share_name rejects '$name' (status $status): $stderr"
-	done
-	for name in "${INVALID_SHARE_NAMES[@]}"; do
-		run_common pkg_check_share_name "$name"
-		[[ $status -eq 1 ]] || fail "pkg_check_share_name accepts '$name' (status $status)"
-		assert_no_output
-	done
-}
-
-# The wizard's JavaScript regex counts UTF-16 code units; preinst must count the same way.
-case_name_length_counts_utf16_units() {
-	local entry
-	for entry in a:1 ä:1 日本語:3 😀:2 a😀b:4 "":0; do
-		run_common pkg_name_length "${entry%:*}"
-		assert_success
-		assert_output "${entry##*:}"
-	done
+case_browse_roots_lists_existing_volume_directories_sorted() {
+	# The package tree of setup holds volume1 only.
+	run_common pkg_browse_roots
+	assert_success
+	assert_output '/volume1'
+	mkdir "$BATS_TEST_TMPDIR/volume2" "$BATS_TEST_TMPDIR/volumeUSB1" "$BATS_TEST_TMPDIR/volumeUSB2"
+	run_common pkg_browse_roots
+	assert_output '/volume1:/volume2:/volumeUSB1:/volumeUSB2'
+	# Neither a name with more than digits, a file, nor a directory deeper down is a volume.
+	mkdir "$BATS_TEST_TMPDIR/volume1x" "$BATS_TEST_TMPDIR/volumeUSBx" "$BATS_TEST_TMPDIR/volumeUSB" \
+		"$BATS_TEST_TMPDIR/volume1/volume3"
+	touch "$BATS_TEST_TMPDIR/volume3"
+	run_common pkg_browse_roots
+	assert_output '/volume1:/volume2:/volumeUSB1:/volumeUSB2'
 }
 
 case_yaml_quote_escapes_backslash_and_double_quote() {
@@ -589,22 +720,26 @@ case_package_directory_check_accepts_only_package_paths() {
 }
 
 register_cases \
-	preinst_accepts_existing_share \
-	preinst_rejects_empty_share \
-	preinst_rejects_missing_share \
-	preinst_rejects_invalid_share_name_even_if_the_path_exists \
-	preinst_speaks_german \
-	preinst_without_temp_logfile_still_refuses \
-	preinst_skips_the_check_on_upgrade \
-	postinst_writes_config_on_install \
-	postinst_quotes_special_share_names \
+	preinst_asks_nothing \
+	postinst_creates_the_directories_and_writes_no_config \
 	postinst_keeps_existing_config \
-	postinst_writes_nothing_on_upgrade \
 	postinst_keeps_existing_directories \
-	postinst_rejects_invalid_share_name \
-	postinst_fails_when_config_cannot_be_written \
-	postinst_speaks_german \
+	postinst_reports_directories_it_cannot_create \
 	postinst_fails_without_dsm_variables \
+	preupgrade_records_the_targets_of_the_share_links \
+	preupgrade_records_nothing_without_links \
+	postupgrade_rewrites_the_alpha2_path_and_keeps_a_backup \
+	postupgrade_handles_names_with_spaces_and_non_ascii_letters \
+	postupgrade_without_a_record_uses_the_one_directory_of_that_name \
+	postupgrade_leaves_an_ambiguous_or_missing_share_alone \
+	postupgrade_rewrites_only_lines_in_alpha2_form \
+	postupgrade_without_config_does_nothing \
+	postupgrade_skips_install_and_uninstall \
+	preupgrade_survives_a_record_it_cannot_write \
+	preupgrade_ignores_targets_outside_the_volumes \
+	postupgrade_keeps_config_when_the_new_file_cannot_be_written \
+	postupgrade_ignores_dot_names_and_foreign_targets \
+	upgrade_from_alpha2_keeps_the_library \
 	postuninst_deletes_data_only_when_asked_on_uninstall \
 	postuninst_keeps_data_for_every_other_combination \
 	postuninst_never_deletes_outside_the_package_directories \
@@ -616,8 +751,7 @@ register_cases \
 	install_then_start \
 	upgrade_order_keeps_user_data \
 	uninstall_keeping_data_then_reinstall \
-	share_name_check_follows_dsm_rules \
-	name_length_counts_utf16_units \
+	browse_roots_lists_existing_volume_directories_sorted \
 	yaml_quote_escapes_backslash_and_double_quote \
 	package_directory_check_accepts_only_package_paths
 

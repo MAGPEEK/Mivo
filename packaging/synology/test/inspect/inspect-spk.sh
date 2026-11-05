@@ -991,12 +991,28 @@ json_valid() {
 	jq -e . "$1" >/dev/null 2>&1
 }
 
+# Task SPK-17: libraries are added in the web app, so the package asks for no shared folder: no
+# data-share resource (it would create a share for a mistyped name) and no wizard key for one.
+check_no_media_folder_question() {
+	if [ -f "$work/spk/conf/resource" ] && jq -e 'has("data-share")' "$work/spk/conf/resource" >/dev/null 2>&1; then
+		failed "conf/resource has a data-share resource (the install wizard asks for no shared folder)"
+	else
+		pass "conf/resource has no data-share resource"
+	fi
+	if grep -rqF wizard_media_share "$work/spk/WIZARD_UIFILES" "$work/spk/conf" "$work/spk/scripts" 2>/dev/null; then
+		failed "wizard_media_share is still used (conf, WIZARD_UIFILES or scripts)"
+	else
+		pass "no wizard_media_share key anywhere in the package"
+	fi
+}
+
 check_json_files() {
 	for json in conf/privilege conf/resource "$work/spk/WIZARD_UIFILES"/*; do
 		case "$json" in /*) json=${json#"$work/spk/"} ;; esac
 		[ -f "$work/spk/$json" ] || { failed "$json is missing"; continue; }
 		check "$json parses as JSON" json_valid "$work/spk/$json"
 	done
+	check_no_media_folder_question
 	privilege="$work/spk/conf/privilege"
 	[ -f "$privilege" ] || return 0
 	if [ "$(jq -r '.defaults."run-as" // ""' "$privilege" 2>/dev/null)" = package ]; then

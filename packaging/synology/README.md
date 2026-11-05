@@ -20,12 +20,13 @@ display name shown in Package Center is `Mivo`. `<version>` is the server versio
 - **DSM 7.2 or newer** (`os_min_ver` is `7.2-64570`; DSM 7.2.1 and 7.2.2 are fine). DSM 6 and
   DSM 7.0/7.1 are not supported.
 - A NAS of one of the three **architecture families** below; one SPK per family.
-- An existing **shared folder with videos** (the installer asks for its name, default `video`).
+- An existing **shared folder with videos**. The installer asks nothing about it: you add it as
+  a library in the web app after the installation.
 - About **1 GB RAM** recommended. The package does not refuse smaller models, but software
   transcoding needs memory and CPU (see "Limits").
 - A browser on another device in the **same local network** (see "Local network only").
-- For settings beyond the first library: **SSH** access (Control Panel > Terminal & SNMP) with
-  an administrator account, until a settings page exists (milestone 7).
+- **SSH** access (Control Panel > Terminal & SNMP) with an administrator account is needed only
+  for advanced settings in `config.yaml` and for reading the log.
 
 ### Which SPK fits which model
 
@@ -84,11 +85,10 @@ hand:
    trust-level setting to change any more.
 4. The **licence page** shows the GPL-3.0 text of the package, which you accept to continue.
    This is the open-source licence of the software, not a restriction on your use.
-5. The **install wizard** asks for the **shared folder** that holds your videos (default
-   `video`). Enter the name of an existing shared folder, without a path. The Next button stays
-   disabled for a name DSM would not accept as a shared folder name; a name that passes but
-   **does not exist is refused by the installer** with a message ("The shared folder … does not
-   exist") – the installer never creates shared folders. Go back and correct the name.
+5. The **install wizard** is one information page: where to open the app (port 8460 or the DSM
+   main menu), that libraries are added in the app under Settings > Libraries, and the
+   permission step for shared folders (below). It asks for **no media folder**. (Whether DSM
+   7.2.2 accepts this page without an input field is confirmed on the owner's NAS, SPK-17.)
 6. The summary offers **Run after installation**; keep it ticked and click **Done**.
 
 The exact order of the alert, the licence page and the wizard pages is not documented by
@@ -97,15 +97,33 @@ Synology and may differ slightly from the list above.
 What the installation does:
 
 - creates the DSM system user `<id>` that runs the server (the package never runs as root);
-- grants that user **read-only** access to the shared folder you named and links it as
-  `/var/packages/<id>/shares/<share>`;
-- writes `/var/packages/<id>/var/config.yaml` with that folder as one movie library – **only
-  if no `config.yaml` exists**. A configuration left by an earlier installation (uninstall with
-  the data kept, see "Uninstall") is used unchanged, so the folder you just chose is **not
-  added** to it; edit the file as described under "Configure" if you want it there;
+- creates the data, cache and transcode directories; it writes **no `config.yaml`** and grants
+  **no access to any shared folder**;
 - registers the firewall service "<display name>" for `8460/tcp`;
-- starts the server. The first start scans the library; items appear in the web app while the
-  scan runs.
+- starts the server **with zero libraries**. The web app shows an empty state with
+  **Add library**; items appear after you add a folder (next section). Libraries, their
+  folders and scans live in the server's database in `/var/packages/<id>/var/data`, so an
+  uninstall that keeps the data keeps them too.
+
+#### Add libraries in the web app
+
+1. Open the web app (**Open** button or `http://<NAS address>:8460/`) and go to
+   **Settings > Libraries > Add library**.
+2. The **folder browser** starts at your volumes (`/volume1`, `/volume2`, `/volumeUSB1`, …).
+   It lists only shared folders the package user can read. Shared folders it cannot read are
+   counted ("n folders are not accessible"), with the permission help; their names are not shown.
+3. **Grant read access** to each shared folder you want: Control Panel > Shared Folder > select
+   the folder > Edit > Permissions. In the drop-down at the top choose **System internal
+   user**, find the user `<id>` and tick **Read only**. Save. Then reopen the folder browser;
+   the folder is listed now. The package has read access only; it never writes into shared
+   folders (transcode output goes to its own `tmp` directory).
+4. Choose the folders, the kind (movies or shows) and a name, and save. The library is scanned
+   right away.
+
+The folder browser may start only at the volumes: the start script sets the browse roots to the
+volume directories that exist at each start (`<PREFIX>_BROWSE_ROOTS`) and the install kind
+`synology` (`<PREFIX>_INSTALL_KIND`). They belong to the package; a user cannot widen them,
+because a shared folder is the unit of access on DSM.
 
 ### 3 Open the web app
 
@@ -157,65 +175,34 @@ The start script sets these through the server's environment, which takes preced
 | transcode output | `/var/packages/<id>/tmp/transcode` | DSM's `tmp` directory, on the data volume, wiped on upgrade and uninstall; the start script clears leftovers |
 | `ffmpeg`, `ffprobe` | `/var/packages/<id>/target/bin/` | the bundled static build (see "FFmpeg") |
 | `HOME` | `/var/packages/<id>/home` | DSM's home directory of the package user |
+| install kind | `synology` (`<PREFIX>_INSTALL_KIND`) | the app shows the DSM permission help for unreadable shared folders |
+| folder browser roots | the existing `/volume<N>` and `/volumeUSB<N>` directories, `:`-joined, sorted (`<PREFIX>_BROWSE_ROOTS`, set at each start) | shared folders are the unit of access on DSM |
 
 `<PREFIX>` is the environment prefix of the server, currently `MIVO`.
 
 **Port 8460 is fixed in the package.** `server.port` in `config.yaml` is not supported here:
 the firewall service and the "Open" button keep pointing at 8460. Everything else in
-`config.yaml` – libraries, `transcode.max_sessions`, `server.lan_only`, log settings – works as
-described in `../../docs/development.md` ("Libraries and tools").
+`config.yaml` – `transcode.max_sessions`, `server.lan_only`, log settings – works as described
+in `../../docs/development.md` ("Libraries and tools").
 
-### Add more shared folders (libraries)
+### Advanced: `libraries` in `config.yaml`
 
-Until the settings page of milestone 7 exists, more libraries need two steps:
+Libraries are managed in the web app. A `libraries` list in `config.yaml` is only a **one-time
+import seed**: the server imports it once and the database owns the libraries from then on (ADR
+0028). The package writes no such file; an administrator can create one over SSH
+(`sudo vi /var/packages/<id>/var/config.yaml`, owner `<id>`, mode `0640`) before the first
+start, with `/volumeN/<share>` paths and the read permission of the previous section:
 
-1. **Grant read access.** Control Panel > Shared Folder > select the folder > Edit >
-   Permissions. In the drop-down at the top choose **System internal user**, find the user
-   `<id>` and tick **Read only**. Save. Without this step the library is listed but reported as
-   unavailable (the scan ends with `root_unavailable`).
-2. **Edit `config.yaml` over SSH.** The file belongs to the package user with mode `0640`, so
-   an administrator edits it with `sudo`:
+```yaml
+libraries:
+  - name: "Series"
+    path: "/volume1/series"
+    kind: "shows"
+```
 
-   ```sh
-   sudo vi /var/packages/<id>/var/config.yaml
-   ```
-
-   Add one entry per folder. The installer wrote the file below (for the wizard share `video`;
-   the three comment lines and the first library are exactly what it generates); the `path` of
-   the first entry is DSM's link to the share chosen in the wizard. Further folders use their
-   **volume path** `/volumeN/<share>` (Control Panel > Shared Folder shows the volume of each
-   folder; `ls -d /volume*/<share>` over SSH prints the path):
-
-   ```yaml
-   # Settings of <display name>, written once at installation; later installs and upgrades keep this file.
-   # More libraries: grant the package user read access to the shared folder in Control Panel,
-   # add an entry below and restart the package.
-   libraries:
-     - name: "video"
-       path: "/var/packages/<id>/shares/video"
-       kind: "movies"
-   ```
-
-   Optional additions, written by hand – a second library and a lower transcode limit:
-
-   ```yaml
-     - name: "Series"
-       path: "/volume1/series"
-       kind: "shows"
-   transcode:
-     max_sessions: 1
-   ```
-
-   `kind` is `movies` (default) or `shows` (listed flat like movies until milestone 3). Do not
-   list the same folder twice (once through the link and once through `/volumeN/…`), and do not
-   nest one library inside another. Check afterwards that the owner did not change
-   (`ls -l /var/packages/<id>/var/config.yaml` shows `<id> <id>`); if your editor replaced the
-   file, restore it with `sudo chown <id>:<id> /var/packages/<id>/var/config.yaml`.
-3. **Restart the package** in Package Center (stop it and start it again). Libraries are read
-   at start; the new one is scanned right away.
-
-The package has read access only; it never writes into shared folders (transcode output goes
-to its own `tmp` directory).
+Restart the package after editing. Check afterwards that the owner did not change
+(`ls -l /var/packages/<id>/var/config.yaml` shows `<id> <id>`); if your editor replaced the
+file, restore it with `sudo chown <id>:<id> /var/packages/<id>/var/config.yaml`.
 
 ### Local network only
 
@@ -256,12 +243,31 @@ dialogs, which is confirmed for the install and uninstall scripts but not yet fo
 ## Upgrade
 
 Install the newer SPK through **Manual Install** exactly like the first time; Package Center
-recognises it as an upgrade of the installed package (the wizard does not ask for the shared
-folder again). DSM stops the package, replaces the program files and starts it again:
+recognises it as an upgrade of the installed package. DSM stops the package, replaces the
+program files and starts it again:
 
-- **kept**: `/var/packages/<id>/var` – `config.yaml`, the database, the cache and the log – and
-  the shared-folder grant and link;
+- **kept**: `/var/packages/<id>/var` – `config.yaml` if there is one, the database with the
+  libraries, the cache and the log – and the read permission you gave the package user on a
+  shared folder;
 - **wiped**: `/var/packages/<id>/tmp` (transcode output only).
+
+**Upgrade from 0.1.0-alpha.2.** alpha.2 asked for a shared folder at installation, granted it
+through DSM and wrote `config.yaml` with the library path
+`/var/packages/<id>/shares/<share>`, a link that exists only while the package holds that grant
+resource, which later versions do not. The upgrade keeps the library:
+
+1. `preupgrade` records where each `/var/packages/<id>/shares/*` link points (for example
+   `/volume1/video`) in `/var/packages/<id>/var/share-links-before-upgrade.tsv`.
+2. `postupgrade` saves `config.yaml` as `config.yaml.bak-0.1.0-alpha.2` and rewrites **only**
+   library `path` lines in exactly the form alpha.2 wrote to the recorded `/volumeN/<share>`
+   (without a record, to the one `/volume*/<share>` directory if exactly one exists). Lines in
+   any other form are left as they are and named in the package log
+   (`/var/log/packages/<id>.log`).
+3. At the first start the server imports the library from `config.yaml` once into its database
+   (the same release also migrates the database), then the web app manages it. The read-only
+   permission for `<id>` that alpha.2 gave on that shared folder is expected to stay; if the
+   library shows as unavailable in the app, grant it as under "Add libraries in the web app"
+   (confirmed on the owner's NAS in SPK-17 / `TESTING.md`).
 
 The server migrates its database at the first start of the new version. **Downgrades are not
 supported**: an older version does not understand a newer database. To go back, uninstall with
@@ -290,9 +296,8 @@ Package Center > the package > Uninstall. The uninstall wizard has one checkbox,
 the database, settings and logs"**, unchecked by default:
 
 - **unchecked**: DSM removes the program files and `tmp`; `/var/packages/<id>/var`
-  (`config.yaml`, database, cache, log) stays on the volume. A later installation on the same
-  volume continues with that configuration – and therefore **ignores the folder entered in the
-  new install wizard** (see "Install", step 2).
+  (`config.yaml` if any, database with the libraries, cache, log) stays on the volume. A later
+  installation on the same volume continues with them.
 - **checked**: the package also deletes the contents of `var` and `home`. It deletes only when
   both are, with every link resolved, this package's directories in DSM's layout
   (`/var/packages/<id>/var` or `/volumeN/@appdata/<id>`, `/var/packages/<id>/home` or
@@ -316,7 +321,8 @@ remove it yourself in Control Panel > Shared Folder > Edit > Permissions if you 
   only family tested on real hardware (SPK-12). Reports from ARM models are welcome.
 - **No accounts, no HTTPS**: local network only (above); HTTPS and certificates come with
   milestone 7.
-- **Libraries are configured in `config.yaml`** over SSH; no settings page yet.
+- **Granting access to a shared folder stays a DSM step** (Control Panel > Shared Folder >
+  Edit > Permissions); the app guides you but cannot grant it.
 - **Fixed port 8460**; the package cannot be moved to another volume from Package Center
   (`support_move` is off).
 - Everything else the release cannot do yet is listed in the repository `README.md`.
@@ -369,8 +375,8 @@ the build recipe – is the archive `ffmpeg-<version>-static<revision>-source.ta
 | The package starts but stops at once; a dialog **should say** "**stopped during start**" with log lines (if Package Center shows no text, read `/var/log/packages/<id>.log`) | Read the lines: `address already in use` means port 8460 is taken (see above); other causes are in `/var/packages/<id>/var/<id>.log`. |
 | Package Center shows **Running**, but the web app does not answer yet | A slow first start or a database migration: the start script counts a server that is alive but not yet healthy after 30 s as started and writes "not healthy after 30 s but keeps running" to `/var/log/packages/<id>.log` (Package Center shows no text). Wait a moment and refresh; `/var/packages/<id>/var/<id>.log` shows `http server listening` when the start is complete. |
 | Status "**broken**" / "**damaged**" in Package Center | The server binary or a package file is missing or not executable (status exit 150), or a post-install script failed; `/var/log/packages/<id>.log` names the file. Uninstall with "delete data" unchecked and install the same SPK again: `var` (settings, database) stays. |
-| The installer refuses the shared folder: "**does not exist**" | A typo, or the folder is not a shared folder (sub-folders of a share are not accepted). Enter the name exactly as Control Panel > Shared Folder shows it, without a path. The installer never creates shared folders, because a mistyped name would otherwise become a new, empty share. |
-| The library is listed but **unavailable**; the log says `root_unavailable` or **permission denied** | The package user cannot read the folder. For the wizard folder: `ls -l /var/packages/<id>/shares/` must show the link and the folder must grant "Read only" to the system internal user `<id>`; for folders added by hand: grant the permission (see "Add more shared folders") and check the `/volumeN/<share>` path. Restart the package afterwards. |
+| A **shared folder is missing in the folder browser** | The browser lists only shared folders the package user can read; unreadable ones are only counted. Control Panel > Shared Folder > select the folder > Edit > Permissions > **System internal user** > `<id>` > **Read only**, save, reopen the browser. A folder on a USB disk or another volume appears when the volume exists at the package start: restart the package after attaching it. |
+| The library is listed but **unavailable**; the log says `root_unavailable` or **permission denied** | The package user cannot read the folder (permission removed, or a folder moved to another volume). Grant "Read only" to the system internal user `<id>` as in the row above and check the folder path in Settings > Libraries. After an upgrade from alpha.2, also see "Upgrade from 0.1.0-alpha.2". |
 | The "**Open**" button is missing or opens the wrong address | Type `http://<NAS address>:8460/` into the browser. Please report the model and DSM version. |
 | `403` **from another device** | The device is not in the local network as the server sees it (VPN, guest network, a proxy in between). See "Local network only". |
 | The wizard or texts appear in **English on a German DSM** | Please report it; the package ships German wizard texts and messages. |

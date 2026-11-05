@@ -1,14 +1,4 @@
 {
-  "data-share": {
-    "shares": [
-      {
-        "name": "{{wizard_media_share}}",
-        "permission": {
-          "ro": ["@ID@"]
-        }
-      }
-    ]
-  },
   "port-config": {
     "protocol-file": "port_conf/@ID@.sc"
   }

@@ -105,6 +105,13 @@ Link definitions are collected at the end of the file.
 
 ## 7 `conf/resource`
 
+> **No longer used since SPK-17 (owner decision 2026-11-04).** The package has no `data-share`
+> resource; the install wizard asks for no shared folder and libraries are added in the web app
+> (ADR 0028). Only `port-config` remains. The rows below are kept as history of 0.1.0-alpha.2
+> and for its upgrade: its `Release()` does nothing, so the read-only grant of alpha.2's share is
+> expected to stay after the upgrade (device result: `TESTING.md` D3a); `preupgrade` reads the
+> `/var/packages/<id>/shares/*` links that resource created.
+
 | Question | Answer | Status | Source |
 |---|---|---|---|
 | `data-share` schema | `{"data-share": {"shares": [{"name": "<share>", "permission": {"ro": ["<user>"], "rw": ["<user>"]}, "once": false}]}}`; `ro` and `rw` are user arrays; `permission` and `once` optional. | confirmed | [Guide "Data Share" – "Syntax"][g-data-share] |
@@ -135,6 +142,7 @@ Link definitions are collected at the end of the file.
 
 | Question | Answer | Status | Source |
 |---|---|---|---|
+| Wizard without an input (SPK-17) | The install wizard is one page of `desc` items without `type`, `subitems` or keys. The 7.2.2 guide documents no such page (it documents only the custom-render format) and says nothing about an install wizard without values; the classic format itself was confirmed to render on DSM 7.4.1 with a text field (SPK-12 run 1). **Assumption**: a classic page with text only renders and Next stays enabled, since a page without validators never disables it. If DSM refuses it, the install wizard files are removed (package-files and `expected-members.txt` change with them). The shared-folder naming rules below are no longer used by the package. | unconfirmed | check: SPK-17 device test (`TESTING.md` A3–A5) |
 | File names | `WIZARD_UIFILES/install_uifile`, `upgrade_uifile`, `uninstall_uifile`; language suffix `_<lang>`, German **`install_uifile_ger`**, `upgrade_uifile_ger`, `uninstall_uifile_ger`. | confirmed | [Guide "WIZARD_UIFILES [7.2.2]"][g-wiz] |
 | Dynamic wizards | `install_uifile.sh`, `upgrade_uifile.sh`, `uninstall_uifile.sh` (and `_<lang>.sh`) run before the operation and write the JSON to `$SYNOPKG_TEMP_LOGFILE`; script variables are available. | confirmed | [Guide "WIZARD_UIFILES [7.2.2]"][g-wiz] |
 | JSON schema (text fields, checkboxes, validators) | The DSM 7.2.2 guide documents only the **new format**: a JSON array of `{"custom_render_fn": "<webpack-built JS>", "custom_render_name": "<name>"}` whose render function is a Vue 2.7.14 component (`pkg-center-step-content`, DSM's `v-form`/`v-input`/`v-checkbox`); validation is own code (disable the Next button in `checkState`); `getValues()` returns `{key: value}` pairs that become script variables. The guide marks the folder with **DSM requirement 7.2.2**. The classic declarative format (`step_title`, `items`, `type: textfield/singleselect/multiselect/password`, `subitems` with `key`, `desc`, `defaultValue`, `validator` with `allowBlank`/`regex`) is **no longer documented**; spksrc packages with a DSM 7.2 minimum still use it (community). **Assumption** for SPK-06: classic JSON (works on 7.2.0–7.2.2 per community use); see Impact 6. | confirmed (7.2.2 format); unconfirmed (classic format on DSM 7.2.x) | [Guide "Wizard UI Files"][g-wiz-intro]; [Guide "WIZARD_UIFILES [7.2.2]"][g-wiz]; [ExamplePackage `PlexMediaInstall.vue`][e-plex] (`getValues`, lines 38–44); community: [spksrc transmission `upgrade_uifile`][c-transmission-upgrade], [spksrc jellyfin `install_uifile`][c-jellyfin-wizard]; check: SPK-12 (install and uninstall wizard in English and German) |
