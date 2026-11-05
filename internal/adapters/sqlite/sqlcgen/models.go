@@ -29,6 +29,17 @@ type Artwork struct {
 	CreatedAt    int64
 }
 
+type EnrichmentQueue struct {
+	ItemID       string
+	Reason       string
+	NotBefore    int64
+	Attempts     int64
+	LastError    string
+	EnqueuedAt   int64
+	Revision     int64
+	ClaimedUntil sql.NullInt64
+}
+
 type Item struct {
 	ID               string
 	LibraryID        string
@@ -56,6 +67,14 @@ type Item struct {
 type ItemFieldLock struct {
 	ItemID string
 	Field  string
+}
+
+type ItemMatch struct {
+	ItemID     string
+	State      string
+	Provider   string
+	Confidence float64
+	MatchedAt  sql.NullInt64
 }
 
 type ItemPerson struct {
@@ -89,6 +108,7 @@ type Library struct {
 	ImportedFromConfig int64
 	CreatedAt          int64
 	UpdatedAt          int64
+	OnlineMetadata     int64
 }
 
 type LibraryImport struct {
@@ -166,6 +186,15 @@ type Person struct {
 	ID       string
 	Name     string
 	SortName string
+}
+
+type ProviderCache struct {
+	Provider  string
+	CacheKey  string
+	Payload   string
+	FetchedAt int64
+	ExpiresAt int64
+	NotFound  int64
 }
 
 type ServerIdentity struct {

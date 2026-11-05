@@ -40,7 +40,7 @@ func TestMediaCatalogTablesAreStrict(t *testing.T) {
 	_, path := openMigratedTestDB(t)
 	inspection := openInspectionDB(t, path)
 
-	for _, table := range slices.Concat(catalogTables(), catalogV2Tables(), libraryManagementTables()) {
+	for _, table := range slices.Concat(catalogTables(), catalogV2Tables(), libraryManagementTables(), onlineMetadataTables()) {
 		var strict int
 
 		err := inspection.QueryRowContext(t.Context(),
@@ -73,7 +73,9 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "artwork", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "artwork", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
 		{table: "artwork", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
+		{table: "enrichment_queue", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_field_locks", column: "item_id", parent: "items", onDelete: "CASCADE"},
+		{table: "item_match", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_people", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_people", column: "person_id", parent: "people", onDelete: "CASCADE"},
 		{table: "item_provider_ids", column: "item_id", parent: "items", onDelete: "CASCADE"},

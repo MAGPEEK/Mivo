@@ -5,17 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/pressly/goose/v3"
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 4
+const latestSchemaVersion = 5
 
 // schemaTables returns all tables the migrations create, in creation order.
 func schemaTables() []string {
-	return append(append([]string{"server_identity"}, catalogTables()...), catalogV2Tables()...)
+	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(), onlineMetadataTables())
 }
 
 func TestMigrateCreatesTheSchemaAndASecondRunIsANoOp(t *testing.T) {

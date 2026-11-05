@@ -1,4 +1,10 @@
-# M6-03 SQLite: migration 00008 (00004 is library management; 00005 music, 00006 audiobooks, 00007 photos are reserved; take the next free number at merge), match state, provider cache, enrichment queue
+# M6-03 SQLite: migration 00005 (online metadata), match state, provider cache, enrichment queue
+
+> **Migration number (2026-11-05).** goose needs sequential numbers and 00004 was the last
+> migration on main when M6-03 started, so this task takes `00005_online_metadata.sql`
+> instead of the planned `00008`. The reserved music, audiobook and photo migrations
+> (M3-13d, M3-14d, M3-15e) move to the following free numbers: music `00006`, audiobooks
+> `00007`, photos `00008` (renumber on rebase if they merge in another order).
 Owner: mivo-backend
 Depends on: M3-05d, M6-02
 Files/areas: `internal/adapters/sqlite/**` (migrations, queries, sqlc output, new store files)
@@ -8,7 +14,7 @@ Persist what online enrichment needs: per-item match state, a response cache so 
 and a resumable queue.
 
 ## Acceptance criteria
-- [ ] Migration `00008` (next free number at merge; 00004 is taken by library management) adds `item_match(item_id, state, provider, confidence, matched_at)`,
+- [ ] Migration `00005` (see the note above) adds `item_match(item_id, state, provider, confidence, matched_at)`,
       `provider_cache(provider, cache_key, payload, fetched_at, expires_at, not_found)`,
       `enrichment_queue(item_id, reason, not_before, attempts, last_error)` and
       `libraries.online_metadata` (default 1); existing data migrates unchanged.
