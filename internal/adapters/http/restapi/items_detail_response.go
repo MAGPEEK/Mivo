@@ -67,7 +67,7 @@ func itemKindResponse(kind library.ItemKind) (apigen.ItemKind, error) {
 	case library.ItemKindPhotoAlbum, library.ItemKindPhoto:
 		return "", fmt.Errorf("photo item kind %q not in the contract yet", kind)
 	case library.ItemKindAudiobook:
-		return "", fmt.Errorf("item kind %q not in the contract yet", kind)
+		return apigen.ItemKindAudiobook, nil
 	default:
 		return "", fmt.Errorf("item kind %q not in the contract", kind)
 	}
@@ -264,8 +264,10 @@ func personRoleResponse(role metadata.Role) (apigen.PersonRole, error) {
 		return apigen.PersonRoleProducer, nil
 	case metadata.RoleGuestStar:
 		return apigen.PersonRoleGuestStar, nil
-	case metadata.RoleAuthor, metadata.RoleNarrator:
-		return "", fmt.Errorf("person role %q not in the contract yet", role)
+	case metadata.RoleAuthor:
+		return apigen.PersonRoleAuthor, nil
+	case metadata.RoleNarrator:
+		return apigen.PersonRoleNarrator, nil
 	default:
 		return "", fmt.Errorf("person role %q not in the contract", role)
 	}

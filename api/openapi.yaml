@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.7.0"
+  version: "1.8.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -31,7 +31,8 @@ tags:
       Libraries are read-only through the API until accounts exist.
   - name: items
     description: >-
-      Items of a library (movies, shows with their seasons and episodes, extras) with their
+      Items of a library (movies, shows with their seasons and episodes, extras, music
+      artists with their albums and tracks, audiobooks with their chapters) with their
       local metadata, artwork references, files and technical streams (ADR 0027).
   - name: playback
     description: >-
@@ -1208,9 +1209,9 @@ components:
       required: false
       description: >-
         Kind of the items to list; it must be a top-level kind of the library ("movie" in a
-        movies library, "show" in a shows library, "artist" or "album" in a music library),
-        else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music
-        library).
+        movies library, "show" in a shows library, "artist" or "album" in a music library,
+        "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the
+        library's top-level kind ("artist" in a music library).
       schema:
         $ref: "#/components/schemas/ItemKind"
     QuickFilter:
@@ -1794,13 +1795,14 @@ components:
       type: string
       description: >-
         What a library contains: "movies" (movie items), "shows" (show items with seasons
-        and episodes) or "music" (artist items with albums and tracks). Clients must
-        tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a
-        new library may have.
+        and episodes), "music" (artist items with albums and tracks) or "audiobooks"
+        (audiobook items with chapters). Clients must tolerate values added in later
+        versions. SystemInfo.libraryKinds lists the kinds a new library may have.
       enum:
         - movies
         - shows
         - music
+        - audiobooks
       example: movies
     LibraryList:
       type: object
@@ -2255,7 +2257,9 @@ components:
           type: number
           format: double
           minimum: 0
-          description: Duration in seconds with millisecond precision; omitted when unknown.
+          description: >-
+            Duration in seconds with millisecond precision; for an audiobook of several part
+            files the sum of its parts. Omitted when unknown.
           example: 5423.042
         videoCodec:
           type: string
@@ -2291,10 +2295,11 @@ components:
         Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season"
         belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to
         a movie or a show. In a music library an "artist" is the top-level item, an "album"
-        belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks
-        own media files; shows, seasons, artists and albums are containers without files.
-        Clients must tolerate values added in later versions (for example audiobook and
-        photo kinds).
+        belongs to an artist and a "track" to an album. In an audiobooks library an
+        "audiobook" is the top-level item; its chapters are not items but listed in
+        ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media
+        files; shows, seasons, artists and albums are containers without files. Clients
+        must tolerate values added in later versions (for example photo kinds).
       enum:
         - movie
         - show
@@ -2304,6 +2309,7 @@ components:
         - artist
         - album
         - track
+        - audiobook
       example: movie
     ExtraType:
       type: string
@@ -2326,7 +2332,8 @@ components:
         Kind of an artwork image: "poster" (portrait), "backdrop" (wide background),
         "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo),
         "banner" or "square" (1:1 album cover or artist image, rendered in the same
-        ImageWidth set as posters). Clients must tolerate values added in later versions.
+        ImageWidth set as posters). An audiobook cover is a "poster" (2:3). Clients must
+        tolerate values added in later versions.
       enum:
         - poster
         - backdrop
@@ -2338,14 +2345,16 @@ components:
     PersonRole:
       type: string
       description: >-
-        Role of a person in an item. Clients must tolerate values added in later versions
-        (for example author and narrator for audiobooks).
+        Role of a person in an item; "author" and "narrator" describe audiobooks. Clients
+        must tolerate values added in later versions.
       enum:
         - actor
         - director
         - writer
         - producer
         - guest_star
+        - author
+        - narrator
       example: actor
     SortOrder:
       type: string
@@ -2477,10 +2486,12 @@ components:
       description: >-
         An item in a library listing or in a list of children. Fields that do not apply to
         the item's kind, or that are unknown, are omitted. poster is the poster of a movie,
-        show or season (a season without its own carries its show's poster); thumb is the
-        still of an episode or extra (without one the client shows a placeholder); square is
-        the cover of an album or the image of an artist. media summarises the primary file
-        and is omitted for containers (show, season, artist, album).
+        show or season (a season without its own carries its show's poster) or the 2:3 cover
+        of an audiobook; thumb is the still of an episode or extra (without one the client
+        shows a placeholder); square is the cover of an album or the image of an artist.
+        media summarises the primary file and is omitted for containers (show, season,
+        artist, album); for an audiobook of several part files durationSeconds is the sum
+        of its parts.
       required:
         - id
         - libraryId
@@ -2506,7 +2517,9 @@ components:
         year:
           type: integer
           format: int32
-          description: Release year of a movie or an album, or first-air year of a show.
+          description: >-
+            Release year of a movie or an album, publication year of an audiobook or
+            first-air year of a show.
           example: 2008
         parentId:
           type: string
@@ -2632,7 +2645,7 @@ components:
       description: >-
         Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release
         of a movie, first air date of a show), "contentRating" (rating text), "duration"
-        (of the primary file), "dateAdded" (when the item entered the catalog),
+        (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog),
         "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the
         primary file), "fileSize" (primary file; for a show the sum of its episodes) or
         "random" (shuffled, stable per seed). Containers without a file (shows) have no
@@ -3142,7 +3155,9 @@ components:
         year:
           type: integer
           format: int32
-          description: Release year of a movie or an album, or first-air year of a show.
+          description: >-
+            Release year of a movie or an album, publication year of an audiobook or
+            first-air year of a show.
           example: 2008
         summaryLine:
           type: string
@@ -3205,8 +3220,10 @@ components:
         An item with its local metadata, artwork, place in the hierarchy, extras, media
         files and their technical streams. Fields that do not apply to the item's kind, or
         that are unknown, are omitted. artwork holds one image per kind; a season without
-        its own poster carries its show's poster, an album and an artist carry their image
-        in artwork.square. files is empty for containers (show, season, artist, album).
+        its own poster carries its show's poster, an audiobook carries its 2:3 cover in
+        artwork.poster, an album and an artist carry their image in artwork.square. files is
+        empty for containers (show, season, artist, album). chapters lists the chapters of
+        an audiobook.
       required:
         - id
         - libraryId
@@ -3259,7 +3276,9 @@ components:
         year:
           type: integer
           format: int32
-          description: Release year of a movie or an album, or first-air year of a show.
+          description: >-
+            Release year of a movie or an album, publication year of an audiobook or
+            first-air year of a show.
           example: 2008
         releaseDate:
           type: string
@@ -3336,9 +3355,9 @@ components:
           type: string
           format: uuid
           description: >-
-            ID of the item Play starts: the item itself for a movie, episode or extra; the
-            first episode of the first regular season for a show; the first episode for a
-            season. Omitted when there is nothing to play.
+            ID of the item Play starts: the item itself for a movie, episode, extra, track
+            or audiobook; the first episode of the first regular season for a show; the
+            first episode for a season. Omitted when there is nothing to play.
           example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
         extras:
           type: array
@@ -3370,10 +3389,53 @@ components:
             seasons, artists and albums have none.
           items:
             $ref: "#/components/schemas/MediaFile"
+        chapters:
+          type: array
+          maxItems: 2000
+          description: >-
+            Chapters of an audiobook in playback order, from the chapter markers of its
+            files or one chapter per part file (ADR 0027); omitted for other kinds and when
+            the book has no chapters.
+          items:
+            $ref: "#/components/schemas/ItemChapter"
         matchState:
           $ref: "#/components/schemas/MatchState"
         metadataSources:
           $ref: "#/components/schemas/MetadataSources"
+    ItemChapter:
+      type: object
+      description: >-
+        One chapter of an audiobook. startMs and endMs are offsets in milliseconds within
+        the media file fileId (one of ItemDetail.files), so a client jumps to the chapter by
+        playing that file from startMs.
+      required:
+        - title
+        - startMs
+        - endMs
+        - fileId
+      properties:
+        title:
+          type: string
+          maxLength: 500
+          description: Title of the chapter; a numbered fallback when the file names none.
+          example: Chapter 1
+        startMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Start of the chapter in its file, in milliseconds.
+          example: 0
+        endMs:
+          type: integer
+          format: int64
+          minimum: 0
+          description: End of the chapter in its file, in milliseconds; greater than startMs.
+          example: 1843250
+        fileId:
+          type: string
+          format: uuid
+          description: ID of the media file (MediaFile.id) that holds the chapter.
+          example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
     MediaFile:
       type: object
       description: >-

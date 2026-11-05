@@ -919,11 +919,11 @@ export interface components {
             apiVersion: string;
         };
         /**
-         * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+         * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks) or "audiobooks" (audiobook items with chapters). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
          * @example movies
          * @enum {string}
          */
-        LibraryKind: "movies" | "shows" | "music";
+        LibraryKind: "movies" | "shows" | "music" | "audiobooks";
         /** @description The configured libraries. */
         LibraryList: {
             /** @description Every configured library, ordered by name. */
@@ -1250,7 +1250,7 @@ export interface components {
             container?: string;
             /**
              * Format: double
-             * @description Duration in seconds with millisecond precision; omitted when unknown.
+             * @description Duration in seconds with millisecond precision; for an audiobook of several part files the sum of its parts. Omitted when unknown.
              * @example 5423.042
              */
             durationSeconds?: number;
@@ -1285,11 +1285,11 @@ export interface components {
             hdr?: components["schemas"]["HdrFormat"];
         };
         /**
-         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+         * @description Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
          * @example movie
          * @enum {string}
          */
-        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "artist" | "album" | "track";
+        ItemKind: "movie" | "show" | "season" | "episode" | "extra" | "artist" | "album" | "track" | "audiobook";
         /**
          * @description What an extra contains, from its folder or file name suffix (ADR 0027). Clients must tolerate values added in later versions.
          * @example trailer
@@ -1297,17 +1297,17 @@ export interface components {
          */
         ExtraType: "trailer" | "featurette" | "behind_the_scenes" | "deleted_scene" | "interview" | "scene" | "short" | "other";
         /**
-         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo), "banner" or "square" (1:1 album cover or artist image, rendered in the same ImageWidth set as posters). Clients must tolerate values added in later versions.
+         * @description Kind of an artwork image: "poster" (portrait), "backdrop" (wide background), "thumb" (16:9 episode still or movie landscape), "logo" (transparent title logo), "banner" or "square" (1:1 album cover or artist image, rendered in the same ImageWidth set as posters). An audiobook cover is a "poster" (2:3). Clients must tolerate values added in later versions.
          * @example poster
          * @enum {string}
          */
         ArtworkKind: "poster" | "backdrop" | "thumb" | "logo" | "banner" | "square";
         /**
-         * @description Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+         * @description Role of a person in an item; "author" and "narrator" describe audiobooks. Clients must tolerate values added in later versions.
          * @example actor
          * @enum {string}
          */
-        PersonRole: "actor" | "director" | "writer" | "producer" | "guest_star";
+        PersonRole: "actor" | "director" | "writer" | "producer" | "guest_star" | "author" | "narrator";
         /**
          * @description Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
          * @default asc
@@ -1398,7 +1398,7 @@ export interface components {
              */
             number?: number;
         };
-        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album). */
+        /** @description An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album); for an audiobook of several part files durationSeconds is the sum of its parts. */
         ItemSummary: {
             /**
              * Format: uuid
@@ -1420,7 +1420,7 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Release year of a movie or an album, or first-air year of a show.
+             * @description Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
              * @example 2008
              */
             year?: number;
@@ -1508,7 +1508,7 @@ export interface components {
             totalCount?: number;
         };
         /**
-         * @description Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+         * @description Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
          * @default title
          * @example dateAdded
          * @enum {string}
@@ -1752,7 +1752,7 @@ export interface components {
             title: string;
             /**
              * Format: int32
-             * @description Release year of a movie or an album, or first-air year of a show.
+             * @description Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
              * @example 2008
              */
             year?: number;
@@ -1784,7 +1784,7 @@ export interface components {
             rows: components["schemas"]["Row"][];
             hint?: components["schemas"]["RowsHint"];
         };
-        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album). */
+        /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an audiobook carries its 2:3 cover in artwork.poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album). chapters lists the chapters of an audiobook. */
         ItemDetail: {
             /**
              * Format: uuid
@@ -1829,7 +1829,7 @@ export interface components {
             originalTitle?: string;
             /**
              * Format: int32
-             * @description Release year of a movie or an album, or first-air year of a show.
+             * @description Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
              * @example 2008
              */
             year?: number;
@@ -1896,7 +1896,7 @@ export interface components {
             nextId?: string;
             /**
              * Format: uuid
-             * @description ID of the item Play starts: the item itself for a movie, episode or extra; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
+             * @description ID of the item Play starts: the item itself for a movie, episode, extra, track or audiobook; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
              * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
              */
             playItemId?: string;
@@ -1916,8 +1916,36 @@ export interface components {
             leafCount?: number;
             /** @description Media files of the item; the first one is the primary file. Several files are alternative versions (versionLabel) or parts of one version (partNumber); shows, seasons, artists and albums have none. */
             files: components["schemas"]["MediaFile"][];
+            /** @description Chapters of an audiobook in playback order, from the chapter markers of its files or one chapter per part file (ADR 0027); omitted for other kinds and when the book has no chapters. */
+            chapters?: components["schemas"]["ItemChapter"][];
             matchState?: components["schemas"]["MatchState"];
             metadataSources?: components["schemas"]["MetadataSources"];
+        };
+        /** @description One chapter of an audiobook. startMs and endMs are offsets in milliseconds within the media file fileId (one of ItemDetail.files), so a client jumps to the chapter by playing that file from startMs. */
+        ItemChapter: {
+            /**
+             * @description Title of the chapter; a numbered fallback when the file names none.
+             * @example Chapter 1
+             */
+            title: string;
+            /**
+             * Format: int64
+             * @description Start of the chapter in its file, in milliseconds.
+             * @example 0
+             */
+            startMs: number;
+            /**
+             * Format: int64
+             * @description End of the chapter in its file, in milliseconds; greater than startMs.
+             * @example 1843250
+             */
+            endMs: number;
+            /**
+             * Format: uuid
+             * @description ID of the media file (MediaFile.id) that holds the chapter.
+             * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+             */
+            fileId: string;
         };
         /** @description One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only. */
         MediaFile: {
@@ -2465,7 +2493,7 @@ export interface components {
          * @example 7e6d5c4b-3a2f-4e1d-9c0b-a9f8e7d6c5b4
          */
         ImageId: string;
-        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+        /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
         ItemTypeFilter: components["schemas"]["ItemKind"];
         /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
         QuickFilter: components["schemas"]["ItemQuickFilter"];
@@ -2791,7 +2819,7 @@ export interface operations {
                 order?: components["schemas"]["SortOrder"];
                 /** @description Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort. */
                 seed?: number;
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2845,7 +2873,7 @@ export interface operations {
             query?: {
                 /** @description Fields to count; omitted counts every field. */
                 field?: components["schemas"]["FacetField"][];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];
@@ -2899,7 +2927,7 @@ export interface operations {
             query?: {
                 /** @description Direction of the title sort; omitted means ascending. */
                 order?: components["schemas"]["SortOrder"];
-                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
+                /** @description Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library). */
                 type?: components["parameters"]["ItemTypeFilter"];
                 /** @description Quick filter of the toolbar; omitted or "all" filters nothing. */
                 quick?: components["parameters"]["QuickFilter"];

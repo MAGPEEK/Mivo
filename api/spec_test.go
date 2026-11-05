@@ -935,11 +935,11 @@ func TestLibraryV2Enums(t *testing.T) {
 	spec := loadSpec(t)
 
 	tests := map[string][]any{
-		"ItemKind":    {"movie", "show", "season", "episode", "extra", "artist", "album", "track"},
-		"LibraryKind": {"movies", "shows", "music"},
+		"ItemKind":    {"movie", "show", "season", "episode", "extra", "artist", "album", "track", "audiobook"},
+		"LibraryKind": {"movies", "shows", "music", "audiobooks"},
 		"ExtraType":   {"trailer", "featurette", "behind_the_scenes", "deleted_scene", "interview", "scene", "short", "other"},
 		"ArtworkKind": {"poster", "backdrop", "thumb", "logo", "banner", "square"},
-		"PersonRole":  {"actor", "director", "writer", "producer", "guest_star"},
+		"PersonRole":  {"actor", "director", "writer", "producer", "guest_star", "author", "narrator"},
 		"ImageWidth":  {160, 320, 480, 640, 960, 1280, 1920},
 		"SortOrder":   {"asc", "desc"},
 	}
@@ -985,10 +985,11 @@ func libraryV2Shapes() map[string]schemaShape {
 			optional: []string{
 				"discNumber", "originalTitle", "year", "releaseDate", "summary", "tagline",
 				"contentRating", "genres", "studios", "countries", "people", "providerIds", "artwork", "ancestors",
-				"previousId", "nextId", "playItemId", "extras", "childCount", "leafCount",
+				"previousId", "nextId", "playItemId", "extras", "childCount", "leafCount", "chapters",
 			},
 		},
-		"MediaFile": {optional: []string{"versionLabel", "partNumber"}},
+		"MediaFile":   {optional: []string{"versionLabel", "partNumber"}},
+		"ItemChapter": {required: []string{"title", "startMs", "endMs", "fileId"}},
 	}
 }
 
@@ -1064,6 +1065,7 @@ func TestLibraryV2PropertyReferences(t *testing.T) {
 
 	arrays := map[string]string{
 		"ItemDetail.people": "ItemPerson", "ItemDetail.ancestors": "ItemAncestor", "ItemDetail.extras": "ItemSummary",
+		"ItemDetail.chapters": "ItemChapter",
 	}
 
 	for location, want := range arrays {
@@ -1114,6 +1116,61 @@ func TestDiscNumberIsAPositiveInteger(t *testing.T) {
 
 		if schema.Min == nil || *schema.Min != 1 {
 			t.Errorf("%s minimum = %v, want 1", location, schema.Min)
+		}
+	}
+}
+
+// TestItemChapterFormats pins the audiobook chapter list (task M3-14b): offsets are
+// non-negative int64 milliseconds within the referenced file, so a client seeks without
+// unit conversion, and the list is bounded like other arrays of the item detail.
+func TestItemChapterFormats(t *testing.T) {
+	spec := loadSpec(t)
+
+	const wantMaxChapters = 2000
+	if chapters := propertySchema(spec, "ItemDetail.chapters"); chapters == nil || chapters.Value.MaxItems == nil || *chapters.Value.MaxItems != wantMaxChapters {
+		t.Errorf("ItemDetail.chapters has no maxItems %d", wantMaxChapters)
+	}
+
+	for _, location := range []string{"ItemChapter.startMs", "ItemChapter.endMs"} {
+		property := propertySchema(spec, location)
+		if property == nil {
+			t.Errorf("%s is not declared", location)
+
+			continue
+		}
+
+		schema := property.Value
+		if !schema.Type.Is(openapi3.TypeInteger) || schema.Format != "int64" || schema.Min == nil || *schema.Min != 0 {
+			t.Errorf("%s = %v/%s min %v, want a non-negative int64 integer", location, schema.Type, schema.Format, schema.Min)
+		}
+	}
+
+	if fileID := propertySchema(spec, "ItemChapter.fileId"); fileID == nil || fileID.Value.Format != "uuid" {
+		t.Error("ItemChapter.fileId is not format uuid")
+	}
+
+	const wantMaxTitleLength = 500
+	if title := propertySchema(spec, "ItemChapter.title"); title == nil || title.Value.MaxLength == nil || *title.Value.MaxLength != wantMaxTitleLength {
+		t.Errorf("ItemChapter.title has no maxLength %d", wantMaxTitleLength)
+	}
+}
+
+// TestAudiobookCoverIsAPoster pins the owner-approved 2:3 audiobook cover (task M3-14b):
+// clients read it from poster, not from the 1:1 square slot of albums.
+func TestAudiobookCoverIsAPoster(t *testing.T) {
+	spec := loadSpec(t)
+
+	for _, name := range []string{"ItemSummary", "ItemDetail", "ArtworkKind"} {
+		schema := spec.Components.Schemas[name]
+		if schema == nil {
+			t.Errorf("components.schemas.%s is not declared", name)
+
+			continue
+		}
+
+		description := strings.Join(strings.Fields(schema.Value.Description), " ")
+		if !strings.Contains(description, "audiobook") || !strings.Contains(description, "2:3") {
+			t.Errorf("%s does not document the 2:3 audiobook cover", name)
 		}
 	}
 }

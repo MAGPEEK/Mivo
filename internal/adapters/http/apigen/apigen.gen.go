@@ -216,14 +216,15 @@ func (e InstallKind) Valid() bool {
 
 // Defines values for ItemKind.
 const (
-	ItemKindAlbum   ItemKind = "album"
-	ItemKindArtist  ItemKind = "artist"
-	ItemKindEpisode ItemKind = "episode"
-	ItemKindExtra   ItemKind = "extra"
-	ItemKindMovie   ItemKind = "movie"
-	ItemKindSeason  ItemKind = "season"
-	ItemKindShow    ItemKind = "show"
-	ItemKindTrack   ItemKind = "track"
+	ItemKindAlbum     ItemKind = "album"
+	ItemKindArtist    ItemKind = "artist"
+	ItemKindAudiobook ItemKind = "audiobook"
+	ItemKindEpisode   ItemKind = "episode"
+	ItemKindExtra     ItemKind = "extra"
+	ItemKindMovie     ItemKind = "movie"
+	ItemKindSeason    ItemKind = "season"
+	ItemKindShow      ItemKind = "show"
+	ItemKindTrack     ItemKind = "track"
 )
 
 // Valid indicates whether the value is a known member of the ItemKind enum.
@@ -232,6 +233,8 @@ func (e ItemKind) Valid() bool {
 	case ItemKindAlbum:
 		return true
 	case ItemKindArtist:
+		return true
+	case ItemKindAudiobook:
 		return true
 	case ItemKindEpisode:
 		return true
@@ -348,14 +351,17 @@ func (e LibraryFolderEntryKind) Valid() bool {
 
 // Defines values for LibraryKind.
 const (
-	LibraryKindMovies LibraryKind = "movies"
-	LibraryKindMusic  LibraryKind = "music"
-	LibraryKindShows  LibraryKind = "shows"
+	LibraryKindAudiobooks LibraryKind = "audiobooks"
+	LibraryKindMovies     LibraryKind = "movies"
+	LibraryKindMusic      LibraryKind = "music"
+	LibraryKindShows      LibraryKind = "shows"
 )
 
 // Valid indicates whether the value is a known member of the LibraryKind enum.
 func (e LibraryKind) Valid() bool {
 	switch e {
+	case LibraryKindAudiobooks:
+		return true
 	case LibraryKindMovies:
 		return true
 	case LibraryKindMusic:
@@ -436,8 +442,10 @@ func (e MetadataProvider) Valid() bool {
 // Defines values for PersonRole.
 const (
 	PersonRoleActor     PersonRole = "actor"
+	PersonRoleAuthor    PersonRole = "author"
 	PersonRoleDirector  PersonRole = "director"
 	PersonRoleGuestStar PersonRole = "guest_star"
+	PersonRoleNarrator  PersonRole = "narrator"
 	PersonRoleProducer  PersonRole = "producer"
 	PersonRoleWriter    PersonRole = "writer"
 )
@@ -447,9 +455,13 @@ func (e PersonRole) Valid() bool {
 	switch e {
 	case PersonRoleActor:
 		return true
+	case PersonRoleAuthor:
+		return true
 	case PersonRoleDirector:
 		return true
 	case PersonRoleGuestStar:
+		return true
+	case PersonRoleNarrator:
 		return true
 	case PersonRoleProducer:
 		return true
@@ -786,7 +798,7 @@ type BrowseQuery struct {
 	// Seed Seed of sort "random", as the listLibraryItems parameter seed.
 	Seed *int32 `json:"seed,omitempty"`
 
-	// Sort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+	// Sort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
 	//
 	// Example: dateAdded
 	Sort *ItemSort `json:"sort,omitempty"`
@@ -794,7 +806,7 @@ type BrowseQuery struct {
 	// SubtitleLanguage Subtitle languages, as the listLibraryItems parameter subtitleLanguage.
 	SubtitleLanguage *[]string `json:"subtitleLanguage,omitempty"`
 
-	// Type Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+	// Type Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 	//
 	// Example: movie
 	Type *ItemKind `json:"type,omitempty"`
@@ -1061,7 +1073,7 @@ type HeroItem struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ItemID uuid.UUID `json:"itemId"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1084,7 +1096,7 @@ type HeroItem struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or an album, or first-air year of a show.
+	// Year Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
@@ -1227,7 +1239,7 @@ type ItemAncestor struct {
 	// Example: 4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1243,13 +1255,39 @@ type ItemAncestor struct {
 	Title string `json:"title"`
 }
 
-// ItemDetail An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album).
+// ItemChapter One chapter of an audiobook. startMs and endMs are offsets in milliseconds within the media file fileId (one of ItemDetail.files), so a client jumps to the chapter by playing that file from startMs.
+type ItemChapter struct {
+	// EndMs End of the chapter in its file, in milliseconds; greater than startMs.
+	//
+	// Example: 1843250
+	EndMs int64 `json:"endMs"`
+
+	// FileID ID of the media file (MediaFile.id) that holds the chapter.
+	//
+	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+	FileID uuid.UUID `json:"fileId"`
+
+	// StartMs Start of the chapter in its file, in milliseconds.
+	//
+	// Example: 0
+	StartMs int64 `json:"startMs"`
+
+	// Title Title of the chapter; a numbered fallback when the file names none.
+	//
+	// Example: Chapter 1
+	Title string `json:"title"`
+}
+
+// ItemDetail An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an audiobook carries its 2:3 cover in artwork.poster, an album and an artist carry their image in artwork.square. files is empty for containers (show, season, artist, album). chapters lists the chapters of an audiobook.
 type ItemDetail struct {
 	// Ancestors The items above this one, root first (the show of a season; the show and the season of an episode; the movie or show of an extra); empty or omitted for top-level items.
 	Ancestors *[]ItemAncestor `json:"ancestors,omitempty"`
 
 	// Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
 	Artwork *Artwork `json:"artwork,omitempty"`
+
+	// Chapters Chapters of an audiobook in playback order, from the chapter markers of its files or one chapter per part file (ADR 0027); omitted for other kinds and when the book has no chapters.
+	Chapters *[]ItemChapter `json:"chapters,omitempty"`
 
 	// ChildCount Number of seasons of a show, of episodes of a season, of albums of an artist or of tracks of an album.
 	//
@@ -1287,7 +1325,7 @@ type ItemDetail struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1335,7 +1373,7 @@ type ItemDetail struct {
 	// People Credited people in metadata order (cast first by billing order).
 	People *[]ItemPerson `json:"people,omitempty"`
 
-	// PlayItemID ID of the item Play starts: the item itself for a movie, episode or extra; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
+	// PlayItemID ID of the item Play starts: the item itself for a movie, episode, extra, track or audiobook; the first episode of the first regular season for a show; the first episode for a season. Omitted when there is nothing to play.
 	//
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	PlayItemID *uuid.UUID `json:"playItemId,omitempty"`
@@ -1373,13 +1411,13 @@ type ItemDetail struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or an album, or first-air year of a show.
+	// Year Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
 }
 
-// ItemKind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+// ItemKind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 //
 // Example: movie
 type ItemKind string
@@ -1412,7 +1450,7 @@ type ItemPerson struct {
 	// Example: Sacha Goedegebure
 	Name string `json:"name"`
 
-	// Role Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+	// Role Role of a person in an item; "author" and "narrator" describe audiobooks. Clients must tolerate values added in later versions.
 	//
 	// Example: actor
 	Role PersonRole `json:"role"`
@@ -1423,12 +1461,12 @@ type ItemPerson struct {
 // Example: hdr
 type ItemQuickFilter string
 
-// ItemSort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+// ItemSort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file; for an audiobook the sum of its parts), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
 //
 // Example: dateAdded
 type ItemSort string
 
-// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album).
+// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album); for an audiobook of several part files durationSeconds is the sum of its parts.
 type ItemSummary struct {
 	// AbsoluteNumber Absolute episode number of an episode named by a bare number (Show - 130).
 	//
@@ -1455,7 +1493,7 @@ type ItemSummary struct {
 	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
 	ID uuid.UUID `json:"id"`
 
-	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 	//
 	// Example: movie
 	Kind ItemKind `json:"kind"`
@@ -1527,7 +1565,7 @@ type ItemSummary struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
-	// Year Release year of a movie or an album, or first-air year of a show.
+	// Year Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
 	//
 	// Example: 2008
 	Year *int32 `json:"year,omitempty"`
@@ -1582,7 +1620,7 @@ type Library struct {
 	// Example: 42
 	ItemCount int64 `json:"itemCount"`
 
-	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks) or "audiobooks" (audiobook items with chapters). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 	//
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
@@ -1609,7 +1647,7 @@ type LibraryCreate struct {
 	// Folders The folders of the library, 1 to 16 entries; each names a root and path.
 	Folders []FolderRef `json:"folders"`
 
-	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+	// Kind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks) or "audiobooks" (audiobook items with chapters). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 	//
 	// Example: movies
 	Kind LibraryKind `json:"kind"`
@@ -1648,7 +1686,7 @@ type LibraryFolder struct {
 
 // LibraryFolderEntry One child of a library folder.
 type LibraryFolderEntry struct {
-	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster); thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album).
+	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist. media summarises the primary file and is omitted for containers (show, season, artist, album); for an audiobook of several part files durationSeconds is the sum of its parts.
 	Item *ItemSummary `json:"item,omitempty"`
 
 	// Kind What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
@@ -1703,7 +1741,7 @@ type LibraryFolderListing struct {
 	TotalCount *int64 `json:"totalCount,omitempty"`
 }
 
-// LibraryKind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes) or "music" (artist items with albums and tracks). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
+// LibraryKind What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks) or "audiobooks" (audiobook items with chapters). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
 //
 // Example: movies
 type LibraryKind string
@@ -1968,7 +2006,7 @@ type MediaSummary struct {
 	// Example: mkv
 	Container *string `json:"container,omitempty"`
 
-	// DurationSeconds Duration in seconds with millisecond precision; omitted when unknown.
+	// DurationSeconds Duration in seconds with millisecond precision; for an audiobook of several part files the sum of its parts. Omitted when unknown.
 	//
 	// Example: 5423.042
 	DurationSeconds *float64 `json:"durationSeconds,omitempty"`
@@ -2094,7 +2132,7 @@ type MetadataStatus struct {
 	QueueLength int32 `json:"queueLength"`
 }
 
-// PersonRole Role of a person in an item. Clients must tolerate values added in later versions (for example author and narrator for audiobooks).
+// PersonRole Role of a person in an item; "author" and "narrator" describe audiobooks. Clients must tolerate values added in later versions.
 //
 // Example: actor
 type PersonRole string
@@ -2536,7 +2574,7 @@ type ImageID = uuid.UUID
 // ItemID defines model for ItemId.
 type ItemID = uuid.UUID
 
-// ItemTypeFilter Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. Movies, episodes, extras and tracks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example audiobook and photo kinds).
+// ItemTypeFilter Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. In a music library an "artist" is the top-level item, an "album" belongs to an artist and a "track" to an album. In an audiobooks library an "audiobook" is the top-level item; its chapters are not items but listed in ItemDetail.chapters. Movies, episodes, extras, tracks and audiobooks own media files; shows, seasons, artists and albums are containers without files. Clients must tolerate values added in later versions (for example photo kinds).
 //
 // Example: movie
 type ItemTypeFilter = ItemKind
@@ -2605,7 +2643,7 @@ type ListLibraryFacetsParams struct {
 	// Field Fields to count; omitted counts every field.
 	Field *[]FacetField `form:"field,omitempty" json:"field,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
@@ -2674,7 +2712,7 @@ type ListLibraryItemsParams struct {
 	// Seed Seed of sort "random": the same seed and filter give the same order, so paging and returning to the list are stable. Omitted, the server picks a seed and keeps it in the cursor. Ignored for every other sort.
 	Seed *int32 `form:"seed,omitempty" json:"seed,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
@@ -2716,7 +2754,7 @@ type ListLibraryLettersParams struct {
 	// Order Direction of the title sort; omitted means ascending.
 	Order *SortOrder `form:"order,omitempty" json:"order,omitempty"`
 
-	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
+	// Type Kind of the items to list; it must be a top-level kind of the library ("movie" in a movies library, "show" in a shows library, "artist" or "album" in a music library, "audiobook" in an audiobooks library), else 400 "invalid". Omitted uses the library's top-level kind ("artist" in a music library).
 	Type *ItemTypeFilter `form:"type,omitempty" json:"type,omitempty"`
 
 	// Quick Quick filter of the toolbar; omitted or "all" filters nothing.
