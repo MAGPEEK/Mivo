@@ -112,5 +112,19 @@
     "empty": "Nothing here yet."
   },
   "summary": "Summary",
-  "genres": "Genres"
+  "genres": "Genres",
+  "titleBlock": {
+    "originalTitle": "Original title: {{title}}",
+    "contentRating": "Content rating",
+    "directors_one": "Director: {{names}}",
+    "directors_other": "Directors: {{names}}",
+    "moreGenresShort": "+{{count, number}}",
+    "moreGenres_one": "+{{count, number}} more genre",
+    "moreGenres_other": "+{{count, number}} more genres",
+    "fewerGenres": "Fewer genres"
+  },
+  "summaryToggle": {
+    "more": "More",
+    "less": "Less"
+  }
 }

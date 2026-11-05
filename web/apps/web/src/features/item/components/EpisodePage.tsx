@@ -11,7 +11,6 @@ import { AncestorLinks, SiblingArrows } from "./ItemNavigation";
 /** Props of {@link EpisodePage}. */
 export interface EpisodePageProps {
   readonly headingRef: Ref<HTMLHeadingElement>;
-  readonly itemId: string;
   readonly item: ItemView;
 }
 
@@ -19,10 +18,10 @@ export interface EpisodePageProps {
  * An episode: links to its show and season, previous/next episode, then the technical details
  * and Play of every playable item.
  */
-export function EpisodePage({ headingRef, itemId, item }: EpisodePageProps) {
+export function EpisodePage({ headingRef, item }: EpisodePageProps) {
   const { t } = useTranslation(itemNamespace);
   const siblings = useSiblingLinks(item, "episode");
-  const code = useEpisodeCode(itemId, item);
+  const code = useEpisodeCode(item);
   const leadFacts = [
     ...(code === undefined ? [] : [code]),
     ...(item.airDate === undefined ? [] : [t("episode.airDate", { date: item.airDate })]),

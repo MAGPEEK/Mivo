@@ -28,7 +28,8 @@ export function findTypeAhead(
 ): number {
   const cycling = isRepeatedCharacter(typed);
   const needle = (cycling ? typed.slice(0, 1) : typed).toLowerCase();
-  const start = cycling ? current + 1 : current;
+  // Without a current entry (-1) longer input searches from the top, not from the last entry.
+  const start = cycling ? current + 1 : Math.max(current, 0);
   for (let offset = 0; offset < labels.length; offset += 1) {
     const index = (((start + offset) % labels.length) + labels.length) % labels.length;
     if (disabled[index] !== true && labels[index]?.toLowerCase().startsWith(needle) === true) {

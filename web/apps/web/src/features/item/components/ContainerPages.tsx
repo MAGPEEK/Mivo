@@ -4,7 +4,7 @@ import { useSiblingLinks } from "../hooks/useSiblingLinks";
 import type { ChildOrder } from "../lib/itemSearch";
 import type { ItemView } from "../lib/itemView";
 import { ChildrenList } from "./ChildrenList";
-import { ItemHeader } from "./ItemHeader";
+import { DetailLayout } from "./DetailLayout";
 import { AncestorLinks, SiblingArrows } from "./ItemNavigation";
 
 /** Props of the show and season pages. */
@@ -25,7 +25,7 @@ export interface ShowPageProps extends ContainerPageProps {
 export function ShowPage({ headingRef, itemId, item, actions }: ShowPageProps) {
   return (
     <article>
-      <ItemHeader headingRef={headingRef} item={item} aspect="poster" actions={actions} />
+      <DetailLayout headingRef={headingRef} item={item} aspect="poster" actions={actions} />
       <ChildrenList itemId={itemId} childKind="season" order="asc" />
     </article>
   );
@@ -41,7 +41,7 @@ export function SeasonPage({ headingRef, itemId, item, order }: SeasonPageProps)
   const siblings = useSiblingLinks(item, "season");
   return (
     <article>
-      <ItemHeader
+      <DetailLayout
         headingRef={headingRef}
         item={item}
         aspect="poster"

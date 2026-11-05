@@ -74,7 +74,7 @@ describe("ItemPage with a playable item", () => {
     const image = main.querySelector("img");
     expect(image?.getAttribute("alt")).toBe("");
     expect(image?.getAttribute("src")).toBe("/api/v1/images/poster-1?width=320&tag=tag-1");
-    expect(image?.getAttribute("sizes")).toBe("10rem");
+    expect(image?.getAttribute("sizes")).toBe("(min-width: 40rem) 14rem, 10rem");
     expect(await blockingAxeViolations(main)).toEqual([]);
   });
 

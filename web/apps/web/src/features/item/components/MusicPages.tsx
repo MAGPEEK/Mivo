@@ -3,7 +3,7 @@ import type { ReactNode, Ref } from "react";
 import { AlbumTrackList } from "../../music";
 import { useAlbumPlayView } from "../hooks/useAlbumPlayView";
 import type { ItemView } from "../lib/itemView";
-import { ItemHeader } from "./ItemHeader";
+import { DetailLayout } from "./DetailLayout";
 import { AncestorLinks } from "./ItemNavigation";
 
 /** Props of {@link AlbumPage}. */
@@ -24,7 +24,7 @@ export function AlbumPage({ headingRef, itemId, item, actions }: AlbumPageProps)
   const play = useAlbumPlayView(itemId);
   return (
     <article>
-      <ItemHeader
+      <DetailLayout
         headingRef={headingRef}
         item={{ ...item, play }}
         aspect="square"

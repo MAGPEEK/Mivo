@@ -235,6 +235,7 @@ function episodeData(detail: ItemDetail, summary: ItemSummary): HierarchyData {
 describe("episode page", () => {
   it("shows the code, air date, links, arrows and the technical details", async () => {
     const detail = episodeDetail("episode-3", {
+      number: 3,
       releaseDate: "2008-01-20",
       previousId: "episode-2",
       nextId: "episode-4",
@@ -265,11 +266,8 @@ describe("episode page", () => {
   });
 
   it("labels a multi-episode file with its range", async () => {
-    const detail = episodeDetail("episode-1");
-    const { main } = await renderAt(
-      "/items/episode-1",
-      episodeData(detail, episodeSummary(1, { numberEnd: 2 })),
-    );
+    const detail = episodeDetail("episode-1", { number: 1, numberEnd: 2 });
+    const { main } = await renderAt("/items/episode-1", episodeData(detail, episodeSummary(1)));
 
     expect(await within(main).findByText("S1 · E1–E2 · 45 min")).toBeTruthy();
   });

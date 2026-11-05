@@ -48,6 +48,10 @@ function PlayerRouteForTest() {
   return <h1>Player</h1>;
 }
 
+function LibraryRouteForTest() {
+  return <h1>Library</h1>;
+}
+
 function HomeRouteForTest() {
   return <h1>Home</h1>;
 }
@@ -74,6 +78,12 @@ function createItemTestRouter(path: string): AnyRouter {
       getParentRoute: () => rootRoute,
       path: "/items/$itemId/play",
       component: PlayerRouteForTest,
+    }),
+    // Target of the genre links; the library feature is not under test here.
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/libraries/$libraryId",
+      component: LibraryRouteForTest,
     }),
   ]);
   return createRouter({ routeTree, history: createMemoryHistory({ initialEntries: [path] }) });

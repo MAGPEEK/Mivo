@@ -4,10 +4,14 @@ import { onTestFinished } from "vitest";
 export interface FakeMediaQueries {
   /** Changes whether the queries match and notifies their change listeners. */
   readonly setMatches: (matches: boolean) => void;
+  /** How many change listeners are registered across all queries right now. */
+  readonly changeListenerCount: () => number;
 }
 
 class FakeMediaQueryList extends EventTarget implements MediaQueryList {
   onchange: MediaQueryList["onchange"] = null;
+  // Tracked so tests can check that a hook subscribes once and cleans up on unmount.
+  readonly changeListeners = new Set<EventListenerOrEventListenerObject>();
 
   constructor(
     readonly media: string,
@@ -20,6 +24,28 @@ class FakeMediaQueryList extends EventTarget implements MediaQueryList {
     return this.currentMatches();
   }
 
+  override addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (type === "change" && listener !== null) {
+      this.changeListeners.add(listener);
+    }
+    super.addEventListener(type, listener, options);
+  }
+
+  override removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    if (type === "change" && listener !== null) {
+      this.changeListeners.delete(listener);
+    }
+    super.removeEventListener(type, listener, options);
+  }
+
   // The legacy listener API; nothing in the app uses it, but the interface requires it.
   addListener(): void {
     throw new Error("addListener is deprecated; use addEventListener");
@@ -30,9 +56,14 @@ class FakeMediaQueryList extends EventTarget implements MediaQueryList {
   }
 }
 
-// Installs a fake `matchMedia` whose lists ask `evaluate` on every read. The returned function
-// notifies every list created so far after the state behind `evaluate` changed.
-function installFakeMatchMedia(evaluate: (query: string) => boolean): () => void {
+interface FakeMatchMedia {
+  /** Notifies every list created so far after the state behind `evaluate` changed. */
+  readonly notify: () => void;
+  readonly changeListenerCount: () => number;
+}
+
+// Installs a fake `matchMedia` whose lists ask `evaluate` on every read.
+function installFakeMatchMedia(evaluate: (query: string) => boolean): FakeMatchMedia {
   const lists: FakeMediaQueryList[] = [];
   window.matchMedia = (query: string) => {
     const list = new FakeMediaQueryList(query, () => evaluate(query));
@@ -42,10 +73,13 @@ function installFakeMatchMedia(evaluate: (query: string) => boolean): () => void
   onTestFinished(() => {
     Reflect.deleteProperty(window, "matchMedia");
   });
-  return () => {
-    for (const list of lists) {
-      list.dispatchEvent(new Event("change"));
-    }
+  return {
+    notify: () => {
+      for (const list of lists) {
+        list.dispatchEvent(new Event("change"));
+      }
+    },
+    changeListenerCount: () => lists.reduce((sum, list) => sum + list.changeListeners.size, 0),
   };
 }
 
@@ -55,12 +89,13 @@ function installFakeMatchMedia(evaluate: (query: string) => boolean): () => void
  */
 export function stubMediaQueries(initialMatches: boolean): FakeMediaQueries {
   let matches = initialMatches;
-  const notify = installFakeMatchMedia(() => matches);
+  const { notify, changeListenerCount } = installFakeMatchMedia(() => matches);
   return {
     setMatches: (nextMatches) => {
       matches = nextMatches;
       notify();
     },
+    changeListenerCount,
   };
 }
 
@@ -88,7 +123,7 @@ function matchesWidth(query: string, widthInPixels: number): boolean {
  */
 export function stubViewportWidth(initialWidthInPixels: number): FakeViewport {
   let width = initialWidthInPixels;
-  const notify = installFakeMatchMedia((query) => matchesWidth(query, width));
+  const { notify } = installFakeMatchMedia((query) => matchesWidth(query, width));
   return {
     setWidth: (nextWidth) => {
       width = nextWidth;

@@ -61,7 +61,7 @@ describe("Album page", () => {
     renderAlbum(twoDiscTracks);
 
     const heading = await screen.findByRole("heading", { level: 1, name: "Two Disc Symphony" });
-    const header = heading.parentElement?.parentElement;
+    const header = heading.closest("article");
     expect(header?.querySelector("img")?.getAttribute("src")).toContain("/api/v1/images/cover-1");
     expect(screen.getByRole("link", { name: "Generated Orchestra" }).getAttribute("href")).toBe(
       "/items/artist-1",

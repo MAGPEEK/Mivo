@@ -203,6 +203,13 @@ describe("menu navigation helpers", () => {
       expected: 3,
     },
     { name: "no match", typed: "z", current: 0, disabled: none, expected: -1 },
+    {
+      name: "longer input without a current entry starts at the top",
+      typed: "ap",
+      current: -1,
+      disabled: none,
+      expected: 0,
+    },
   ])("findTypeAhead: $name", (row) => {
     expect(findTypeAhead(labels, row.disabled, row.typed, row.current)).toBe(row.expected);
   });

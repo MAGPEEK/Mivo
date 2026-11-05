@@ -112,5 +112,19 @@
     "empty": "Hier ist noch nichts."
   },
   "summary": "Handlung",
-  "genres": "Genres"
+  "genres": "Genres",
+  "titleBlock": {
+    "originalTitle": "Originaltitel: {{title}}",
+    "contentRating": "Altersfreigabe",
+    "directors_one": "Regie: {{names}}",
+    "directors_other": "Regie: {{names}}",
+    "moreGenresShort": "+{{count, number}}",
+    "moreGenres_one": "+{{count, number}} weiteres Genre",
+    "moreGenres_other": "+{{count, number}} weitere Genres",
+    "fewerGenres": "Weniger Genres"
+  },
+  "summaryToggle": {
+    "more": "Mehr",
+    "less": "Weniger"
+  }
 }

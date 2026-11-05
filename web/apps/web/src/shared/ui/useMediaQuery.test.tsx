@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { stubMediaQueries } from "../../test/mediaQuery";
 import { useMediaQuery } from "./useMediaQuery";
@@ -24,16 +24,13 @@ describe("useMediaQuery", () => {
     expect(result.current).toBe(true);
   });
 
-  it("removes its change listener on unmount", () => {
-    stubMediaQueries(false);
-    const remove = vi.spyOn(EventTarget.prototype, "removeEventListener");
-    try {
-      const { unmount } = renderHook(() => useMediaQuery(query));
-      unmount();
+  it("keeps one change listener across rerenders and removes it on unmount", () => {
+    const queries = stubMediaQueries(false);
+    const { rerender, unmount } = renderHook(() => useMediaQuery(query));
+    rerender();
 
-      expect(remove).toHaveBeenCalledWith("change", expect.any(Function));
-    } finally {
-      remove.mockRestore();
-    }
+    expect(queries.changeListenerCount()).toBe(1);
+    unmount();
+    expect(queries.changeListenerCount()).toBe(0);
   });
 });

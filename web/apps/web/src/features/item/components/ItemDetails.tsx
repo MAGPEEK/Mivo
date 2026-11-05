@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import type { FileView, ItemView } from "../lib/itemView";
 import { itemNamespace } from "../locales";
-import { ItemHeader } from "./ItemHeader";
+import { DetailLayout } from "./DetailLayout";
 import { TrackList } from "./TrackList";
 
 /** Props of {@link ItemDetails}. */
@@ -29,7 +29,7 @@ export function ItemDetails({ headingRef, item, above, leadFacts, actions }: Ite
   const aspect = item.kind === "movie" ? "poster" : "still";
   return (
     <article>
-      <ItemHeader
+      <DetailLayout
         headingRef={headingRef}
         item={item}
         aspect={aspect}
@@ -38,7 +38,7 @@ export function ItemDetails({ headingRef, item, above, leadFacts, actions }: Ite
         actions={actions}
       >
         {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
-      </ItemHeader>
+      </DetailLayout>
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
         <TrackList
           heading={t("tracks.audio.heading")}

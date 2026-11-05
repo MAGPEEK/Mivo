@@ -3,7 +3,7 @@ import type { ReactNode, Ref } from "react";
 import { ChapterList } from "../../audiobooks";
 import { useItem } from "../hooks/useItem";
 import type { ItemView } from "../lib/itemView";
-import { ItemHeader } from "./ItemHeader";
+import { DetailLayout } from "./DetailLayout";
 
 /** Props of {@link AudiobookPage}. */
 export interface AudiobookPageProps {
@@ -25,7 +25,7 @@ export function AudiobookPage({ headingRef, itemId, item, actions }: AudiobookPa
   const book = useItem(itemId).data;
   return (
     <article>
-      <ItemHeader headingRef={headingRef} item={item} aspect="poster" actions={actions} />
+      <DetailLayout headingRef={headingRef} item={item} aspect="poster" actions={actions} />
       {book !== undefined && <ChapterList book={book} />}
     </article>
   );

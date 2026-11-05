@@ -93,7 +93,7 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
         />
       );
     case "episode":
-      return <EpisodePage headingRef={headingRef} itemId={itemId} item={item} />;
+      return <EpisodePage headingRef={headingRef} item={item} />;
     case "album":
       return <AlbumPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
     case "audiobook":

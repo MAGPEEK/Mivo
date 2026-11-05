@@ -71,6 +71,7 @@ function viewTexts(t: ItemTranslate, language: string): ItemViewTexts {
     trackCount: (count) => t("trackCount", { count }),
     authors: (names) => t("authors", { names }),
     narrators: (names) => t("narrators", { names }),
+    directors: (names, count) => t("titleBlock.directors", { names, count }),
     chapterCount: (count) => t("chapterCount", { count }),
     photoCount: (count) => t("photoCount", { count }),
   };

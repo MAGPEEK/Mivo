@@ -69,7 +69,7 @@ describe("Audiobook page", () => {
     renderBook(m4bBook);
 
     const heading = await screen.findByRole("heading", { level: 1, name: m4bBook.title });
-    const header = heading.parentElement?.parentElement;
+    const header = heading.closest("article");
     expect(header?.querySelector("img")?.getAttribute("src")).toContain("/api/v1/images/cover-1");
     expect(header?.querySelector("img")?.parentElement?.className).toContain("aspect-2/3");
     expect(

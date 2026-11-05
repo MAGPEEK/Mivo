@@ -9,11 +9,12 @@ import type {
 import { bookTimeline, resolutionLabel } from "@mivo/player-core";
 
 import { formatAirDate } from "./airDate";
-import { durationParts, type DurationParts } from "./duration";
+import type { DurationParts } from "./duration";
 import { formatFileSize } from "./fileSize";
 import { languageName } from "./languageName";
 import { playTarget, type UnavailableReason } from "./playTarget";
 import { primaryVideoStream } from "./primaryStreams";
+import { runtimeLabel } from "./runtimeLabel";
 import { technicalChips } from "./technicalChips";
 import { audioTracks, subtitleTracks, type Track } from "./tracks";
 
@@ -47,11 +48,25 @@ export type PlayView =
 /** Everything the detail page shows of a loaded item, as display text. */
 export interface ItemView {
   readonly kind: ItemKind;
+  /** The library the item belongs to, for the genre links to its Browse pivot. */
+  readonly libraryId: string;
   readonly title: string;
+  /** Title in the original language; undefined when unknown or equal to the title. */
+  readonly originalTitle: string | undefined;
+  /** Age rating as stored, e.g. `FSK 12`; undefined when unknown. */
+  readonly contentRating: string | undefined;
+  /** Season, episode or track number; undefined when unknown or for other kinds. */
+  readonly number: number | undefined;
+  /** Last episode number of a file holding several episodes. */
+  readonly numberEnd: number | undefined;
   /** Release or first-air year; undefined when unknown. */
   readonly year: string | undefined;
   readonly summary: string | undefined;
+  /** Tagline of a movie or show, shown above the summary. */
+  readonly tagline: string | undefined;
   readonly genres: readonly string[];
+  /** "Director: Mara Lindqvist", already translated; undefined without a credited director. */
+  readonly directorLine: string | undefined;
   /** Air date of an episode, localised; undefined when unknown. */
   readonly airDate: string | undefined;
   /** Show first, then season; empty for top-level items. */
@@ -64,6 +79,8 @@ export interface ItemView {
   readonly still: ImageRef | undefined;
   /** The 1:1 cover of an album or image of an artist; `undefined` shows the placeholder. */
   readonly square: ImageRef | undefined;
+  /** The wide backdrop behind the header; `undefined` falls back to the item's artwork. */
+  readonly backdrop: ImageRef | undefined;
   /** Short facts below the title, e.g. `["1 h 30 min", "1080p"]`. */
   readonly facts: readonly string[];
   /** Technical chips, e.g. `["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"]`. */
@@ -94,6 +111,8 @@ export interface ItemViewTexts {
   readonly authors: (names: string) => string;
   /** "Narrated by Nora Vale" for the narrators of an audiobook, already joined. */
   readonly narrators: (names: string) => string;
+  /** "Director: Mara Lindqvist" for the directors, already joined; `count` picks the plural. */
+  readonly directors: (names: string, count: number) => string;
   /** "3 chapters", with the plural form of the language. */
   readonly chapterCount: (count: number) => string;
   /** "24 photos" in a photo album and its sub-albums, with the plural form of the language. */
@@ -120,10 +139,17 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
   const fileView = primaryFile === undefined ? noFileParts : fileParts(primaryFile, texts);
   return {
     kind: item.kind,
+    libraryId: item.libraryId,
     title: item.title,
+    originalTitle: originalTitle(item),
+    contentRating: textOrUndefined(item.contentRating),
+    number: item.number,
+    numberEnd: item.numberEnd,
     year: item.year === undefined ? undefined : String(item.year),
-    summary: item.summary,
-    genres: item.genres ?? [],
+    summary: textOrUndefined(item.summary),
+    tagline: textOrUndefined(item.tagline),
+    genres: (item.genres ?? []).filter((genre) => genre.trim() !== ""),
+    directorLine: directorLine(item, texts),
     airDate: formatAirDate(item.releaseDate, texts.language),
     ancestors: (item.ancestors ?? []).map(toAncestorView),
     previousId: item.previousId,
@@ -131,6 +157,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     poster: item.artwork?.poster,
     still: item.artwork?.thumb,
     square: item.artwork?.square,
+    backdrop: item.artwork?.backdrop,
     play: playView(item, texts),
     metadataSources: item.metadataSources ?? [],
     ...fileView,
@@ -141,11 +168,38 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
   };
 }
 
+// Blank metadata counts as missing, so no line or separator shows for it.
+function textOrUndefined(text: string | undefined): string | undefined {
+  return text === undefined || text.trim() === "" ? undefined : text;
+}
+
+// The original title only adds information when it differs from the shown one.
+function originalTitle(item: ItemDetail): string | undefined {
+  const original = textOrUndefined(item.originalTitle);
+  return original?.trim().toLocaleLowerCase() === item.title.trim().toLocaleLowerCase()
+    ? undefined
+    : original;
+}
+
+function peopleWithRole(item: ItemDetail, role: PersonRole): string[] {
+  return (item.people ?? [])
+    .filter((person) => person.role === role && person.name.trim() !== "")
+    .map((person) => person.name);
+}
+
+function joinNames(names: readonly string[], language: string): string {
+  return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(names);
+}
+
 function namesWithRole(item: ItemDetail, role: PersonRole, language: string): string {
-  const names = (item.people ?? []).filter((person) => person.role === role);
-  return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(
-    names.map((person) => person.name),
-  );
+  return joinNames(peopleWithRole(item, role), language);
+}
+
+function directorLine(item: ItemDetail, texts: ItemViewTexts): string | undefined {
+  const names = peopleWithRole(item, "director");
+  return names.length === 0
+    ? undefined
+    : texts.directors(joinNames(names, texts.language), names.length);
 }
 
 // An audiobook names its authors and narrators, and its length is that of all its parts: the
@@ -159,7 +213,7 @@ function audiobookFacts(item: ItemDetail, texts: ItemViewTexts): string[] {
     authors === "" ? "" : texts.authors(authors),
     narrators === "" ? "" : texts.narrators(narrators),
     item.year === undefined ? "" : String(item.year),
-    totalSeconds > 0 ? texts.duration(durationParts(totalSeconds)) : "",
+    runtimeLabel(totalSeconds, texts.duration) ?? "",
     chapters.length > 0 ? texts.chapterCount(chapters.length) : "",
   ].filter((fact) => fact !== "");
 }
@@ -207,8 +261,7 @@ function fileParts(file: MediaFile, texts: ItemViewTexts): FileParts {
 function facts(file: MediaFile, texts: ItemViewTexts): string[] {
   const video = primaryVideoStream(file);
   const resolution = video?.height === undefined ? "" : resolutionLabel(video.height, video.width);
-  const duration =
-    file.durationSeconds === undefined ? "" : texts.duration(durationParts(file.durationSeconds));
+  const duration = runtimeLabel(file.durationSeconds, texts.duration) ?? "";
   return [duration, resolution].filter((fact) => fact !== "");
 }
 
