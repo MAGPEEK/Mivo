@@ -16,6 +16,7 @@ const texts: ItemViewTexts = {
   authors: (names) => `By ${names}`,
   narrators: (names) => `Narrated by ${names}`,
   chapterCount: (count) => `${String(count)} chapters`,
+  photoCount: (count) => `${String(count)} photos`,
 };
 
 interface ViewCase {

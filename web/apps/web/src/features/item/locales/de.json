@@ -35,6 +35,8 @@
   "trackCount_other": "{{count, number}} Titel",
   "chapterCount_one": "{{count, number}} Kapitel",
   "chapterCount_other": "{{count, number}} Kapitel",
+  "photoCount_one": "{{count, number}} Foto",
+  "photoCount_other": "{{count, number}} Fotos",
   "authors": "Von {{names}}",
   "narrators": "Gelesen von {{names}}",
   "file": {

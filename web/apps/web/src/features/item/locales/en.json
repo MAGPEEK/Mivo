@@ -35,6 +35,8 @@
   "trackCount_other": "{{count, number}} tracks",
   "chapterCount_one": "{{count, number}} chapter",
   "chapterCount_other": "{{count, number}} chapters",
+  "photoCount_one": "{{count, number}} photo",
+  "photoCount_other": "{{count, number}} photos",
   "authors": "By {{names}}",
   "narrators": "Narrated by {{names}}",
   "file": {

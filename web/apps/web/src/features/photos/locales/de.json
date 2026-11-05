@@ -1,0 +1,66 @@
+{
+  "albums": {
+    "label": "Fotoalben",
+    "loading": "Alben werden geladen",
+    "loadFailed": "Die Alben konnten nicht geladen werden.",
+    "loadingMore": "Weitere Alben werden geladen",
+    "loadMoreFailed": "Weitere Alben konnten nicht geladen werden.",
+    "empty": {
+      "title": "Noch keine Alben",
+      "hint": "Starte einen Scan, um die Fotos im Ordner dieser Mediathek zu finden."
+    },
+    "emptyUnmatched": {
+      "title": "Nichts zuzuordnen",
+      "hint": "Fotos werden keinen Einträgen eines Anbieters zugeordnet."
+    }
+  },
+  "photos": {
+    "label": "Fotos",
+    "loading": "Fotos werden geladen",
+    "loadFailed": "Die Fotos konnten nicht geladen werden.",
+    "loadingMore": "Weitere Fotos werden geladen",
+    "loadMoreFailed": "Weitere Fotos konnten nicht geladen werden.",
+    "empty": {
+      "title": "Noch keine Fotos",
+      "hint": "Starte einen Scan, um die Fotos im Ordner dieser Mediathek zu finden."
+    },
+    "emptyUnmatched": {
+      "title": "Nichts zuzuordnen",
+      "hint": "Fotos werden keinen Einträgen eines Anbieters zugeordnet."
+    }
+  },
+  "contents": {
+    "label": "Albuminhalt",
+    "loading": "Album wird geladen",
+    "loadFailed": "Die Fotos des Albums konnten nicht geladen werden.",
+    "loadingMore": "Weitere Fotos werden geladen",
+    "loadMoreFailed": "Weitere Fotos konnten nicht geladen werden.",
+    "empty": {
+      "title": "Dieses Album ist leer",
+      "hint": "Es enthält keine Fotos und keine Alben."
+    }
+  },
+  "album": {
+    "photoCount_one": "{{count, number}} Foto",
+    "photoCount_other": "{{count, number}} Fotos"
+  },
+  "tile": {
+    "unsupported": "Kann nicht angezeigt werden",
+    "unsupportedLabel": "{{label}}, kann nicht angezeigt werden",
+    "video": "{{label}}, Video"
+  },
+  "view": {
+    "unsupported": "Dieses Foto kann nicht angezeigt werden.",
+    "loadFailed": "Das Foto konnte nicht geladen werden.",
+    "details": "Fotodetails"
+  },
+  "facts": {
+    "taken": "Aufgenommen",
+    "fileTime": "{{date}} (Dateidatum)",
+    "camera": "Kamera",
+    "lens": "Objektiv",
+    "exposure": "Belichtung",
+    "size": "Größe",
+    "file": "Datei"
+  }
+}

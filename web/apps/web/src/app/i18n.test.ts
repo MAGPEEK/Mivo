@@ -50,6 +50,7 @@ describe("locales", () => {
       "item",
       "library",
       "music",
+      "photos",
       "player",
       "settings",
       "translation",

@@ -15,6 +15,7 @@ import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import { LibraryPage, validateBrowseSearch, type LibraryItemsRenderer } from "../features/library";
 import { MusicLibraryGrid } from "../features/music";
+import { PhotoAlbumGrid, PhotoGrid } from "../features/photos";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
 import {
   AboutSettingsPage,
@@ -54,7 +55,8 @@ function LibraryRoute() {
   });
 }
 
-// Listed types with their own view: albums get square covers, books their author line; the
+// Listed types with their own view: albums get square covers, books their author line, photo
+// albums and photos square tiles; the
 // others keep the poster grid.
 const itemsViewByType: LibraryItemsRenderer = ({ type, items, filter }) => {
   switch (type) {
@@ -62,6 +64,10 @@ const itemsViewByType: LibraryItemsRenderer = ({ type, items, filter }) => {
       return createElement(MusicLibraryGrid, { albums: items, filter });
     case "audiobook":
       return createElement(AudiobookGrid, { books: items, filter });
+    case "photo_album":
+      return createElement(PhotoAlbumGrid, { items, filter });
+    case "photo":
+      return createElement(PhotoGrid, { items, filter });
     default:
       return undefined;
   }

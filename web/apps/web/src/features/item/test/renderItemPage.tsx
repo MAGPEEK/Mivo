@@ -18,7 +18,9 @@ import { ApiClientProvider } from "../../../shared/api";
 import { createI18n } from "../../../shared/i18n";
 import { audiobooksLocales, audiobooksNamespace } from "../../audiobooks";
 import { identifyLocales, identifyNamespace } from "../../identify";
+import { libraryLocales, libraryNamespace } from "../../library";
 import { musicLocales, musicNamespace } from "../../music";
+import { photosLocales, photosNamespace } from "../../photos";
 import { ItemPage } from "../components/ItemPage";
 import { validateItemSearch } from "../lib/itemSearch";
 import { itemLocales, itemNamespace } from "../locales";
@@ -95,6 +97,8 @@ export function renderItemPage(path: string, options: RenderItemPageOptions): Re
     [identifyNamespace]: identifyLocales,
     [musicNamespace]: musicLocales,
     [audiobooksNamespace]: audiobooksLocales,
+    [photosNamespace]: photosLocales,
+    [libraryNamespace]: libraryLocales,
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   render(

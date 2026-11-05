@@ -28,10 +28,18 @@ export interface LibraryPageProps {
 
 const headingClass = "text-3xl font-semibold";
 
-// The library counts its top-level items: books in an audiobook library. The other kinds keep
-// the video count until they get their own (BACKLOG M3-14h).
-function itemCountKey(kind: LibraryKind): "audiobookCount" | "itemCount" {
-  return kind === "audiobooks" ? "audiobookCount" : "itemCount";
+// The library counts its top-level items: books in an audiobook library, albums and loose
+// photos in a photo library. The other kinds keep the video count until they get their own
+// (BACKLOG M3-14h).
+function itemCountKey(kind: LibraryKind): "audiobookCount" | "photoItemCount" | "itemCount" {
+  switch (kind) {
+    case "audiobooks":
+      return "audiobookCount";
+    case "photos":
+      return "photoItemCount";
+    default:
+      return "itemCount";
+  }
 }
 
 /** One library: name, item count, scan button and the grid of its items. */

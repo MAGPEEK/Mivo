@@ -42,6 +42,7 @@ export type {
   ItemKind,
   ItemPage,
   ItemPerson,
+  ItemPhoto,
   ItemQuickFilter,
   ItemSort,
   ItemSummary,
@@ -61,6 +62,7 @@ export type {
   MediaSummary,
   MetadataProvider,
   PersonRole,
+  PhotoTimeSource,
   PlaybackDelivery,
   PlaybackMode,
   PlaybackReason,
@@ -80,4 +82,5 @@ export type {
   StreamAction,
   StreamDecision,
   SystemInfo,
+  ThumbnailState,
 } from "./schemas";

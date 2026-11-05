@@ -5,6 +5,8 @@
   "itemCount_other": "{{count, number}} videos",
   "audiobookCount_one": "{{count, number}} audiobook",
   "audiobookCount_other": "{{count, number}} audiobooks",
+  "photoItemCount_one": "{{count, number}} item",
+  "photoItemCount_other": "{{count, number}} items",
   "libraryUnavailable": "Folder unavailable",
   "loadFailed": "The library could not be loaded.",
   "retry": "Try again",

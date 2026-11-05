@@ -78,6 +78,15 @@ export type MediaSummary = Schemas["MediaSummary"];
 /** An item with its metadata, artwork, hierarchy, extras, media files and their streams. */
 export type ItemDetail = Schemas["ItemDetail"];
 
+/** Capture data of a photo (EXIF) for its info panel; present for photos only. */
+export type ItemPhoto = Schemas["ItemPhoto"];
+
+/** Where a photo's capture time comes from. Later API versions may add values. */
+export type PhotoTimeSource = Schemas["PhotoTimeSource"];
+
+/** Whether the server can render a photo. Later API versions may add values. */
+export type ThumbnailState = Schemas["ThumbnailState"];
+
 /** Kind of an item (movie, show, season, episode, extra). Later API versions may add values. */
 export type ItemKind = Schemas["ItemKind"];
 

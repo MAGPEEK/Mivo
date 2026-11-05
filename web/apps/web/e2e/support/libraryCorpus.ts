@@ -165,3 +165,44 @@ export function expectedMusic(): ExpectedMusic {
   }
   return manifest.music;
 }
+
+/** One file of the photo corpus (task M3-15g), as the manifest lists it. */
+export interface ExpectedPhoto {
+  /** Path below the photo library root, e.g. `Holidays 2024/IMG_0101.jpg`. */
+  readonly file: string;
+  /** Folder of the file below the root: the album a scan files it in. */
+  readonly album: string;
+  /** Primary file of a RAW+JPEG pair; the scan files this RAW under it. */
+  readonly alternateOf?: string;
+  /** Built only when FFmpeg has the encoder (HEIC, AVIF). */
+  readonly optional?: boolean;
+  readonly exif?: { readonly takenAt?: string; readonly make?: string; readonly model?: string };
+  readonly thumbnailState: "ready" | "unsupported";
+  /** False for the corrupt file, the unreadable RAW and videos: no thumbnail is rendered. */
+  readonly renders: boolean;
+}
+
+/** The photo library of the corpus; `path` is its folder below {@link libraryCorpusDirectory}. */
+export interface ExpectedPhotos {
+  readonly path: string;
+  readonly photos: readonly ExpectedPhoto[];
+}
+
+/** Shown by the photo spec when the corpus has no photo tree. */
+export const missingPhotoCorpusReason =
+  `No photo corpus below ${libraryCorpusDirectory}. Generate it with ` +
+  '`go run ./scripts/gen-testmedia -only "library-*"` (needs FFmpeg).';
+
+/** Whether the manifest and the photo tree exist. */
+export function photoCorpusExists(): boolean {
+  return [manifestPath, join(libraryCorpusDirectory, "photos")].every((path) => existsSync(path));
+}
+
+/** The photo library of the corpus manifest. */
+export function expectedPhotos(): ExpectedPhotos {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { photos?: ExpectedPhotos };
+  if (manifest.photos === undefined) {
+    throw new Error("The library corpus manifest has no photo library.");
+  }
+  return manifest.photos;
+}

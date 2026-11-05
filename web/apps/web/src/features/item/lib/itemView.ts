@@ -96,6 +96,8 @@ export interface ItemViewTexts {
   readonly narrators: (names: string) => string;
   /** "3 chapters", with the plural form of the language. */
   readonly chapterCount: (count: number) => string;
+  /** "24 photos" in a photo album and its sub-albums, with the plural form of the language. */
+  readonly photoCount: (count: number) => string;
 }
 
 /** The parts of an {@link ItemView} that describe the primary file. */
@@ -182,6 +184,9 @@ function itemFacts(item: ItemDetail, texts: ItemViewTexts): string[] {
   if (item.kind === "album" && item.childCount !== undefined) {
     facts.push(texts.trackCount(item.childCount));
   }
+  if (item.kind === "photo_album" && item.leafCount !== undefined) {
+    facts.push(texts.photoCount(item.leafCount));
+  }
   return facts;
 }
 
@@ -212,6 +217,10 @@ function playView(item: ItemDetail, texts: ItemViewTexts): PlayView {
     return item.playItemId === undefined
       ? { kind: "unavailable", explanation: texts.unavailable("noEpisodes") }
       : { kind: "playable", itemId: item.playItemId };
+  }
+  // A still photo has an image file but nothing to play; only a video names its play item.
+  if (item.kind === "photo" && item.playItemId === undefined) {
+    return { kind: "unavailable", explanation: texts.unavailable("noFile") };
   }
   const target = playTarget(item);
   return target.kind === "playable"

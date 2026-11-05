@@ -1,0 +1,66 @@
+{
+  "albums": {
+    "label": "Photo albums",
+    "loading": "Loading albums",
+    "loadFailed": "The albums could not be loaded.",
+    "loadingMore": "Loading more albums",
+    "loadMoreFailed": "More albums could not be loaded.",
+    "empty": {
+      "title": "No albums yet",
+      "hint": "Run a scan to find the photos in this library's folder."
+    },
+    "emptyUnmatched": {
+      "title": "Nothing to match",
+      "hint": "Photos are not matched with provider entries."
+    }
+  },
+  "photos": {
+    "label": "Photos",
+    "loading": "Loading photos",
+    "loadFailed": "The photos could not be loaded.",
+    "loadingMore": "Loading more photos",
+    "loadMoreFailed": "More photos could not be loaded.",
+    "empty": {
+      "title": "No photos yet",
+      "hint": "Run a scan to find the photos in this library's folder."
+    },
+    "emptyUnmatched": {
+      "title": "Nothing to match",
+      "hint": "Photos are not matched with provider entries."
+    }
+  },
+  "contents": {
+    "label": "Album contents",
+    "loading": "Loading the album",
+    "loadFailed": "The album's photos could not be loaded.",
+    "loadingMore": "Loading more photos",
+    "loadMoreFailed": "More photos could not be loaded.",
+    "empty": {
+      "title": "This album is empty",
+      "hint": "It holds no photos or albums."
+    }
+  },
+  "album": {
+    "photoCount_one": "{{count, number}} photo",
+    "photoCount_other": "{{count, number}} photos"
+  },
+  "tile": {
+    "unsupported": "Cannot be shown",
+    "unsupportedLabel": "{{label}}, cannot be shown",
+    "video": "{{label}}, video"
+  },
+  "view": {
+    "unsupported": "This photo cannot be shown.",
+    "loadFailed": "The photo could not be loaded.",
+    "details": "Photo details"
+  },
+  "facts": {
+    "taken": "Taken",
+    "fileTime": "{{date}} (file date)",
+    "camera": "Camera",
+    "lens": "Lens",
+    "exposure": "Exposure",
+    "size": "Size",
+    "file": "File"
+  }
+}
