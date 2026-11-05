@@ -16,7 +16,8 @@
     },
     "kind": {
       "movies": "Movies",
-      "shows": "Shows"
+      "shows": "Shows",
+      "music": "Music"
     },
     "foldersLabel": "Folders",
     "folderUnavailable": "Unavailable",

@@ -9,7 +9,7 @@ import type { BrowseSearch } from "../lib/browseQuery";
 import { errorCodeOf, errorKeyForCode } from "../lib/errorKeys";
 import { libraryNamespace } from "../locales";
 import { primaryButtonClass } from "./buttonClasses";
-import { LibraryItemGrid } from "./LibraryItemGrid";
+import { LibraryItemGrid, type LibraryItemsRenderer } from "./LibraryItemGrid";
 import { ScanControl } from "./ScanControl";
 
 /** Props of {@link LibraryPage}. */
@@ -19,12 +19,17 @@ export interface LibraryPageProps {
   /** Validated search of the route: sort, type and filter of the grid. */
   readonly search: BrowseSearch;
   readonly onSearchChange: BrowseSearchChange;
+  /**
+   * Renders the listed items of a type that has its own view, e.g. the album grid of a music
+   * library. The app layer passes it, so this feature does not depend on other features.
+   */
+  readonly renderItems?: LibraryItemsRenderer | undefined;
 }
 
 const headingClass = "text-3xl font-semibold";
 
 /** One library: name, item count, scan button and the poster grid of its videos. */
-export function LibraryPage({ libraryId, search, onSearchChange }: LibraryPageProps) {
+export function LibraryPage({ libraryId, search, onSearchChange, renderItems }: LibraryPageProps) {
   const { t } = useTranslation(libraryNamespace);
   const library = useLibrary(libraryId);
   if (library.status === "success") {
@@ -35,6 +40,7 @@ export function LibraryPage({ libraryId, search, onSearchChange }: LibraryPagePr
         library={library.library}
         search={search}
         onSearchChange={onSearchChange}
+        renderItems={renderItems}
       />
     );
   }
@@ -55,7 +61,7 @@ interface LibraryContentProps extends Omit<LibraryPageProps, "libraryId"> {
   readonly library: Library;
 }
 
-function LibraryContent({ library, search, onSearchChange }: LibraryContentProps) {
+function LibraryContent({ library, search, onSearchChange, renderItems }: LibraryContentProps) {
   const { t } = useTranslation(libraryNamespace);
   return (
     <>
@@ -76,6 +82,7 @@ function LibraryContent({ library, search, onSearchChange }: LibraryContentProps
         libraryKind={library.kind}
         search={search}
         onSearchChange={onSearchChange}
+        renderItems={renderItems}
       />
     </>
   );

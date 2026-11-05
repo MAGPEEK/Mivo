@@ -82,7 +82,7 @@ export interface E2EServer {
 export interface E2ELibrary {
   /** Display name; the library folder below the run's root is named the same. */
   readonly name: string;
-  readonly kind: "movies" | "shows";
+  readonly kind: "movies" | "shows" | "music";
   /** Directory whose content is copied into the library before the server starts. */
   readonly copyFrom: string;
 }

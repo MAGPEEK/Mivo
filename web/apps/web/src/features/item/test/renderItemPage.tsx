@@ -17,6 +17,7 @@ import { I18nextProvider } from "react-i18next";
 import { ApiClientProvider } from "../../../shared/api";
 import { createI18n } from "../../../shared/i18n";
 import { identifyLocales, identifyNamespace } from "../../identify";
+import { musicLocales, musicNamespace } from "../../music";
 import { ItemPage } from "../components/ItemPage";
 import { validateItemSearch } from "../lib/itemSearch";
 import { itemLocales, itemNamespace } from "../locales";
@@ -91,6 +92,7 @@ export function renderItemPage(path: string, options: RenderItemPageOptions): Re
   const i18n = createI18n(languages, {
     [itemNamespace]: itemLocales,
     [identifyNamespace]: identifyLocales,
+    [musicNamespace]: musicLocales,
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   render(

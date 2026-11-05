@@ -1,4 +1,10 @@
-import type { FolderEntry, FolderListing, InstallKind, Library } from "@mivo/api-client";
+import type {
+  FolderEntry,
+  FolderListing,
+  InstallKind,
+  Library,
+  LibraryKind,
+} from "@mivo/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
@@ -47,7 +53,7 @@ interface ServerOptions {
   readonly libraries?: Library[];
   readonly installKind?: InstallKind;
   readonly listings?: Record<string, FolderListing>;
-  readonly kinds?: ("movies" | "shows")[];
+  readonly kinds?: LibraryKind[];
   /** Answers the save request; the default echoes a created or changed library. */
   readonly save?: () => Response;
 }
@@ -189,6 +195,16 @@ describe("Add library dialog", () => {
 
     expect(within(group).getAllByRole("radio")).toHaveLength(1);
     expect(within(group).getByRole("radio", { name: "Shows" })).toHaveProperty("checked", true);
+  });
+
+  it("offers a named music tile with its icon when the server supports music", async () => {
+    const { server } = dialogServer({ kinds: ["movies", "shows", "music"] });
+    renderApp(addPath, { fetch: server.fetch });
+
+    const group = await screen.findByRole("group", { name: "Kind of library" });
+    const music = within(group).getByRole("radio", { name: "Music" });
+
+    expect(music.closest("label")?.querySelector('[data-icon="music"]')).not.toBeNull();
   });
 
   it("creates a shows library when the tile is chosen", async () => {

@@ -1,4 +1,5 @@
 export { LibraryPage, type LibraryPageProps } from "./components/LibraryPage";
+export type { LibraryItemsRenderer, LibraryItemsView } from "./components/LibraryItemGrid";
 export { validateBrowseSearch, type BrowseSearch } from "./lib/browseQuery";
 export type { BrowseNavigation, BrowseSearchChange } from "./hooks/useBrowseState";
 export { LibraryKindIcon, type LibraryKindIconProps } from "./components/LibraryKindIcon";
@@ -8,3 +9,4 @@ export { useLibraryScan, type LibraryScan } from "./hooks/useLibraryScan";
 export { useScanStatusText } from "./hooks/useScanStatusText";
 export { useSidebarLibraries } from "./hooks/useSidebarLibraries";
 export { libraryLocales, libraryNamespace } from "./locales";
+export { formatDuration } from "./lib/formatDuration";

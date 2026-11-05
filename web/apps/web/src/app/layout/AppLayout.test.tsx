@@ -125,13 +125,22 @@ describe("Sidebar navigation", () => {
   });
 
   it("shows the generic library icon for a kind this client does not know", async () => {
-    const music = fakeLibrary({ name: "Music", kind: "music" as LibraryKind });
+    const future = fakeLibrary({ name: "Holograms", kind: "holograms" as LibraryKind });
+    renderApp("/", { fetch: createFakeServer([librariesRoute([future])]).fetch });
+
+    const link = await within(await findSidebar()).findByRole("link", { name: "Holograms" });
+
+    expect(link.querySelector("svg")).not.toBeNull();
+    expect(link.querySelector("[data-icon]")).toBeNull();
+  });
+
+  it("shows the note icon for a music library", async () => {
+    const music = fakeLibrary({ name: "Music", kind: "music" });
     renderApp("/", { fetch: createFakeServer([librariesRoute([music])]).fetch });
 
     const link = await within(await findSidebar()).findByRole("link", { name: "Music" });
 
-    expect(link.querySelector("svg")).not.toBeNull();
-    expect(link.querySelector("[data-icon]")).toBeNull();
+    expect(link.querySelector('[data-icon="music"]')).not.toBeNull();
   });
 
   it("keeps the layout when the library list has the wrong shape", async () => {

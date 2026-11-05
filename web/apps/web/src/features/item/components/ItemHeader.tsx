@@ -1,3 +1,4 @@
+import type { ImageRef } from "@mivo/api-client";
 import type { ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,7 +12,7 @@ export interface ItemHeaderProps {
   /** Receives the title heading, so focus can move to it after a retry or navigation. */
   readonly headingRef: Ref<HTMLHeadingElement>;
   readonly item: ItemView;
-  /** `poster` for movies, shows and seasons, `still` for episodes and extras. */
+  /** `poster` for movies, shows and seasons, `still` for episodes and extras, `square` for albums. */
   readonly aspect: PosterAspect;
   /** Shown above the title, e.g. the links to the show and season. */
   readonly above?: ReactNode;
@@ -31,6 +32,18 @@ const artworkBoxes: Readonly<Record<PosterAspect, { className: string; sizes: st
   still: { className: "w-64", sizes: "16rem" },
   square: { className: "w-40", sizes: "10rem" },
 };
+
+// The image that fills the artwork box of each shape.
+function artworkOf(item: ItemView, aspect: PosterAspect): ImageRef | undefined {
+  switch (aspect) {
+    case "poster":
+      return item.poster;
+    case "still":
+      return item.still;
+    case "square":
+      return item.square;
+  }
+}
 
 /**
  * The top of every detail page: artwork, title, facts, genres, summary and Play. The artwork is
@@ -56,7 +69,7 @@ export function ItemHeader({
       />
       <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end">
         <Poster
-          imageRef={aspect === "poster" ? item.poster : item.still}
+          imageRef={artworkOf(item, aspect)}
           aspect={aspect}
           alt=""
           sizes={box.sizes}

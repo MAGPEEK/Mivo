@@ -25,9 +25,14 @@
       "probeFailed": "Diese Datei kann nicht abgespielt werden, weil der Server sie nicht lesen konnte.",
       "probeTimedOut": "Diese Datei kann nicht abgespielt werden, weil das Lesen zu lange gedauert hat.",
       "generic": "Diese Datei kann nicht abgespielt werden.",
-      "noEpisodes": "Es gibt noch keine Folge zum Abspielen."
+      "noEpisodes": "Es gibt noch keine Folge zum Abspielen.",
+      "noTracks": "Es gibt noch keinen Titel zum Abspielen.",
+      "tracksLoading": "Die Titel zum Abspielen werden geladen.",
+      "tracksFailed": "Die Titel zum Abspielen konnten nicht geladen werden."
     }
   },
+  "trackCount_one": "{{count, number}} Titel",
+  "trackCount_other": "{{count, number}} Titel",
   "file": {
     "heading": "Datei",
     "name": "Dateiname",

@@ -1,0 +1,29 @@
+{
+  "albums": {
+    "label": "Albums",
+    "loading": "Loading albums",
+    "loadFailed": "The albums could not be loaded.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more albums",
+    "loadMoreFailed": "More albums could not be loaded.",
+    "retry": "Try again",
+    "empty": {
+      "title": "No albums yet",
+      "hint": "Run a scan to find the albums in this library's folder."
+    }
+  },
+  "tracks": {
+    "label": "Tracks",
+    "loading": "Loading tracks",
+    "loadFailed": "The tracks could not be loaded.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more tracks",
+    "loadMoreFailed": "More tracks could not be loaded.",
+    "retry": "Try again",
+    "empty": "This album has no tracks yet.",
+    "disc": "Disc {{number}}",
+    "discUnknown": "Other tracks",
+    "play": "Play {{title}}",
+    "unavailable": "Unavailable"
+  }
+}

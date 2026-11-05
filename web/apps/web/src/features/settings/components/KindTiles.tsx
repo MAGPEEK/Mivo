@@ -25,6 +25,8 @@ function kindName(kind: LibraryKind, t: TFunction<typeof settingsNamespace>): st
       return t("libraries.kind.movies");
     case "shows":
       return t("libraries.kind.shows");
+    case "music":
+      return t("libraries.kind.music");
     default:
       return kind;
   }

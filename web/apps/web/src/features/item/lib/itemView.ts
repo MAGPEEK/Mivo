@@ -55,6 +55,8 @@ export interface ItemView {
   readonly poster: ImageRef | undefined;
   /** The 16:9 still of an episode or extra; `undefined` shows the placeholder. */
   readonly still: ImageRef | undefined;
+  /** The 1:1 cover of an album or image of an artist; `undefined` shows the placeholder. */
+  readonly square: ImageRef | undefined;
   /** Short facts below the title, e.g. `["1 h 30 min", "1080p"]`. */
   readonly facts: readonly string[];
   /** Technical chips, e.g. `["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"]`. */
@@ -79,6 +81,8 @@ export interface ItemViewTexts {
   readonly seasons: (count: number) => string;
   /** "62 episodes", with the plural form of the language. */
   readonly episodes: (count: number) => string;
+  /** "12 tracks", with the plural form of the language. */
+  readonly trackCount: (count: number) => string;
 }
 
 /** The parts of an {@link ItemView} that describe the primary file. */
@@ -111,6 +115,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     nextId: item.nextId,
     poster: item.artwork?.poster,
     still: item.artwork?.thumb,
+    square: item.artwork?.square,
     play: playView(item, texts),
     metadataSources: item.metadataSources ?? [],
     ...fileView,
@@ -134,6 +139,9 @@ function itemFacts(item: ItemDetail, texts: ItemViewTexts): string[] {
   }
   if (item.kind === "season" && item.childCount !== undefined) {
     facts.push(texts.episodes(item.childCount));
+  }
+  if (item.kind === "album" && item.childCount !== undefined) {
+    facts.push(texts.trackCount(item.childCount));
   }
   return facts;
 }

@@ -1,11 +1,12 @@
 import type { LibraryKind } from "@mivo/api-client";
+import { Fragment, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState, LibraryIcon, Skeleton } from "../../../shared/ui";
 import { useBrowseState, type BrowseSearchChange } from "../hooks/useBrowseState";
 import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
 import { useNewPageFocus } from "../hooks/useNewPageFocus";
-import type { BrowseSearch, LibraryItemFilter } from "../lib/browseQuery";
+import type { BrowseSearch, BrowseType, LibraryItemFilter } from "../lib/browseQuery";
 import { libraryNamespace } from "../locales";
 import { BrowseToolbar } from "./BrowseToolbar";
 import { secondaryButtonClass } from "./buttonClasses";
@@ -19,7 +20,21 @@ export interface LibraryItemGridProps {
   /** Sort, type and filter from the URL. */
   readonly search: BrowseSearch;
   readonly onSearchChange: BrowseSearchChange;
+  /** Renders the items of a type with its own view; the poster grid shows the others. */
+  readonly renderItems?: LibraryItemsRenderer | undefined;
 }
+
+/** What a {@link LibraryItemsRenderer} gets: the listed type and its loaded pages. */
+export interface LibraryItemsView {
+  readonly type: BrowseType;
+  readonly items: LibraryItems;
+}
+
+/**
+ * Renders the listed items (loading, error, empty and loaded states) for a type with its own
+ * view, e.g. albums; returns `undefined` for types that use the poster grid.
+ */
+export type LibraryItemsRenderer = (view: LibraryItemsView) => ReactNode | undefined;
 
 /** The items of a library as a poster grid, page by page, with the Browse toolbar above. */
 export function LibraryItemGrid({
@@ -27,14 +42,20 @@ export function LibraryItemGrid({
   libraryKind,
   search,
   onSearchChange,
+  renderItems,
 }: LibraryItemGridProps) {
   const browse = useBrowseState({ search, onSearchChange, libraryKind });
   const items = useLibraryItems(libraryId, browse.query);
+  // Keyed, so focus targets and "load more" state never carry over to another query.
+  const key = JSON.stringify(browse.query);
   return (
     <>
       <BrowseToolbar browse={browse} totalCount={items.totalCount} />
-      {/* Keyed, so focus targets and "load more" state never carry over to another query. */}
-      <BrowseItems key={JSON.stringify(browse.query)} items={items} filter={browse.filter} />
+      <Fragment key={key}>
+        {renderItems?.({ type: browse.type, items }) ?? (
+          <BrowseItems items={items} filter={browse.filter} />
+        )}
+      </Fragment>
     </>
   );
 }

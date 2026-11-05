@@ -117,7 +117,7 @@ What the installation does:
    user**, find the user `<id>` and tick **Read only**. Save. Then reopen the folder browser;
    the folder is listed now. The package has read access only; it never writes into shared
    folders (transcode output goes to its own `tmp` directory).
-4. Choose the folders, the kind (movies or shows) and a name, and save. The library is scanned
+4. Choose the folders, the kind (movies, shows or music) and a name, and save. The library is scanned
    right away.
 
 The folder browser may start only at the volumes: the start script sets the browse roots to the

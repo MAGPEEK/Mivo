@@ -68,6 +68,7 @@ function viewTexts(t: ItemTranslate, language: string): ItemViewTexts {
     unavailable: (reason) => unavailableExplanation(reason, t),
     seasons: (count) => t("seasons", { count }),
     episodes: (count) => t("episodes", { count }),
+    trackCount: (count) => t("trackCount", { count }),
   };
 }
 

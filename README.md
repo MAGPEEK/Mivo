@@ -24,6 +24,9 @@ changes; keep a copy of anything you care about.
   Remux (shown as "Direct Stream" in the player) repackages the streams into HLS without
   re-encoding, Transcode re-encodes to H.264/AAC (at most 1080p) on the CPU. The player's
   stream info overlay shows which mode was chosen and why.
+- **Music libraries**: albums as a grid of square covers with their artist, an album page
+  with its tracks by disc and track number, and playback of FLAC, MP3 and M4A tracks in the
+  player (the persistent music player bar follows in milestone 5).
 - **Seek** anywhere in the file; a seek outside the part produced so far restarts FFmpeg there
   (a remux at the keyframe before the target).
 
@@ -34,8 +37,8 @@ changes; keep a copy of anything you care about.
 - **No subtitles** in the player and no subtitle burn-in (milestone 4).
 - **No hardware acceleration**: transcoding uses the CPU only (milestone 4).
 - **No metadata**: titles come from file names; no posters, descriptions or TMDB lookups
-  (milestone 6). Every library is a flat list of videos: no seasons and episodes, no music
-  or photo libraries yet.
+  (milestone 6). Every library is a flat list of videos: no seasons and episodes, no photo
+  libraries yet.
 - Libraries are set in the configuration, not in the web app, and changes need a restart.
 
 ## Local network only

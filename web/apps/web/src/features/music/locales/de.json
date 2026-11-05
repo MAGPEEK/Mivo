@@ -1,0 +1,29 @@
+{
+  "albums": {
+    "label": "Alben",
+    "loading": "Alben werden geladen",
+    "loadFailed": "Die Alben konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Weitere Alben werden geladen",
+    "loadMoreFailed": "Weitere Alben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": {
+      "title": "Noch keine Alben",
+      "hint": "Starte einen Scan, um die Alben im Ordner dieser Mediathek zu finden."
+    }
+  },
+  "tracks": {
+    "label": "Titel",
+    "loading": "Titel werden geladen",
+    "loadFailed": "Die Titel konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Weitere Titel werden geladen",
+    "loadMoreFailed": "Weitere Titel konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "Dieses Album hat noch keine Titel.",
+    "disc": "Disc {{number}}",
+    "discUnknown": "Weitere Titel",
+    "play": "{{title}} abspielen",
+    "unavailable": "Nicht verfügbar"
+  }
+}

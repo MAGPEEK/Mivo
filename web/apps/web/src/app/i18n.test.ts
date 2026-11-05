@@ -48,6 +48,7 @@ describe("locales", () => {
       "identify",
       "item",
       "library",
+      "music",
       "player",
       "settings",
       "translation",

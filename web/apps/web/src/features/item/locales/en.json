@@ -25,9 +25,14 @@
       "probeFailed": "This file cannot be played because the server could not read it.",
       "probeTimedOut": "This file cannot be played because reading it took too long.",
       "generic": "This file cannot be played.",
-      "noEpisodes": "There is no episode to play yet."
+      "noEpisodes": "There is no episode to play yet.",
+      "noTracks": "There is no track to play yet.",
+      "tracksLoading": "Loading the tracks to play.",
+      "tracksFailed": "The tracks to play could not be loaded."
     }
   },
+  "trackCount_one": "{{count, number}} track",
+  "trackCount_other": "{{count, number}} tracks",
   "file": {
     "heading": "File",
     "name": "File name",

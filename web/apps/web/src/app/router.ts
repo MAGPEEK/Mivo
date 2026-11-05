@@ -12,7 +12,8 @@ import { createElement } from "react";
 
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
-import { LibraryPage, validateBrowseSearch } from "../features/library";
+import { LibraryPage, validateBrowseSearch, type LibraryItemsRenderer } from "../features/library";
+import { MusicLibraryGrid } from "../features/music";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
 import {
   AboutSettingsPage,
@@ -48,8 +49,13 @@ function LibraryRoute() {
     onSearchChange: (next, navigation) => {
       void navigate({ search: next, replace: navigation?.replace === true, resetScroll: true });
     },
+    renderItems: itemsViewByType,
   });
 }
+
+// Listed types with their own view: albums get square covers; the others keep the poster grid.
+const itemsViewByType: LibraryItemsRenderer = ({ type, items }) =>
+  type === "album" ? createElement(MusicLibraryGrid, { albums: items }) : undefined;
 
 function ItemRoute() {
   const { itemId } = useParams({ from: "/shell/items/$itemId" });

@@ -12,6 +12,7 @@ const texts: ItemViewTexts = {
   unavailable: (reason) => `unavailable:${reason}`,
   seasons: (count) => `${String(count)} seasons`,
   episodes: (count) => `${String(count)} episodes`,
+  trackCount: (count) => `${String(count)} tracks`,
 };
 
 interface ViewCase {
@@ -97,6 +98,16 @@ const viewCases: readonly ViewCase[] = [
     name: "an episode with a still",
     item: item({ kind: "episode", artwork: { thumb: { id: "still-1", tag: "tag-1" } } }),
     expected: { still: { id: "still-1", tag: "tag-1" } },
+  },
+  {
+    name: "an album with a square cover, year and tracks",
+    item: item({
+      kind: "album",
+      year: 2019,
+      childCount: 4,
+      artwork: { square: { id: "cover-1", tag: "tag-1" } },
+    }),
+    expected: { square: { id: "cover-1", tag: "tag-1" }, facts: ["2019", "4 tracks"] },
   },
   {
     name: "a movie with year, summary and genres",

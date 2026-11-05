@@ -75,3 +75,44 @@ export function expectedLibrary(kind: ExpectedLibrary["kind"]): ExpectedLibrary 
 export function libraryCorpusFolder(library: ExpectedLibrary): string {
   return join(libraryCorpusDirectory, library.path);
 }
+
+/** One track of the music corpus, as the manifest lists it. */
+export interface ExpectedTrack {
+  readonly title: string;
+  readonly disc: number;
+  readonly track: number;
+}
+
+/** One album of the music corpus (task M3-13f). */
+export interface ExpectedAlbum {
+  readonly albumArtist: string;
+  readonly title: string;
+  /** Short container name of every track: "flac", "mp3" or "m4a". */
+  readonly container: string;
+  readonly tracks: readonly ExpectedTrack[];
+}
+
+/** The music library of the corpus; `path` is its folder below {@link libraryCorpusDirectory}. */
+export interface ExpectedMusic {
+  readonly path: string;
+  readonly albums: readonly ExpectedAlbum[];
+}
+
+/** Shown by the music spec when the corpus has no music tree. */
+export const missingMusicCorpusReason =
+  `No music corpus below ${libraryCorpusDirectory}. Generate it with ` +
+  '`go run ./scripts/gen-testmedia -only "library-*"` (needs FFmpeg).';
+
+/** Whether the manifest and the music tree exist. */
+export function musicCorpusExists(): boolean {
+  return [manifestPath, join(libraryCorpusDirectory, "music")].every((path) => existsSync(path));
+}
+
+/** The music library of the corpus manifest. */
+export function expectedMusic(): ExpectedMusic {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { music?: ExpectedMusic };
+  if (manifest.music === undefined) {
+    throw new Error("The library corpus manifest has no music library.");
+  }
+  return manifest.music;
+}

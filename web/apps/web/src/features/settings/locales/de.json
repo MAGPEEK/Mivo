@@ -16,7 +16,8 @@
     },
     "kind": {
       "movies": "Filme",
-      "shows": "Serien"
+      "shows": "Serien",
+      "music": "Musik"
     },
     "foldersLabel": "Ordner",
     "folderUnavailable": "Nicht erreichbar",
