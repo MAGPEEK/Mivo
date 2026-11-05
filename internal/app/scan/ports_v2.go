@@ -167,6 +167,10 @@ type RefreshRequest struct {
 	// refresher derives each item's kind, files and folders from it. After an early-ended
 	// scan it holds the files placed before the end.
 	Files []RefreshFile
+	// Embedded holds, per item ID, the record the container tags of the item's files give (a
+	// book's author and narrator as people). The refresher merges it after the NFO and before
+	// the file name; an item without an entry has no embedded source.
+	Embedded map[string]metadata.Record
 	// CountMetadataWarnings, when set, receives the number of NFO problems met (unreadable,
 	// malformed, parser warnings); they never fail the refresh.
 	CountMetadataWarnings func(count int)

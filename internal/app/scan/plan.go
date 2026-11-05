@@ -15,6 +15,9 @@ type probeJob struct {
 	state     library.FileState
 	placement library.Placement
 	placed    *PlacedFileState
+	// fileID, when set, is the ID a new file is saved with; the audiobook pipeline needs it
+	// before the save to write the file's chapters.
+	fileID string
 }
 
 // belowAny reports whether relativePath equals one of the skipped paths or lies below one.

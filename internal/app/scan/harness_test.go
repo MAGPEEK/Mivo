@@ -30,6 +30,8 @@ type harness struct {
 	refresher *recordingRefresher
 	// music are the music ports; zero leaves music libraries unconfigured.
 	music scan.MusicPorts
+	// audiobooks are the audiobook ports; zero leaves audiobooks libraries unconfigured.
+	audiobooks scan.AudiobookPorts
 	// finished is the optional Finished callback.
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
@@ -70,15 +72,16 @@ func (h *harness) dependencies() scan.Dependencies {
 	}
 
 	dependencies := scan.Dependencies{
-		Libraries: h.libraries,
-		Walker:    h.walker,
-		Resolver:  h.resolver,
-		Prober:    h.prober,
-		IDs:       h.ids,
-		Clock:     h.clock.Now,
-		Logger:    slog.New(handler),
-		Finished:  h.finished,
-		Music:     h.music,
+		Libraries:  h.libraries,
+		Walker:     h.walker,
+		Resolver:   h.resolver,
+		Prober:     h.prober,
+		IDs:        h.ids,
+		Clock:      h.clock.Now,
+		Logger:     slog.New(handler),
+		Finished:   h.finished,
+		Music:      h.music,
+		Audiobooks: h.audiobooks,
 	}
 
 	// A nil pointer in an interface field would count as set.

@@ -29,7 +29,9 @@ func (service *Service) pipelineFor(scanned library.ManagedLibrary, scanTracker 
 	switch scanned.Kind {
 	case library.KindMusic:
 		return service.newMusicRun(scanned, scanTracker)
-	case library.KindMovies, library.KindShows, library.KindPhotos, library.KindAudiobooks:
+	case library.KindAudiobooks:
+		return service.newAudiobookRun(scanned, scanTracker)
+	case library.KindMovies, library.KindShows, library.KindPhotos:
 		return service.newRunV2(scanned, scanTracker)
 	default:
 		return service.newRunV2(scanned, scanTracker)

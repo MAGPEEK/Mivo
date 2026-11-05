@@ -10,6 +10,9 @@ const firstDisc = 1
 
 // AudioTags are the tags of one audio file as read by an adapter. Empty text and zero
 // numbers mean the tag is absent. Compilation is the iTunes/ID3 compilation flag ("1").
+// Composer, Narrator and ComposerIsNarrator serve audiobooks: Narrator is an explicit
+// narrator tag, and ComposerIsNarrator is set only when the file says that its composer
+// field holds the narrator (see naming.AudiobookFile).
 type AudioTags struct {
 	AlbumArtist         string
 	Artist              string
@@ -23,6 +26,9 @@ type AudioTags struct {
 	MusicBrainzArtistID string
 	MusicBrainzAlbumID  string
 	MusicBrainzTrackID  string
+	Composer            string
+	Narrator            string
+	ComposerIsNarrator  bool
 }
 
 // AudioPlacement is what the tags alone say about where a track belongs. Fields the tags

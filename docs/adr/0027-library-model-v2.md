@@ -365,3 +365,23 @@ without changes reads nothing, but a changed library option makes every item due
 every track of the library once. Until the photo pipeline (M3-15f), a photos library keeps its
 images as image sidecars. An artist folder like `VA` also wins over a plain artist tag when no
 album artist tag is set.
+
+## Notes (M3-14e)
+
+§3 for audiobooks: a book's placement is one `audiobook` level; its match key is `file:` and the
+lower-cased path of a book that stands alone (an M4B, a file in the library root), else
+`folder:` and the lower-cased folder and title. The part number of a file is its 1-based play order. Grouping needs every
+file of a folder, so the folder is the scan's unit: a folder with a new, changed or removed file
+is read as a whole (probe and tags; chapters of new and changed files) and regrouped, unchanged
+files whose placement changed are moved; other folders are not read unless a book there is due
+for a refresh. An unchanged file that cannot be read keeps its stored placement.
+
+Chapters are stored per media file with file-relative offsets: the file's own valid chapter list,
+else one chapter over the whole file (title tag, else file name). Author (album artist, else
+artist) and narrator reach the item as people of a `SourceEmbedded` record, merged after the NFO
+and before the file name. §8: a folder book takes `cover`/`folder`/`front` in its folder, then
+the attached picture of its first part (several folder books in one folder, split by album tag,
+share that folder cover); a book that stands alone takes only images named after
+its file, then its attached picture. A scan that ends early refreshes only the items it touched
+when its pipeline reads files before the refresh (music, audiobooks); older pending items stay
+pending.

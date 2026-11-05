@@ -137,6 +137,10 @@ func (run *refreshRun) refreshMetadata(ctx context.Context, item *refreshItem, s
 	case nfoAbsent:
 	}
 
+	if embedded, found := run.request.Embedded[item.id]; found {
+		sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceEmbedded, Record: embedded})
+	}
+
 	sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceFilename, Record: filenameRecord(item.level)})
 	merged := metadata.Merge(state.Record, state.Locks, sources)
 

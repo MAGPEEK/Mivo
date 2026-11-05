@@ -30,6 +30,9 @@ type Dependencies struct {
 	Refresher ItemRefresher
 	// Music holds the ports of the music pipeline; a music library fails to scan without them.
 	Music MusicPorts
+	// Audiobooks holds the ports of the audiobook pipeline; an audiobooks library fails to scan
+	// without them.
+	Audiobooks AudiobookPorts
 	// Finished, when set, is called after every scan ended, whatever its outcome.
 	Finished func(ctx context.Context, libraryID string)
 	// IDs creates item and file IDs.
@@ -51,6 +54,7 @@ type Service struct {
 	catalogV2 CatalogV2
 	refresher ItemRefresher
 	music     MusicPorts
+	audiobook AudiobookPorts
 	finished  func(ctx context.Context, libraryID string)
 	ids       IDGenerator
 	clock     func() time.Time
@@ -78,6 +82,9 @@ type Service struct {
 	// pendingRefresh holds, per library ID, the items whose refresh waits for an unavailable
 	// folder to return (memory only, like the options).
 	pendingRefresh map[string]map[string]struct{}
+	// chapterRetries holds, per library ID, the audio files that were saved but whose chapters
+	// could not be written; the next scan reads them again although they are unchanged.
+	chapterRetries map[string]map[fileKey]struct{}
 	closed         bool
 }
 
@@ -99,6 +106,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		catalogV2:   dependencies.CatalogV2,
 		refresher:   refresher,
 		music:       dependencies.Music,
+		audiobook:   dependencies.Audiobooks,
 		finished:    dependencies.Finished,
 		libraries:   dependencies.Libraries,
 		walker:      dependencies.Walker,
@@ -115,6 +123,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		lastOptions: map[string]library.Options{},
 
 		pendingRefresh: map[string]map[string]struct{}{},
+		chapterRetries: map[string]map[fileKey]struct{}{},
 		withoutVideo:   map[string]map[fileKey]library.FileState{},
 	}, nil
 }
@@ -327,6 +336,7 @@ func (service *Service) Forget(libraryID string) {
 	delete(service.lastOptions, libraryID)
 	delete(service.pendingRefresh, libraryID)
 	delete(service.withoutVideo, libraryID)
+	delete(service.chapterRetries, libraryID)
 }
 
 func (service *Service) trackerOf(libraryID string) *tracker {

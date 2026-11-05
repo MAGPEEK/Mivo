@@ -9,6 +9,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
+	"github.com/magpeek/mivo/internal/domain/metadata"
 )
 
 // walked is what a completed walk found.
@@ -44,6 +45,8 @@ type runV2 struct {
 	// beforeRefresh, when set, runs once the items to refresh are known and before the
 	// refresher is called; the music pipeline reads unchanged tracks there (music_refresh.go).
 	beforeRefresh func(ctx context.Context) error
+	// embedded holds, per item ID, the record of the container tags (RefreshRequest.Embedded).
+	embedded map[string]metadata.Record
 }
 
 // refreshGrace bounds the refresh of an early-ended scan, which runs after cancellation.
@@ -75,11 +78,14 @@ func (scanRun *runV2) executeSteps(ctx context.Context, steps func(context.Conte
 		// Close waits for this scan, so it is bounded by the same grace. The scan's own error
 		// wins. The refresher gets the walked sidecars: without them it would merge
 		// filename-only data over NFO-derived metadata that no later scan repairs. When the
-		// walk failed nothing was touched, so this branch is not reached.
+		// walk failed nothing was touched, so this branch is not reached. A pipeline with a
+		// beforeRefresh hook (it reads files for the due items) did not read for the items left
+		// pending by earlier scans, so they stay pending instead of being refreshed without
+		// their files and dropped (BACKLOG, m3-13e review 2).
 		graceContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshGrace)
 		defer cancel()
 
-		_ = scanRun.refreshTouched(graceContext, scanRun.sidecars)
+		_ = scanRun.refreshTouched(graceContext, scanRun.sidecars, scanRun.beforeRefresh == nil)
 	}
 
 	return err
@@ -260,18 +266,25 @@ func (scanRun *runV2) prepareAndRefresh(ctx context.Context, sidecars []library.
 		}
 	}
 
-	return scanRun.refreshTouched(ctx, sidecars)
+	return scanRun.refreshTouched(ctx, sidecars, true)
 }
 
-// refreshTouched hands the collected items to the refresher.
-func (scanRun *runV2) refreshTouched(ctx context.Context, sidecars []library.FileState) error {
+// refreshTouched hands the collected items, and with withPending those left pending by
+// earlier scans, to the refresher.
+func (scanRun *runV2) refreshTouched(ctx context.Context, sidecars []library.FileState, withPending bool) error {
 	scanRun.refreshed = true
 	base := scanRun.base
 	service := base.service
-	pending := service.takePendingRefresh(base.library.ID)
+
+	var pending []string
+	if withPending {
+		pending = service.takePendingRefresh(base.library.ID)
+	}
+
 	ready, deferred := scanRun.splitBlocked(slices.Concat(scanRun.refresh.sorted(), pending))
 	request := RefreshRequest{
 		Library: base.library, ItemIDs: ready, Sidecars: sidecars, Files: scanRun.refreshFiles(),
+		Embedded: scanRun.embedded,
 		CountMetadataWarnings: func(count int) {
 			base.tracker.count(func(counts *Counts) { counts.MetadataWarnings += int64(count) })
 		},
@@ -453,6 +466,10 @@ func (scanRun *runV2) save(ctx context.Context, job probeJob, description media.
 func (scanRun *runV2) fileID(job probeJob) (string, error) {
 	if job.placed != nil {
 		return job.placed.ID, nil
+	}
+
+	if job.fileID != "" {
+		return job.fileID, nil
 	}
 
 	id, err := scanRun.base.service.ids.NewID()

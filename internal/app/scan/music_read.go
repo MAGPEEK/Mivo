@@ -98,7 +98,7 @@ func (scanRun *musicRun) recordTrack(ctx context.Context, result musicResult) er
 }
 
 // saveProbed stores the file with its description or its probe error and counts it.
-func (scanRun *musicRun) saveProbed(ctx context.Context, job probeJob, probed probeResult) error {
+func (scanRun *runV2) saveProbed(ctx context.Context, job probeJob, probed probeResult) error {
 	if probed.outcome == outcomeProbed {
 		return scanRun.recordProbed(ctx, probeResult{job: job, outcome: outcomeProbed, description: probed.description})
 	}
@@ -152,7 +152,7 @@ func (scanRun *musicRun) warnUnreadableTags(ctx context.Context, state library.F
 
 // warn logs a per-file warning and counts it. The error text comes from the tag reader or
 // the catalog, whose errors carry no absolute library path.
-func (scanRun *musicRun) warn(ctx context.Context, message string, state library.FileState, err error) {
+func (scanRun *runV2) warn(ctx context.Context, message string, state library.FileState, err error) {
 	base := scanRun.base
 	base.service.logger.LogAttrs(ctx, slog.LevelWarn, message,
 		slog.String("library", base.library.ID), slog.String("path", state.RelativePath), slog.String("error", err.Error()))

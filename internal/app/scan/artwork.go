@@ -62,8 +62,10 @@ func (run *refreshRun) artworkCandidates(item *refreshItem, state MetadataState)
 		return dedupe(run.albumArtwork(item, state))
 	case library.ItemKindArtist:
 		return dedupe(run.artistArtwork(item))
+	case library.ItemKindAudiobook:
+		return dedupe(run.audiobookArtwork(item, state))
 	case library.ItemKindExtra, library.ItemKindTrack,
-		library.ItemKindPhotoAlbum, library.ItemKindPhoto, library.ItemKindAudiobook:
+		library.ItemKindPhotoAlbum, library.ItemKindPhoto:
 		return nil
 	default:
 		return nil

@@ -21,9 +21,10 @@ const sortKeySeparator = "\x00"
 // and relative to the library root. Disc and Track are zero when the tag is missing.
 // ComposerIsNarrator is set by the tag reader only when the file says that the composer
 // field holds the narrator (for example a "Narrated by" label); a composer is otherwise a
-// composer.
+// composer. Author is the author tag of the file (album artist, else artist).
 type AudiobookFile struct {
 	Path               string
+	Author             string
 	Album              string
 	Composer           string
 	Narrator           string
@@ -32,10 +33,12 @@ type AudiobookFile struct {
 	ComposerIsNarrator bool
 }
 
-// Audiobook is one book: its title, folder, narrator and its part files in play order.
+// Audiobook is one book: its title, folder, author, narrator and its part files in play
+// order.
 type Audiobook struct {
 	Title    string
 	Folder   string
+	Author   string
 	Narrator string
 	Parts    []AudiobookFile
 }
@@ -145,6 +148,7 @@ func buildAudiobook(parts []AudiobookFile) Audiobook {
 	return Audiobook{
 		Title:    audiobookTitle(parts, folder),
 		Folder:   folder,
+		Author:   firstPartValue(parts, func(part AudiobookFile) string { return part.Author }),
 		Narrator: audiobookNarrator(parts),
 		Parts:    parts,
 	}
@@ -175,10 +179,8 @@ func fileStem(name string) string {
 // audiobookNarrator returns the first explicit narrator, else the first composer whose tag
 // says it is the narrator.
 func audiobookNarrator(parts []AudiobookFile) string {
-	for _, part := range parts {
-		if narrator := strings.TrimSpace(part.Narrator); narrator != "" {
-			return narrator
-		}
+	if narrator := firstPartValue(parts, func(part AudiobookFile) string { return part.Narrator }); narrator != "" {
+		return narrator
 	}
 
 	for _, part := range parts {
