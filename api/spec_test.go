@@ -227,6 +227,8 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: library + "/facets", operationID: "listLibraryFacets", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "FacetList"},
 		{method: http.MethodGet, path: library + "/letters", operationID: "listLibraryLetters", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LetterIndex"},
 		{method: http.MethodGet, path: library + "/folders", operationID: "listLibraryFolders", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LibraryFolderListing"},
+		{method: http.MethodGet, path: library + "/rows", operationID: "listLibraryRows", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "LibraryRows"},
+		{method: http.MethodGet, path: "/api/v1/home/rows", operationID: "getHomeRows", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "HomeRows"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}", operationID: "getItem", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}/children", operationID: "listItemChildren", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
 		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes", unauthenticated: true},
@@ -529,7 +531,7 @@ func TestIDsAreUUIDs(t *testing.T) {
 	for name, schema := range spec.Components.Schemas {
 		for propertyName, property := range schema.Value.Properties {
 			isID := propertyName == "id" || strings.HasSuffix(propertyName, "Id")
-			if isID && property.Value.Format != "uuid" && !isProviderScopedID(name, propertyName) {
+			if isID && property.Value.Format != "uuid" && !isProviderScopedID(name, propertyName) && !isOpaqueRowID(name, propertyName) {
 				t.Errorf("%s.%s is not format uuid", name, propertyName)
 			}
 		}

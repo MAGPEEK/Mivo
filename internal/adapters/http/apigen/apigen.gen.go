@@ -19,6 +19,27 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for CardFormat.
+const (
+	CardFormatEpisode CardFormat = "episode"
+	CardFormatPoster  CardFormat = "poster"
+	CardFormatSquare  CardFormat = "square"
+)
+
+// Valid indicates whether the value is a known member of the CardFormat enum.
+func (e CardFormat) Valid() bool {
+	switch e {
+	case CardFormatEpisode:
+		return true
+	case CardFormatPoster:
+		return true
+	case CardFormatSquare:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExtraType.
 const (
 	ExtraTypeBehindTheScenes ExtraType = "behind_the_scenes"
@@ -559,6 +580,54 @@ func (e ProviderState) Valid() bool {
 	}
 }
 
+// Defines values for RowKind.
+const (
+	RowKindMoreGenre      RowKind = "moreGenre"
+	RowKindNewReleases    RowKind = "newReleases"
+	RowKindRecentEpisodes RowKind = "recentEpisodes"
+	RowKindRecentlyAdded  RowKind = "recentlyAdded"
+)
+
+// Valid indicates whether the value is a known member of the RowKind enum.
+func (e RowKind) Valid() bool {
+	switch e {
+	case RowKindMoreGenre:
+		return true
+	case RowKindNewReleases:
+		return true
+	case RowKindRecentEpisodes:
+		return true
+	case RowKindRecentlyAdded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RowsHint.
+const (
+	RowsHintNoItems       RowsHint = "noItems"
+	RowsHintNoLibraries   RowsHint = "noLibraries"
+	RowsHintNotEnoughData RowsHint = "notEnoughData"
+	RowsHintScanning      RowsHint = "scanning"
+)
+
+// Valid indicates whether the value is a known member of the RowsHint enum.
+func (e RowsHint) Valid() bool {
+	switch e {
+	case RowsHintNoItems:
+		return true
+	case RowsHintNoLibraries:
+		return true
+	case RowsHintNotEnoughData:
+		return true
+	case RowsHintScanning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ScanState.
 const (
 	ScanStateFailed  ScanState = "failed"
@@ -660,6 +729,72 @@ type Artwork struct {
 	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Thumb *ImageRef `json:"thumb,omitempty"`
 }
+
+// BrowseQuery The sort and filters of a Browse pivot listing (listLibraryItems) as a structured object: every property has the name, values and bounds of the listLibraryItems query parameter of the same name, and an absent property means that parameter's default. "See all" opens the Browse pivot of Row.libraryId with these values in the URL. The Browse pivot lists top-level items, so a row of episodes points to their shows.
+type BrowseQuery struct {
+	// AudioCodec Audio codecs, as the listLibraryItems parameter audioCodec.
+	AudioCodec *[]string `json:"audioCodec,omitempty"`
+
+	// AudioLanguage Audio languages, as the listLibraryItems parameter audioLanguage.
+	AudioLanguage *[]string `json:"audioLanguage,omitempty"`
+
+	// Container Containers, as the listLibraryItems parameter container.
+	Container *[]string `json:"container,omitempty"`
+
+	// ContentRating Content ratings, as the listLibraryItems parameter contentRating.
+	ContentRating *[]string `json:"contentRating,omitempty"`
+
+	// Decade Decades by their first year, as the listLibraryItems parameter decade.
+	Decade *[]int32 `json:"decade,omitempty"`
+
+	// Genre Genres, as the listLibraryItems parameter genre.
+	Genre *[]string `json:"genre,omitempty"`
+
+	// MatchState Whether the item is matched with an online provider: "matched", "unmatched" (no confident match yet) or "disabled" (the match was removed on purpose and is not made again automatically). Clients must tolerate new values.
+	//
+	// Example: matched
+	MatchState *MatchState `json:"matchState,omitempty"`
+
+	// Order Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
+	//
+	// Example: asc
+	Order *SortOrder `json:"order,omitempty"`
+
+	// Quick Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
+	//
+	// Example: hdr
+	Quick *ItemQuickFilter `json:"quick,omitempty"`
+
+	// Resolution Resolution classes, as the listLibraryItems parameter resolution.
+	Resolution *[]VideoResolution `json:"resolution,omitempty"`
+
+	// Seed Seed of sort "random", as the listLibraryItems parameter seed.
+	Seed *int32 `json:"seed,omitempty"`
+
+	// Sort Sort key of a library listing: "title" (sort title), "year", "releaseDate" (release of a movie, first air date of a show), "contentRating" (rating text), "duration" (of the primary file), "dateAdded" (when the item entered the catalog), "resolution" (pixel count of the primary video), "bitrate" (overall bit rate of the primary file), "fileSize" (primary file; for a show the sum of its episodes) or "random" (shuffled, stable per seed). Containers without a file (shows) have no duration, resolution or bit rate. Clients must tolerate values added in later versions.
+	//
+	// Example: dateAdded
+	Sort *ItemSort `json:"sort,omitempty"`
+
+	// SubtitleLanguage Subtitle languages, as the listLibraryItems parameter subtitleLanguage.
+	SubtitleLanguage *[]string `json:"subtitleLanguage,omitempty"`
+
+	// Type Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	//
+	// Example: movie
+	Type *ItemKind `json:"type,omitempty"`
+
+	// VideoCodec Video codecs, as the listLibraryItems parameter videoCodec.
+	VideoCodec *[]string `json:"videoCodec,omitempty"`
+
+	// Year Years, as the listLibraryItems parameter year.
+	Year *[]int32 `json:"year,omitempty"`
+}
+
+// CardFormat Card shape of a row (HO-02): "poster" (2:3, the item's poster), "episode" (16:9, the item's thumb, falling back to its poster) or "square" (1:1, albums and photos). Clients must tolerate values added in later versions and render unknown formats as "poster".
+//
+// Example: poster
+type CardFormat string
 
 // ClientProfile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
 type ClientProfile struct {
@@ -901,6 +1036,45 @@ type HealthResponse struct {
 // HealthStatus State of the server as a whole or of one health check. Clients must tolerate values added in later versions.
 type HealthStatus string
 
+// HeroItem One title of the Home hero (HO-01). Only items with a backdrop are listed.
+type HeroItem struct {
+	// Backdrop Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Backdrop ImageRef `json:"backdrop"`
+
+	// ItemID ID of the item, for "More info" (getItem) and "Play".
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	ItemID uuid.UUID `json:"itemId"`
+
+	// Kind Kind of an item (ADR 0027): "movie" and "show" are top-level items, a "season" belongs to a show, an "episode" to a season, an "extra" (trailer, featurette, …) to a movie or a show. Movies, episodes and extras own media files; shows and seasons are containers without files. Clients must tolerate values added in later versions (for example music, audiobook and photo kinds).
+	//
+	// Example: movie
+	Kind ItemKind `json:"kind"`
+
+	// LibraryID ID of the library that contains the item.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// Logo Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
+	Logo *ImageRef `json:"logo,omitempty"`
+
+	// SummaryLine Start of the item's summary, cut by the server at a word boundary to fit one line; omitted when the item has no summary.
+	//
+	// Example: A large and lovable rabbit deals with three tiny bullies.
+	SummaryLine *string `json:"summaryLine,omitempty"`
+
+	// Title Display title of the item.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+
+	// Year Release year of a movie or first-air year of a show.
+	//
+	// Example: 2008
+	Year *int32 `json:"year,omitempty"`
+}
+
 // HlsDelivery How the client plays HLS with fMP4 segments: "mse" (a script player over Media Source Extensions, for example hls.js), "native" (the media element plays HLS itself) or "none" (no HLS; only direct play is possible). Clients must tolerate values added in later versions.
 //
 // Example: mse
@@ -922,6 +1096,20 @@ type HlsProfile struct {
 	//
 	// Example: ["h264","av1","vp9"]
 	VideoCodecs []MediaIdentifier `json:"videoCodecs"`
+}
+
+// HomeRows The rows and the hero list of the Home screen.
+type HomeRows struct {
+	// Hero Up to five titles for the hero, most recently added first (later milestones put "continue watching" first); empty when no item has a backdrop, and then the client hides the hero.
+	Hero []HeroItem `json:"hero"`
+
+	// Hint Why a rows response has no or few rows, for a short hint instead of an empty page: "noLibraries" (Home without libraries; the client offers "Add library", HO-09), "noItems" (the library, or every library on Home, has no items yet), "scanning" (no items yet and the first scan is running) or "notEnoughData" (items exist but lack the metadata most rows need, for example release dates or genres; it may accompany the rows that could be built). Clients must tolerate values added in later versions and show a generic hint for unknown values.
+	//
+	// Example: noItems
+	Hint *RowsHint `json:"hint,omitempty"`
+
+	// Rows The rows in display order; empty without libraries or items.
+	Rows []Row `json:"rows"`
 }
 
 // IdentifyCandidate One provider entry the item may be matched with.
@@ -1270,6 +1458,11 @@ type ItemSummary struct {
 	// Example: ["nfo","tmdb"]
 	MetadataSources *MetadataSources `json:"metadataSources,omitempty"`
 
+	// NewEpisodeCount Only in rows of kind "recentlyAdded": the number of recently added episodes this show or season card groups (HO-05, the "new episodes" badge). Omitted elsewhere.
+	//
+	// Example: 3
+	NewEpisodeCount *int32 `json:"newEpisodeCount,omitempty"`
+
 	// Number Season number of a season (0 for specials) or episode number of an episode.
 	//
 	// Example: 1
@@ -1287,6 +1480,16 @@ type ItemSummary struct {
 
 	// Poster Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Poster *ImageRef `json:"poster,omitempty"`
+
+	// SeasonNumber Season number of an episode (0 for specials), for the compact "S3 · E7" label. Rows carry it; listItemChildren of a season may omit it, the parent already names the season.
+	//
+	// Example: 3
+	SeasonNumber *int32 `json:"seasonNumber,omitempty"`
+
+	// ShowTitle Title of the show of a season or an episode, so a card can name it. Rows carry it; listItemChildren may omit it, the parent already names the show.
+	//
+	// Example: Elephants Dream
+	ShowTitle *string `json:"showTitle,omitempty"`
 
 	// Thumb Reference to an artwork image. Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Thumb *ImageRef `json:"thumb,omitempty"`
@@ -1504,6 +1707,22 @@ type LibraryOptions struct {
 	//
 	// Example: true
 	ScanExtras bool `json:"scanExtras"`
+}
+
+// LibraryRows The rows of a library's Overview pivot.
+type LibraryRows struct {
+	// Hint Why a rows response has no or few rows, for a short hint instead of an empty page: "noLibraries" (Home without libraries; the client offers "Add library", HO-09), "noItems" (the library, or every library on Home, has no items yet), "scanning" (no items yet and the first scan is running) or "notEnoughData" (items exist but lack the metadata most rows need, for example release dates or genres; it may accompany the rows that could be built). Clients must tolerate values added in later versions and show a generic hint for unknown values.
+	//
+	// Example: noItems
+	Hint *RowsHint `json:"hint,omitempty"`
+
+	// LibraryID ID of the library.
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// Rows The rows in display order; empty for a library without items.
+	Rows []Row `json:"rows"`
 }
 
 // LibraryUpdate Request body of updateLibrary; at least one property. The kind of a library cannot change, so it is not part of this body.
@@ -2049,6 +2268,60 @@ type ProviderKeyStatus string
 // Example: ok
 type ProviderState string
 
+// Row One row of Home or of a library's Overview pivot with its first items (HO-07). The title is a translation key with parameters, never a translated text: the server has no UI language. Episode grouping in "recentlyAdded" (HO-05): the recently added episodes of one show become one card; when they all belong to one season the card is that season, else the show, and newEpisodeCount counts them. In "recentEpisodes" every card is an episode with seasonNumber, showTitle and its show's poster in poster. "moreGenre" rows rotate daily: the server ranks the library's genres by number of items and picks up to three of the top ten, seeded by the server's local calendar date as the number YYYYMMDD, so every client sees the same genres for the whole day.
+type Row struct {
+	// CardFormat Card shape of a row (HO-02): "poster" (2:3, the item's poster), "episode" (16:9, the item's thumb, falling back to its poster) or "square" (1:1, albums and photos). Clients must tolerate values added in later versions and render unknown formats as "poster".
+	//
+	// Example: poster
+	CardFormat CardFormat `json:"cardFormat"`
+
+	// Genre The genre of a "moreGenre" row; omitted for other kinds.
+	//
+	// Example: Comedy
+	Genre *string `json:"genre,omitempty"`
+
+	// ID Opaque identifier of the row, stable across requests (for list keys and later for hiding a row, HO-08). Not a UUID; clients must not parse it.
+	//
+	// Example: recentlyAdded:3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	ID string `json:"id"`
+
+	// Items The row's first items in display order, at most the requested limit: movies, shows, seasons (grouped episodes) or episodes, depending on kind.
+	Items []ItemSummary `json:"items"`
+
+	// Kind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre) or "recentEpisodes" (episodes by air date, newest first, in shows libraries). Later milestones add kinds such as "people", "topRated", "continueWatching" and "upNext". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
+	//
+	// Example: recentlyAdded
+	Kind RowKind `json:"kind"`
+
+	// LibraryID ID of the library the row comes from; seeAllQuery applies to its Browse pivot. Omitted only for rows across libraries (later milestones).
+	//
+	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
+	LibraryID *uuid.UUID `json:"libraryId,omitempty"`
+
+	// SeeAllQuery The sort and filters of a Browse pivot listing (listLibraryItems) as a structured object: every property has the name, values and bounds of the listLibraryItems query parameter of the same name, and an absent property means that parameter's default. "See all" opens the Browse pivot of Row.libraryId with these values in the URL. The Browse pivot lists top-level items, so a row of episodes points to their shows.
+	SeeAllQuery *BrowseQuery `json:"seeAllQuery,omitempty"`
+
+	// TitleKey Translation key of the row title: "rows.recentlyAdded", "rows.recentlyAddedIn" (Home, parameter library), "rows.newReleases", "rows.moreGenre" (parameter genre) or "rows.recentEpisodes"; later versions add keys. A client without a translation for the key falls back to a title for kind.
+	//
+	// Example: rows.moreGenre
+	TitleKey string `json:"titleKey"`
+
+	// TitleParams Values of the title's placeholders by name, for example {"genre": "Comedy"} or {"library": "Movies"}; omitted when the title has none. Values are data (genre or library names), not translated text.
+	//
+	// Example: {"genre":"Comedy"}
+	TitleParams *map[string]string `json:"titleParams,omitempty"`
+}
+
+// RowKind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre) or "recentEpisodes" (episodes by air date, newest first, in shows libraries). Later milestones add kinds such as "people", "topRated", "continueWatching" and "upNext". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
+//
+// Example: recentlyAdded
+type RowKind string
+
+// RowsHint Why a rows response has no or few rows, for a short hint instead of an empty page: "noLibraries" (Home without libraries; the client offers "Add library", HO-09), "noItems" (the library, or every library on Home, has no items yet), "scanning" (no items yet and the first scan is running) or "notEnoughData" (items exist but lack the metadata most rows need, for example release dates or genres; it may accompany the rows that could be built). Clients must tolerate values added in later versions and show a generic hint for unknown values.
+//
+// Example: noItems
+type RowsHint string
+
 // ScanCounts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
 type ScanCounts struct {
 	// Added New video files that were probed and added.
@@ -2254,6 +2527,9 @@ type ResolutionFilter = []VideoResolution
 // RootID defines model for RootId.
 type RootID = uuid.UUID
 
+// RowItemLimit defines model for RowItemLimit.
+type RowItemLimit = int32
+
 // SessionID defines model for SessionId.
 type SessionID = uuid.UUID
 
@@ -2276,6 +2552,12 @@ type ProviderUnavailable = Problem
 type ListFoldersParams struct {
 	// Path Folder to list, relative to the root and separated by "/", up to 4096 characters. Empty or omitted lists the root itself.
 	Path *string `form:"path,omitempty" json:"path,omitempty"`
+}
+
+// GetHomeRowsParams defines parameters for GetHomeRows.
+type GetHomeRowsParams struct {
+	// Limit Maximum number of items in each row (the row's first page); "See all" opens the Browse pivot for the rest.
+	Limit *RowItemLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListItemChildrenParams defines parameters for ListItemChildren.
@@ -2443,6 +2725,12 @@ type ListLibraryLettersParams struct {
 	SubtitleLanguage *SubtitleLanguageFilter `form:"subtitleLanguage,omitempty" json:"subtitleLanguage,omitempty"`
 }
 
+// ListLibraryRowsParams defines parameters for ListLibraryRows.
+type ListLibraryRowsParams struct {
+	// Limit Maximum number of items in each row (the row's first page); "See all" opens the Browse pivot for the rest.
+	Limit *RowItemLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // IdentifyItemJSONRequestBody defines body for IdentifyItem for application/json ContentType.
 type IdentifyItemJSONRequestBody = IdentifyRequest
 
@@ -2472,6 +2760,9 @@ type ServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetHomeRows Rows and hero of the Home screen
+	// (GET /api/v1/home/rows)
+	GetHomeRows(w http.ResponseWriter, r *http.Request, params GetHomeRowsParams)
 	// GetItem Describe one item with its metadata, files and streams
 	// (GET /api/v1/items/{itemId})
 	GetItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
@@ -2520,6 +2811,9 @@ type ServerInterface interface {
 	// RefreshLibraryMetadata Queue a metadata refresh of a library
 	// (POST /api/v1/libraries/{libraryId}/refresh)
 	RefreshLibraryMetadata(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// ListLibraryRows Rows of a library's Overview pivot
+	// (GET /api/v1/libraries/{libraryId}/rows)
+	ListLibraryRows(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryRowsParams)
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
@@ -2616,6 +2910,39 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHomeRows operation middleware
+func (siw *ServerInterfaceWrapper) GetHomeRows(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetHomeRowsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHomeRows(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3682,6 +4009,48 @@ func (siw *ServerInterfaceWrapper) RefreshLibraryMetadata(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListLibraryRows operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryRows(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "libraryId" -------------
+	var libraryID LibraryID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "libraryId", r.PathValue("libraryId"), &libraryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "libraryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryRowsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryRows(w, r, libraryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartLibraryScan operation middleware
 func (siw *ServerInterfaceWrapper) StartLibraryScan(w http.ResponseWriter, r *http.Request) {
 
@@ -3964,6 +4333,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/facets", wrapper.ListLibraryFacets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/letters", wrapper.ListLibraryLetters)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/folders", wrapper.ListLibraryFolders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/rows", wrapper.ListLibraryRows)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/home/rows", wrapper.GetHomeRows)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}/children", wrapper.ListItemChildren)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify/search", wrapper.SearchIdentifyCandidates)
@@ -4113,6 +4484,45 @@ type GetHealthdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetHealthdefaultApplicationProblemPlusJSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHomeRowsRequestObject struct {
+	Params GetHomeRowsParams
+}
+
+type GetHomeRowsResponseObject interface {
+	VisitGetHomeRowsResponse(w http.ResponseWriter) error
+}
+
+type GetHomeRows200JSONResponse HomeRows
+
+func (response GetHomeRows200JSONResponse) VisitGetHomeRowsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHomeRowsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetHomeRowsdefaultApplicationProblemPlusJSONResponse) VisitGetHomeRowsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -4849,6 +5259,46 @@ func (response RefreshLibraryMetadatadefaultApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type ListLibraryRowsRequestObject struct {
+	LibraryID LibraryID `json:"libraryId"`
+	Params    ListLibraryRowsParams
+}
+
+type ListLibraryRowsResponseObject interface {
+	VisitListLibraryRowsResponse(w http.ResponseWriter) error
+}
+
+type ListLibraryRows200JSONResponse LibraryRows
+
+func (response ListLibraryRows200JSONResponse) VisitListLibraryRowsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLibraryRowsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLibraryRowsdefaultApplicationProblemPlusJSONResponse) VisitListLibraryRowsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartLibraryScanRequestObject struct {
 	LibraryID LibraryID `json:"libraryId"`
 }
@@ -5197,6 +5647,9 @@ type StrictServerInterface interface {
 	// GetHealth Report whether the server can serve requests
 	// (GET /api/v1/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetHomeRows Rows and hero of the Home screen
+	// (GET /api/v1/home/rows)
+	GetHomeRows(ctx context.Context, request GetHomeRowsRequestObject) (GetHomeRowsResponseObject, error)
 	// GetItem Describe one item with its metadata, files and streams
 	// (GET /api/v1/items/{itemId})
 	GetItem(ctx context.Context, request GetItemRequestObject) (GetItemResponseObject, error)
@@ -5245,6 +5698,9 @@ type StrictServerInterface interface {
 	// RefreshLibraryMetadata Queue a metadata refresh of a library
 	// (POST /api/v1/libraries/{libraryId}/refresh)
 	RefreshLibraryMetadata(ctx context.Context, request RefreshLibraryMetadataRequestObject) (RefreshLibraryMetadataResponseObject, error)
+	// ListLibraryRows Rows of a library's Overview pivot
+	// (GET /api/v1/libraries/{libraryId}/rows)
+	ListLibraryRows(ctx context.Context, request ListLibraryRowsRequestObject) (ListLibraryRowsResponseObject, error)
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(ctx context.Context, request StartLibraryScanRequestObject) (StartLibraryScanResponseObject, error)
@@ -5378,6 +5834,32 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHomeRows operation middleware
+func (sh *strictHandler) GetHomeRows(w http.ResponseWriter, r *http.Request, params GetHomeRowsParams) {
+	var request GetHomeRowsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHomeRows(ctx, request.(GetHomeRowsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHomeRows")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHomeRowsResponseObject); ok {
+		if err := validResponse.VisitGetHomeRowsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5823,6 +6305,33 @@ func (sh *strictHandler) RefreshLibraryMetadata(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshLibraryMetadataResponseObject); ok {
 		if err := validResponse.VisitRefreshLibraryMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLibraryRows operation middleware
+func (sh *strictHandler) ListLibraryRows(w http.ResponseWriter, r *http.Request, libraryID LibraryID, params ListLibraryRowsParams) {
+	var request ListLibraryRowsRequestObject
+
+	request.LibraryID = libraryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLibraryRows(ctx, request.(ListLibraryRowsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLibraryRows")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLibraryRowsResponseObject); ok {
+		if err := validResponse.VisitListLibraryRowsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
