@@ -33,6 +33,10 @@
   },
   "trackCount_one": "{{count, number}} track",
   "trackCount_other": "{{count, number}} tracks",
+  "chapterCount_one": "{{count, number}} chapter",
+  "chapterCount_other": "{{count, number}} chapters",
+  "authors": "By {{names}}",
+  "narrators": "Narrated by {{names}}",
   "file": {
     "heading": "File",
     "name": "File name",

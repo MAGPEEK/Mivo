@@ -1,4 +1,4 @@
-import type { Library } from "@mivo/api-client";
+import type { Library, LibraryKind } from "@mivo/api-client";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
@@ -28,7 +28,13 @@ export interface LibraryPageProps {
 
 const headingClass = "text-3xl font-semibold";
 
-/** One library: name, item count, scan button and the poster grid of its videos. */
+// The library counts its top-level items: books in an audiobook library. The other kinds keep
+// the video count until they get their own (BACKLOG M3-14h).
+function itemCountKey(kind: LibraryKind): "audiobookCount" | "itemCount" {
+  return kind === "audiobooks" ? "audiobookCount" : "itemCount";
+}
+
+/** One library: name, item count, scan button and the grid of its items. */
 export function LibraryPage({ libraryId, search, onSearchChange, renderItems }: LibraryPageProps) {
   const { t } = useTranslation(libraryNamespace);
   const library = useLibrary(libraryId);
@@ -68,7 +74,9 @@ function LibraryContent({ library, search, onSearchChange, renderItems }: Librar
       <div className="mb-8 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h1 className={headingClass}>{library.name}</h1>
-          <p className="text-sm text-text-muted">{t("itemCount", { count: library.itemCount })}</p>
+          <p className="text-sm text-text-muted">
+            {t(itemCountKey(library.kind), { count: library.itemCount })}
+          </p>
           {!library.available && (
             <Badge icon={<AlertIcon className="size-3 shrink-0 text-accent" />}>
               {t("libraryUnavailable")}

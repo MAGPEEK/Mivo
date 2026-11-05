@@ -44,6 +44,7 @@ const localeFiles = namespaces.flatMap(([name, locales]) =>
 describe("locales", () => {
   it("registers the shared namespace and one namespace per feature", () => {
     expect(namespaces.map(([name]) => name).toSorted()).toEqual([
+      "audiobooks",
       "home",
       "identify",
       "item",

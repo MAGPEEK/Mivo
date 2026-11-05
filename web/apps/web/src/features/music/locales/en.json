@@ -3,13 +3,15 @@
     "label": "Albums",
     "loading": "Loading albums",
     "loadFailed": "The albums could not be loaded.",
-    "loadMore": "Load more",
     "loadingMore": "Loading more albums",
     "loadMoreFailed": "More albums could not be loaded.",
-    "retry": "Try again",
     "empty": {
       "title": "No albums yet",
       "hint": "Run a scan to find the albums in this library's folder."
+    },
+    "emptyUnmatched": {
+      "title": "Everything is matched",
+      "hint": "Every album of this library is matched with a provider entry."
     }
   },
   "tracks": {

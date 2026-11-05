@@ -13,6 +13,9 @@ const texts: ItemViewTexts = {
   seasons: (count) => `${String(count)} seasons`,
   episodes: (count) => `${String(count)} episodes`,
   trackCount: (count) => `${String(count)} tracks`,
+  authors: (names) => `By ${names}`,
+  narrators: (names) => `Narrated by ${names}`,
+  chapterCount: (count) => `${String(count)} chapters`,
 };
 
 interface ViewCase {
@@ -108,6 +111,43 @@ const viewCases: readonly ViewCase[] = [
       artwork: { square: { id: "cover-1", tag: "tag-1" } },
     }),
     expected: { square: { id: "cover-1", tag: "tag-1" }, facts: ["2019", "4 tracks"] },
+  },
+  {
+    name: "an audiobook of two parts names its people, whole length and chapters",
+    item: item({
+      kind: "audiobook",
+      year: 2021,
+      people: [
+        { name: "Ada Inkwell", role: "author" },
+        { name: "Bram Quill", role: "author" },
+        { name: "Nora Vale", role: "narrator" },
+        { name: "Someone Else", role: "actor" },
+      ],
+      files: [
+        mediaFile({ id: "part-1", durationSeconds: 1_800 }),
+        mediaFile({ id: "part-2", durationSeconds: 1_900 }),
+      ],
+      chapters: [
+        { title: "One", startMs: 0, endMs: 1_800_000, fileId: "part-1" },
+        { title: "Two", startMs: 0, endMs: 1_900_000, fileId: "part-2" },
+      ],
+      artwork: { poster: { id: "cover-2", tag: "tag-2" } },
+    }),
+    expected: {
+      poster: { id: "cover-2", tag: "tag-2" },
+      facts: [
+        "By Ada Inkwell and Bram Quill",
+        "Narrated by Nora Vale",
+        "2021",
+        `duration:${JSON.stringify({ unit: "hours", hours: 1, minutes: 1 })}`,
+        "2 chapters",
+      ],
+    },
+  },
+  {
+    name: "an audiobook without people, length or chapters",
+    item: item({ kind: "audiobook", files: [mediaFile()] }),
+    expected: { facts: [] },
   },
   {
     name: "a movie with year, summary and genres",

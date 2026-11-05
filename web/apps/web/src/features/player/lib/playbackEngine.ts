@@ -122,6 +122,15 @@ const mediaEvents: readonly PlaybackMediaEvent[] = [
   "timeupdate",
 ];
 
+/**
+ * Where a new session starts in the file. An HLS stream starts where the server says (the
+ * keyframe at or before the request). A direct-play stream is the whole file, so the server
+ * answers 0 and the element seeks to the requested position itself.
+ */
+function sessionStart(session: PlaybackSession, requestedPosition: number): number {
+  return session.delivery === "file" ? requestedPosition : session.startPositionSeconds;
+}
+
 /** Bounds positions before any session told the duration: inside `[0, ∞)`. */
 const fileOfUnknownLength: TimelineSession = { delivery: "file", startPositionSeconds: 0 };
 
@@ -363,7 +372,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     if (next !== undefined) {
       this.continueAfter(session, options, next);
     } else if (generation === this.generation) {
-      this.useSession(options.request, session, session.startPositionSeconds);
+      this.useSession(options.request, session, sessionStart(session, options.position));
     } else {
       // Closed or hidden while the request was in flight.
       this.dependencies.api.stopSession(session.id);

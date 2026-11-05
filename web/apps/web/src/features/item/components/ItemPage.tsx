@@ -11,6 +11,7 @@ import { ShowPage, SeasonPage } from "./ContainerPages";
 import { ItemDetails } from "./ItemDetails";
 import { ItemLoadError, ItemLoading, ItemNotFound } from "./ItemStates";
 import { AlbumPage } from "./MusicPages";
+import { AudiobookPage } from "./AudiobookPage";
 import type { Ref } from "react";
 
 /** Props of {@link ItemPage}. */
@@ -24,7 +25,8 @@ export interface ItemPageProps {
 /**
  * Item page: shows what the kind of the item calls for. A movie or extra is what a video is
  * technically, its tracks and the Play button; a show lists its seasons, a season its
- * episodes, an episode links back to both and to its neighbours, an album lists its tracks.
+ * episodes, an episode links back to both and to its neighbours, an album lists its tracks,
+ * an audiobook its chapters.
  */
 export function ItemPage({ itemId, search = {} }: ItemPageProps) {
   const state = useItemDetails(itemId);
@@ -93,6 +95,10 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
       return <EpisodePage headingRef={headingRef} itemId={itemId} item={item} />;
     case "album":
       return <AlbumPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
+    case "audiobook":
+      return (
+        <AudiobookPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />
+      );
     // Artists get their own page with the full music view (M5); until then the generic
     // detail view shows them, tracks and kinds added in later API versions (default).
     case "movie":

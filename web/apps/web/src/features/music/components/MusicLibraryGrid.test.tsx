@@ -95,6 +95,13 @@ describe("Music library grid", () => {
     expect(screen.queryByRole("list", { name: "Videos" })).toBeNull();
   });
 
+  it("tells an empty Unmatched result from a library without albums", async () => {
+    renderMusicLibrary([itemsRoute(library.id, [])], ["en"], `${albumsPath}&matchState=unmatched`);
+
+    expect(await screen.findByText("Everything is matched")).toBeTruthy();
+    expect(screen.queryByText("No albums yet")).toBeNull();
+  });
+
   it("offers a retry after a failed load and then shows the albums", async () => {
     let failing = true;
     renderMusicLibrary([
@@ -126,6 +133,10 @@ describe("Music library grid", () => {
 
     await waitFor(() => {
       expect(within(list).getAllByRole("listitem").length).toBeGreaterThan(firstPage);
+    });
+    // Focus moves to the first new card, so keyboard users continue where the page grew.
+    await waitFor(() => {
+      expect(document.activeElement?.textContent).toContain(`Album album-${String(firstPage)}`);
     });
   });
 

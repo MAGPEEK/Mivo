@@ -1,5 +1,12 @@
-import type { ImageRef, ItemAncestor, ItemDetail, ItemKind, MediaFile } from "@mivo/api-client";
-import { resolutionLabel } from "@mivo/player-core";
+import type {
+  ImageRef,
+  ItemAncestor,
+  ItemDetail,
+  ItemKind,
+  MediaFile,
+  PersonRole,
+} from "@mivo/api-client";
+import { bookTimeline, resolutionLabel } from "@mivo/player-core";
 
 import { formatAirDate } from "./airDate";
 import { durationParts, type DurationParts } from "./duration";
@@ -83,6 +90,12 @@ export interface ItemViewTexts {
   readonly episodes: (count: number) => string;
   /** "12 tracks", with the plural form of the language. */
   readonly trackCount: (count: number) => string;
+  /** "By Ada Inkwell" for the authors of an audiobook, already joined. */
+  readonly authors: (names: string) => string;
+  /** "Narrated by Nora Vale" for the narrators of an audiobook, already joined. */
+  readonly narrators: (names: string) => string;
+  /** "3 chapters", with the plural form of the language. */
+  readonly chapterCount: (count: number) => string;
 }
 
 /** The parts of an {@link ItemView} that describe the primary file. */
@@ -119,8 +132,34 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     play: playView(item, texts),
     metadataSources: item.metadataSources ?? [],
     ...fileView,
-    facts: [...itemFacts(item, texts), ...fileView.facts],
+    facts:
+      item.kind === "audiobook"
+        ? audiobookFacts(item, texts)
+        : [...itemFacts(item, texts), ...fileView.facts],
   };
+}
+
+function namesWithRole(item: ItemDetail, role: PersonRole, language: string): string {
+  const names = (item.people ?? []).filter((person) => person.role === role);
+  return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(
+    names.map((person) => person.name),
+  );
+}
+
+// An audiobook names its authors and narrators, and its length is that of all its parts: the
+// primary file is only the first part of a book of several.
+function audiobookFacts(item: ItemDetail, texts: ItemViewTexts): string[] {
+  const authors = namesWithRole(item, "author", texts.language);
+  const narrators = namesWithRole(item, "narrator", texts.language);
+  const chapters = item.chapters ?? [];
+  const { totalSeconds } = bookTimeline(item.files, chapters);
+  return [
+    authors === "" ? "" : texts.authors(authors),
+    narrators === "" ? "" : texts.narrators(narrators),
+    item.year === undefined ? "" : String(item.year),
+    totalSeconds > 0 ? texts.duration(durationParts(totalSeconds)) : "",
+    chapters.length > 0 ? texts.chapterCount(chapters.length) : "",
+  ].filter((fact) => fact !== "");
 }
 
 function toAncestorView(ancestor: ItemAncestor): AncestorView {

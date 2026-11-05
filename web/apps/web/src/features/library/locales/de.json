@@ -3,6 +3,8 @@
   "loading": "Bibliothek wird geladen",
   "itemCount_one": "{{count, number}} Video",
   "itemCount_other": "{{count, number}} Videos",
+  "audiobookCount_one": "{{count, number}} Hörbuch",
+  "audiobookCount_other": "{{count, number}} Hörbücher",
   "libraryUnavailable": "Ordner nicht erreichbar",
   "loadFailed": "Die Bibliothek konnte nicht geladen werden.",
   "retry": "Erneut versuchen",

@@ -187,9 +187,10 @@ func pageOf(ctx context.Context, queries *sqlcgen.Queries, source pageSource, cu
 	return page, nil
 }
 
-// summariesOf builds the summaries of listed items with three queries whatever the page size:
-// the primary files with their streams, and the selected artwork. A season without a poster
-// shows the poster of fallbackParent, its show.
+// summariesOf builds the summaries of listed items with a fixed number of queries whatever the
+// page size: the primary files with their streams, the selected artwork and, for a page with
+// audiobooks, their summed part lengths. A season without a poster shows the poster of
+// fallbackParent, its show.
 func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedItem, fallbackParent sqlcgen.Item) ([]applibrary.ItemSummary, error) {
 	itemIDs := make([]string, 0, len(listed)+1)
 	for _, entry := range listed {

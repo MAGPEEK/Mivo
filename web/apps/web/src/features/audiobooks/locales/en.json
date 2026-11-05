@@ -1,0 +1,25 @@
+{
+  "books": {
+    "label": "Audiobooks",
+    "loading": "Loading audiobooks",
+    "loadFailed": "The audiobooks could not be loaded.",
+    "loadingMore": "Loading more audiobooks",
+    "loadMoreFailed": "More audiobooks could not be loaded.",
+    "empty": {
+      "title": "No audiobooks yet",
+      "hint": "Run a scan to find the audiobooks in this library's folder."
+    },
+    "emptyUnmatched": {
+      "title": "Everything is matched",
+      "hint": "Every audiobook of this library is matched with a provider entry."
+    }
+  },
+  "chapters": {
+    "label": "Chapters",
+    "empty": "This audiobook has no chapters.",
+    "play": "Play {{title}}",
+    "startsAt": "Starts at {{time}}",
+    "length": "Length",
+    "unavailable": "Unavailable"
+  }
+}

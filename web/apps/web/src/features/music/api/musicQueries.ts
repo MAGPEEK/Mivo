@@ -1,6 +1,8 @@
 import { ApiError, requestData, type ApiClient } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
+import { itemQueryKey } from "../../../shared/api";
+
 /** Tracks per page: the server maximum, so one page holds every track of a usual album. */
 export const tracksPageSize = 500;
 
@@ -20,17 +22,11 @@ export function shouldRetryMusicQuery(failureCount: number, error: Error): boole
 }
 
 /**
- * Cache key of `GET /api/v1/items/{itemId}`. It is the item page's key, so an artist loaded
- * for an album card is the entry the artist's page shows, and invalidating an item reaches
- * its tracks below it.
+ * Cache key of the track pages of an album: below the album's item key, so invalidating the
+ * album reaches its tracks.
  */
-export function musicItemQueryKey(itemId: string) {
-  return ["items", itemId] as const;
-}
-
-/** Cache key of the track pages of an album. */
 export function albumTracksQueryKey(albumId: string) {
-  return [...musicItemQueryKey(albumId), "tracks"] as const;
+  return [...itemQueryKey(albumId), "tracks"] as const;
 }
 
 /** Infinite query options for the tracks of an album, in disc and track order. */
@@ -62,7 +58,7 @@ export function albumTracksQueryOptions(client: ApiClient, albumId: string) {
  */
 export function artistNameQueryOptions(client: ApiClient, artistId: string) {
   return queryOptions({
-    queryKey: musicItemQueryKey(artistId),
+    queryKey: itemQueryKey(artistId),
     queryFn: ({ signal }) =>
       requestData(
         client.GET("/api/v1/items/{itemId}", { params: { path: { itemId: artistId } }, signal }),

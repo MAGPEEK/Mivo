@@ -140,3 +140,12 @@ export {
   type StreamKindKey,
   type WarningKey,
 } from "./streamInfo/translationKeys";
+export {
+  bookTimeline,
+  filePositionAt,
+  type BookChapter,
+  type BookPart,
+  type BookTimeline,
+  type FilePosition,
+  type TimelineChapter,
+} from "./audiobook/bookTimeline";

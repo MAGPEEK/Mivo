@@ -3,13 +3,15 @@
     "label": "Alben",
     "loading": "Alben werden geladen",
     "loadFailed": "Die Alben konnten nicht geladen werden.",
-    "loadMore": "Mehr laden",
     "loadingMore": "Weitere Alben werden geladen",
     "loadMoreFailed": "Weitere Alben konnten nicht geladen werden.",
-    "retry": "Erneut versuchen",
     "empty": {
       "title": "Noch keine Alben",
       "hint": "Starte einen Scan, um die Alben im Ordner dieser Mediathek zu finden."
+    },
+    "emptyUnmatched": {
+      "title": "Alles zugeordnet",
+      "hint": "Jedes Album dieser Mediathek ist einem Eintrag eines Anbieters zugeordnet."
     }
   },
   "tracks": {

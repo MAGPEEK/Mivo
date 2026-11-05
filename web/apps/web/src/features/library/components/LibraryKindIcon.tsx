@@ -41,7 +41,7 @@ export interface LibraryKindIconProps {
   readonly className: string;
 }
 
-/** Icon of a library kind: a film strip for movies, a screen for shows, a note for music. */
+/** Icon of a library kind: a film strip for movies, a screen for shows, a note for music, a book for audiobooks. */
 export function LibraryKindIcon({ kind, className }: LibraryKindIconProps) {
   switch (kind) {
     case "movies":
@@ -64,6 +64,14 @@ export function LibraryKindIcon({ kind, className }: LibraryKindIconProps) {
           <path d="M9 18V5l11-2v13" />
           <circle cx="6" cy="18" r="3" />
           <circle cx="17" cy="16" r="3" />
+        </KindIcon>
+      );
+    case "audiobooks":
+      // An open book.
+      return (
+        <KindIcon name="audiobooks" className={className}>
+          <path d="M12 6.5C10.5 5 8 4.5 3 4.5v14c5 0 7.5.5 9 2 1.5-1.5 4-2 9-2v-14c-5 0-7.5.5-9 2Z" />
+          <path d="M12 6.5v14" />
         </KindIcon>
       );
     default:

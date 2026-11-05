@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { createElement } from "react";
 
+import { AudiobookGrid } from "../features/audiobooks";
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import { LibraryPage, validateBrowseSearch, type LibraryItemsRenderer } from "../features/library";
@@ -53,9 +54,18 @@ function LibraryRoute() {
   });
 }
 
-// Listed types with their own view: albums get square covers; the others keep the poster grid.
-const itemsViewByType: LibraryItemsRenderer = ({ type, items }) =>
-  type === "album" ? createElement(MusicLibraryGrid, { albums: items }) : undefined;
+// Listed types with their own view: albums get square covers, books their author line; the
+// others keep the poster grid.
+const itemsViewByType: LibraryItemsRenderer = ({ type, items, filter }) => {
+  switch (type) {
+    case "album":
+      return createElement(MusicLibraryGrid, { albums: items, filter });
+    case "audiobook":
+      return createElement(AudiobookGrid, { books: items, filter });
+    default:
+      return undefined;
+  }
+};
 
 function ItemRoute() {
   const { itemId } = useParams({ from: "/shell/items/$itemId" });

@@ -69,6 +69,9 @@ function viewTexts(t: ItemTranslate, language: string): ItemViewTexts {
     seasons: (count) => t("seasons", { count }),
     episodes: (count) => t("episodes", { count }),
     trackCount: (count) => t("trackCount", { count }),
+    authors: (names) => t("authors", { names }),
+    narrators: (names) => t("narrators", { names }),
+    chapterCount: (count) => t("chapterCount", { count }),
   };
 }
 

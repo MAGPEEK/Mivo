@@ -160,6 +160,11 @@ func TestParseComposer(t *testing.T) {
 		{"Narrated by : ", "Narrated by :", false},
 		{"Reader", "Reader", false},
 		{"Narratorx", "Narratorx", false},
+		// A label must end at a separator, not inside a word: "Byrne" is no "by".
+		{"Read Byrne", "Read Byrne", false},
+		{"Narrated byX", "Narrated byX", false},
+		{"Narrated by:Nora Vale", "Nora Vale", true},
+		{"Narrator:Iris Fenn", "Iris Fenn", true},
 		{"Nä", "Nä", false},
 		{"", "", false},
 	}

@@ -1,80 +1,57 @@
 import { useTranslation } from "react-i18next";
 
-import { EmptyState, secondaryButtonClass, Skeleton } from "../../../shared/ui";
-import { LibraryKindIcon } from "../../library";
-import type { PagedItems } from "../hooks/pagedItems";
-import { useLibraryAlbums, type LibraryAlbums } from "../hooks/useLibraryAlbums";
+import {
+  BrowseItemGrid,
+  LibraryKindIcon,
+  type BrowseCardProps,
+  type BrowseItemTexts,
+  type LibraryItemFilter,
+  type LibraryItems,
+} from "../../library";
+import { toAlbumCardModel } from "../lib/albumCard";
 import { musicNamespace } from "../locales";
 import { AlbumCard } from "./AlbumCard";
-import { LoadMoreButton } from "./LoadMoreButton";
 
 /** Props of {@link MusicLibraryGrid}. */
 export interface MusicLibraryGridProps {
   /** The album pages the library's Browse listing loaded. */
-  readonly albums: PagedItems;
+  readonly albums: LibraryItems;
+  /** The toolbar filter, which picks the empty texts. */
+  readonly filter: LibraryItemFilter;
 }
 
-// The same dense grid as the video grid; square covers instead of 2:3 posters.
-const albumGridClass =
-  "grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8";
-
-/** The albums of a music library as a grid of square covers, page by page. */
-export function MusicLibraryGrid({ albums: pages }: MusicLibraryGridProps) {
-  const { t } = useTranslation(musicNamespace);
-  const albums = useLibraryAlbums(pages);
-  if (albums.status === "pending") {
-    return (
-      <div role="status" className="w-40">
-        <Skeleton label={t("albums.loading")} className="aspect-square w-full rounded-md" />
-      </div>
-    );
-  }
-  if (albums.status === "error") {
-    return (
-      <div className="flex flex-wrap items-center gap-4">
-        <p role="alert" className="text-text-muted">
-          {t("albums.loadFailed")}
-        </p>
-        <button type="button" onClick={albums.retry} className={secondaryButtonClass}>
-          {t("albums.retry")}
-        </button>
-      </div>
-    );
-  }
-  if (albums.albums.length === 0) {
-    return (
-      <EmptyState
-        icon={<LibraryKindIcon kind="music" className="size-10" />}
-        title={t("albums.empty.title")}
-        description={t("albums.empty.hint")}
-      />
-    );
-  }
-  return <AlbumList albums={albums} />;
+function renderAlbumCard({ item, focusOnMount }: BrowseCardProps) {
+  return <AlbumCard album={toAlbumCardModel(item)} focusOnMount={focusOnMount} />;
 }
 
-function AlbumList({ albums }: { readonly albums: LibraryAlbums }) {
+function useAlbumTexts(): BrowseItemTexts {
   const { t } = useTranslation(musicNamespace);
+  return {
+    label: t("albums.label"),
+    loading: t("albums.loading"),
+    loadFailed: t("albums.loadFailed"),
+    loadingMore: t("albums.loadingMore"),
+    loadMoreFailed: t("albums.loadMoreFailed"),
+    emptyTitle: t("albums.empty.title"),
+    emptyHint: t("albums.empty.hint"),
+    emptyUnmatchedTitle: t("albums.emptyUnmatched.title"),
+    emptyUnmatchedHint: t("albums.emptyUnmatched.hint"),
+  };
+}
+
+/**
+ * The albums of a music library as a grid of square covers, page by page; the library's
+ * Browse grid supplies the states, "Load more" and the focus on the first new card.
+ */
+export function MusicLibraryGrid({ albums, filter }: MusicLibraryGridProps) {
+  const texts = useAlbumTexts();
   return (
-    <>
-      <ul aria-label={t("albums.label")} className={albumGridClass}>
-        {albums.albums.map((album) => (
-          <li key={album.id}>
-            <AlbumCard album={album} />
-          </li>
-        ))}
-      </ul>
-      {albums.hasMore && (
-        <LoadMoreButton
-          paged={albums}
-          texts={{
-            loadMore: t("albums.loadMore"),
-            loadingMore: t("albums.loadingMore"),
-            failed: t("albums.loadMoreFailed"),
-            retry: t("albums.retry"),
-          }}
-        />
-      )}
-    </>
+    <BrowseItemGrid
+      items={albums}
+      filter={filter}
+      texts={texts}
+      renderCard={renderAlbumCard}
+      emptyIcon={<LibraryKindIcon kind="music" className="size-10" />}
+    />
   );
 }

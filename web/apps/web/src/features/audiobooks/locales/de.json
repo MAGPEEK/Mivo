@@ -1,0 +1,25 @@
+{
+  "books": {
+    "label": "Hörbücher",
+    "loading": "Hörbücher werden geladen",
+    "loadFailed": "Die Hörbücher konnten nicht geladen werden.",
+    "loadingMore": "Weitere Hörbücher werden geladen",
+    "loadMoreFailed": "Weitere Hörbücher konnten nicht geladen werden.",
+    "empty": {
+      "title": "Noch keine Hörbücher",
+      "hint": "Starte einen Scan, um die Hörbücher im Ordner dieser Mediathek zu finden."
+    },
+    "emptyUnmatched": {
+      "title": "Alles zugeordnet",
+      "hint": "Jedes Hörbuch dieser Mediathek ist einem Eintrag eines Anbieters zugeordnet."
+    }
+  },
+  "chapters": {
+    "label": "Kapitel",
+    "empty": "Dieses Hörbuch hat keine Kapitel.",
+    "play": "{{title}} abspielen",
+    "startsAt": "Beginnt bei {{time}}",
+    "length": "Länge",
+    "unavailable": "Nicht verfügbar"
+  }
+}

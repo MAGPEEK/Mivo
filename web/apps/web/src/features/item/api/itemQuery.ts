@@ -1,6 +1,8 @@
 import { ApiError, clientErrorCodes, requestData, type ApiClient } from "@mivo/api-client";
 import { queryOptions } from "@tanstack/react-query";
 
+import { itemQueryKey } from "../../../shared/api";
+
 const badRequestStatus = 400;
 const notFoundStatus = 404;
 
@@ -8,10 +10,8 @@ const notFoundStatus = 404;
 // button when the server is really down.
 const itemRetries = 1;
 
-/** Cache key of `GET /api/v1/items/{itemId}`. */
-export function itemQueryKey(itemId: string) {
-  return ["items", itemId] as const;
-}
+// The key is shared with the other features that load items (music, audiobooks).
+export { itemQueryKey };
 
 /**
  * Whether a failed item load means "there is no such item". Besides 404 that includes 400: the

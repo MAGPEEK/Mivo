@@ -219,7 +219,8 @@ func firstTag(tags map[string]string, keys []string) string {
 
 // parseComposer returns the composer without a narrator label and whether it had one:
 // "Narrated by Nora Vale" yields "Nora Vale", true; "Nora Vale" yields "Nora Vale", false.
-// A label without a name is no narrator and is kept as the composer.
+// A label without a name is no narrator and is kept as the composer, and so is a label that
+// ends inside a word ("Read Byrne").
 func parseComposer(text string) (string, bool) {
 	composer := strings.TrimSpace(text)
 
@@ -228,12 +229,22 @@ func parseComposer(text string) (string, bool) {
 			continue
 		}
 
-		if name := strings.TrimLeft(composer[len(label):], labelSeparators); name != "" {
+		rest := composer[len(label):]
+		if !endsWithSeparator(label) && !strings.ContainsAny(rest[:min(1, len(rest))], labelSeparators) {
+			continue
+		}
+
+		if name := strings.TrimLeft(rest, labelSeparators); name != "" {
 			return strings.TrimSpace(name), true
 		}
 	}
 
 	return composer, false
+}
+
+// endsWithSeparator reports whether label already ends at a separator ("narrator:").
+func endsWithSeparator(label string) bool {
+	return strings.ContainsAny(label[len(label)-1:], labelSeparators)
 }
 
 // parseOrdinal reads a track or disc number: "3" or "3/12" yield 3. Anything else yields 0

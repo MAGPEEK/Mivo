@@ -42,7 +42,11 @@ export interface PlaybackServer extends FakeServer {
   readonly lookedUpSessions: readonly string[];
 }
 
-/** A session created by the default responder: `session-<n>` at the requested start. */
+/**
+ * A session created by the default responder: `session-<n>`. Like the real server, an HLS
+ * session starts at the requested position and a direct-play file at 0, because its stream is
+ * the whole file and the player seeks in it (`PlaybackSession.startPositionSeconds`).
+ */
 export function createdSession(
   request: PlaybackRequest,
   index: number,
@@ -51,7 +55,7 @@ export function createdSession(
   return fakeSession({
     id: `session-${String(index + 1)}`,
     delivery,
-    startPositionSeconds: request.startPositionSeconds ?? 0,
+    startPositionSeconds: delivery === "file" ? 0 : (request.startPositionSeconds ?? 0),
   });
 }
 

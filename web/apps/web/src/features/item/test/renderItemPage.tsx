@@ -16,6 +16,7 @@ import { I18nextProvider } from "react-i18next";
 
 import { ApiClientProvider } from "../../../shared/api";
 import { createI18n } from "../../../shared/i18n";
+import { audiobooksLocales, audiobooksNamespace } from "../../audiobooks";
 import { identifyLocales, identifyNamespace } from "../../identify";
 import { musicLocales, musicNamespace } from "../../music";
 import { ItemPage } from "../components/ItemPage";
@@ -93,6 +94,7 @@ export function renderItemPage(path: string, options: RenderItemPageOptions): Re
     [itemNamespace]: itemLocales,
     [identifyNamespace]: identifyLocales,
     [musicNamespace]: musicLocales,
+    [audiobooksNamespace]: audiobooksLocales,
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
   render(

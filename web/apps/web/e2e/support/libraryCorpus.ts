@@ -108,6 +108,55 @@ export function musicCorpusExists(): boolean {
   return [manifestPath, join(libraryCorpusDirectory, "music")].every((path) => existsSync(path));
 }
 
+/** One chapter of a corpus book; the offsets are seconds within its part file. */
+export interface ExpectedChapter {
+  readonly file: string;
+  readonly title: string;
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+}
+
+/** One book of the audiobook corpus (task M3-14f). */
+export interface ExpectedAudiobook {
+  readonly title: string;
+  readonly author: string;
+  /** Omitted for a book without a narrator. */
+  readonly narrator?: string;
+  /** Short container name of every part: "m4b" or "mp3". */
+  readonly container: string;
+  readonly parts: readonly { readonly file: string }[];
+  readonly chapters: readonly ExpectedChapter[];
+}
+
+/** The audiobook library of the corpus; `path` is its folder below {@link libraryCorpusDirectory}. */
+export interface ExpectedAudiobooks {
+  readonly path: string;
+  readonly books: readonly ExpectedAudiobook[];
+}
+
+/** Shown by the audiobook spec when the corpus has no audiobook tree. */
+export const missingAudiobookCorpusReason =
+  `No audiobook corpus below ${libraryCorpusDirectory}. Generate it with ` +
+  '`go run ./scripts/gen-testmedia -only "library-*"` (needs FFmpeg).';
+
+/** Whether the manifest and the audiobook tree exist. */
+export function audiobookCorpusExists(): boolean {
+  return [manifestPath, join(libraryCorpusDirectory, "audiobooks")].every((path) =>
+    existsSync(path),
+  );
+}
+
+/** The audiobook library of the corpus manifest. */
+export function expectedAudiobooks(): ExpectedAudiobooks {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    audiobooks?: ExpectedAudiobooks;
+  };
+  if (manifest.audiobooks === undefined) {
+    throw new Error("The library corpus manifest has no audiobook library.");
+  }
+  return manifest.audiobooks;
+}
+
 /** The music library of the corpus manifest. */
 export function expectedMusic(): ExpectedMusic {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { music?: ExpectedMusic };
