@@ -33,9 +33,11 @@ that says `Supersedes: NNNN` and set the old one's status to `Superseded by NNNN
 | [0025](0025-playback-verification.md) | Playback verification: reference profiles, expected modes, smoke and E2E | Accepted |
 | [0026](0026-synology-spk-package.md) | Native Synology DSM package (SPK) | Accepted |
 | [0027](0027-library-model-v2.md) | Library model v2: hierarchy, local metadata, artwork and scanning (milestone 3) | Accepted |
-| [0028](0028-library-management-before-accounts.md) | Library management in the app, before accounts (partly supersedes 0022) | Accepted |
+| [0028](0028-library-management-before-accounts.md) | Library management in the app, before accounts (partly supersedes 0022) | Accepted; §4/§7 partly superseded by 0032 |
 | [0029](0029-second-wave-tooling-photos-and-discs.md) | Second-wave tooling: photos and discs | Accepted |
 | [0030](0030-streaming-extension-m4.md) | Streaming extension (M4): subtitles, tracks, hardware acceleration, throttling, trickplay | Proposed |
+| [0031](0031-online-metadata-providers.md) | Online metadata providers (milestone 6) | Accepted |
+| [0032](0032-accounts-sessions-and-access.md) | Accounts, sessions, profiles and access control (milestone 7) | Proposed |
 
 ## Template
 

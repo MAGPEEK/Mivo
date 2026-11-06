@@ -1,6 +1,6 @@
 # 0028 Library management in the app, before accounts
 
-Status: Accepted (2026-11-04, owner delegated the decision: "arbeite alles selber ab")
+Status: Accepted (2026-11-04, owner delegated the decision: "arbeite alles selber ab"); §4 and §7 partly superseded by 0032 §9 (admin sign-in on top of the local-peer rule)
 
 ## Context
 ADR 0022 defined libraries in the configuration only and deferred UI management to the setup
