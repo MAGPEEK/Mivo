@@ -8,18 +8,18 @@ The signed-in profile's progress, watched marks and hidden flags are recorded wi
 `domain/watch`, and item lists can be decorated with the profile's state.
 
 ## Acceptance criteria
-- [ ] `ReportProgress(ctx, itemID, position)`: viewer from context; item looked up through a
+- [x] `ReportProgress(ctx, itemID, position)`: viewer from context; item looked up through a
       viewer-scoped item port (hidden → `ErrNotFound`); kind checked with
       `SupportsWatchState`; duration taken from the catalog; `attach_key` from the item's
       provider reference; `ApplyProgress` then store.
-- [ ] `MarkWatched` / `MarkUnwatched` for movie, episode, audiobook, and for show/season over
+- [x] `MarkWatched` / `MarkUnwatched` for movie, episode, audiobook, and for show/season over
       their episodes; `HideFromContinueWatching`.
-- [ ] `States(ctx, items)` returns the viewer state per summary (incl. unwatched counts for
+- [x] `States(ctx, items)` returns the viewer state per summary (incl. unwatched counts for
       shows/seasons) in at most two store calls per page.
-- [ ] Tests: fakes (`go test ./internal/app/watch/`): no viewer → `ErrUnauthenticated`,
+- [x] Tests: fakes (`go test ./internal/app/watch/`): no viewer → `ErrUnauthenticated`,
       no profile → profile error, photo/track refused, 90 % boundary through the use case,
       show mark cascades, hidden item.
-- [ ] Gates: lint + layer rules + coverage thresholds pass.
+- [x] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes
 The item port is satisfied by the scoped `app/library` service after M7-14; use a fake here,
