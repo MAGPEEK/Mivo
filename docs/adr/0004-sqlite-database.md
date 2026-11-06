@@ -26,6 +26,9 @@ cgo for amd64, arm64, armv7 and windows/amd64.
 - Conventions: timestamps are `INTEGER` Unix milliseconds in UTC. IDs exposed through the
   API are text UUIDs. The database file lives in the configured data directory
   (`<data>/server.db`).
+- File modes (M7-24): on Unix the database, WAL, SHM and journal files are created `0600`;
+  existing files with wider modes are tightened when the server process owns them, otherwise
+  a warning is logged and startup continues. On Windows they inherit the data directory ACL.
 - Full-text search later uses FTS5, which modernc includes.
 
 ## Consequences

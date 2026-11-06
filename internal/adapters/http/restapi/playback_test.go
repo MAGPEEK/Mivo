@@ -323,7 +323,7 @@ func TestStopPlaybackSessionAnswersNoContent(t *testing.T) {
 		t.Errorf("Stop calls = %v, want the session twice", stopped)
 	}
 
-	assertLogged(t, logs.String(), `level=INFO msg="playback session stop requested" session=`+testSessionID)
+	assertLogged(t, logs.String(), `level=INFO msg="playback session stop requested" playback_id=`+testSessionID)
 }
 
 func TestStopPlaybackSessionMapsServiceErrors(t *testing.T) {

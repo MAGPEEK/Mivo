@@ -51,7 +51,7 @@ func (s *Service) stopIdle(ctx context.Context) {
 		// The session ID never changes, so reading it outside the lock is safe; the idle time
 		// was computed under it.
 		s.logger.InfoContext(ctx, "stopping idle playback session",
-			"session", removed.entry.session.ID, "idle", removed.idleFor)
+			"playback_id", removed.entry.session.ID, "idle", removed.idleFor)
 
 		entries = append(entries, removed.entry)
 	}

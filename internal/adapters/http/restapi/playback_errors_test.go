@@ -144,7 +144,7 @@ func TestCreatePlaybackSessionLogsTheStart(t *testing.T) {
 		t.Fatalf("status = %d, want %d (body %s)", got.status, http.StatusCreated, got.body)
 	}
 
-	assertLogged(t, logs.String(), `level=INFO msg="playback session started" session=`+testSessionID+
+	assertLogged(t, logs.String(), `level=INFO msg="playback session started" playback_id=`+testSessionID+
 		" file="+testFileID+" mode=transcode reasons=container_not_supported,video_codec_not_supported")
 
 	if strings.Contains(logs.String(), testProfileName) {

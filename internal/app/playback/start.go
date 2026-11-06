@@ -266,7 +266,7 @@ func (s *Service) produce(ctx context.Context, request productionRequest) (activ
 	production, err := s.producer.Start(s.processContext, job) //nolint:contextcheck // FFmpeg must outlive the request (ADR 0024)
 	if err != nil {
 		if cleanupErr := s.removeWorkspace(ctx, id); cleanupErr != nil {
-			s.logger.WarnContext(ctx, "clean up after a failed stream start", "session", id, "error", cleanupErr)
+			s.logger.WarnContext(ctx, "clean up after a failed stream start", "playback_id", id, "error", cleanupErr)
 		}
 
 		// A start racing Close sees the cancelled process context; that is the shutdown
@@ -303,7 +303,7 @@ func (s *Service) actualStart(ctx context.Context, request productionRequest) (t
 	}
 
 	s.logger.WarnContext(ctx, "keyframe lookup failed, starting at the beginning of the file",
-		"session", request.sessionID, "position", requested, "error", err)
+		"playback_id", request.sessionID, "position", requested, "error", err)
 
 	return 0, nil
 }

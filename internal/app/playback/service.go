@@ -208,7 +208,7 @@ func (s *Service) teardown(ctx context.Context, entry *sessionEntry) {
 	// (ADR 0024, Notes M2-38); requests still open here make a leaked grant visible.
 	if open := s.sessions.openRequests(entry); open > 0 {
 		s.logger.DebugContext(ctx, "playback session torn down with stream requests open",
-			"session", entry.session.ID, "open_requests", open)
+			"playback_id", entry.session.ID, "open_requests", open)
 	}
 
 	if entry.production != nil {
@@ -221,7 +221,7 @@ func (s *Service) teardown(ctx context.Context, entry *sessionEntry) {
 
 	if err := s.removeWorkspace(ctx, entry.session.ID); err != nil {
 		s.logger.WarnContext(ctx, "playback session stopped, but its workspace is left behind",
-			"session", entry.session.ID, "error", err)
+			"playback_id", entry.session.ID, "error", err)
 	}
 }
 

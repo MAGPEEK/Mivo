@@ -301,7 +301,7 @@ func (p *production) Stop() {
 	case <-p.done:
 	case <-timer.C:
 		p.logger.Warn("ffmpeg did not exit in time after it was stopped",
-			slog.String("session", p.sessionID), slog.Duration("timeout", p.stopTimeout))
+			slog.String("playback_id", p.sessionID), slog.Duration("timeout", p.stopTimeout))
 	}
 }
 
@@ -357,7 +357,7 @@ func (p *production) outcome(ctx context.Context, started *process, waitErr erro
 	if waitErr == nil {
 		if err := completePlaylist(p.directory); err != nil {
 			p.logger.LogAttrs(ctx, slog.LevelWarn, "the final playlist could not be completed",
-				slog.String("session", p.sessionID), slog.String("error", err.Error()))
+				slog.String("playback_id", p.sessionID), slog.String("error", err.Error()))
 		}
 	}
 
@@ -380,7 +380,7 @@ func (p *production) outcome(ctx context.Context, started *process, waitErr erro
 // at warn level (ADR 0024): it is the only record of why a transcode broke. It may contain
 // the media path; logs stay on the server. exit_code is present only when FFmpeg exited.
 func (p *production) logFailure(ctx context.Context, failure error, stderrTail string, segmentsWritten bool) {
-	attributes := []slog.Attr{slog.String("session", p.sessionID)}
+	attributes := []slog.Attr{slog.String("playback_id", p.sessionID)}
 
 	if code, exited := exitCode(failure); exited {
 		attributes = append(attributes, slog.Int(exitCodeKey, code))

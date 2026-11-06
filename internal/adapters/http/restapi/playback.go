@@ -116,7 +116,7 @@ func (api *API) undescribableSession(ctx context.Context, id string, err error) 
 // want to see it. The client profile is never logged at info.
 func (api *API) logSessionStarted(ctx context.Context, session appplayback.Session) {
 	api.logger.InfoContext(ctx, "playback session started",
-		slog.String("session", session.ID),
+		slog.String("playback_id", session.ID),
 		slog.String("file", session.FileID),
 		slog.String("mode", string(session.Plan.Mode)),
 		slog.String("reasons", reasonCodes(session.Plan.Reasons)),
@@ -163,7 +163,7 @@ func (api *API) StopPlaybackSession(ctx context.Context, request apigen.StopPlay
 	}
 
 	api.logger.InfoContext(ctx, "playback session stop requested",
-		slog.String("session", id),
+		slog.String("playback_id", id),
 		slog.String("request_id", requestid.FromContext(ctx)))
 
 	return apigen.StopPlaybackSession204Response{}, nil

@@ -22,8 +22,9 @@ import (
 // (ADR 0024) before it answers 503 stream_not_ready.
 const readyTimeout = 20 * time.Second
 
-// sessionAttribute names the session ID in log records, as app/playback does.
-const sessionAttribute = "session"
+// sessionAttribute names the playback session ID in log records, as app/playback does. It
+// avoids the word "session", which the log redaction treats as a credential (M7-24).
+const sessionAttribute = "playback_id"
 
 // Sessions grants access to the streams of playback sessions. Implemented by
 // *playback.Service (app/playback).

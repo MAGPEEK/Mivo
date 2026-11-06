@@ -313,7 +313,7 @@ func assertStreamRequestsQuiet(t *testing.T, logs string, sessionIDs ...string) 
 	t.Helper()
 
 	for _, id := range sessionIDs {
-		assertLogLine(t, logs, "level=INFO", `msg="playback session started"`, "session="+id)
+		assertLogLine(t, logs, "level=INFO", `msg="playback session started"`, "playback_id="+id)
 
 		if strings.Contains(logs, "path=/api/v1/playback/sessions/"+id+"/") {
 			t.Errorf("a stream request of session %s reached the info log:\n%s", id, logs)

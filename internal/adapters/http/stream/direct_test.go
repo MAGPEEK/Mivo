@@ -205,7 +205,7 @@ func TestDirectFileLogsABodyThatBrokeOff(t *testing.T) {
 
 	logs := env.logs.String()
 	if !strings.Contains(logs, "level=WARN") || !strings.Contains(logs, "ended before its declared length") ||
-		!strings.Contains(logs, "session="+session.ID) || !strings.Contains(logs, "written=100") {
+		!strings.Contains(logs, "playback_id="+session.ID) || !strings.Contains(logs, "written=100") {
 		t.Errorf("logs lack the warning about the short body:\n%s", logs)
 	}
 }
@@ -242,7 +242,7 @@ func TestDirectFileMissingOnDiskAnswersNotFound(t *testing.T) {
 
 	assertProblem(t, env.get(t, session.StreamURL), http.StatusNotFound, restapi.CodeNotFound)
 
-	if logs := env.logs.String(); !strings.Contains(logs, "level=WARN") || !strings.Contains(logs, "session="+session.ID) {
+	if logs := env.logs.String(); !strings.Contains(logs, "level=WARN") || !strings.Contains(logs, "playback_id="+session.ID) {
 		t.Errorf("logs lack the warning with the session:\n%s", logs)
 	}
 }
@@ -272,7 +272,7 @@ func TestUnexpectedAccessFailureAnswersInternalError(t *testing.T) {
 		assertProblem(t, recorder, http.StatusInternalServerError, restapi.CodeInternal)
 	}
 
-	if text := logs.String(); !strings.Contains(text, errRegistry.Error()) || !strings.Contains(text, "session="+unknownSessionID) {
+	if text := logs.String(); !strings.Contains(text, errRegistry.Error()) || !strings.Contains(text, "playback_id="+unknownSessionID) {
 		t.Errorf("logs lack the cause with the session:\n%s", text)
 	}
 }

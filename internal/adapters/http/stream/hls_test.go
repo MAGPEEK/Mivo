@@ -217,7 +217,7 @@ func TestHLSOutputThatCannotBeOpenedAnswersInternalError(t *testing.T) {
 	}
 
 	logs := env.logs.String()
-	if strings.Count(logs, errOutputStorage.Error()) != 2 || !strings.Contains(logs, "session="+session.ID) {
+	if strings.Count(logs, errOutputStorage.Error()) != 2 || !strings.Contains(logs, "playback_id="+session.ID) {
 		t.Errorf("logs lack the two failures with the session:\n%s", logs)
 	}
 }
@@ -355,7 +355,7 @@ func TestPlaylistOverTheBoundAnswersInternalError(t *testing.T) {
 	assertProblem(t, env.get(t, session.StreamURL), http.StatusInternalServerError, restapi.CodeInternal)
 
 	logs := env.logs.String()
-	if strings.Count(logs, "level=ERROR") != 1 || !strings.Contains(logs, "session="+session.ID) {
+	if strings.Count(logs, "level=ERROR") != 1 || !strings.Contains(logs, "playback_id="+session.ID) {
 		t.Errorf("want one error record with the session:\n%s", logs)
 	}
 }
@@ -544,7 +544,7 @@ func TestFailedProductionAnswersInternalError(t *testing.T) {
 	// session and must not repeat the cause for every retry.
 	logs := env.logs.String()
 	if !strings.Contains(logs, "level=DEBUG") || !strings.Contains(logs, "production failed") ||
-		!strings.Contains(logs, "session="+session.ID) {
+		!strings.Contains(logs, "playback_id="+session.ID) {
 		t.Errorf("logs lack the refused request with the session:\n%s", logs)
 	}
 

@@ -51,7 +51,7 @@ func (s *Service) finish(id string, outcome error) {
 
 	if outcome == nil {
 		if _, changed := s.sessions.transition(id, StateEnded, ""); changed {
-			s.logger.DebugContext(s.processContext, "playback session production finished", "session", id)
+			s.logger.DebugContext(s.processContext, "playback session production finished", "playback_id", id)
 		}
 
 		return
@@ -61,7 +61,7 @@ func (s *Service) finish(id string, outcome error) {
 	// code and stderr tail; this line only records the session's state change.
 	if session, changed := s.sessions.transition(id, StateFailed, FailureTranscodeFailed); changed {
 		s.logger.InfoContext(s.processContext, "playback session failed",
-			"session", id, "file", session.FileID, "failure_code", session.FailureCode, "error", outcome)
+			"playback_id", id, "file", session.FileID, "failure_code", session.FailureCode, "error", outcome)
 	}
 }
 
@@ -91,7 +91,7 @@ func (s *Service) Close(ctx context.Context) error {
 
 	select {
 	case <-finished:
-		s.logger.InfoContext(ctx, "playback sessions stopped", "sessions", len(sessions))
+		s.logger.InfoContext(ctx, "playback sessions stopped", "playback_count", len(sessions))
 
 		return nil
 	case <-ctx.Done():

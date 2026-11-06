@@ -681,7 +681,7 @@ func TestTeardownLogsTheOpenStreamRequests(t *testing.T) {
 			}
 
 			record := records[0]
-			if record.level != slog.LevelDebug || record.attrs["session"] != id || record.attrs["open_requests"] != "2" {
+			if record.level != slog.LevelDebug || record.attrs["playback_id"] != id || record.attrs["open_requests"] != "2" {
 				t.Errorf("record = %+v, want debug with session %s and open_requests 2", record, id)
 			}
 		})

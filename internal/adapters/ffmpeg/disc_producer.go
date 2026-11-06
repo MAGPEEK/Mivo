@@ -125,6 +125,6 @@ func (p *Producer) inheritedClipURLs(root string, clips []discClip) ([]string, [
 func (p *Producer) closeDiscInput(sessionID string, prepared *DiscInputArguments) {
 	if err := prepared.Close(); err != nil {
 		p.logger.Warn("disc input could not be released",
-			slog.String("session", sessionID), slog.String("error", err.Error()))
+			slog.String("playback_id", sessionID), slog.String("error", err.Error()))
 	}
 }

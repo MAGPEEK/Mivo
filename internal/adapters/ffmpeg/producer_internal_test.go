@@ -269,7 +269,7 @@ func assertOneFailureLog(t *testing.T, logs *syncBuffer, exitCode int, segmentsW
 	record := warnings[0]
 
 	// JSON numbers decode as float64.
-	if record["session"] != testSessionID || record["exit_code"] != float64(exitCode) ||
+	if record["playback_id"] != testSessionID || record["exit_code"] != float64(exitCode) ||
 		record["segments_written"] != segmentsWritten {
 		t.Errorf("warning = %v, want session %s, exit_code %d, segments_written %t",
 			record, testSessionID, exitCode, segmentsWritten)
@@ -540,7 +540,7 @@ func TestProducerLogsNoExitCodeForAFailureThatIsNoExit(t *testing.T) {
 		t.Errorf("warning carries exit_code %v for a failure that is no exit: %v", code, warnings[0])
 	}
 
-	if warnings[0]["session"] != testSessionID || warnings[0]["segments_written"] != true {
+	if warnings[0]["playback_id"] != testSessionID || warnings[0]["segments_written"] != true {
 		t.Errorf("warning = %v", warnings[0])
 	}
 }
@@ -699,7 +699,7 @@ func TestProducerStopGivesUpAfterTheStopTimeout(t *testing.T) {
 	}
 
 	warnings := test.logs.warnings(t)
-	if len(warnings) != 1 || warnings[0]["session"] != testSessionID {
+	if len(warnings) != 1 || warnings[0]["playback_id"] != testSessionID {
 		t.Errorf("warnings = %v, want one about the slow exit", warnings)
 	}
 
