@@ -111,6 +111,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   (`FSK 12`, `de/12`, `DE-12`, `12`), US MPAA (G 0, PG 6, PG-13 12, R 16, NC-17 18), US TV
   (TV-Y/TV-G 0, TV-Y7/TV-PG 6, TV-14 12, TV-MA 16), UK BBFC (U 0, PG 6, 12/12A 12, 15 16,
   18/R18 18); anything else is unknown. Ages between buckets round **up** (13 → 16).
+  Amendment: X/XXX → 18 (orchestrator 2026-11-06); a text with non-ASCII characters other
+  than spaces and punctuation (`1８`, `1⁸`, `Ⅻ`, combining marks) is unknown, so it fails
+  closed instead of losing characters.
 - The bucket is stored per item (`age_rating`, migration `00013`) together with the effective
   bucket that children inherit from their show (an episode without its own rating uses the
   show's), so one indexed predicate filters every query.
