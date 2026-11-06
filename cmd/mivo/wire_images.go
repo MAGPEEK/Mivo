@@ -12,6 +12,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/fs/imagecache"
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	imagehttp "github.com/magpeek/mivo/internal/adapters/http/images"
+	"github.com/magpeek/mivo/internal/adapters/metadata/artworkfetch"
 	"github.com/magpeek/mivo/internal/adapters/photometa"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	appimages "github.com/magpeek/mivo/internal/app/images"
@@ -56,7 +57,8 @@ func (app application) newImageServices(db *sqlite.DB, files *libraryfs.FileSyst
 	reader := sqlite.NewCatalogReader(db)
 	service := appimages.NewService(appimages.Dependencies{
 		Source: reader, Resolver: files, Renderer: renderer, Cache: cache, Logger: app.logger,
-		Photos: reader, PhotoRenderer: photoRenderer, DataDir: app.config.Paths.Data,
+		Photos: reader, PhotoRenderer: photoRenderer,
+		ArtworkDir: filepath.Join(app.config.Paths.Data, artworkfetch.ArtworkDirectory),
 	})
 
 	handlers, err := imagehttp.New(imagehttp.Options{Images: service, Logger: app.logger})

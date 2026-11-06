@@ -145,15 +145,21 @@ func (worker *Worker) RunOnce(ctx context.Context) (worked bool, err error) {
 		return false, nil
 	}
 
-	_, enrichErr := worker.deps.Enricher.EnrichItem(ctx, job.ItemID)
+	outcome, enrichErr := worker.deps.Enricher.EnrichItem(ctx, job.ItemID)
 
-	return true, worker.finish(ctx, job, enrichErr)
+	return true, worker.finish(ctx, job, jobResult{outcome: outcome, err: enrichErr})
+}
+
+// jobResult is what EnrichItem returned for a job.
+type jobResult struct {
+	outcome Outcome
+	err     error
 }
 
 // finish records the outcome of a job. A lost lease means another worker owns the job now,
 // and a failed job that is gone was deleted with its item: neither is an error here.
-func (worker *Worker) finish(ctx context.Context, job Job, enrichErr error) error {
-	err := worker.settle(ctx, job, enrichErr)
+func (worker *Worker) finish(ctx context.Context, job Job, result jobResult) error {
+	err := worker.settle(ctx, job, result)
 
 	switch {
 	case err == nil:
@@ -171,7 +177,8 @@ func (worker *Worker) finish(ctx context.Context, job Job, enrichErr error) erro
 // anything else: the item was deleted, so the job is dropped rather than retried. The write
 // runs on a short context of its own: a job that finished (or was interrupted) just as the
 // run context was cancelled must still be recorded, else it waits for its lease to run out.
-func (worker *Worker) settle(ctx context.Context, job Job, enrichErr error) error {
+func (worker *Worker) settle(ctx context.Context, job Job, result jobResult) error {
+	enrichErr := result.err
 	now := worker.deps.Clock()
 	interrupted := ctx.Err() != nil
 
@@ -180,7 +187,10 @@ func (worker *Worker) settle(ctx context.Context, job Job, enrichErr error) erro
 
 	switch {
 	case enrichErr == nil:
-		worker.deps.Health.recordSuccess(now)
+		// A skipped item asked no provider, so it says nothing about the providers' health.
+		if result.outcome != OutcomeSkipped {
+			worker.deps.Health.recordSuccess(now)
+		}
 
 		return worker.deps.Jobs.MarkJobDone(finishCtx, job)
 	case errors.Is(enrichErr, ErrItemGone):

@@ -79,37 +79,45 @@ type ChangeListener interface {
 	SettingsChanged()
 }
 
-// Options configure the Service. Initial is the state at start (configuration plus the
-// stored changes, merged by the wiring); DefaultLanguage is the language an empty Language
-// stands for; BundledTMDBKey is the key shipped with the build, empty in development
-// builds. Store and Listener are optional.
+// ForcedOff lists the switches the configuration (file or environment) turns off. They stay
+// off whatever the user's settings say, so an operator can always switch online lookups off
+// (ADR 0018, notes M6-14); the zero value forces nothing.
+type ForcedOff struct {
+	Online      bool
+	TMDB        bool
+	MusicBrainz bool
+}
+
+// Options configure the Service. Initial is the user's state at start (StartState);
+// ForcedOff is applied on top of it but never stored; DefaultLanguage is the language an
+// empty Language stands for; BundledTMDBKey is the key shipped with the build, empty in
+// development builds. Store and Listener are optional.
 type Options struct {
 	Initial         State
+	ForcedOff       ForcedOff
 	DefaultLanguage string
 	BundledTMDBKey  string
 	Store           Store
 	Listener        ChangeListener
 }
 
-// StartState is the state a server starts with: the stored one when the settings were
-// changed before (found), else the configured one. A switch the configuration turns off
-// stays off either way, so an operator can always switch online lookups off in the file or
-// the environment (ADR 0018, notes M6-14).
-func StartState(configured, stored State, found bool) State {
-	if !found {
-		return configured
+// StartState is the user's state a server starts with: the stored one when the settings
+// were changed before (found), else every switch on with the configured own key. The
+// configured switches apply as ForcedOff, so a configured "off" is never stored as the
+// user's choice.
+func StartState(configuredKey string, stored State, found bool) State {
+	if found {
+		return stored
 	}
 
-	stored.Online = stored.Online && configured.Online
-	stored.TMDB = stored.TMDB && configured.TMDB
-	stored.MusicBrainz = stored.MusicBrainz && configured.MusicBrainz
-
-	return stored
+	return State{Online: true, TMDB: true, MusicBrainz: true, OwnTMDBKey: configuredKey}
 }
 
 // Service holds the current settings. It is safe for concurrent use.
 type Service struct {
-	mutex   sync.RWMutex
+	mutex sync.RWMutex
+	// state is the user's state, which Update changes and the Store persists; the forced
+	// switches are applied on every read (effective).
 	state   State
 	options Options
 }
@@ -144,41 +152,64 @@ func (service *Service) APIKey(_ context.Context) (string, error) {
 	return service.key(service.current()), nil
 }
 
-// Update applies the change, stores the new state and tells the listener. A malformed
-// language or key wraps domain.ErrInvalid (FieldError names the field); a failed store
-// leaves the settings unchanged.
+// Update applies the change to the user's state, stores it and tells the listener. A
+// malformed language or key wraps domain.ErrInvalid (FieldError names the field); a failed
+// store leaves the settings unchanged. A switch forced off by the configuration is stored as
+// the user chose it but stays off.
 func (service *Service) Update(ctx context.Context, change Change) (Settings, error) {
+	next, changed, err := service.apply(ctx, change)
+	if err != nil {
+		return Settings{}, fmt.Errorf("update metadata settings: %w", err)
+	}
+
+	// Outside the lock: the listener may read the settings again (the queue does).
+	if changed && service.options.Listener != nil {
+		service.options.Listener.SettingsChanged()
+	}
+
+	return service.view(service.effective(next)), nil
+}
+
+// apply changes and stores the user's state under the lock and reports whether it changed.
+func (service *Service) apply(ctx context.Context, change Change) (State, bool, error) {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 
 	next, err := applyChange(service.state, change)
 	if err != nil {
-		return Settings{}, fmt.Errorf("update metadata settings: %w", err)
+		return State{}, false, err
 	}
 
 	if next == service.state {
-		return service.view(next), nil
+		return next, false, nil
 	}
 
 	if service.options.Store != nil {
 		if err := service.options.Store.SaveMetadataSettings(ctx, next); err != nil {
-			return Settings{}, fmt.Errorf("update metadata settings: %w", err)
+			return State{}, false, err
 		}
 	}
 
 	service.state = next
-	if service.options.Listener != nil {
-		service.options.Listener.SettingsChanged()
-	}
 
-	return service.view(next), nil
+	return next, true, nil
 }
 
+// current returns the effective state: the user's with the forced switches off.
 func (service *Service) current() State {
 	service.mutex.RLock()
 	defer service.mutex.RUnlock()
 
-	return service.state
+	return service.effective(service.state)
+}
+
+func (service *Service) effective(state State) State {
+	forced := service.options.ForcedOff
+	state.Online = state.Online && !forced.Online
+	state.TMDB = state.TMDB && !forced.TMDB
+	state.MusicBrainz = state.MusicBrainz && !forced.MusicBrainz
+
+	return state
 }
 
 func (service *Service) view(state State) Settings {

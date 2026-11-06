@@ -32,5 +32,5 @@ first, so "no adapter with network access" is checked as "nothing is dialled" by
 `TestRunWithOnlineMetadataOffDialsNothing`, and switching online on in the UI needs no
 restart. The scan hook is `scan.Dependencies.Enrichment` (`*enrich.Queue.EnqueueScanned`) and
 the refresher keeps the local records (`MetadataRefresherDeps.Locals`). The periodic refresh
-is `enrich.Scheduler.Periodic` (once at start, then every 24 h). Migration 00014 persists the
+is `enrich.Scheduler.Periodic` (once at start, then every 24 h). Migration 00012 persists the
 metadata settings and the local records; remaining points are in BACKLOG row "m6-14 notes".

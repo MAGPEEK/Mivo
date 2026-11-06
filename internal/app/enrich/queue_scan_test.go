@@ -128,6 +128,34 @@ func TestQueueEnqueueScannedWithoutItemsAsksNothing(t *testing.T) {
 	}
 }
 
+func TestRefreshDueAsksNothingWhileOnlineMetadataIsOff(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]enrich.SettingsSource{
+		"online off":         fakeSettings{settings: enrich.OnlineSettings{TMDB: true, MusicBrainz: true}},
+		"every provider off": fakeSettings{settings: enrich.OnlineSettings{Enabled: true}},
+	}
+
+	for name, settings := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			source := &fakeRefreshSource{itemIDs: []string{"item-a"}}
+			queue := enrich.NewQueue(enrich.QueueDeps{Jobs: newFakeJobs(newFakeClock()), Settings: settings})
+
+			queued, err := enrich.NewScheduler(source, queue).RefreshDue(context.Background(), queueStart())
+			if err != nil || queued != 0 || len(source.cutoffs) != 0 {
+				t.Errorf("RefreshDue = %d, %v after %d listings; want nothing listed or queued", queued, err, len(source.cutoffs))
+			}
+		})
+	}
+
+	failing := enrich.NewQueue(enrich.QueueDeps{Jobs: newFakeJobs(newFakeClock()), Settings: fakeSettings{err: errQueueStore}})
+	if _, err := enrich.NewScheduler(&fakeRefreshSource{}, failing).RefreshDue(context.Background(), queueStart()); !errors.Is(err, errQueueStore) {
+		t.Errorf("settings failure: err = %v, want it wrapped", err)
+	}
+}
+
 func TestQueueSettingsChangedForgetsStatesAndRetriesFailedJobs(t *testing.T) {
 	t.Parallel()
 

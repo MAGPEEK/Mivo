@@ -41,6 +41,17 @@ func NewScheduler(items RefreshSource, queue *Queue) *Scheduler {
 // RefreshDue queues every item last enriched more than CacheTTL before now and returns how
 // many it queued. now comes from the caller, so the periodic task's clock decides.
 func (scheduler *Scheduler) RefreshDue(ctx context.Context, now time.Time) (int, error) {
+	// With online metadata or every provider off nothing would be enriched, so nothing is
+	// listed or queued.
+	kinds, err := scheduler.queue.enrichableKinds(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("refresh due items: %w", err)
+	}
+
+	if len(kinds) == 0 {
+		return 0, nil
+	}
+
 	itemIDs, err := scheduler.items.ItemsDueForRefresh(ctx, now.Add(-CacheTTL), refreshBatchLimit)
 	if err != nil {
 		return 0, fmt.Errorf("refresh due items: %w", err)

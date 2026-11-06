@@ -53,6 +53,47 @@ func testClient(clock *manualClock, mutate func(*outbound.Options)) *outbound.Cl
 	return outbound.New(opts)
 }
 
+// redirectsTo lets redirects leave the original host for hosts (Options.RedirectHosts).
+func redirectsTo(hosts ...string) func(*outbound.Options) {
+	return func(o *outbound.Options) { o.RedirectHosts = hosts }
+}
+
+// TestRedirectsStayOnTheHostWithoutRedirectHosts: an empty RedirectHosts is the safe
+// default – a redirect to the same host is followed, one to another host is refused.
+func TestRedirectsStayOnTheHostWithoutRedirectHosts(t *testing.T) {
+	t.Parallel()
+
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("other"))
+	}))
+	defer other.Close()
+
+	var origin *httptest.Server
+
+	origin = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/same":
+			http.Redirect(w, r, origin.URL+"/final", http.StatusFound)
+		case "/away":
+			// localhost is loopback too, so only the host check can refuse it.
+			http.Redirect(w, r, strings.Replace(other.URL, "127.0.0.1", "localhost", 1), http.StatusFound)
+		default:
+			_, _ = w.Write([]byte("done"))
+		}
+	}))
+	defer origin.Close()
+
+	client := testClient(newClock(), nil)
+
+	if resp, err := client.Get(context.Background(), origin.URL+"/same", nil); err != nil || string(resp.Body) != "done" {
+		t.Errorf("same-host redirect = %v, %v; want it followed", resp, err)
+	}
+
+	if _, err := client.Get(context.Background(), origin.URL+"/away", nil); !errors.Is(err, outbound.ErrHostNotAllowed) {
+		t.Errorf("redirect to another host error = %v, want ErrHostNotAllowed", err)
+	}
+}
+
 func TestGetSendsOnlyUserAgentAndNoCookies(t *testing.T) {
 	t.Parallel()
 
@@ -157,7 +198,10 @@ func TestRedirects(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := testClient(newClock(), func(o *outbound.Options) { o.MaxAttempts = 1 })
+	client := testClient(newClock(), func(o *outbound.Options) {
+		o.MaxAttempts = 1
+		o.RedirectHosts = []string{"10.0.0.1"}
+	})
 
 	if _, err := client.Get(context.Background(), server.URL+"/loop", nil); !errors.Is(err, outbound.ErrTooManyRedirects) {
 		t.Errorf("redirect chain error = %v, want ErrTooManyRedirects", err)

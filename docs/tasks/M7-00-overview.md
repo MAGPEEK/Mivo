@@ -9,7 +9,7 @@ marks, badges and the Home rows Continue watching / Up next (HO-03, HO-04, LB-01
 DT-05), a CLI password recovery. Decisions: [ADR 0032](../adr/0032-accounts-sessions-and-access.md)
 on top of ADR 0006, 0024, 0027 §3 and 0028 (§4/§7 refined). Prototype:
 `docs/design/prototypes/admin.html` (approved); sign-in and setup screens get a prototype first
-(M7-29). Migrations: `00011` accounts, `00012` watch state, `00013` age ratings, merged in
+(M7-29). Migrations: `00011` accounts, `00012` metadata settings (M6-14), `00013` watch state, `00014` age ratings, merged in
 this order.
 
 ## What exists (do not re-plan)
@@ -34,8 +34,8 @@ this order.
 | M7-07 | Adapter: argon2id hasher and session tokens | mivo-backend | none |
 | M7-08 | SQLite: migration 00011 and account/profile store | mivo-backend | M7-04, M7-05 |
 | M7-09 | SQLite: session and device store | mivo-backend | M7-08 |
-| M7-10 | SQLite: migration 00012 watch state store and row queries | mivo-backend | M7-06, M7-08 |
-| M7-11 | SQLite: migration 00013 age ratings | mivo-backend | M7-05; merges after M7-10 |
+| M7-10 | SQLite: migration 00013 watch state store and row queries | mivo-backend | M7-06, M7-08 |
+| M7-11 | SQLite: migration 00014 age ratings | mivo-backend | M7-05; merges after M7-10 |
 | M7-12 | SQLite: restriction in listing, facets, letters, folders | mivo-backend | M7-11 |
 | M7-13 | SQLite: restriction in rows, search, children, summaries, detail | mivo-backend | M7-12 |
 | M7-14 | App: viewer-scoped catalog | mivo-backend | M7-13, M7-15 |

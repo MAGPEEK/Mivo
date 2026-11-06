@@ -41,7 +41,7 @@ type Client struct {
 	limiter   *limiter
 	userAgent string
 	allowed   hostMatcher
-	// redirectHosts limits where a redirect may lead; disabled when empty.
+	// redirectHosts limits where a redirect may lead; empty keeps redirects on the host.
 	redirectHosts hostMatcher
 
 	mu       sync.Mutex
@@ -237,7 +237,9 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 		return nil
 	}
 
-	if c.redirectHosts.enabled && !c.redirectHosts.allows(normalizedHostname(req.URL)) {
+	// Without RedirectHosts a redirect may not leave the original host at all: the safe
+	// default, so a client wired without the list cannot be steered elsewhere.
+	if !c.redirectHosts.enabled || !c.redirectHosts.allows(normalizedHostname(req.URL)) {
 		return ErrHostNotAllowed
 	}
 

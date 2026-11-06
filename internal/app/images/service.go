@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
@@ -41,9 +42,9 @@ type Image struct {
 
 // Dependencies are the ports the service needs. Logger may be nil. Photos and
 // PhotoRenderer are optional together: without them the service serves artwork only and a
-// photo item ID is unknown. DataDir is the absolute data directory the downloaded provider
-// pictures live in (ADR 0031 §11); Resolver confines them to it like library files to their
-// root. Empty refuses data-directory pictures.
+// photo item ID is unknown. ArtworkDir is the absolute <data>/artwork directory the
+// downloaded provider pictures live in (ADR 0031 §11); Resolver confines them to it like
+// library files to their root. Empty refuses data-directory pictures.
 type Dependencies struct {
 	Source        ArtworkSource
 	Resolver      PathResolver
@@ -52,7 +53,7 @@ type Dependencies struct {
 	Logger        *slog.Logger
 	Photos        PhotoSource
 	PhotoRenderer Renderer
-	DataDir       string
+	ArtworkDir    string
 }
 
 // renderTarget is everything a render needs, whatever the ID named: the cache key, where
@@ -153,22 +154,29 @@ func (service *Service) renderAndStore(ctx context.Context, target renderTarget)
 	return rendered.Data, nil
 }
 
+// DataArtworkDirectory is the folder of the data directory provider pictures are stored in
+// (ADR 0031 §11); their data paths are "artwork/<file>". It matches the artwork fetcher's
+// directory, which the wiring checks.
+const DataArtworkDirectory = "artwork"
+
 // sourcePath resolves the file a picture is read from. It is the one place that switches on
-// the source location: a data-directory picture resolves below DataDir.
+// the source location: a data-directory picture resolves below ArtworkDir only, so a stored
+// path can never reach the database or anything else in the data directory.
 func (service *Service) sourcePath(target renderTarget) (string, error) {
 	root, relativePath := target.libraryRoot, target.location.RelativePath
 
 	if dataPath := target.location.DataPath; dataPath != "" {
-		if service.dependencies.DataDir == "" {
+		name, inArtwork := strings.CutPrefix(dataPath, DataArtworkDirectory+"/")
+		if service.dependencies.ArtworkDir == "" || !inArtwork {
 			return "", fmt.Errorf("resolve data-directory picture %q: %w", dataPath, domain.ErrUnsupported)
 		}
 
-		root, relativePath = service.dependencies.DataDir, dataPath
+		root, relativePath = service.dependencies.ArtworkDir, name
 	}
 
 	path, err := service.dependencies.Resolver.Resolve(root, relativePath)
 	if err != nil {
-		return "", fmt.Errorf("resolve %q: %w", target.location.RelativePath, err)
+		return "", fmt.Errorf("resolve %q below %q: %w", relativePath, root, err)
 	}
 
 	return path, nil

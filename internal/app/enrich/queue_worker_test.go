@@ -82,6 +82,20 @@ func TestWorkerSuccessRemovesJob(t *testing.T) {
 	}
 }
 
+func TestWorkerSkippedItemIsNoProviderSuccess(t *testing.T) {
+	t.Parallel()
+
+	h := newWorkerHarness()
+	h.enricher.outcome = enrich.OutcomeSkipped
+	mustEnqueue(t, h.queue, "item-a")
+
+	h.runOnce(t)
+
+	if h.jobs.length() != 0 || !h.health.LastSuccess().IsZero() {
+		t.Fatalf("queued = %d, last success = %v; want the job done without a success", h.jobs.length(), h.health.LastSuccess())
+	}
+}
+
 func TestWorkerDropsJobOfGoneItem(t *testing.T) {
 	t.Parallel()
 

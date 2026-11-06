@@ -128,7 +128,7 @@ func (app application) newOnlineMetadata(ctx context.Context, db *sqlite.DB) (on
 
 // newMetadataSettings starts from the configuration, or from the state saved in Settings ›
 // Metadata when there is one, so a change made in the UI survives a restart. A switch the
-// configuration turns off stays off at start (ADR 0018, notes M6-14).
+// configuration turns off is forced off and never stored (ADR 0018, notes M6-14).
 func (app application) newMetadataSettings(ctx context.Context, db *sqlite.DB,
 	listener metadatasettings.ChangeListener,
 ) (*metadatasettings.Service, error) {
@@ -140,13 +140,12 @@ func (app application) newMetadataSettings(ctx context.Context, db *sqlite.DB,
 		return nil, fmt.Errorf("load metadata settings: %w", err)
 	}
 
-	initial := metadatasettings.StartState(metadatasettings.State{
-		Online: configured.Online, TMDB: configured.TMDB.Enabled, MusicBrainz: configured.MusicBrainz.Enabled,
-		OwnTMDBKey: string(configured.TMDB.APIKey),
-	}, stored, found)
-
 	return metadatasettings.NewService(metadatasettings.Options{
-		Initial: initial, DefaultLanguage: configured.Language, BundledTMDBKey: app.config.BundledTMDBKey(),
+		Initial: metadatasettings.StartState(string(configured.TMDB.APIKey), stored, found),
+		ForcedOff: metadatasettings.ForcedOff{
+			Online: !configured.Online, TMDB: !configured.TMDB.Enabled, MusicBrainz: !configured.MusicBrainz.Enabled,
+		},
+		DefaultLanguage: configured.Language, BundledTMDBKey: app.config.BundledTMDBKey(),
 		Store: store, Listener: listener,
 	}), nil
 }
@@ -158,19 +157,9 @@ func (app application) newProviderLookups(settings *metadatasettings.Service, st
 	health *enrich.Health,
 ) (providerLookups, error) {
 	hooks := app.hooks.metadata
-	tmdbHosts := app.allowedHosts(tmdb.AllowedHosts())
-	tmdbHTTP := app.outboundClient(outbound.Options{
-		AllowedHosts: tmdbHosts, RedirectHosts: tmdbHosts,
-		DefaultRate: outbound.Rate{PerSecond: tmdbRequestsPerSecond, Burst: tmdbRequestBurst},
-	})
-	musicHTTP := app.outboundClient(outbound.Options{
-		AllowedHosts: app.allowedHosts(musicbrainz.AllowedHosts()), HostRates: musicbrainz.HostRates(),
-	})
-	coverArtHTTP := app.outboundClient(outbound.Options{
-		AllowedHosts:  app.allowedHosts(coverart.AllowedHosts()),
-		RedirectHosts: app.allowedHosts(slices.Concat(coverart.RedirectHosts(), artworkfetch.CoverArtRedirectHosts())),
-		DefaultRate:   outbound.Rate{PerSecond: coverArtRequestsPerSecond, Burst: coverArtRequestBurst},
-	})
+	tmdbHTTP := app.outboundClient(app.tmdbClientOptions())
+	musicHTTP := app.outboundClient(app.musicBrainzClientOptions())
+	coverArtHTTP := app.outboundClient(app.coverArtClientOptions())
 
 	tmdbClient := tmdb.New(tmdb.Options{
 		HTTP: tmdbHTTP, Keys: settings, BaseURL: hooks.tmdbBaseURL, ImageBaseURL: hooks.tmdbImageBaseURL,
@@ -198,6 +187,32 @@ func (app application) newProviderLookups(settings *metadatasettings.Service, st
 		artwork: enrich.NewObservedArtwork(fetcher, health),
 		fetcher: fetcher,
 	}, nil
+}
+
+// tmdbClientOptions: the API and image hosts, redirects only between them, 20 req/s.
+func (app application) tmdbClientOptions() outbound.Options {
+	hosts := app.allowedHosts(tmdb.AllowedHosts())
+
+	return outbound.Options{
+		AllowedHosts: hosts, RedirectHosts: hosts,
+		DefaultRate: outbound.Rate{PerSecond: tmdbRequestsPerSecond, Burst: tmdbRequestBurst},
+	}
+}
+
+// musicBrainzClientOptions: musicbrainz.org only, redirects included, at its 1 req/s.
+func (app application) musicBrainzClientOptions() outbound.Options {
+	hosts := app.allowedHosts(musicbrainz.AllowedHosts())
+
+	return outbound.Options{AllowedHosts: hosts, RedirectHosts: hosts, HostRates: musicbrainz.HostRates()}
+}
+
+// coverArtClientOptions: coverartarchive.org, redirects to *.archive.org, 1 req/s.
+func (app application) coverArtClientOptions() outbound.Options {
+	return outbound.Options{
+		AllowedHosts:  app.allowedHosts(coverart.AllowedHosts()),
+		RedirectHosts: app.allowedHosts(slices.Concat(coverart.RedirectHosts(), artworkfetch.CoverArtRedirectHosts())),
+		DefaultRate:   outbound.Rate{PerSecond: coverArtRequestsPerSecond, Burst: coverArtRequestBurst},
+	}
 }
 
 // outboundClient completes the options every provider client shares.

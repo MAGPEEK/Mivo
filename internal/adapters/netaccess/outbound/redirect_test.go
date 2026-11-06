@@ -73,7 +73,7 @@ func TestCredentialHeaderNeverReachesOtherHostOnMultiHopRedirect(t *testing.T) {
 	for name, tc := range tests {
 		pair = newRedirectPair(t, tc.origin, tc.other)
 
-		if err := getWithKey(t, testClient(newClock(), nil), pair.origin.URL+"/start"); err != nil {
+		if err := getWithKey(t, testClient(newClock(), redirectsTo("127.0.0.1")), pair.origin.URL+"/start"); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
 

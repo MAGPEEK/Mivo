@@ -1,6 +1,7 @@
 package enrich_test
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -226,9 +227,11 @@ func (jobs *fakeJobs) length() int {
 // fakeEnricher answers every item with err; block, when set, makes EnrichItem wait for the
 // context and report the running count, so tests can watch concurrency.
 type fakeEnricher struct {
-	mutex      sync.Mutex
-	err        error
-	errs       map[string]error
+	mutex sync.Mutex
+	err   error
+	errs  map[string]error
+	// outcome is what a successful EnrichItem returns; empty means matched.
+	outcome    enrich.Outcome
 	block      bool
 	running    int
 	maxRunning int
@@ -273,7 +276,7 @@ func (enricher *fakeEnricher) EnrichItem(ctx context.Context, itemID string) (en
 		return enrich.OutcomeSkipped, fmt.Errorf("enrich %s: %w", itemID, ctx.Err())
 	}
 
-	return enrich.OutcomeMatched, err
+	return cmp.Or(enricher.outcome, enrich.OutcomeMatched), err
 }
 
 func (enricher *fakeEnricher) peak() int {

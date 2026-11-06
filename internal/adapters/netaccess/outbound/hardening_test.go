@@ -222,7 +222,7 @@ func TestCrossHostRedirectStripsCustomHeaders(t *testing.T) {
 	header.Set("X-Custom-Token", "t")
 	header.Set("Accept", "application/json")
 
-	if _, err := testClient(newClock(), nil).Get(context.Background(), origin.URL, header); err != nil {
+	if _, err := testClient(newClock(), redirectsTo("127.0.0.1")).Get(context.Background(), origin.URL, header); err != nil {
 		t.Fatal(err)
 	}
 

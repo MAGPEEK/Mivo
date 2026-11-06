@@ -151,7 +151,7 @@ func TestImageReadsProviderPicturesFromTheDataDirectory(t *testing.T) {
 
 	service := images.NewService(images.Dependencies{
 		Source: fixture.source, Resolver: prefixResolver{}, Renderer: fixture.renderer, Cache: fixture.cache,
-		DataDir: "/data",
+		ArtworkDir: "/data/artwork",
 	})
 
 	image, err := service.Image(t.Context(), images.Request{ID: posterID, Width: artwork.Width320})
@@ -162,7 +162,30 @@ func TestImageReadsProviderPicturesFromTheDataDirectory(t *testing.T) {
 	_ = image.Content.Close()
 
 	if got := fixture.renderer.requests[0].AbsolutePath; got != "/data/artwork/x.jpg" {
-		t.Errorf("rendered %q, want the picture below the data directory", got)
+		t.Errorf("rendered %q, want the picture below the artwork directory", got)
+	}
+}
+
+// TestImageRefusesDataPathsOutsideTheArtworkDirectory: a stored data path that does not name
+// a file of <data>/artwork (for example the database) is never resolved.
+func TestImageRefusesDataPathsOutsideTheArtworkDirectory(t *testing.T) {
+	t.Parallel()
+
+	for _, dataPath := range []string{"server.db", "artworkx/a.jpg", "cache/a.jpg"} {
+		fixture := newFixture(t, &fakeRenderer{})
+		stored := fixture.source.artworks[posterID]
+		stored.LibraryRoot, stored.Location = "", artwork.DataLocation(dataPath)
+		fixture.source.artworks[posterID] = stored
+
+		service := images.NewService(images.Dependencies{
+			Source: fixture.source, Resolver: prefixResolver{}, Renderer: fixture.renderer, Cache: fixture.cache,
+			ArtworkDir: "/data/artwork",
+		})
+
+		_, err := service.Image(t.Context(), images.Request{ID: posterID, Width: artwork.Width320})
+		if !errors.Is(err, domain.ErrUnsupported) || fixture.renderer.calls() != 0 {
+			t.Errorf("data path %q: error = %v after %d renders, want ErrUnsupported and none", dataPath, err, fixture.renderer.calls())
+		}
 	}
 }
 

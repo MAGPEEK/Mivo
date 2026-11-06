@@ -47,9 +47,9 @@ type Options struct {
 	// redirects (for example coverartarchive.org to archive.org) are limited by the SSRF
 	// guard, the redirect cap and HTTPS only.
 	AllowedHosts []string
-	// RedirectHosts, when set, restricts redirects that leave the original host to these exact
-	// hosts or ".domain" suffixes (ADR 0031 §1, for example ".archive.org" for Cover Art
-	// Archive). Provider adapters (M6-07/09/10) must set it; empty allows any public host.
+	// RedirectHosts are the exact hosts or ".domain" suffixes a redirect may lead to when it
+	// leaves the original host (ADR 0031 §1, for example ".archive.org" for Cover Art
+	// Archive). Empty means a redirect must stay on the original host.
 	RedirectHosts []string
 	// MaxBodyBytes caps a response body; larger bodies fail with ErrBodyTooLarge.
 	MaxBodyBytes int64

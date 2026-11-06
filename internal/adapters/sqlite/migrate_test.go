@@ -12,11 +12,11 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 14
+const latestSchemaVersion = 12
 
-// migrationFiles is the number of files in migrations/: 00012 and 00013 are reserved for
-// milestone 7 (docs/tasks/M7-00-overview.md) and not merged yet.
-const migrationFiles = 12
+// migrationFiles is the number of files in migrations/; the numbering has no gaps, so it
+// equals latestSchemaVersion.
+const migrationFiles = latestSchemaVersion
 
 // schemaTables returns all tables the migrations create, in creation order.
 func schemaTables() []string {

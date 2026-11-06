@@ -1,14 +1,14 @@
-# M7-10 SQLite: migration 00012 watch state store and row queries
+# M7-10 SQLite: migration 00013 watch state store and row queries
 Owner: mivo-backend
 Depends on: M7-06, M7-08
-Files/areas: `internal/adapters/sqlite/migrations/00012_watch_state.sql`, `internal/adapters/sqlite/queries/watch.sql`, generated `sqlcgen`, new `internal/adapters/sqlite/watch_store*.go`
+Files/areas: `internal/adapters/sqlite/migrations/00013_watch_state.sql`, `internal/adapters/sqlite/queries/watch.sql`, generated `sqlcgen`, new `internal/adapters/sqlite/watch_store*.go`
 
 ## Goal
 Per-profile watch state is stored so that no catalog change deletes it, and the queries for
 Continue watching, Up next and badges are fast.
 
 ## Acceptance criteria
-- [ ] Migration `00012` creates `watch_state` per ADR 0032 §8: primary key
+- [ ] Migration `00013` creates `watch_state` per ADR 0032 §8: primary key
       (`profile_id`, `item_id`), FK to profiles `ON DELETE CASCADE`, **no FK to items**,
       `attach_key`, index for (`profile_id`, `last_played_at`).
 - [ ] Store: get/put state for one item; bulk mark watched/unwatched for the episodes of a show

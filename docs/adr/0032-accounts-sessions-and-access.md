@@ -118,7 +118,7 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   Amendment: X/XXX → 18 (orchestrator 2026-11-06); a text with non-ASCII characters other
   than spaces and punctuation (`1８`, `1⁸`, `Ⅻ`, combining marks) is unknown, so it fails
   closed instead of losing characters.
-- The bucket is stored per item (`age_rating`, migration `00013`) together with the effective
+- The bucket is stored per item (`age_rating`, migration `00014`) together with the effective
   bucket that children inherit from their show (an episode without its own rating uses the
   show's), so one indexed predicate filters every query.
 - The restriction (library set, max age, hide unrated) is applied in SQL for every listing,
@@ -133,7 +133,7 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   viewer-scoped reads.
 
 ### 8 Watch state
-- Table `watch_state` (migration `00012`): `profile_id` (FK, `ON DELETE CASCADE`), `item_id`
+- Table `watch_state` (migration `00013`): `profile_id` (FK, `ON DELETE CASCADE`), `item_id`
   (**no foreign key**, so a rescan, a folder change or a library removal never deletes it),
   `position_seconds`, `watched`, `play_count`, `last_played_at`, `hidden_from_continue`,
   `attach_key` (the item's provider reference at write time, e.g. `tmdb:movie:603`, for a later
@@ -164,7 +164,7 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   `SameSite=Lax` session cookie.
 
 ### 10 Migrations
-- `00011` accounts, profiles, library access, sessions/devices; `00012` watch state; `00013`
+- `00011` accounts, profiles, library access, sessions/devices; `00012` metadata settings and local records (M6-14); `00013` watch state; `00014`
   age ratings. They merge in numeric order (goose refuses gaps on existing databases).
 
 ## Consequences

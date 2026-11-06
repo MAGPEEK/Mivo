@@ -1,9 +1,9 @@
 -- Online metadata, part three (M6-14, ADR 0031): the settings changed in Settings › Metadata
 -- and the records of an item's local sources.
 --
--- Number 00014 follows the numbers milestone 7 reserves (00011 accounts, 00012 watch state,
--- 00013 age ratings, docs/tasks/M7-00-overview.md). goose refuses missing earlier versions,
--- so those three must be merged before a build with this migration is released.
+-- Number 00012 follows 00011 accounts (M7-08); watch state and age ratings of milestone 7 take
+-- 00013 and 00014 (docs/tasks/M7-00-overview.md). goose refuses missing earlier versions, so
+-- 00011 must be merged before a build with this migration is released.
 --
 -- metadata_settings has at most one row. Without it the configuration applies; with it the
 -- stored state wins, so a change made in the UI survives a restart. tmdb_api_key is the
