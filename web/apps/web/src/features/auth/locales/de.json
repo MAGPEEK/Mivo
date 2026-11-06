@@ -77,10 +77,6 @@
     "checking": "Wird geprüft…",
     "still": "Diese Verbindung kommt weiterhin nicht aus dem lokalen Netzwerk."
   },
-  "profiles": {
-    "title": "Profil wählen",
-    "placeholder": "Die Profilwahl gibt es in dieser Version noch nicht. Melde dich ab und mit einem Konto ohne verwaltete Profile oder PIN wieder an."
-  },
   "signOut": {
     "action": "Abmelden",
     "pending": "Abmeldung läuft…",

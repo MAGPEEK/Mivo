@@ -77,10 +77,6 @@
     "checking": "Checking…",
     "still": "This connection still does not come from the local network."
   },
-  "profiles": {
-    "title": "Choose a profile",
-    "placeholder": "Choosing a profile is not available in this version yet. Sign out and sign in with an account without managed profiles or PIN."
-  },
   "signOut": {
     "action": "Sign out",
     "pending": "Signing out…",

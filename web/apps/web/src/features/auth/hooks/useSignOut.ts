@@ -8,7 +8,7 @@ import { answers, matches } from "../lib/authErrors";
 import { authHref } from "../lib/authSearch";
 import { resetSession } from "./sessionCache";
 
-/** The "Sign out" action for the profile menu (SH-07, M7-31). */
+/** The "Sign out" action of the profile menu (SH-07) and the profile picker. */
 export interface SignOutAction {
   readonly signOut: () => void;
   readonly pending: boolean;

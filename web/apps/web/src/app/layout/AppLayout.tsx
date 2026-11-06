@@ -3,6 +3,7 @@ import { useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useSidebarLibraries } from "../../features/library";
+import { ProfileMenu } from "../../features/profiles";
 import { useArrangedLibraries } from "../../features/sidebar-layout";
 import { ServerVersion } from "../../features/system";
 import { BottomNav, Sidebar, TopBar } from "../../shared/ui";
@@ -62,7 +63,7 @@ export function AppLayout({ children = <Outlet /> }: AppLayoutProps) {
         />
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar searchInputRef={searchInputRef} />
+        <TopBar searchInputRef={searchInputRef} actions={<ProfileMenu />} />
         {/* tabIndex -1 lets the skip link move keyboard focus into the content. */}
         <main id={mainContentId} tabIndex={-1} className={shell.main}>
           {children}

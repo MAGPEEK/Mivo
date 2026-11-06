@@ -99,11 +99,11 @@ describe("session guard", () => {
     expect(router.state.location.href).toBe("/");
   });
 
-  it("opens the profile placeholder when the session has no profile", async () => {
+  it("opens the profile picker when the session has no profile", async () => {
     const server = createFakeAuthServer({ initial: { currentProfile: null } });
     const { router } = renderApp("/items/item-1", { fetch: server.fetch });
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Choose a profile" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Who's watching?" })).toBeTruthy();
     expect(router.state.location.search).toMatchObject({ next: "/items/item-1" });
   });
 });
@@ -364,7 +364,7 @@ describe("lost session", () => {
     });
     const { router } = renderApp("/libraries/lib-1", { fetch: server.fetch });
 
-    expect(await screen.findByRole("heading", { level: 1, name: "Choose a profile" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Who's watching?" })).toBeTruthy();
     expect(router.state.location.search).toMatchObject({ next: "/libraries/lib-1" });
   });
 });
@@ -373,7 +373,7 @@ describe("sign out", () => {
   it("ends the session and says so on the sign-in page", async () => {
     const server = createFakeAuthServer({ initial: { currentProfile: null } });
     const { router } = renderApp("/profiles", { fetch: server.fetch });
-    const page = await screen.findByRole("region", { name: "Choose a profile" });
+    const page = await screen.findByRole("region", { name: "Who's watching?" });
 
     fireEvent.click(within(page).getByRole("button", { name: "Sign out" }));
 

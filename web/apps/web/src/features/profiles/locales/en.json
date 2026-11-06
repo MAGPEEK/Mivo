@@ -1,0 +1,40 @@
+{
+  "picker": {
+    "title": "Who's watching?",
+    "listLabel": "Profiles",
+    "admin": "Admin",
+    "pinRequired": "PIN required",
+    "add": "Add profile",
+    "choosing": "Opening the profile…",
+    "failed": "That did not work. Please try again.",
+    "network": "The server cannot be reached. Check the connection and try again."
+  },
+  "pin": {
+    "title": "PIN for {{name}}",
+    "padLabel": "PIN pad",
+    "entered": "{{count}} of {{total}} digits entered",
+    "delete": "Delete digit",
+    "submit": "Confirm PIN",
+    "wrong": "Wrong PIN. Please try again.",
+    "locked": "Too many wrong PINs. The profile is locked. Try again in {{time}}.",
+    "unlocked": "You can try again now.",
+    "remember": "Remember on this device",
+    "rememberHint": "Without it, the profile closes after 4 hours without use.",
+    "attemptsHint": "5 wrong attempts lock the profile for 5 minutes.",
+    "cancel": "Back to profiles"
+  },
+  "menu": {
+    "label": "Profile menu",
+    "trigger": "Profile menu: {{name}}",
+    "admin": "Admin",
+    "primary": "Primary profile",
+    "managed": "Managed profile",
+    "pinHint": "Managed profiles exist. Set a PIN on your profile so they cannot switch to it.",
+    "switch": "Switch profile",
+    "changePassword": "Change password…",
+    "devices": "Devices",
+    "signOut": "Sign out",
+    "signOutPending": "Signing out…",
+    "failed": "That did not work. Please try again."
+  }
+}

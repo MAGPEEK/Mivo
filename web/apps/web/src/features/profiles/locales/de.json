@@ -1,0 +1,40 @@
+{
+  "picker": {
+    "title": "Wer schaut?",
+    "listLabel": "Profile",
+    "admin": "Admin",
+    "pinRequired": "PIN erforderlich",
+    "add": "Profil hinzufügen",
+    "choosing": "Profil wird geöffnet…",
+    "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal.",
+    "network": "Der Server ist nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal."
+  },
+  "pin": {
+    "title": "PIN für {{name}}",
+    "padLabel": "PIN-Feld",
+    "entered": "{{count}} von {{total}} Ziffern eingegeben",
+    "delete": "Ziffer löschen",
+    "submit": "PIN bestätigen",
+    "wrong": "Falsche PIN. Bitte versuche es noch einmal.",
+    "locked": "Zu viele falsche PINs. Das Profil ist gesperrt. Versuche es in {{time}} wieder.",
+    "unlocked": "Du kannst es jetzt wieder versuchen.",
+    "remember": "Auf diesem Gerät merken",
+    "rememberHint": "Ohne diese Option schließt sich das Profil nach 4 Stunden ohne Nutzung.",
+    "attemptsHint": "5 falsche Versuche sperren das Profil für 5 Minuten.",
+    "cancel": "Zurück zu den Profilen"
+  },
+  "menu": {
+    "label": "Profilmenü",
+    "trigger": "Profilmenü: {{name}}",
+    "admin": "Admin",
+    "primary": "Hauptprofil",
+    "managed": "Verwaltetes Profil",
+    "pinHint": "Es gibt verwaltete Profile. Lege eine PIN für dein Profil fest, damit sie nicht dorthin wechseln können.",
+    "switch": "Profil wechseln",
+    "changePassword": "Passwort ändern…",
+    "devices": "Geräte",
+    "signOut": "Abmelden",
+    "signOutPending": "Abmeldung läuft…",
+    "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal."
+  }
+}

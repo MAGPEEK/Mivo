@@ -1,6 +1,13 @@
 export { productId, productName, repositoryUrl } from "./brand";
 export { belowBreakpointQuery, breakpoints, type BreakpointToken } from "./breakpoints";
-export { colors, textScrimOpacity, type ColorToken, type HexColor } from "./colors";
+export {
+  avatarColorNames,
+  colors,
+  textScrimOpacity,
+  type AvatarColorName,
+  type ColorToken,
+  type HexColor,
+} from "./colors";
 export { compositeColor, contrastRatio, InvalidColorError, relativeLuminance } from "./contrast";
 export { radii, type RadiusToken } from "./radii";
 export { shadows, type ShadowToken } from "./shadows";

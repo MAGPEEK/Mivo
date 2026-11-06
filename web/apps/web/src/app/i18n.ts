@@ -10,6 +10,7 @@ import { libraryLocales, libraryNamespace } from "../features/library";
 import { musicLocales, musicNamespace } from "../features/music";
 import { photosLocales, photosNamespace } from "../features/photos";
 import { playerLocales, playerNamespace } from "../features/player";
+import { profilesLocales, profilesNamespace } from "../features/profiles";
 import { settingsLocales, settingsNamespace } from "../features/settings";
 import { createI18n } from "../shared/i18n";
 
@@ -29,6 +30,7 @@ export const featureNamespaces = {
   [photosNamespace]: photosLocales,
   [authNamespace]: authLocales,
   [devicesNamespace]: devicesLocales,
+  [profilesNamespace]: profilesLocales,
 } as const;
 
 /** Type of {@link featureNamespaces}; `i18next.d.ts` types `t()` keys with it. */

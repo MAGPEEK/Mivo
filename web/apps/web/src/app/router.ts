@@ -13,7 +13,6 @@ import { createElement, useCallback } from "react";
 
 import { AudiobookGrid } from "../features/audiobooks";
 import {
-  ProfilesPlaceholderPage,
   RemoteSetupPage,
   SessionGate,
   SetupPage,
@@ -41,6 +40,7 @@ import {
 import { MusicLibraryGrid } from "../features/music";
 import { PhotoAlbumGrid, PhotoGrid } from "../features/photos";
 import { PlayerPage, validatePlayerSearch } from "../features/player";
+import { ProfilePickerPage } from "../features/profiles";
 import {
   AboutSettingsPage,
   LibrariesSettingsPage,
@@ -152,12 +152,12 @@ function authPages<Parent extends AnyRoute>(parent: Parent) {
       path: remoteSetupPath,
       component: RemoteSetupPage,
     }),
-    // M7-31 replaces the placeholder with the profile picker.
+    // M7-33 passes its editor path to the picker for "Add profile".
     createRoute({
       getParentRoute: () => parent,
       path: profilesPath,
       validateSearch: validateAuthSearch,
-      component: ProfilesPlaceholderPage,
+      component: ProfilePickerPage,
     }),
   ] as const;
 }

@@ -47,6 +47,20 @@ describe("text contrast (>= 4.5:1)", () => {
   it.each([
     ...pairs(["text", "textMuted"], ["background", "surface", "surfaceRaised"]),
     ...pairs(["onAccent"], ["accent", "accentHover"]),
+    // The avatar initial is written in `background` on the avatar colour.
+    ...pairs(
+      ["background"],
+      [
+        "avatarCoral",
+        "avatarAmber",
+        "avatarGreen",
+        "avatarTeal",
+        "avatarBlue",
+        "avatarViolet",
+        "avatarPink",
+        "avatarSlate",
+      ],
+    ),
   ])("$foreground on $background", ({ foreground, background }) => {
     expect(contrastRatio(colors[foreground], colors[background])).toBeGreaterThanOrEqual(
       textContrast,

@@ -15,3 +15,19 @@ export function useSession(): SessionState {
   const me = useQuery(meQueryOptions(client));
   return deriveSession(setup, me);
 }
+
+// A component below the gate must not check again on mount: on a failed check (a `501`, an
+// unreachable server) a new observer retries and turns the session back into `loading`, the
+// gate unmounts the page with the component, the check fails again – an endless loop.
+const withoutMountCheck = { refetchOnMount: false, retryOnMount: false } as const;
+
+/**
+ * The session as the gate last saw it, for components below the session gate such as the
+ * profile menu and the picker. Unlike {@link useSession} it never starts a check on mount.
+ */
+export function useSessionSnapshot(): SessionState {
+  const client = useApiClient();
+  const setup = useQuery({ ...setupStateQueryOptions(client), ...withoutMountCheck });
+  const me = useQuery({ ...meQueryOptions(client), ...withoutMountCheck });
+  return deriveSession(setup, me);
+}

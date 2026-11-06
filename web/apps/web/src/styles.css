@@ -12,3 +12,23 @@
     @apply outline-2 outline-offset-2 outline-accent;
   }
 }
+
+/* Wrong PIN on the profile picker (US-02): a short sideways shake of the PIN dots. */
+@theme {
+  --animate-pin-shake: pin-shake 0.4s ease-in-out;
+
+  @keyframes pin-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-0.5rem);
+    }
+    40%,
+    80% {
+      transform: translateX(0.5rem);
+    }
+  }
+}

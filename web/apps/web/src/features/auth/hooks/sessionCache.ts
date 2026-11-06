@@ -24,6 +24,16 @@ export function storeSession(queryClient: QueryClient, session: Session): void {
   queryClient.setQueryData(meQueryKey, session.me);
 }
 
+/**
+ * Stores the account after its profile changed (selected or left) and drops everything the
+ * previous profile loaded, so every page loads again with the new profile's limits. The account
+ * is stored first: the guard then leaves the page before a query could refetch.
+ */
+export function storeProfileChange(queryClient: QueryClient, me: Me): void {
+  queryClient.setQueryData(meQueryKey, me);
+  queryClient.removeQueries({ predicate: (query) => !isAuthQuery(query.queryKey) });
+}
+
 /** The name of the account signed in last, for prefilling the sign-in form. */
 export function cachedAccountName(queryClient: QueryClient): string | undefined {
   return queryClient.getQueryData<Me>(meQueryKey)?.account.name;

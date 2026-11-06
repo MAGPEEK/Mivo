@@ -54,6 +54,7 @@ describe("locales", () => {
       "music",
       "photos",
       "player",
+      "profiles",
       "settings",
       "translation",
     ]);

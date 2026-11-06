@@ -33,6 +33,7 @@ export {
   HomeIcon,
   InfoIcon,
   LibraryIcon,
+  LockIcon,
   MutedIcon,
   PauseIcon,
   PlayIcon,

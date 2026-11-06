@@ -1,4 +1,4 @@
-import { useId, type Ref, type SubmitEvent } from "react";
+import { useId, type ReactNode, type Ref, type SubmitEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { searchShortcutAriaKeys } from "../lib/searchShortcut";
@@ -8,6 +8,8 @@ import { SearchIcon } from "./icons";
 export interface TopBarProps {
   /** Receives the search field, so a global shortcut can focus it. */
   readonly searchInputRef: Ref<HTMLInputElement>;
+  /** Controls at the end of the bar, such as the profile menu. */
+  readonly actions?: ReactNode;
 }
 
 // Search has no results page yet; without this, submitting would reload the app.
@@ -15,12 +17,12 @@ function ignoreSubmit(event: SubmitEvent<HTMLFormElement>) {
   event.preventDefault();
 }
 
-/** Bar above the page content with the global search. */
-export function TopBar({ searchInputRef }: TopBarProps) {
+/** Bar above the page content with the global search and, at its end, the given actions. */
+export function TopBar({ searchInputRef, actions }: TopBarProps) {
   const { t } = useTranslation();
   const searchInputId = useId();
   return (
-    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center border-b border-divider bg-background px-6">
+    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-4 border-b border-divider bg-background px-6">
       <form role="search" onSubmit={ignoreSubmit} className="relative w-full max-w-md">
         <label htmlFor={searchInputId} className="sr-only">
           {t("search.label")}
@@ -36,6 +38,7 @@ export function TopBar({ searchInputRef }: TopBarProps) {
           className="h-9 w-full rounded-md border border-divider bg-surface pr-3 pl-9 text-sm text-text placeholder:text-text-muted hover:border-text-muted"
         />
       </form>
+      {actions !== undefined && <div className="ml-auto flex items-center">{actions}</div>}
     </header>
   );
 }

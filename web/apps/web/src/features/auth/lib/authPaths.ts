@@ -10,7 +10,7 @@ export const setupPath = "/setup";
 /** "Setup only from the local network" (AU-03). */
 export const remoteSetupPath = "/setup/remote";
 
-/** Profile picker (US-01, owned by M7-31; a placeholder until then). */
+/** Profile picker (US-01…03, features/profiles). */
 export const profilesPath = "/profiles";
 
 /** Home, where a visitor lands when there is no `next` page to return to. */

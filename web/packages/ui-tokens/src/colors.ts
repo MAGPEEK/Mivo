@@ -32,7 +32,31 @@ export const colors = {
   directStream: "#4C9AFF",
   /** Playback status: the server transcodes audio or video. */
   transcode: "#F5B544",
+  /** Profile avatars (AvatarColor in api/openapi.yaml); the initial is written in `background`. */
+  avatarCoral: "#FF8572",
+  avatarAmber: "#F5B544",
+  avatarGreen: "#3DD68C",
+  avatarTeal: "#2EC4B6",
+  avatarBlue: "#4C9AFF",
+  avatarViolet: "#A78BFA",
+  avatarPink: "#F47FB5",
+  avatarSlate: "#8E9AAF",
 } as const satisfies Readonly<Record<string, HexColor>>;
+
+/** Names of the profile avatar colours, the values of the API's `AvatarColor`. */
+export const avatarColorNames = [
+  "coral",
+  "amber",
+  "green",
+  "teal",
+  "blue",
+  "violet",
+  "pink",
+  "slate",
+] as const;
+
+/** One profile avatar colour name. */
+export type AvatarColorName = (typeof avatarColorNames)[number];
 
 /** Name of a colour token. */
 export type ColorToken = keyof typeof colors;
