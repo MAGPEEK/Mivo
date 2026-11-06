@@ -77,19 +77,22 @@ INSERT INTO profiles (id, user_id, name, is_primary, avatar_color, pin_hash, max
                       all_libraries, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+-- Profile writes are scoped to the owning account, so a profile id of another account
+-- changes nothing (no rows) instead of someone else's profile.
+
 -- name: UpdateProfile :execrows
 UPDATE profiles
 SET name = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
-WHERE id = ?;
+WHERE id = ? AND user_id = ?;
 
 -- name: SetProfilePINHash :execrows
 UPDATE profiles
 SET pin_hash = ?, updated_at = ?
-WHERE id = ?;
+WHERE id = ? AND user_id = ?;
 
 -- name: DeleteProfile :execrows
 DELETE FROM profiles
-WHERE id = ?;
+WHERE id = ? AND user_id = ?;
 
 -- name: GetProfile :one
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,

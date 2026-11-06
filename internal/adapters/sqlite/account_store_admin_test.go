@@ -239,7 +239,7 @@ func TestAccountProfileDeleteKeepsTheSessionWithoutProfile(t *testing.T) {
 	mustCreateProfile(t, fixture.store, managed)
 	fixture.insertSession(t, "session-anna", "account-Anna", managed.Record.Profile.ID)
 
-	if err := fixture.store.DeleteProfile(t.Context(), managed.Record.Profile.ID); err != nil {
+	if err := fixture.store.DeleteProfile(t.Context(), "account-Anna", managed.Record.Profile.ID); err != nil {
 		t.Fatalf("DeleteProfile error = %v", err)
 	}
 

@@ -22,6 +22,14 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &driverError) && driverError.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
 }
 
+// isPrimaryKeyViolation reports a PRIMARY KEY constraint failure; SQLite reports it with its
+// own extended code, not as a UNIQUE failure.
+func isPrimaryKeyViolation(err error) bool {
+	var driverError *sqlitedriver.Error
+
+	return errors.As(err, &driverError) && driverError.Code() == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY
+}
+
 // foreignKeyAsNotFound turns a FOREIGN KEY constraint failure into domain.ErrNotFound: the
 // row the statement refers to does not exist. The driver detail is dropped so no schema
 // text reaches the error message. Other errors pass through unchanged.

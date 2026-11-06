@@ -49,11 +49,16 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 
 const deleteProfile = `-- name: DeleteProfile :execrows
 DELETE FROM profiles
-WHERE id = ?
+WHERE id = ? AND user_id = ?
 `
 
-func (q *Queries) DeleteProfile(ctx context.Context, id string) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteProfile, id)
+type DeleteProfileParams struct {
+	ID     string
+	UserID string
+}
+
+func (q *Queries) DeleteProfile(ctx context.Context, arg DeleteProfileParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteProfile, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -486,17 +491,23 @@ func (q *Queries) ListUserSummaries(ctx context.Context) ([]ListUserSummariesRow
 const setProfilePINHash = `-- name: SetProfilePINHash :execrows
 UPDATE profiles
 SET pin_hash = ?, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND user_id = ?
 `
 
 type SetProfilePINHashParams struct {
 	PinHash   sql.NullString
 	UpdatedAt int64
 	ID        string
+	UserID    string
 }
 
 func (q *Queries) SetProfilePINHash(ctx context.Context, arg SetProfilePINHashParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, setProfilePINHash, arg.PinHash, arg.UpdatedAt, arg.ID)
+	result, err := q.db.ExecContext(ctx, setProfilePINHash,
+		arg.PinHash,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.UserID,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -550,9 +561,10 @@ func (q *Queries) UpdatePrimaryProfile(ctx context.Context, arg UpdatePrimaryPro
 }
 
 const updateProfile = `-- name: UpdateProfile :execrows
+
 UPDATE profiles
 SET name = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
-WHERE id = ?
+WHERE id = ? AND user_id = ?
 `
 
 type UpdateProfileParams struct {
@@ -563,8 +575,11 @@ type UpdateProfileParams struct {
 	AllLibraries int64
 	UpdatedAt    int64
 	ID           string
+	UserID       string
 }
 
+// Profile writes are scoped to the owning account, so a profile id of another account
+// changes nothing (no rows) instead of someone else's profile.
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateProfile,
 		arg.Name,
@@ -574,6 +589,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (i
 		arg.AllLibraries,
 		arg.UpdatedAt,
 		arg.ID,
+		arg.UserID,
 	)
 	if err != nil {
 		return 0, err

@@ -115,8 +115,11 @@ func (store *AccountStore) insertProfile(ctx context.Context, queries *sqlcgen.Q
 }
 
 // UpdateProfile stores name, avatar colour, content limit, library access and the PIN action
-// of a profile; the account and the primary flag never change. An unknown profile wraps
-// domain.ErrNotFound, an unknown library domain.ErrInvalid.
+// of a profile of the account Profile.AccountID; the account and the primary flag never
+// change. A profile that is unknown or belongs to another account wraps domain.ErrNotFound,
+// so a guessed id never reaches someone else's profile. A primary profile keeps its name and
+// all of the account's libraries (domain.ErrInvalid otherwise): those change through
+// UpdateAccount. An unknown library wraps domain.ErrInvalid.
 func (store *AccountStore) UpdateProfile(ctx context.Context, write ProfileWrite) error {
 	record := write.Record
 	if _, err := account.NewProfile(record.Profile); err != nil {
@@ -124,20 +127,18 @@ func (store *AccountStore) UpdateProfile(ctx context.Context, write ProfileWrite
 	}
 
 	err := inWriteTransaction(ctx, store.writer, func(queries *sqlcgen.Queries) error {
-		now := store.clock().UnixMilli()
-		maxAge, hideUnrated := limitColumns(record.Limit)
-
-		changed, err := queries.UpdateProfile(ctx, sqlcgen.UpdateProfileParams{
-			Name: record.Profile.Name, AvatarColor: string(record.Profile.AvatarColor),
-			MaxAge: maxAge, HideUnrated: hideUnrated, AllLibraries: boolToInt(record.Libraries.IsAll()),
-			UpdatedAt: now, ID: record.Profile.ID,
-		})
+		current, err := ownedProfileRow(ctx, queries, record.Profile.AccountID, record.Profile.ID)
 		if err != nil {
-			return fmt.Errorf("update profile row: %w", err)
+			return err
 		}
 
-		if changed == 0 {
-			return domain.ErrNotFound
+		if err := checkPrimaryProfileUpdate(current, record); err != nil {
+			return err
+		}
+
+		now := store.clock().UnixMilli()
+		if err := writeProfileRow(ctx, queries, record, now); err != nil {
+			return err
 		}
 
 		if err := writePIN(ctx, queries, write, now); err != nil {
@@ -153,16 +154,73 @@ func (store *AccountStore) UpdateProfile(ctx context.Context, write ProfileWrite
 	return nil
 }
 
+// ownedProfileRow reads the profile inside a transaction; a missing profile and one of
+// another account both wrap domain.ErrNotFound, so the answer does not tell them apart.
+func ownedProfileRow(ctx context.Context, queries *sqlcgen.Queries, accountID, profileID string) (sqlcgen.Profile, error) {
+	row, err := readProfileRow(ctx, queries, profileID)
+	if err != nil {
+		return sqlcgen.Profile{}, err
+	}
+
+	if row.UserID != accountID {
+		return sqlcgen.Profile{}, domain.ErrNotFound
+	}
+
+	return row, nil
+}
+
+// checkPrimaryProfileUpdate refuses to rename a primary profile or narrow its libraries: it
+// carries the account name and the account's access, which UpdateAccount owns.
+func checkPrimaryProfileUpdate(current sqlcgen.Profile, record ProfileRecord) error {
+	if current.IsPrimary == 0 {
+		return nil
+	}
+
+	if record.Profile.Name != current.Name {
+		return fmt.Errorf("a primary profile is renamed with its account: %w", domain.ErrInvalid)
+	}
+
+	if !record.Libraries.IsAll() {
+		return fmt.Errorf("a primary profile has all of its account's libraries: %w", domain.ErrInvalid)
+	}
+
+	return nil
+}
+
+func writeProfileRow(ctx context.Context, queries *sqlcgen.Queries, record ProfileRecord, now int64) error {
+	maxAge, hideUnrated := limitColumns(record.Limit)
+
+	changed, err := queries.UpdateProfile(ctx, sqlcgen.UpdateProfileParams{
+		Name: record.Profile.Name, AvatarColor: string(record.Profile.AvatarColor),
+		MaxAge: maxAge, HideUnrated: hideUnrated, AllLibraries: boolToInt(record.Libraries.IsAll()),
+		UpdatedAt: now, ID: record.Profile.ID, UserID: record.Profile.AccountID,
+	})
+	if err != nil {
+		return fmt.Errorf("update profile row: %w", err)
+	}
+
+	if changed == 0 {
+		return domain.ErrNotFound
+	}
+
+	return nil
+}
+
 func writePIN(ctx context.Context, queries *sqlcgen.Queries, write ProfileWrite, now int64) error {
 	if write.PINAction == PINKeep {
 		return nil
 	}
 
-	_, err := queries.SetProfilePINHash(ctx, sqlcgen.SetProfilePINHashParams{
-		PinHash: pinColumn(write), UpdatedAt: now, ID: write.Record.Profile.ID,
+	changed, err := queries.SetProfilePINHash(ctx, sqlcgen.SetProfilePINHashParams{
+		PinHash: pinColumn(write), UpdatedAt: now,
+		ID: write.Record.Profile.ID, UserID: write.Record.Profile.AccountID,
 	})
 	if err != nil {
 		return fmt.Errorf("update pin hash: %w", err)
+	}
+
+	if changed == 0 {
+		return domain.ErrNotFound
 	}
 
 	return nil
@@ -178,24 +236,20 @@ func pinColumn(write ProfileWrite) sql.NullString {
 }
 
 // DeleteProfile removes a managed profile; sessions that had it selected keep running without
-// a profile. The primary profile goes only with its account (domain.ErrConflict); an unknown
-// profile wraps domain.ErrNotFound.
-func (store *AccountStore) DeleteProfile(ctx context.Context, profileID string) error {
+// a profile. The primary profile goes only with its account (domain.ErrConflict); a profile
+// that is unknown or belongs to another account than accountID wraps domain.ErrNotFound.
+func (store *AccountStore) DeleteProfile(ctx context.Context, accountID, profileID string) error {
 	err := inWriteTransaction(ctx, store.writer, func(queries *sqlcgen.Queries) error {
-		row, err := queries.GetProfile(ctx, profileID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return domain.ErrNotFound
-		}
-
+		row, err := ownedProfileRow(ctx, queries, accountID, profileID)
 		if err != nil {
-			return fmt.Errorf("read profile: %w", err)
+			return err
 		}
 
 		if err := account.CheckProfileDeletion(profileFromRow(row)); err != nil {
 			return err
 		}
 
-		if _, err := queries.DeleteProfile(ctx, profileID); err != nil {
+		if _, err := queries.DeleteProfile(ctx, sqlcgen.DeleteProfileParams{ID: profileID, UserID: accountID}); err != nil {
 			return fmt.Errorf("delete profile row: %w", err)
 		}
 

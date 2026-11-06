@@ -144,13 +144,13 @@ func TestAccountProfileUpdatePINActionsAndDelete(t *testing.T) {
 		t.Errorf("UpdateProfile(clear PIN) error = %v or the PIN is still set", err)
 	}
 
-	wantError(t, "DeleteProfile(primary)", fixture.store.DeleteProfile(ctx, "profile-Anna"), domain.ErrConflict)
+	wantError(t, "DeleteProfile(primary)", fixture.store.DeleteProfile(ctx, "account-Anna", "profile-Anna"), domain.ErrConflict)
 
-	if err := fixture.store.DeleteProfile(ctx, profileID); err != nil {
+	if err := fixture.store.DeleteProfile(ctx, "account-Anna", profileID); err != nil {
 		t.Fatalf("DeleteProfile error = %v", err)
 	}
 
-	wantError(t, "DeleteProfile(again)", fixture.store.DeleteProfile(ctx, profileID), domain.ErrNotFound)
+	wantError(t, "DeleteProfile(again)", fixture.store.DeleteProfile(ctx, "account-Anna", profileID), domain.ErrNotFound)
 
 	wantError(t, "UpdateProfile(missing)", fixture.store.UpdateProfile(ctx, update), domain.ErrNotFound)
 

@@ -18,8 +18,9 @@ import (
 // admin, managed-profile limit) cannot race with another writer. Hashes pass through the
 // store unchanged and are never logged or put into error messages.
 //
-// The record and callback types mirror the ports of app/users (M7-17) field for field, so the
-// wiring converts them with plain type conversions.
+// The record and callback types mirror the ports of app/users (M7-17) field for field; this
+// package cannot import app/users yet, so M7-25 adds a thin adapter from the store to those
+// ports (type conversions for the records, wrapping closures for the callbacks).
 type AccountStore struct {
 	writer *sql.DB
 	reader *sql.DB
@@ -306,10 +307,10 @@ func checkAdminChanges(current, next account.Account, enabledAdmins int) error {
 	return nil
 }
 
-// accountWriteError maps a unique violation (the name key, or an id the caller reused) to
-// domain.ErrConflict.
+// accountWriteError maps a unique violation (the name key, the one-primary index) and a
+// primary-key violation (an id the caller reused) to domain.ErrConflict.
 func accountWriteError(action string, err error) error {
-	if isUniqueViolation(err) {
+	if isUniqueViolation(err) || isPrimaryKeyViolation(err) {
 		return fmt.Errorf("%s: name or id already taken: %w", action, domain.ErrConflict)
 	}
 
