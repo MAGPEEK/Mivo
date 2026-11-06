@@ -59,13 +59,32 @@ type Options struct {
 	MaxCachedBytes int
 }
 
-// entry is one registered poster. fetch serialises the download, so concurrent requests
-// for one ID reach the provider once.
+// entry is one registered poster. fetch is a one-slot lock that serialises the download, so
+// concurrent requests for one ID reach the provider once; a waiter gives up when its request
+// ends, so a hanging download never holds the other requests (lockFetch).
 type entry struct {
 	ref     enrich.ArtworkRef
 	expires time.Time
-	fetch   sync.Mutex
+	fetch   chan struct{}
 	body    []byte
+}
+
+func newEntry(ref enrich.ArtworkRef, expires time.Time) *entry {
+	return &entry{ref: ref, expires: expires, fetch: make(chan struct{}, 1)}
+}
+
+// lockFetch takes the fetch lock or fails with the context's error.
+func (found *entry) lockFetch(ctx context.Context) error {
+	select {
+	case found.fetch <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("wait for poster download: %w", ctx.Err())
+	}
+}
+
+func (found *entry) unlockFetch() {
+	<-found.fetch
 }
 
 // Proxy registers candidate posters and serves them. It is safe for concurrent use and
@@ -82,7 +101,8 @@ type Proxy struct {
 // Compile-time check: the search handler registers posters here.
 var _ restapi.CandidatePosters = (*Proxy)(nil)
 
-// New returns a Proxy. A missing Source or Logger is a wiring bug and wraps domain.ErrInvalid.
+// New returns a Proxy. A missing Source, Settings or Logger is a wiring bug and wraps
+// domain.ErrInvalid.
 func New(options Options) (*Proxy, error) {
 	switch {
 	case options.Source == nil:
@@ -143,7 +163,7 @@ func (proxy *Proxy) PosterURL(ref enrich.ArtworkRef) string {
 		proxy.dropSoonestExpiring()
 	}
 
-	proxy.entries[id] = &entry{ref: ref, expires: now.Add(proxy.options.Lifetime)}
+	proxy.entries[id] = newEntry(ref, now.Add(proxy.options.Lifetime))
 	proxy.idsByRef[ref] = id
 
 	return pathPrefix + id

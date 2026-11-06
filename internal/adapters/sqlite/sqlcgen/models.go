@@ -83,6 +83,13 @@ type ItemFieldLock struct {
 	Field  string
 }
 
+type ItemLocalRecord struct {
+	ItemID    string
+	Nfo       string
+	Filename  string
+	UpdatedAt int64
+}
+
 type ItemMatch struct {
 	ItemID      string
 	State       string
@@ -214,6 +221,16 @@ type MediaStream struct {
 	IsForced          int64
 	IsAttachedPicture int64
 	BitRate           int64
+}
+
+type MetadataSetting struct {
+	ID          int64
+	Online      int64
+	Tmdb        int64
+	Musicbrainz int64
+	Language    string
+	TmdbApiKey  string
+	UpdatedAt   int64
 }
 
 type Person struct {

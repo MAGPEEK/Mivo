@@ -91,6 +91,22 @@ type Options struct {
 	Listener        ChangeListener
 }
 
+// StartState is the state a server starts with: the stored one when the settings were
+// changed before (found), else the configured one. A switch the configuration turns off
+// stays off either way, so an operator can always switch online lookups off in the file or
+// the environment (ADR 0018, notes M6-14).
+func StartState(configured, stored State, found bool) State {
+	if !found {
+		return configured
+	}
+
+	stored.Online = stored.Online && configured.Online
+	stored.TMDB = stored.TMDB && configured.TMDB
+	stored.MusicBrainz = stored.MusicBrainz && configured.MusicBrainz
+
+	return stored
+}
+
 // Service holds the current settings. It is safe for concurrent use.
 type Service struct {
 	mutex   sync.RWMutex

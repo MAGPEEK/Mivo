@@ -356,14 +356,18 @@ func TestRemoveDeletesStoredPictures(t *testing.T) {
 		t.Fatalf("Fetch: %v", err)
 	}
 
-	if err := h.fetcher.Remove(t.Context(), first.DataPath, second.DataPath); err != nil {
+	if err := h.fetcher.Remove(t.Context(), first.DataPath); err != nil {
 		t.Fatalf("Remove: %v", err)
+	}
+
+	if err := h.fetcher.RemoveDataFile(t.Context(), second.DataPath); err != nil {
+		t.Fatalf("RemoveDataFile: %v", err)
 	}
 
 	h.requireNoFiles(t)
 
-	if err := h.fetcher.Remove(t.Context(), first.DataPath); err != nil {
-		t.Fatalf("Remove of a missing picture: %v", err)
+	if err := h.fetcher.RemoveDataFile(t.Context(), first.DataPath); err != nil {
+		t.Fatalf("RemoveDataFile of a missing picture: %v", err)
 	}
 }
 

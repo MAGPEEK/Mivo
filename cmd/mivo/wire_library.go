@@ -112,16 +112,19 @@ type scanAdapters struct {
 	files  *libraryfs.FileSystem
 	prober *ffmpeg.Prober
 	images *appimages.Service
+	// enrichment queues the refreshed items for online metadata.
+	enrichment appscan.EnrichmentRequester
 }
 
 // newScanService builds the v2 scan use case on the real walker, resolver and ffprobe, the
-// sqlite catalog, and the metadata refresher that reads NFO files and picks artwork. A
-// finished scan purges the image cache, whose renderings the scan may have outdated.
+// sqlite catalog, and the metadata refresher that reads NFO files, picks artwork and keeps
+// the local records for online metadata. A finished scan purges the image cache, whose
+// renderings the scan may have outdated; the refreshed items are queued for enrichment.
 func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibraryStore, adapters scanAdapters) (*appscan.Service, error) {
 	catalog := sqlite.NewLibraryCatalog(db, time.Now)
 
 	refresher, err := appscan.NewMetadataRefresher(appscan.MetadataRefresherDeps{
-		Catalog: catalog, Reader: adapters.files, Parser: nfoParser{}, Logger: app.logger,
+		Catalog: catalog, Reader: adapters.files, Parser: nfoParser{}, Locals: catalog, Logger: app.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create metadata refresher: %w", err)
@@ -144,9 +147,10 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		Finished: func(ctx context.Context, _ string) {
 			app.purgeImageCache(ctx, adapters.images)
 		},
-		IDs:    uuidgen.New(),
-		Clock:  time.Now,
-		Logger: app.logger,
+		Enrichment: adapters.enrichment,
+		IDs:        uuidgen.New(),
+		Clock:      time.Now,
+		Logger:     app.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create scan service: %w", err)

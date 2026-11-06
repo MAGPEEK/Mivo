@@ -32,7 +32,7 @@ func (c *Client) attempts(ctx context.Context, req *http.Request, host string) (
 
 		delay, retry := c.retryDelay(resp, attempt)
 		if !retry || attempt >= c.opts.MaxAttempts || !isIdempotent(req.Method) {
-			return resp, exhausted(req, resp, err)
+			return resp, c.exhausted(req, resp, err)
 		}
 
 		if sleepErr := c.opts.Sleep(ctx, delay); sleepErr != nil {
@@ -41,19 +41,43 @@ func (c *Client) attempts(ctx context.Context, req *http.Request, host string) (
 	}
 }
 
-// exhausted turns the last failed attempt into a domain error.
-func exhausted(req *http.Request, resp *Response, err error) error {
+// exhausted turns the last failed attempt into a domain error. A 429 that named a pause
+// becomes a *RateLimitError, so the enrichment queue waits as long as the provider asked.
+func (c *Client) exhausted(req *http.Request, resp *Response, err error) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", domain.ErrUnavailable, err)
 	}
 
-	sentinel := domain.ErrUnavailable
-	if resp.StatusCode == http.StatusTooManyRequests {
-		sentinel = domain.ErrRateLimited
+	message := fmt.Sprintf("%s %s: status %d", req.Method, redactParsed(req.URL), resp.StatusCode)
+
+	if resp.StatusCode != http.StatusTooManyRequests {
+		return fmt.Errorf("%s: %w", message, domain.ErrUnavailable)
 	}
 
-	return fmt.Errorf("%s %s: status %d: %w", req.Method, redactParsed(req.URL), resp.StatusCode, sentinel)
+	if after, ok := parseRetryAfter(resp.Header.Get("Retry-After"), c.opts.Now()); ok && after > 0 {
+		return &RateLimitError{message: message, after: after}
+	}
+
+	return fmt.Errorf("%s: %w", message, domain.ErrRateLimited)
 }
+
+// RateLimitError is a rate-limited answer (429) with the pause the server asked for in
+// Retry-After. It wraps domain.ErrRateLimited.
+type RateLimitError struct {
+	message string
+	after   time.Duration
+}
+
+// Error implements error.
+func (err *RateLimitError) Error() string {
+	return fmt.Sprintf("%s (retry after %s): %v", err.message, err.after, domain.ErrRateLimited)
+}
+
+// Unwrap lets errors.Is match domain.ErrRateLimited.
+func (err *RateLimitError) Unwrap() error { return domain.ErrRateLimited }
+
+// RetryAfter is the pause the server asked for.
+func (err *RateLimitError) RetryAfter() time.Duration { return err.after }
 
 // retryDelay returns the pause before the next attempt: exponential backoff with jitter,
 // raised to the server's Retry-After. retry is false when Retry-After exceeds the cap.

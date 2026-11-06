@@ -149,8 +149,11 @@ func redactKey(err error, query url.Values) error {
 
 // keptSentinels are the errors callers branch on; a redacted error keeps only these.
 func keptSentinels() []error {
+	// ErrInvalid and ErrUnsupported carry the outbound client's ErrInsecureURL and
+	// ErrBodyTooLarge.
 	return []error{
 		domain.ErrUnavailable, domain.ErrRateLimited, domain.ErrNotFound,
+		domain.ErrInvalid, domain.ErrUnsupported,
 		context.Canceled, context.DeadlineExceeded,
 	}
 }

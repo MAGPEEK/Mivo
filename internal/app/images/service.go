@@ -41,7 +41,9 @@ type Image struct {
 
 // Dependencies are the ports the service needs. Logger may be nil. Photos and
 // PhotoRenderer are optional together: without them the service serves artwork only and a
-// photo item ID is unknown.
+// photo item ID is unknown. DataDir is the absolute data directory the downloaded provider
+// pictures live in (ADR 0031 §11); Resolver confines them to it like library files to their
+// root. Empty refuses data-directory pictures.
 type Dependencies struct {
 	Source        ArtworkSource
 	Resolver      PathResolver
@@ -50,6 +52,7 @@ type Dependencies struct {
 	Logger        *slog.Logger
 	Photos        PhotoSource
 	PhotoRenderer Renderer
+	DataDir       string
 }
 
 // renderTarget is everything a render needs, whatever the ID named: the cache key, where
@@ -151,13 +154,19 @@ func (service *Service) renderAndStore(ctx context.Context, target renderTarget)
 }
 
 // sourcePath resolves the file a picture is read from. It is the one place that switches on
-// the source location: data-directory pictures (milestone 6) need their own resolver.
+// the source location: a data-directory picture resolves below DataDir.
 func (service *Service) sourcePath(target renderTarget) (string, error) {
-	if target.location.DataPath != "" {
-		return "", fmt.Errorf("resolve data-directory picture %q: %w", target.location.DataPath, domain.ErrUnsupported)
+	root, relativePath := target.libraryRoot, target.location.RelativePath
+
+	if dataPath := target.location.DataPath; dataPath != "" {
+		if service.dependencies.DataDir == "" {
+			return "", fmt.Errorf("resolve data-directory picture %q: %w", dataPath, domain.ErrUnsupported)
+		}
+
+		root, relativePath = service.dependencies.DataDir, dataPath
 	}
 
-	path, err := service.dependencies.Resolver.Resolve(target.libraryRoot, target.location.RelativePath)
+	path, err := service.dependencies.Resolver.Resolve(root, relativePath)
 	if err != nil {
 		return "", fmt.Errorf("resolve %q: %w", target.location.RelativePath, err)
 	}

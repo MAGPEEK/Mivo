@@ -141,6 +141,31 @@ func TestImageTagMismatchIsNotImmutable(t *testing.T) {
 	}
 }
 
+func TestImageReadsProviderPicturesFromTheDataDirectory(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t, &fakeRenderer{})
+	stored := fixture.source.artworks[posterID]
+	stored.LibraryRoot, stored.Location = "", artwork.DataLocation("artwork/x.jpg")
+	fixture.source.artworks[posterID] = stored
+
+	service := images.NewService(images.Dependencies{
+		Source: fixture.source, Resolver: prefixResolver{}, Renderer: fixture.renderer, Cache: fixture.cache,
+		DataDir: "/data",
+	})
+
+	image, err := service.Image(t.Context(), images.Request{ID: posterID, Width: artwork.Width320})
+	if err != nil {
+		t.Fatalf("Image() error = %v", err)
+	}
+
+	_ = image.Content.Close()
+
+	if got := fixture.renderer.requests[0].AbsolutePath; got != "/data/artwork/x.jpg" {
+		t.Errorf("rendered %q, want the picture below the data directory", got)
+	}
+}
+
 func TestImageErrors(t *testing.T) {
 	t.Parallel()
 

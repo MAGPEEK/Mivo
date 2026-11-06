@@ -195,3 +195,30 @@ type ItemRefresher interface {
 	// RefreshItems recomputes metadata and artwork of the requested items.
 	RefreshItems(ctx context.Context, request RefreshRequest) error
 }
+
+// LocalRecords are what an item's local sources said in one refresh. Filename holds the
+// embedded tags merged above the file name: both rank below the provider (ADR 0031 §8).
+type LocalRecords struct {
+	NFO metadata.Record
+	// KeepNFO is set when the NFO could not be read this time: a stored NFO record stays, and
+	// NFO (the item's stored record) is used only for an item without one.
+	KeepNFO  bool
+	Filename metadata.Record
+}
+
+// LocalRecordStore keeps the local records per item, so online enrichment can merge them
+// again under the provider record and "Remove match" can fall back to them. Implemented by
+// adapters/sqlite (LibraryCatalog).
+type LocalRecordStore interface {
+	// SaveLocalRecords stores the records of an item. Errors wrap domain.ErrNotFound for an
+	// unknown item.
+	SaveLocalRecords(ctx context.Context, itemID string, records LocalRecords) error
+}
+
+// EnrichmentRequester queues online enrichment of the items a scan refreshed (ADR 0031 §8).
+// It only writes queue rows and never waits for the network; it decides itself whether
+// online metadata is on. Implemented by *enrich.Queue.
+type EnrichmentRequester interface {
+	// EnqueueScanned queues the items that may be enriched.
+	EnqueueScanned(ctx context.Context, itemIDs []string) error
+}

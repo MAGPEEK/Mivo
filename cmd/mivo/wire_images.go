@@ -56,7 +56,7 @@ func (app application) newImageServices(db *sqlite.DB, files *libraryfs.FileSyst
 	reader := sqlite.NewCatalogReader(db)
 	service := appimages.NewService(appimages.Dependencies{
 		Source: reader, Resolver: files, Renderer: renderer, Cache: cache, Logger: app.logger,
-		Photos: reader, PhotoRenderer: photoRenderer,
+		Photos: reader, PhotoRenderer: photoRenderer, DataDir: app.config.Paths.Data,
 	})
 
 	handlers, err := imagehttp.New(imagehttp.Options{Images: service, Logger: app.logger})

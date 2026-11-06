@@ -3,6 +3,7 @@ package enrich
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
@@ -78,11 +79,15 @@ type JobStore interface {
 
 // QueueDeps are the ports of a Queue. A nil Settings reports every provider by its health
 // only. Health should be shared with the worker and the caching lookups; nil means a
-// private one in which every provider stays ok.
+// private one in which every provider stays ok. Batch serves EnqueueScanned; Retries, when
+// set, makes failed jobs due after a settings change; a nil Logger discards.
 type QueueDeps struct {
 	Jobs     JobEnqueuer
 	Health   *Health
 	Settings SettingsSource
+	Batch    BatchEnqueuer
+	Retries  FailedJobRetrier
+	Logger   *slog.Logger
 }
 
 // Queue accepts enrichment requests and reports the queue's status. Enqueue only writes one
@@ -96,6 +101,10 @@ type Queue struct {
 func NewQueue(deps QueueDeps) *Queue {
 	if deps.Health == nil {
 		deps.Health = NewHealth(HealthOptions{})
+	}
+
+	if deps.Logger == nil {
+		deps.Logger = slog.New(slog.DiscardHandler)
 	}
 
 	return &Queue{deps: deps, wake: make(chan struct{}, 1)}

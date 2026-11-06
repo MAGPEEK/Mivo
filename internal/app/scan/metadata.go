@@ -32,11 +32,13 @@ const (
 	nfoMalformed  = "nfo_malformed"
 )
 
-// MetadataRefresherDeps lists what NewMetadataRefresher needs; every field is required.
+// MetadataRefresherDeps lists what NewMetadataRefresher needs; every field is required but
+// Locals, which keeps the local records for online enrichment (nil keeps none).
 type MetadataRefresherDeps struct {
 	Catalog MetadataCatalog
 	Reader  SidecarReader
 	Parser  NFOParser
+	Locals  LocalRecordStore
 	Logger  *slog.Logger
 }
 
@@ -127,21 +129,28 @@ func (run *refreshRun) refreshMetadata(ctx context.Context, item *refreshItem, s
 
 	var sources []metadata.SourcedRecord
 
+	locals := LocalRecords{}
+
 	switch outcome {
 	case nfoUsed:
 		sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceNFO, Record: nfo})
+		locals.NFO = nfo
 	case nfoUnusable:
 		// A broken NFO must not wipe what an earlier good one gave: the stored record leads,
 		// the file name only fills gaps.
 		sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceNFO, Record: state.Record})
+		locals.NFO, locals.KeepNFO = state.Record, true
 	case nfoAbsent:
 	}
 
-	if embedded, found := run.request.Embedded[item.id]; found {
-		sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceEmbedded, Record: embedded})
+	lower := run.lowerSources(item)
+	sources = append(sources, lower...)
+	locals.Filename = metadata.Merge(metadata.Record{}, metadata.LockSet{}, lower)
+
+	if err := run.saveLocals(ctx, item.id, locals); err != nil {
+		return err
 	}
 
-	sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceFilename, Record: filenameRecord(item.level)})
 	merged := metadata.Merge(state.Record, state.Locks, sources)
 
 	if sameRecord(state.Record, merged) {
@@ -151,6 +160,33 @@ func (run *refreshRun) refreshMetadata(ctx context.Context, item *refreshItem, s
 	err = run.refresher.deps.Catalog.SaveMetadata(ctx, item.id, merged)
 	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return fmt.Errorf("save metadata: %w", err)
+	}
+
+	return nil
+}
+
+// lowerSources are the sources below the NFO: the embedded tags, then the file name.
+func (run *refreshRun) lowerSources(item *refreshItem) []metadata.SourcedRecord {
+	var sources []metadata.SourcedRecord
+
+	if embedded, found := run.request.Embedded[item.id]; found {
+		sources = append(sources, metadata.SourcedRecord{Source: metadata.SourceEmbedded, Record: embedded})
+	}
+
+	return append(sources, metadata.SourcedRecord{Source: metadata.SourceFilename, Record: filenameRecord(item.level)})
+}
+
+// saveLocals keeps the local records for online enrichment; an item deleted meanwhile is
+// skipped like in SaveMetadata.
+func (run *refreshRun) saveLocals(ctx context.Context, itemID string, locals LocalRecords) error {
+	store := run.refresher.deps.Locals
+	if store == nil {
+		return nil
+	}
+
+	err := store.SaveLocalRecords(ctx, itemID, locals)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return fmt.Errorf("save local records: %w", err)
 	}
 
 	return nil

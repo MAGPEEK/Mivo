@@ -14,7 +14,7 @@ import (
 //	-ldflags "-X github.com/magpeek/mivo/internal/platform/config.BundledTMDBKey=<key>"
 //
 // It has to be a package variable because the linker can only set variables (ADR 0031 §3).
-// Nothing but TMDBKey reads it.
+// Nothing but TMDBKey and Config.BundledTMDBKey read it.
 var BundledTMDBKey string //nolint:gochecknoglobals // set by the linker (-X); only TMDBKey reads it
 
 // Defaults of the online metadata settings (ADR 0031 §2). Online lookup is on so that the
@@ -111,6 +111,13 @@ func (secret Secret) LogValue() slog.Value { return slog.StringValue(secret.Stri
 // the bundled project key. The key is meant for the TMDB adapter only; do not log it.
 func (cfg Config) TMDBKey() (string, KeyOrigin) {
 	return selectTMDBKey(string(cfg.Metadata.TMDB.APIKey), BundledTMDBKey)
+}
+
+// BundledTMDBKey returns the project key shipped with the build, "" in development builds.
+// The settings service needs it apart from the own key, which can change at runtime in
+// Settings › Metadata; do not log it.
+func (Config) BundledTMDBKey() string {
+	return BundledTMDBKey
 }
 
 func selectTMDBKey(own, bundled string) (string, KeyOrigin) {

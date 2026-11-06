@@ -36,6 +36,7 @@ const (
 	envPathsData      = brand.EnvPrefix + "_PATHS_DATA"
 	envPathsCache     = brand.EnvPrefix + "_PATHS_CACHE"
 	envPathsTranscode = brand.EnvPrefix + "_PATHS_TRANSCODE"
+	envMetadataOnline = brand.EnvPrefix + "_METADATA_ONLINE_ENABLED"
 )
 
 func TestRunServesSystemEndpointsAndKeepsServerIDAcrossRestarts(t *testing.T) {
@@ -486,7 +487,9 @@ func assertExists(t *testing.T, path string) {
 }
 
 // isolatedEnvironment points every directory into a temp directory and the listener to a
-// free loopback port, so a test never touches the host's directories or port 8460.
+// free loopback port, so a test never touches the host's directories or port 8460. Online
+// metadata is off, so no test reaches TMDB or MusicBrainz; the online metadata tests switch
+// it on against fakes.
 func isolatedEnvironment(t *testing.T) map[string]string {
 	t.Helper()
 
@@ -500,6 +503,7 @@ func isolatedEnvironment(t *testing.T) map[string]string {
 		envServerHost:        "127.0.0.1",
 		envServerPort:        "0",
 		envLogLevel:          "warn",
+		envMetadataOnline:    "false",
 	}
 }
 

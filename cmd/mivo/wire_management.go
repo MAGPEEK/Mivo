@@ -76,13 +76,23 @@ type scanning struct {
 	scans      *appscan.Service
 	trigger    *scantrigger.Trigger
 	management management
+	// online is the online metadata feature the scan queues its refreshed items for.
+	online onlineMetadata
 }
 
-// newScanning builds the scan service, its triggers and the library management and imports
-// the configured libraries. The scan service is closed again when a later step fails.
+// newScanning builds the online metadata feature, the scan service, its triggers and the
+// library management and imports the configured libraries. The scan service is closed again
+// when a later step fails.
 func (app application) newScanning(ctx context.Context, db *sqlite.DB, store *sqlite.ManagedLibraryStore,
 	adapters scanAdapters,
 ) (scanning, error) {
+	online, err := app.newOnlineMetadata(ctx, db)
+	if err != nil {
+		return scanning{}, err
+	}
+
+	adapters.enrichment = online.queue
+
 	scans, err := app.newScanService(db, store, adapters)
 	if err != nil {
 		return scanning{}, err
@@ -98,7 +108,7 @@ func (app application) newScanning(ctx context.Context, db *sqlite.DB, store *sq
 		return scanning{}, withCleanupError(ctx, err, closeScansStep, app.closeScans(ctx, scans))
 	}
 
-	return scanning{scans: scans, trigger: trigger, management: managing}, nil
+	return scanning{scans: scans, trigger: trigger, management: managing, online: online}, nil
 }
 
 // reservedDirectories are the server's own directories no library folder may touch.

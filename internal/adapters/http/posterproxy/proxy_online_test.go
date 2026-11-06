@@ -3,14 +3,18 @@ package posterproxy_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/posterproxy"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/app/enrich"
+	"github.com/magpeek/mivo/internal/domain"
 )
 
 // TestServePosterOpensNoConnectionWhenSwitchedOff: with online metadata or TMDB off a held
@@ -63,6 +67,62 @@ func TestServePosterFailsWhenTheSettingsCannotBeRead(t *testing.T) {
 
 	if source.callCount() != 0 {
 		t.Errorf("previews = %d, want none", source.callCount())
+	}
+}
+
+// TestAnUnavailableSettingsStoreIsNoProviderOutage: only a failed download is
+// provider_unavailable with Retry-After; a settings read that wraps ErrUnavailable is an
+// internal error.
+func TestAnUnavailableSettingsStoreIsNoProviderOutage(t *testing.T) {
+	t.Parallel()
+
+	settings := newSwitches(true, true)
+	settings.err = fmt.Errorf("settings store: %w", domain.ErrUnavailable)
+	proxy, handler, _ := newProxy(t, posterproxy.Options{Source: &fakeSource{}, Settings: settings})
+
+	recorder := get(t, handler, proxy.PosterURL(poster("/a.jpg")))
+	assertProblem(t, recorder, http.StatusInternalServerError, restapi.CodeInternal)
+
+	if recorder.Header().Get("Retry-After") != "" {
+		t.Error("a settings failure answered Retry-After")
+	}
+}
+
+// TestAWaiterGivesUpWhenItsRequestEnds: a hanging download holds the fetch lock, but a second
+// request for the same poster returns as soon as its own context ends.
+func TestAWaiterGivesUpWhenItsRequestEnds(t *testing.T) {
+	t.Parallel()
+
+	source := &blockingSource{body: readImage(t, "poster.jpg"), started: make(chan struct{}), release: make(chan struct{})}
+	proxy, handler, _ := newProxy(t, posterproxy.Options{Source: source})
+	target := proxy.PosterURL(poster("/a.jpg"))
+
+	first := make(chan int, 1)
+
+	go func() { first <- get(t, handler, target).Code }()
+
+	<-source.started
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	waiter := make(chan struct{})
+
+	go func() {
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, http.MethodGet, target, nil))
+		close(waiter)
+	}()
+
+	select {
+	case <-waiter:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiter with an ended request kept waiting for the hanging download")
+	}
+
+	close(source.release)
+
+	if code := <-first; code != http.StatusOK || source.calls.Load() != 1 {
+		t.Errorf("first request = %d after %d previews, want 200 after one", code, source.calls.Load())
 	}
 }
 

@@ -280,6 +280,28 @@ func TestRetryAfterBeyondCapStopsRetrying(t *testing.T) {
 	if !errors.Is(err, domain.ErrRateLimited) || calls.Load() != 1 || len(clock.sleeps) != 0 {
 		t.Errorf("err=%v calls=%d sleeps=%v, want ErrRateLimited after one call", err, calls.Load(), clock.sleeps)
 	}
+
+	// The enrichment queue reads the pause the server asked for (enrich.RetryAfterError).
+	var rateLimit *outbound.RateLimitError
+	if !errors.As(err, &rateLimit) || rateLimit.RetryAfter() != 24*time.Hour || strings.Contains(err.Error(), "%!") {
+		t.Errorf("err = %v, want a *RateLimitError asking for 24h", err)
+	}
+}
+
+func TestRateLimitWithoutRetryAfterCarriesNoPause(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	_, err := testClient(newClock(), func(o *outbound.Options) { o.MaxAttempts = 1 }).Get(context.Background(), server.URL, nil)
+
+	var rateLimit *outbound.RateLimitError
+	if !errors.Is(err, domain.ErrRateLimited) || errors.As(err, &rateLimit) {
+		t.Errorf("err = %v, want ErrRateLimited without a pause", err)
+	}
 }
 
 func TestNetworkErrorIsUnavailableAndRedactsKey(t *testing.T) {

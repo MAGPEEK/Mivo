@@ -311,8 +311,23 @@ func (scanRun *runV2) refreshTouched(ctx context.Context, sidecars []library.Fil
 	}
 
 	service.addPendingRefresh(base.library.ID, deferred)
+	scanRun.requestEnrichment(ctx, ready)
 
 	return nil
+}
+
+// requestEnrichment queues the refreshed items for online enrichment. A failure only costs
+// the provider data until the next scan or refresh, so it is logged and never fails the scan.
+func (scanRun *runV2) requestEnrichment(ctx context.Context, itemIDs []string) {
+	service := scanRun.base.service
+	if service.enrich == nil || len(itemIDs) == 0 {
+		return
+	}
+
+	if err := service.enrich.EnqueueScanned(ctx, itemIDs); err != nil {
+		service.logger.LogAttrs(ctx, slog.LevelWarn, "could not queue online metadata",
+			slog.String("library_id", scanRun.base.library.ID), slog.String("error", err.Error()))
+	}
 }
 
 // splitBlocked separates the due items (sorted, unique) into those that can be refreshed now

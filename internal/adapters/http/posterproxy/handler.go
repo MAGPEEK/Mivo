@@ -66,10 +66,15 @@ func (proxy *Proxy) servePoster(writer http.ResponseWriter, request *http.Reques
 }
 
 // picture returns the held bytes of an entry or downloads them once. The entry's fetch lock
-// covers only the download and keep, never the write to a (slow) client.
+// covers only the download and keep, never the write to a (slow) client. A download that is
+// already running when online metadata is switched off completes and its bytes are kept;
+// only new downloads are refused.
 func (proxy *Proxy) picture(ctx context.Context, id string, found *entry) ([]byte, error) {
-	found.fetch.Lock()
-	defer found.fetch.Unlock()
+	if err := found.lockFetch(ctx); err != nil {
+		return nil, err
+	}
+
+	defer found.unlockFetch()
 
 	if found.body != nil {
 		return found.body, nil
@@ -86,12 +91,24 @@ func (proxy *Proxy) picture(ctx context.Context, id string, found *entry) ([]byt
 
 	fetched, err := proxy.options.Source.Preview(ctx, found.ref)
 	if err != nil {
-		return nil, fmt.Errorf("preview poster: %w", err)
+		return nil, sourceError{fmt.Errorf("preview poster: %w", err)}
 	}
 
 	proxy.keep(id, found, fetched)
 
 	return fetched, nil
+}
+
+// sourceError marks a failure of the provider download, the only one that is a provider
+// outage (provider_unavailable with Retry-After); a failed settings read is not.
+type sourceError struct{ error }
+
+func (err sourceError) Unwrap() error { return err.error }
+
+func isProviderOutage(err error) bool {
+	var source sourceError
+
+	return errors.As(err, &source) && (errors.Is(err, domain.ErrUnavailable) || errors.Is(err, domain.ErrRateLimited))
 }
 
 func writePicture(writer http.ResponseWriter, body []byte) {
@@ -128,7 +145,8 @@ func isServedType(mediaType string) bool {
 // writeFailure maps a failed fetch: a picture the provider does not have, refuses or that is
 // no valid image is not found; online metadata or the provider switched off is
 // online_disabled (no outage, so no Retry-After); an unreachable or rate-limiting provider is
-// provider_unavailable; anything else is logged and answered 500.
+// provider_unavailable; anything else, such as a failed settings read, is logged and
+// answered 500.
 func (proxy *Proxy) writeFailure(writer http.ResponseWriter, request *http.Request, err error) {
 	switch {
 	case request.Context().Err() != nil:
@@ -138,7 +156,7 @@ func (proxy *Proxy) writeFailure(writer http.ResponseWriter, request *http.Reque
 		restapi.WriteProblem(writer, restapi.NewProblem(http.StatusConflict, restapi.CodeOnlineDisabled))
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrInvalid), errors.Is(err, domain.ErrForbidden):
 		restapi.WriteProblem(writer, restapi.NewProblem(http.StatusNotFound, restapi.CodeNotFound))
-	case errors.Is(err, domain.ErrUnavailable), errors.Is(err, domain.ErrRateLimited):
+	case isProviderOutage(err):
 		writer.Header().Set("Retry-After", strconv.Itoa(int(restapi.ProviderRetryAfterSeconds)))
 		restapi.WriteProblem(writer, unavailableProblem())
 	default:

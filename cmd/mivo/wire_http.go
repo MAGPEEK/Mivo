@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 
 	imagehttp "github.com/magpeek/mivo/internal/adapters/http/images"
+	"github.com/magpeek/mivo/internal/adapters/http/posterproxy"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/server"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
@@ -40,6 +42,9 @@ type catalogServices struct {
 	// rows and is built from the others by serveWithPlayback.
 	store *sqlite.ManagedLibraryStore
 	rows  *approws.Service
+	// online is the online metadata feature: its API services, the enrichment worker and
+	// the periodic refresh.
+	online onlineMetadata
 }
 
 // wiredServices is everything the HTTP adapter serves.
@@ -57,9 +62,10 @@ type httpHandlers struct {
 	webUI http.Handler
 }
 
-// mounts are the extra API routes: the stream delivery and the image endpoint.
+// mounts are the extra API routes: the stream delivery, the image endpoint and the
+// candidate posters of the identify dialog.
 func (services wiredServices) mounts() []restapi.Mount {
-	return append(services.streams.Mounts(), services.images.handlers.Mounts()...)
+	return slices.Concat(services.streams.Mounts(), services.images.handlers.Mounts(), services.online.posters.Mounts())
 }
 
 // serveHTTP binds the listener, starts the startup scan and serves until ctx is done. The
@@ -84,11 +90,17 @@ func (app application) serveHTTP(ctx context.Context, services wiredServices) er
 	app.hooks.reportListening(listener.Addr())
 	app.startLibraryScans(ctx, services.scans)
 
-	// The trigger starts scans, so it stops before the caller closes the scan service.
+	// The trigger starts scans, so it stops before the caller closes the scan service; the
+	// enrichment worker and the periodic refresh stop before the database closes. A stopped
+	// worker gives its running jobs back to the queue, so a restart resumes them.
 	stopTrigger := startBackground(ctx, services.trigger)
+	stopWorker := startBackground(ctx, services.online.worker)
+	stopPeriodic := startBackground(ctx, services.online.periodic)
 	runErr := httpServer.Run(ctx)
 
 	stopTrigger()
+	stopPeriodic()
+	stopWorker()
 
 	if runErr != nil {
 		return fmt.Errorf("run http server: %w", runErr)
@@ -107,7 +119,7 @@ func (app application) serverOptions(listener net.Listener, handlers httpHandler
 		Logger:             app.logger,
 		APIHandler:         handlers.api,
 		Fallback:           handlers.webUI,
-		QuietPatterns:      append(stream.QuietPatterns(), imagehttp.QuietPatterns()...),
+		QuietPatterns:      slices.Concat(stream.QuietPatterns(), imagehttp.QuietPatterns(), posterproxy.QuietPatterns()),
 		AllowPublicClients: !app.config.Server.LANOnly,
 	}
 }
@@ -127,6 +139,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		LibraryKinds: enabledLibraryKinds(),
 		Logger:       app.logger,
 		Mounts:       services.mounts(),
+		Metadata:     services.online.apiServices(),
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

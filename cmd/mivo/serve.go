@@ -234,7 +234,7 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 	stopPurge := app.purgeImageCacheInBackground(ctx, images.service)
 	catalog := catalogServices{
 		system: system, libraries: libraries, managed: managed, scans: scanning.scans, images: images,
-		trigger: scanning.trigger, management: scanning.management, store: store,
+		trigger: scanning.trigger, management: scanning.management, store: store, online: scanning.online,
 	}
 	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
 	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scanning.scans))

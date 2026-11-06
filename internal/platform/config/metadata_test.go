@@ -129,6 +129,11 @@ func TestOwnKeyFromFileWinsOverBundled(t *testing.T) {
 	if key, origin := cfg.TMDBKey(); key != secretKey || origin != config.KeyOriginOwn {
 		t.Errorf("TMDBKey() = (%q, %q), want own key", key, origin)
 	}
+
+	// The settings service picks between the two at runtime, so it reads the bundled one apart.
+	if bundled := cfg.BundledTMDBKey(); bundled != "bundled" {
+		t.Errorf("BundledTMDBKey() = %q, want the bundled key next to the own one", bundled)
+	}
 }
 
 func setBundledKey(t *testing.T, value string) {

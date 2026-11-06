@@ -253,3 +253,11 @@ Keys added for online metadata (ADR 0031). Booleans are strict like `server.lan_
 The key type `config.Secret` prints a redaction marker in `%v`, `%#v`, JSON and `slog`, and
 error messages never contain the value. Keep it out of any config dump.
 The per-library `online_metadata` flag is stored with the library (ADR 0031 §2), not here.
+
+M6-14: the `metadata.*` keys are the starting state. Once the settings were changed in
+Settings › Metadata they are stored in the database (`metadata_settings`, migration 00014)
+and that stored state is used on every later start, so a UI change survives a restart, with
+one exception: a switch set to `false` in the file or the environment (`metadata.online.enabled`,
+`metadata.tmdb.enabled`, `metadata.musicbrainz.enabled`) is off at start whatever was stored,
+so an operator can always turn online lookups off. `metadata.language` stays the default an
+empty language stands for.

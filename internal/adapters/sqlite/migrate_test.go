@@ -12,11 +12,17 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 11
+const latestSchemaVersion = 14
+
+// migrationFiles is the number of files in migrations/: 00012 and 00013 are reserved for
+// milestone 7 (docs/tasks/M7-00-overview.md) and not merged yet.
+const migrationFiles = 12
 
 // schemaTables returns all tables the migrations create, in creation order.
 func schemaTables() []string {
-	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(), onlineMetadataTables(), []string{"media_chapters", "search_docs", "item_search"}, accountTables())
+	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(),
+		onlineMetadataTables(), []string{"media_chapters", "search_docs", "item_search"}, accountTables(),
+		[]string{"metadata_settings", "item_local_records"})
 }
 
 func TestMigrateCreatesTheSchemaAndASecondRunIsANoOp(t *testing.T) {
@@ -37,15 +43,15 @@ func TestMigrateCreatesTheSchemaAndASecondRunIsANoOp(t *testing.T) {
 		t.Errorf("schema version = %d, want %d", got, latestSchemaVersion)
 	}
 
-	if got := appliedMigrationRows(t, inspection); got != latestSchemaVersion {
-		t.Errorf("applied migration rows = %d, want %d (second run must not re-apply)", got, latestSchemaVersion)
+	if got := appliedMigrationRows(t, inspection); got != migrationFiles {
+		t.Errorf("applied migration rows = %d, want %d (second run must not re-apply)", got, migrationFiles)
 	}
 
 	assertTablesExist(t, inspection, true)
 
 	// Only the first run applies something, and it logs each applied migration once.
-	if got := len(records()); got != latestSchemaVersion {
-		t.Errorf("log records = %+v, want %d applied-migration records", records(), latestSchemaVersion)
+	if got := len(records()); got != migrationFiles {
+		t.Errorf("log records = %+v, want %d applied-migration records", records(), migrationFiles)
 	}
 }
 

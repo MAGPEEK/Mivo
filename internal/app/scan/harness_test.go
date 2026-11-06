@@ -40,9 +40,11 @@ type harness struct {
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
 	finished          func(ctx context.Context, libraryID string)
-	ids               *counterIDs
-	clock             *tickingClock
-	logs              *syncBuffer
+	// enrichment, when set, receives the refreshed items for online enrichment.
+	enrichment *recordingEnrichment
+	ids        *counterIDs
+	clock      *tickingClock
+	logs       *syncBuffer
 	// wrapHandler, when set, wraps the text handler that writes to logs.
 	wrapHandler func(slog.Handler) slog.Handler
 	service     *scan.Service
@@ -101,6 +103,10 @@ func (h *harness) dependencies() scan.Dependencies {
 
 	if h.metadataRefresher != nil {
 		dependencies.Refresher = h.metadataRefresher
+	}
+
+	if h.enrichment != nil {
+		dependencies.Enrichment = h.enrichment
 	}
 
 	return dependencies

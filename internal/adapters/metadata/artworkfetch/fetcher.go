@@ -147,6 +147,12 @@ func (fetcher *Fetcher) Remove(ctx context.Context, dataPaths ...string) error {
 	return nil
 }
 
+// RemoveDataFile deletes one stored provider picture; it implements the identify use case's
+// DataFileRemover. A missing file is no error.
+func (fetcher *Fetcher) RemoveDataFile(ctx context.Context, dataPath string) error {
+	return fetcher.Remove(ctx, dataPath)
+}
+
 // resolve turns a reference into a checked URL and the client of its provider.
 func (fetcher *Fetcher) resolve(ref enrich.ArtworkRef) (string, Getter, error) {
 	var provider Provider

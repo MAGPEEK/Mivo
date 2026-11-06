@@ -41,6 +41,8 @@ type Dependencies struct {
 	Discs DiscPorts
 	// Finished, when set, is called after every scan ended, whatever its outcome.
 	Finished func(ctx context.Context, libraryID string)
+	// Enrichment, when set, queues online enrichment of the items a scan refreshed.
+	Enrichment EnrichmentRequester
 	// IDs creates item and file IDs.
 	IDs IDGenerator
 	// Clock returns the current time; injected so tests are deterministic.
@@ -64,6 +66,7 @@ type Service struct {
 	photo     PhotoPorts
 	discs     DiscPorts
 	finished  func(ctx context.Context, libraryID string)
+	enrich    EnrichmentRequester
 	ids       IDGenerator
 	clock     func() time.Time
 	logger    *slog.Logger
@@ -125,6 +128,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		photo:       dependencies.Photos,
 		discs:       dependencies.Discs,
 		finished:    dependencies.Finished,
+		enrich:      dependencies.Enrichment,
 		libraries:   dependencies.Libraries,
 		walker:      dependencies.Walker,
 		resolver:    dependencies.Resolver,

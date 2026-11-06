@@ -62,6 +62,8 @@ type runHooks struct {
 	// wrapListener replaces the bound listener, for example to present connections from a
 	// public address to the LAN-only guard.
 	wrapListener func(listener net.Listener) net.Listener
+	// metadata points the online metadata providers at fakes and observes their lookups.
+	metadata metadataHooks
 }
 
 func (hooks runHooks) reportListening(address net.Addr) {
