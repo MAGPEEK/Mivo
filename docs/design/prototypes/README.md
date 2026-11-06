@@ -12,6 +12,7 @@ questions). German UI texts by default, en/de toggle in the top bar.
 | [detail.html](detail.html) | Movie, movie without artwork, show, season (grid and list), episode, extra page; item overflow menu (M5 actions only); player (full layout, mode badge green/blue/amber with stream-info overlay and reason hints, options panel with Auto play and speed, queue panel, next-up card, keyboard help, mini player, media info dialog); responsive preview 1440 / 1024 / 390 with phone bottom sheets; "Show later milestones" toggle reveals M4/M6/M7 placeholders | DT-01…03, DT-05, DT-06, DT-08, DT-09, DT-11, DT-20…22, PL-01…05, PL-08, PL-09, PL-14, PL-15, PL-32, PL-35, PL-36, PL-38, PL-40…42 (M4/M6/M7 placeholders: DT-04, DT-07, DT-10, ED-01…07, PL-07, PL-10…13, PL-20, PL-30) | approved (owner) |
 | [settings.html](settings.html) | Settings for this device (`/settings/app`): Appearance, Library layout, Playback (M4 placeholders), Search, Diagnostics (expert), About; every control labelled with storage and milestone; keyboard help sheet opened with "?" | AD-01…03, SH-14, HO-01, PL-09, SR-02, LB-20 (M5-03) | approved (owner) |
 | [media.html](media.html) | Music (artists/albums grids, artist page, album page with disc/track numbers, persistent player bar with queue, repeat/shuffle, phone variant above bottom nav), photos (month/day timeline, albums/folders, lightbox with zoom, swipe/arrows, EXIF panel, slideshow, Esc), audiobooks (grid, book page with resume point, chapters, speed 0.5-2.0x, sleep timer placeholder, bar in book mode), one-playback-at-a-time demo with video mini player | SH-11, SH-17, HO-02, LB-40, SR-02, PL-15, PL-38; proposed new ids MU-01…12, PH-01…09, AB-01…07 (M5-02) | approved (owner) |
+| [auth.html](auth.html) | Sign in (show-password toggle, generic error, throttling countdown, "Forgot your password?"), first-run setup step 1 "Create admin account" leading to "No libraries yet", setup from a remote peer ("Only from the local network"), profile menu with "Change password" dialog, "Signed out" and "Session expired" states; viewport switch 1440 / 1024 / 390 (M7-29, ADR 0032) | AU-01…06 (new, ux-spec 10.4), SH-07, HO-09; picker and PIN pad unchanged in admin.html (US-01…03) | approved (by delegation) |
 
 Statuses: **in progress** (being built), **draft** (ready for owner review), **approved**.
 
@@ -54,6 +55,18 @@ The edit dialog (ED-*) stays in the file as an M6 preview behind that toggle; it
 7. One playback at a time: video start pauses music/audiobook, music/audiobook start closes the video mini player.
 8. The ux-spec has no ids for 5.4; MU-/PH-/AB- ids are proposed in the legend and should be added after approval.
 
+## auth.html (M7-29) – open questions, defaults as drawn
+
+1. Sign in with a typed name, no account tiles (tiles would list account names to everyone on the network).
+2. No "Stay signed in" switch; every session lasts 30 days from last use (ADR 0032 §3).
+3. "Forgot your password?" shows "ask your admin" plus the recovery command for admins.
+4. After setup: "No libraries yet" (HO-09) instead of opening the "Add library" dialog directly.
+5. Change password as a dialog from the profile menu (also reachable from Account, 11.3).
+6. Session expired: sign-in page with notice and return to the previous page, not a dialog.
+7. No password strength meter, only the 8–128 length rule.
+
+admin.html follow-up (M7-29): content limit preset "Teens" is FSK 12; FSK 16 only via "Custom" (ADR 0032 §7).
+
 ## Approval (orchestrator, 2026-11-04)
 
 The owner delegated all remaining decisions ("arbeite alles selber ab und hinterfrage nicht",
@@ -67,3 +80,11 @@ any time; a change request goes to `mivo-ux` and updates the prototype before th
 
 The owner approved `detail.html`, `media.html` and `settings.html` explicitly after opening them
 (replaces the approval by delegation above for these three files; defaults as drawn stay).
+
+## Approval auth.html (orchestrator, 2026-11-06)
+
+Approved by delegation with the defaults as drawn for questions 1–7 (type the name, no
+"remember me" – 30-day sliding sessions, show the recovery command on "Forgot your password?",
+HO-09 after setup, change password as a dialog, "Session expired" as the sign-in page with
+return, no strength meter). The owner may still object; a change request goes to `mivo-ux`
+before M7-30 builds on it.

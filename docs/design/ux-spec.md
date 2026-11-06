@@ -61,7 +61,7 @@ parts are named in its row. "Data" means the server work, "UI" the screen work.
 | `/items/$itemId/play?…` | Player (full) | 9 | exists since M2, layout M5 |
 | (overlay, all routes) | Mini player | 9.7 | M5 |
 | `/profiles` | Profile picker | 10.1 | M7 |
-| `/login`, `/setup` | Login, first-run wizard | 10, 11 | M7 |
+| `/login`, `/setup` | Sign in, first-run wizard | 10.4 | M7 |
 | `/settings/app/*` | Settings for this device (client) | 11.2 | M5 |
 | `/settings/account/*` | Own account and profile | 11.3 | M7 |
 | `/admin/status/*` | Admin – Status group | 11.4 | M5 (read-only dashboard), M7 |
@@ -390,7 +390,7 @@ vendor account.
 | Id | Element | Behaviour | Milestone |
 |---|---|---|---|
 | US-10 | Create managed profile | Name, avatar, optional PIN, **content limit**, libraries, remote access allowed (M7b). | M7 |
-| US-11 | Content limit presets | Presets by age (Mivo wording): "Young children", "Children", "Teens", "Adults" (no limit), mapped to the maximum certification per country (Germany FSK 0/6/12/16; US TV-Y/TV-G/G, TV-PG/PG, TV-14/PG-13; further countries in a table). "Custom" (free in Mivo): maximum certification plus **labels** to allow or block (ED-04). Unrated titles: hidden for limited profiles by default (switch). | M7 |
+| US-11 | Content limit presets | Presets by age (Mivo wording): "Young children", "Children", "Teens", "Adults" (no limit), mapped to the maximum certification per country (ADR 0032 §7: Young children 0, Children 6, Teens 12, Adults none, 16 only via Custom; Germany FSK 0/6/12/16; US TV-Y/TV-G/G, TV-PG/PG, TV-14/PG-13; further countries in a table). "Custom" (free in Mivo): maximum certification plus **labels** to allow or block (ED-04). Unrated titles: hidden for limited profiles by default (switch). | M7 |
 | US-12 | Enforcement | On the server for every list, row, search, detail and stream request – never only in the client. | M7 |
 
 ### 10.3 Admin: users and access (`/admin/users`)
@@ -405,6 +405,20 @@ vendor account.
 | US-25 | Devices | Per account and globally: device name, client (web, TV app, DLNA, Chromecast), platform, app version, last seen, last address class (LAN/remote); filter by client type; **revoke** (ends its tokens and sessions). | M7b (plan: Geräteverwaltung) |
 | US-26 | Sign-in log | Successful and failed sign-ins, new-device notice (plan security). | M7b |
 | – | Sharing by vendor account / e-mail, friends lists | Not adopted (ADR 0006: invite links). | – |
+
+### 10.4 Sign-in, first-run setup and session states
+
+Rules from ADR 0032 (§1, §2, §3, §5, §6); prototype `docs/design/prototypes/auth.html` (task M7-29).
+The profile picker and PIN pad after sign-in stay as in 10.1 (`admin.html`).
+
+| Id | Element | Behaviour | Milestone |
+|---|---|---|---|
+| AU-01 | Sign in (`/login`) | Server name and version (open `system/info`), **name** and **password** field with a show/hide toggle, one "Sign in" button. Wrong credentials: one generic text ("Name or password is incorrect.") that never reveals whether the name exists. Throttling (`429`, `Retry-After`): the button is disabled and a countdown shows the wait (after 5 failures 1 min, doubling up to 15 min). "Forgot your password?" disclosure: ask the admin; for the admin the recovery command. No "stay signed in" switch: a session lasts 30 days from last use. After sign-in: profile picker (US-01) when the account has managed profiles or a PIN, else Home. | M7 |
+| AU-02 | First-run setup (`/setup`) | Step 1 of 2 "Create admin account": name (1–40 characters, no e-mail), password and repeat (8–128, no composition rules), note that the page works only from the local network and that there are no default credentials, the recovery command `<brand id> admin reset-password --name <account>` (Docker: `docker exec`, Synology: SSH). "Create account and sign in" signs in and leads to step 2, the "No libraries yet" state (HO-09). | M7 |
+| AU-03 | Setup not available from this network | Setup requested from a remote peer: explains why (a fresh server must not be taken over from the internet) and how to continue (open the server's local address from a device in its network); "Check again". | M7 |
+| AU-04 | Change password | From the profile menu (SH-07) and Account (11.3), only for the primary profile of an account: current password, new password and repeat; note that the account's other devices are signed out, this device stays signed in. | M7 |
+| AU-05 | Signed out | After "Sign out": the sign-in page with a confirmation that this device is signed out (other devices stay signed in). | M7 |
+| AU-06 | Session expired | A request answers `401 unauthenticated` (idle 30 days, password changed, revoked device): the sign-in page with a notice and the reasons, the name prefilled; after sign-in the previous page opens again. | M7 |
 
 ## 11 Admin area
 

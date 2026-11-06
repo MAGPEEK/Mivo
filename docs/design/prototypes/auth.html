@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mivo – Prototype: Sign-in, first-run setup, change password</title>
+<style>
+:root{
+  --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#a3a9b0;
+  --accent:#ff6b57;--accent-hover:#ff8572;--on-accent:#3a0e07;--dp:#3dd68c;--ds:#4c9aff;--tc:#f5b544;--err:#ff7a7a;
+  --r-sm:6px;--r-md:8px;--r-lg:10px;--shadow:0 16px 48px rgb(0 0 0/.55);
+  --font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font)}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)} .mono,code{font-family:var(--mono)}
+code{background:var(--raised);padding:0 4px;border-radius:4px;font-size:12.5px;word-break:break-word}
+.legend{background:#1d1410;border-bottom:1px solid #4a2a22;padding:12px 16px;font-size:13px}
+.legend summary{cursor:pointer;font-weight:600}.legend ul{margin:6px 0;padding-left:20px}.legend ol{margin:2px 0;padding-left:20px}
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--divider);position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.logo{font-weight:800;color:var(--accent);font-size:18px}
+.screens{display:flex;gap:4px;flex-wrap:wrap;flex:1}
+.screens button,.chip-btn,.vp button{background:transparent;border:1px solid var(--divider);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--muted)}
+.screens button[aria-current=page],.vp button[aria-pressed=true]{background:var(--raised);color:var(--text);border-color:var(--accent)}
+.vp{display:flex;gap:4px;align-items:center}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--divider);background:var(--raised);border-radius:var(--r-md);padding:9px 14px;cursor:pointer;white-space:nowrap;text-decoration:none;color:var(--text)}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:700}
+.btn.primary:hover{background:var(--accent-hover)}
+.btn.block{width:100%}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.badge{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--muted);border-radius:4px;padding:0 5px}
+/* stage = simulated viewport */
+.stagewrap{padding:0;overflow-x:auto}
+.stage{container-type:inline-size;position:relative;min-height:calc(100vh - 56px);margin:0 auto;background:var(--bg)}
+.stage.framed{border-left:1px solid var(--divider);border-right:1px solid var(--divider);max-width:none}
+/* auth pages */
+.auth{min-height:calc(100vh - 56px);display:grid;place-items:center;padding:32px 16px}
+.auth-card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-lg);padding:28px}
+.auth-card.wide{max-width:520px}
+.auth-card h1{font-size:22px;margin:0 0 4px}
+.auth-card h1:focus{outline:none}
+.srv{display:flex;gap:10px;align-items:center;margin-bottom:20px}
+.srv .mark{width:40px;height:40px;border-radius:var(--r-md);background:linear-gradient(135deg,#ff6b57,#c2410c);display:grid;place-items:center;font-weight:800;color:var(--on-accent);font-size:18px}
+.srv b{display:block}.srv span{font-size:12px;color:var(--muted)}
+.field{margin-bottom:14px}.field>label{display:block;font-size:13px;margin-bottom:4px;font-weight:500}
+input[type=text],input[type=password]{width:100%;background:var(--bg);border:1px solid var(--divider);border-radius:var(--r-sm);padding:9px 10px}
+input[aria-invalid=true]{border-color:var(--err)}
+.pwrow{position:relative}.pwrow input{padding-right:96px}
+.reveal{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:var(--raised);border:1px solid var(--divider);border-radius:var(--r-sm);padding:3px 8px;font-size:12px;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);margin:4px 0 0}
+.err{color:var(--err);font-size:12.5px;margin-top:4px}.err:empty{display:none}
+.banner{border-left:3px solid var(--ds);background:#121c2b;padding:10px 12px;border-radius:var(--r-sm);margin-bottom:16px}
+.banner.warn{border-color:var(--tc);background:#241d10}.banner.bad{border-color:var(--err);background:#2a1414}.banner.ok{border-color:var(--dp);background:#0f2219}
+.banner p{margin:0}.banner p+p{margin-top:4px}
+.note{border:1px solid var(--divider);background:var(--bg);border-radius:var(--r-md);padding:12px;margin:16px 0;font-size:13px}
+.note p{margin:0 0 6px}.note p:last-child{margin:0}
+.steps{display:flex;gap:6px;list-style:none;padding:0;margin:0 0 16px;font-size:12px}
+.steps li{flex:1;border-top:3px solid var(--divider);padding-top:6px;color:var(--muted)}
+.steps li[aria-current=step]{border-color:var(--accent);color:var(--text);font-weight:600}
+.steps li.done{border-color:var(--dp)}
+details.forgot{margin-top:16px;font-size:13px}details.forgot summary{cursor:pointer;color:var(--accent)}
+.demo{margin-top:16px;font-size:12px;color:var(--muted);border-top:1px dashed var(--divider);padding-top:10px}
+.demo button{font-size:12px;padding:3px 8px}
+.cd{font-variant-numeric:tabular-nums;font-weight:700}
+.big-ico{font-size:40px;line-height:1}
+/* app shell (signed in) */
+.app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:auto 1fr;min-height:calc(100vh - 56px)}
+.app-top{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--divider);position:relative}
+.app-top .search{flex:1;max-width:420px;margin:0 auto;background:var(--bg);border:1px solid var(--divider);border-radius:999px;padding:6px 14px;color:var(--muted)}
+.avatar-btn{background:none;border:0;padding:2px;border-radius:50%;cursor:pointer}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#101216;font-size:14px}
+.av.lg{width:40px;height:40px;font-size:17px}
+.app-side{background:var(--surface);border-right:1px solid var(--divider);padding:12px 8px}
+.app-side h3{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 8px 4px}
+.app-side a,.app-side button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:7px 10px;cursor:pointer;color:var(--muted);text-decoration:none}
+.app-side .cur{background:var(--raised);color:var(--text);box-shadow:inset 3px 0 0 var(--accent)}
+.app-main{padding:24px 32px}
+.app-main h1{font-size:24px;margin:0 0 16px}.app-main h1:focus{outline:none}
+.row h2{font-size:16px;margin:0 0 8px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.poster{aspect-ratio:2/3;border-radius:var(--r-md);display:flex;align-items:flex-end;padding:10px;font-weight:700;font-size:14px;color:#fff;text-shadow:0 1px 3px rgb(0 0 0/.6)}
+.emptystate{text-align:center;padding:48px 16px;max-width:520px;margin:24px auto}
+.emptystate h1{font-size:22px;margin:8px 0}
+.bottomnav{display:none}
+/* profile menu */
+.menu{position:absolute;right:12px;top:52px;width:280px;background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:6px;z-index:30}
+.menu .who{display:flex;gap:10px;align-items:center;padding:8px 8px 10px;border-bottom:1px solid var(--divider);margin-bottom:4px}
+.menu .who b{display:block}
+.menu [role=menuitem]{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:8px 10px;cursor:pointer;color:var(--text);text-decoration:none}
+.menu [role=menuitem]:hover,.menu [role=menuitem]:focus-visible{background:var(--raised)}
+.menu [role=separator]{border-top:1px solid var(--divider);margin:4px 0}
+.menu .ext{margin-left:auto;font-size:11px;color:var(--muted)}
+.scrim{display:none}
+.demo-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);border:1px dashed var(--divider);border-radius:var(--r-md);padding:8px 12px;margin-bottom:20px}
+.demo-bar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.demo-bar input{accent-color:var(--accent)}
+/* dialog */
+dialog{background:var(--surface);color:var(--text);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:0;width:100%;max-width:min(460px,calc(100vw - 24px))}
+dialog::backdrop{background:rgb(0 0 0/.65)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--divider)}
+.dlg-head h2{margin:0;font-size:18px}
+.dlg-body{padding:18px}
+.dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--divider);flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--raised);border:1px solid var(--divider);border-left:3px solid var(--dp);border-radius:var(--r-md);padding:10px 14px;box-shadow:var(--shadow);z-index:50;max-width:min(520px,calc(100vw - 24px))}
+.toast:empty{display:none}
+/* responsive (container = simulated viewport) */
+@container (max-width:1100px){.app{grid-template-columns:180px 1fr}.app-main{padding:16px}}
+@container (max-width:700px){
+  .app{grid-template-columns:1fr;padding-bottom:64px}
+  .app-side{display:none}
+  .app-top{position:static}
+  .app-top .search{display:none}
+  .app-top .avatar-btn{display:none}
+  .bottomnav{display:flex;position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--divider);z-index:25}
+  .bottomnav button{flex:1;background:none;border:0;padding:8px 4px;color:var(--muted);font-size:12px;cursor:pointer}
+  .bottomnav button[aria-current=page],.bottomnav button[aria-expanded=true]{color:var(--accent)}
+  .scrim{display:block;position:absolute;inset:0;background:rgb(0 0 0/.55);z-index:29}
+  .menu{position:absolute;left:0;right:0;top:auto;bottom:0;width:auto;border-radius:var(--r-lg) var(--r-lg) 0 0;padding:8px 8px 16px}
+  .menu [role=menuitem]{padding:12px 10px}
+  .auth{place-items:start center;padding:16px 12px}
+  .auth-card{padding:20px;border:0;background:transparent}
+  .tiles{grid-template-columns:repeat(3,1fr)}
+}
+@media (max-width:700px){.vp{display:none}}
+</style>
+</head>
+<body>
+<details class="legend" open>
+  <summary id="legendTitle">Legende – Prototyp „Anmelden, Ersteinrichtung, Passwort ändern“ (Entwurf, M7-29)</summary>
+  <div data-lang="de">
+  <ul>
+    <li><b>ux-spec-IDs (neu, Abschnitt 10.4):</b> AU-01 Anmelden (inkl. Fehlertext und Drosselung mit Countdown), AU-02 Ersteinrichtung Schritt 1 „Admin-Konto anlegen“ → weiter zu HO-09 „Noch keine Mediatheken“, AU-03 „Nur im lokalen Netzwerk“ (Einrichtung von außen), AU-04 Passwort ändern (aus dem Profilmenü), AU-05 „Abgemeldet“, AU-06 „Sitzung abgelaufen“. Mit gezeigt: SH-07 Profilmenü, HO-09. Profilwahl und PIN-Feld (US-01…03) bleiben unverändert in <a href="admin.html">admin.html</a> (Reiter „Profilwahl“).</li>
+    <li><b>ADR 0032:</b> §1 Name 1–40 Zeichen, Passwort 8–128, keine E-Mail, eigene Passwortänderung meldet die anderen Geräte ab; §2 die Antwort verrät nie, ob ein Name existiert; §3 Sitzung pro Gerät, 30 Tage ohne Nutzung; §4 Profilwahl nach dem Anmelden, wenn das Konto verwaltete Profile oder eine PIN hat; §5 Drosselung nach 5 Fehlversuchen (1 Min., verdoppelt bis 15 Min.); §6 Ersteinrichtung nur aus dem lokalen Netz, keine Standard-Zugangsdaten, Wiederherstellung per <code>mivo admin reset-password --name …</code>.</li>
+    <li><b>Meilenstein:</b> M7 (Web-App). Ansicht 1440 / 1024 / 390 oben rechts umschaltbar.</li>
+    <li><b>Offene Fragen an den Eigentümer</b> (Vorgabe wie gezeichnet):
+      <ol>
+        <li>Anmelden mit eingetipptem Namen (wie hier) statt Konto-Kacheln auf der Anmeldeseite? Kacheln würden die Kontonamen jedem im Netz zeigen (ADR 0032 §2).</li>
+        <li>Kein Schalter „Angemeldet bleiben“: jede Anmeldung gilt 30 Tage ab letzter Nutzung (wie hier) – oder ein Schalter für kurze Sitzungen auf fremden Geräten?</li>
+        <li>„Passwort vergessen?“ zeigt allen den Hinweis „Admin fragen“ und den Befehl für Admins (wie hier) – oder den Befehl nur in der Ersteinrichtung und in der Doku?</li>
+        <li>Nach der Ersteinrichtung auf „Noch keine Mediatheken“ (HO-09, wie hier) – oder direkt den Dialog „Mediathek hinzufügen“ öffnen?</li>
+        <li>Passwort ändern als Dialog aus dem Profilmenü (wie hier) – oder nur als Seite unter Konto (<code>/settings/account</code>)?</li>
+        <li>Sitzung abgelaufen als Anmeldeseite mit Hinweis und Rücksprung zur vorherigen Seite (wie hier) – oder als Dialog über der aktuellen Seite?</li>
+        <li>Keine Passwortstärke-Anzeige, nur Längenregel 8–128 (wie hier, ADR 0032 §1 ohne Zusammensetzungsregeln)?</li>
+      </ol></li>
+    <li><b>Zum Ausprobieren:</b> Anmelden mit <code>Anna</code> / <code>nordlicht</code>. Falsches Passwort → Fehlertext; nach 5 Fehlversuchen oder „Drosselung simulieren“ → Countdown. Ersteinrichtung ausfüllen → HO-09. Profilmenü: Avatar oben rechts (Telefon: Reiter „Profil“) → „Passwort ändern…“ (aktuelles Passwort <code>nordlicht</code>) oder „Abmelden“.</li>
+  </ul>
+  </div>
+  <div data-lang="en" hidden>
+  <ul>
+    <li><b>ux-spec ids (new, section 10.4):</b> AU-01 Sign in (incl. error text and throttling with countdown), AU-02 first-run setup step 1 “Create admin account” → on to HO-09 “No libraries yet”, AU-03 “Only from the local network” (setup from a remote peer), AU-04 Change password (from the profile menu), AU-05 “Signed out”, AU-06 “Session expired”. Also shown: SH-07 profile menu, HO-09. Profile picker and PIN pad (US-01…03) stay unchanged in <a href="admin.html">admin.html</a> (tab “Profile picker”).</li>
+    <li><b>ADR 0032:</b> §1 name 1–40 characters, password 8–128, no e-mail, a self password change signs out the other devices; §2 the answer never reveals whether a name exists; §3 one session per device, 30 days idle; §4 profile picker after sign-in when the account has managed profiles or a PIN; §5 throttling after 5 failures (1 min, doubling up to 15 min); §6 setup only from the local network, no default credentials, recovery via <code>mivo admin reset-password --name …</code>.</li>
+    <li><b>Milestone:</b> M7 (web app). Switch the view 1440 / 1024 / 390 at the top right.</li>
+    <li><b>Open questions for the owner</b> (default as drawn):
+      <ol>
+        <li>Sign in with a typed name (as here) instead of account tiles on the sign-in page? Tiles would show every account name to anyone on the network (ADR 0032 §2).</li>
+        <li>No “Stay signed in” switch: every sign-in lasts 30 days from last use (as here) – or a switch for short sessions on shared devices?</li>
+        <li>“Forgot your password?” shows everyone “ask your admin” plus the command for admins (as here) – or the command only in the setup step and the docs?</li>
+        <li>After setup go to “No libraries yet” (HO-09, as here) – or open the “Add library” dialog directly?</li>
+        <li>Change password as a dialog from the profile menu (as here) – or only as a page under Account (<code>/settings/account</code>)?</li>
+        <li>Session expired as the sign-in page with a notice and a return to the previous page (as here) – or as a dialog over the current page?</li>
+        <li>No password strength meter, only the 8–128 length rule (as here, ADR 0032 §1 has no composition rules)?</li>
+      </ol></li>
+    <li><b>Try:</b> sign in with <code>Anna</code> / <code>nordlicht</code>. Wrong password → error text; after 5 failures or “Simulate throttling” → countdown. Fill in the setup → HO-09. Profile menu: avatar at the top right (phone: “Profile” tab) → “Change password…” (current password <code>nordlicht</code>) or “Sign out”.</li>
+  </ul>
+  </div>
+</details>
+
+<header class="topbar">
+  <span class="logo" id="brand">Mivo</span>
+  <nav class="screens" aria-label="Prototype screens" id="screens"></nav>
+  <div class="vp" role="group" aria-label="Viewport" id="vp"></div>
+  <button class="chip-btn" id="langToggle" aria-label="Sprache / language"><b>DE</b> · EN</button>
+</header>
+
+<div class="stagewrap"><div class="stage" id="stage"></div></div>
+
+<dialog id="pwDlg" aria-labelledby="pwTitle"></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+// Mirrors web/packages/ui-tokens/src/brand.ts (name and lowercase id); the only place in this file.
+const BRAND="Mivo", BRAND_ID="mivo";
+const SERVER={name:"Wohnzimmer-NAS",version:"0.1.0-beta.1",lan:"http://192.168.178.20:8460"};
+const DEMO={name:"Anna",password:"nordlicht",title:"Nordlicht"};
+const NAME_MAX_RUNES=40, PW_MIN_BYTES=8, PW_MAX_BYTES=128, THROTTLE_AFTER=5, THROTTLE_BASE_S=60, THROTTLE_MAX_S=900, TOAST_MS=5000;
+
+const D={
+ de:{
+  title:"Legende – Prototyp „Anmelden, Ersteinrichtung, Passwort ändern“ (Entwurf, M7-29)",
+  "s.signin":"AU-01 Anmelden","s.setup":"AU-02 Ersteinrichtung","s.home":"HO-09 Nach der Einrichtung","s.remote":"AU-03 Von außen","s.menu":"SH-07/AU-04 Profilmenü","s.out":"AU-05 Abgemeldet","s.expired":"AU-06 Sitzung abgelaufen",
+  "signin.title":"Bei {brand} anmelden","srv.ver":"{brand} {v} · lokales Netzwerk",
+  "f.name":"Name","f.pw":"Passwort","f.show":"Anzeigen","f.hide":"Verbergen","f.showAria":"Passwort anzeigen",
+  "btn.signin":"Anmelden",
+  "e.creds":"Name oder Passwort ist falsch.",
+  "e.throttle":"Zu viele Fehlversuche. Nächster Versuch in {t}.",
+  "e.throttleHint":"Die Wartezeit verdoppelt sich mit jedem weiteren Fehlversuch, höchstens 15 Minuten.",
+  "i.throttleOver":"Du kannst es jetzt erneut versuchen.",
+  "signin.stay":"Du bleibst auf diesem Gerät angemeldet, bis du dich abmeldest oder es 30 Tage nicht benutzt.",
+  "forgot.q":"Passwort vergessen?",
+  "forgot.a":"Bitte die Person, die diesen Server verwaltet, dein Passwort zurückzusetzen (Verwaltung › Benutzer).",
+  "forgot.admin":"Für das Admin-Konto: auf dem Server-Rechner ausführen und das neue Passwort eingeben:",
+  "demo.signin":"Demo: {n} / {p} meldet an. Jedes andere Passwort zeigt den Fehler; nach 5 Fehlversuchen startet die Drosselung.",
+  "demo.throttle":"Drosselung simulieren","demo.reset":"Zähler zurücksetzen",
+  "b.out":"Du hast dich abgemeldet.","b.outSub":"Auf deinen anderen Geräten bleibst du angemeldet.",
+  "b.exp":"Deine Sitzung ist abgelaufen oder wurde beendet. Melde dich erneut an – danach geht es weiter mit „{title}“.",
+  "b.expWhy":"Mögliche Gründe: 30 Tage nicht benutzt, Passwort geändert, auf einem anderen Gerät abgemeldet oder von einem Admin beendet.",
+  "setup.step1":"Admin-Konto","setup.step2":"Mediathek hinzufügen","setup.stepOf":"Schritt {i} von 2",
+  "setup.title":"Admin-Konto anlegen",
+  "setup.intro":"Willkommen bei {brand}. Lege zuerst das Konto an, mit dem du den Server verwaltest. Danach fügst du deine erste Mediathek hinzu.",
+  "f.nameHint":"Mit diesem Namen meldest du dich an (1–40 Zeichen). Eine E-Mail-Adresse ist nicht nötig.",
+  "f.pw2":"Passwort wiederholen",
+  "f.pwHint":"8 bis 128 Zeichen, sonst keine Regeln. Ein Satz aus mehreren Wörtern ist ein gutes Passwort.",
+  "setup.lanT":"Nur im lokalen Netzwerk",
+  "setup.lan":"Solange es kein Konto gibt, ist diese Seite nur von Geräten im selben Netzwerk wie der Server erreichbar. Es gibt keine Standard-Zugangsdaten.",
+  "setup.recover":"Passwort später vergessen? Dieser Befehl auf dem Server-Rechner setzt es zurück und meldet alle Geräte des Kontos ab:",
+  "setup.recoverWhere":"Docker: über {docker}. Synology: per SSH auf der DiskStation.",
+  "btn.create":"Konto anlegen und anmelden",
+  "e.nameEmpty":"Bitte einen Namen eingeben.","e.nameLong":"Höchstens 40 Zeichen.",
+  "e.pwShort":"Mindestens 8 Zeichen.","e.pwLong":"Höchstens 128 Zeichen.","e.pwMatch":"Die Passwörter stimmen nicht überein.",
+  "e.form":"Bitte die markierten Felder prüfen.",
+  "toast.created":"Admin-Konto „{n}“ angelegt – du bist angemeldet.",
+  "toast.signedin":"Angemeldet. Konten mit verwalteten Profilen oder PIN sehen zuerst die Profilwahl (admin.html).",
+  "toast.back":"Angemeldet – zurück zu „{title}“.",
+  "noLibs":"Noch keine Mediatheken","noLibsText":"Füge einen Medienordner hinzu, damit {brand} deine Filme und Serien findet.","addLib":"Mediathek hinzufügen",
+  "addLibNote":"Öffnet Verwaltung › Mediatheken mit dem Dialog „Mediathek hinzufügen“ (admin.html).",
+  "nav.home":"Start","nav.libs":"Mediatheken","nav.search":"Suche","nav.profile":"Profil","nav.searchPh":"Suchen",
+  "home.title":"Start","row.continue":"Weiterschauen","row.added":"Neu hinzugefügt","lib.movies":"Filme","lib.shows":"Serien",
+  "remote.title":"Einrichtung nur im lokalen Netzwerk",
+  "remote.body":"Dieser {brand}-Server ist noch nicht eingerichtet. Damit niemand aus dem Internet ihn übernehmen kann, lässt sich das erste Admin-Konto nur von einem Gerät im selben Netzwerk wie der Server anlegen.",
+  "remote.how":"So geht es weiter:",
+  "remote.s1":"Verbinde dein Gerät mit dem Netzwerk, in dem der Server steht (WLAN oder Kabel).",
+  "remote.s2":"Öffne dort die lokale Adresse des Servers, zum Beispiel {url}.",
+  "remote.s3":"Lege das Admin-Konto an. Fernzugriff richtest du später in der Verwaltung ein.",
+  "remote.retry":"Erneut prüfen","remote.still":"Diese Verbindung kommt weiterhin nicht aus dem lokalen Netzwerk.",
+  "m.label":"Profilmenü","m.switch":"Profil wechseln","m.account":"Konto und Profil","m.pw":"Passwort ändern…","m.device":"Einstellungen für dieses Gerät","m.admin":"Verwaltung","m.out":"Abmelden",
+  "m.adminBadge":"Admin","m.managed":"Verwaltetes Profil · Kinder (FSK 6)","m.primary":"Hauptprofil",
+  "m.accountToast":"Konto und Profil (ux-spec 11.3) ist nicht Teil dieses Prototyps.",
+  "demo.profile":"Aktives Profil (Demo):","demo.anna":"Anna (Admin, Hauptprofil)","demo.max":"Max (verwaltetes Profil)",
+  "demo.noPw":"Verwaltete Profile haben kein Passwort – „Passwort ändern…“ und „Verwaltung“ fehlen dort.",
+  "demo.menu":"Menü öffnen",
+  "pw.title":"Passwort ändern","pw.cur":"Aktuelles Passwort","pw.new":"Neues Passwort","pw.rep":"Neues Passwort wiederholen",
+  "pw.note":"Danach werden deine anderen Geräte abgemeldet. Dieses Gerät bleibt angemeldet.",
+  "pw.save":"Passwort ändern","cancel":"Abbrechen","close":"Schließen",
+  "pw.demo":"Demo: aktuelles Passwort ist „{p}“.",
+  "e.cur":"Das aktuelle Passwort stimmt nicht.",
+  "toast.pw":"Passwort geändert. 2 andere Geräte wurden abgemeldet."
+ },
+ en:{
+  title:"Legend – prototype “Sign in, first-run setup, change password” (draft, M7-29)",
+  "s.signin":"AU-01 Sign in","s.setup":"AU-02 First-run setup","s.home":"HO-09 After setup","s.remote":"AU-03 From remote","s.menu":"SH-07/AU-04 Profile menu","s.out":"AU-05 Signed out","s.expired":"AU-06 Session expired",
+  "signin.title":"Sign in to {brand}","srv.ver":"{brand} {v} · local network",
+  "f.name":"Name","f.pw":"Password","f.show":"Show","f.hide":"Hide","f.showAria":"Show password",
+  "btn.signin":"Sign in",
+  "e.creds":"Name or password is incorrect.",
+  "e.throttle":"Too many failed attempts. Try again in {t}.",
+  "e.throttleHint":"The wait doubles with every further failure, up to 15 minutes.",
+  "i.throttleOver":"You can try again now.",
+  "signin.stay":"You stay signed in on this device until you sign out or don't use it for 30 days.",
+  "forgot.q":"Forgot your password?",
+  "forgot.a":"Ask the person who runs this server to reset your password (Administration › Users).",
+  "forgot.admin":"For the admin account: run this on the server machine and enter the new password:",
+  "demo.signin":"Demo: {n} / {p} signs in. Any other password shows the error; after 5 failures throttling starts.",
+  "demo.throttle":"Simulate throttling","demo.reset":"Reset counter",
+  "b.out":"You have signed out.","b.outSub":"Your other devices stay signed in.",
+  "b.exp":"Your session has expired or was ended. Sign in again to continue with “{title}”.",
+  "b.expWhy":"Possible reasons: not used for 30 days, password changed, signed out on another device or ended by an admin.",
+  "setup.step1":"Admin account","setup.step2":"Add library","setup.stepOf":"Step {i} of 2",
+  "setup.title":"Create admin account",
+  "setup.intro":"Welcome to {brand}. First create the account you use to manage the server. Then add your first library.",
+  "f.nameHint":"You sign in with this name (1–40 characters). No e-mail address needed.",
+  "f.pw2":"Repeat password",
+  "f.pwHint":"8 to 128 characters, no other rules. A sentence of several words makes a good password.",
+  "setup.lanT":"Local network only",
+  "setup.lan":"While no account exists, this page can only be reached from devices in the same network as the server. There are no default credentials.",
+  "setup.recover":"Forget the password later? This command on the server machine resets it and signs out all devices of the account:",
+  "setup.recoverWhere":"Docker: via {docker}. Synology: over SSH on the DiskStation.",
+  "btn.create":"Create account and sign in",
+  "e.nameEmpty":"Please enter a name.","e.nameLong":"At most 40 characters.",
+  "e.pwShort":"At least 8 characters.","e.pwLong":"At most 128 characters.","e.pwMatch":"The passwords do not match.",
+  "e.form":"Please check the marked fields.",
+  "toast.created":"Admin account “{n}” created – you are signed in.",
+  "toast.signedin":"Signed in. Accounts with managed profiles or a PIN see the profile picker first (admin.html).",
+  "toast.back":"Signed in – back to “{title}”.",
+  "noLibs":"No libraries yet","noLibsText":"Add a media folder so {brand} can find your movies and shows.","addLib":"Add library",
+  "addLibNote":"Opens Administration › Libraries with the “Add library” dialog (admin.html).",
+  "nav.home":"Home","nav.libs":"Libraries","nav.search":"Search","nav.profile":"Profile","nav.searchPh":"Search",
+  "home.title":"Home","row.continue":"Continue watching","row.added":"Recently added","lib.movies":"Movies","lib.shows":"Shows",
+  "remote.title":"Setup only from the local network",
+  "remote.body":"This {brand} server is not set up yet. So that nobody on the internet can take it over, the first admin account can only be created from a device in the same network as the server.",
+  "remote.how":"How to continue:",
+  "remote.s1":"Connect your device to the network the server is in (Wi-Fi or cable).",
+  "remote.s2":"Open the server's local address there, for example {url}.",
+  "remote.s3":"Create the admin account. You set up remote access later in Administration.",
+  "remote.retry":"Check again","remote.still":"This connection still does not come from the local network.",
+  "m.label":"Profile menu","m.switch":"Switch profile","m.account":"Account and profile","m.pw":"Change password…","m.device":"Settings for this device","m.admin":"Administration","m.out":"Sign out",
+  "m.adminBadge":"Admin","m.managed":"Managed profile · Children (FSK 6)","m.primary":"Primary profile",
+  "m.accountToast":"Account and profile (ux-spec 11.3) is not part of this prototype.",
+  "demo.profile":"Active profile (demo):","demo.anna":"Anna (admin, primary profile)","demo.max":"Max (managed profile)",
+  "demo.noPw":"Managed profiles have no password – “Change password…” and “Administration” are missing there.",
+  "demo.menu":"Open menu",
+  "pw.title":"Change password","pw.cur":"Current password","pw.new":"New password","pw.rep":"Repeat new password",
+  "pw.note":"Your other devices are signed out afterwards. This device stays signed in.",
+  "pw.save":"Change password","cancel":"Cancel","close":"Close",
+  "pw.demo":"Demo: the current password is “{p}”.",
+  "e.cur":"The current password is incorrect.",
+  "toast.pw":"Password changed. 2 other devices were signed out."
+ }
+};
+const SCREENS=["signin","setup","home","remote","menu","out","expired"];
+const VIEWPORTS=[["auto","Auto"],["1440","1440"],["1024","1024"],["390","390"]];
+const POSTERS=[["Nordlicht","#1e3a5f","#4c9aff"],["Die stille Bucht","#3b2a4f","#a77bff"],["Kupferstadt","#5a2e14","#ff6b57"],["Sommer am Fluss","#1f4a35","#3dd68c"],["Echo der Berge","#4a3d12","#f5b544"],["Glasgarten","#22343f","#6fd3e0"]];
+
+let lang="de", screen="signin", viewport="auto", fails=0, throttleUntil=0, throttleTimer=0, throttleOver=false;
+let profile="anna", menuOpen=false, accountName=DEMO.name, remoteChecked=false, toastTimer=0;
+
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
+function t(k,v={}){let s=D[lang][k]??D.de[k]??k;v={brand:BRAND,...v};for(const x in v)s=s.split("{"+x+"}").join(v[x]);return s}
+const bytes=s=>new TextEncoder().encode(s).length;
+const runes=s=>[...s.normalize("NFC")].length;
+const mmss=sec=>`${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+const recoverCmd=name=>`${BRAND_ID} admin reset-password --name ${name}`;
+const dockerCmd=()=>`docker exec -it ${BRAND_ID} ${BRAND_ID} admin reset-password --name …`;
+
+/* ---------- building blocks ---------- */
+function pwField(id,labelKey,autocomplete,hintKey){
+ const hint=hintKey?`<p class="hint" id="${id}-hint">${t(hintKey)}</p>`:"";
+ return `<div class="field"><label for="${id}">${t(labelKey)}</label>
+  <div class="pwrow"><input type="password" id="${id}" name="${id}" autocomplete="${autocomplete}" aria-describedby="${hintKey?id+"-hint ":""}${id}-err">
+  <button type="button" class="reveal" data-reveal="${id}" aria-pressed="false" aria-label="${t("f.showAria")}">${t("f.show")}</button></div>
+  ${hint}<div class="err" id="${id}-err"></div></div>`;
+}
+function textField(id,labelKey,autocomplete,hintKey,value=""){
+ const hint=hintKey?`<p class="hint" id="${id}-hint">${t(hintKey)}</p>`:"";
+ return `<div class="field"><label for="${id}">${t(labelKey)}</label>
+  <input type="text" id="${id}" name="${id}" autocomplete="${autocomplete}" autocapitalize="none" spellcheck="false" value="${esc(value)}" aria-describedby="${hintKey?id+"-hint ":""}${id}-err">
+  ${hint}<div class="err" id="${id}-err"></div></div>`;
+}
+const serverHead=()=>`<div class="srv"><div class="mark" aria-hidden="true">${BRAND[0]}</div><div><b>${SERVER.name}</b><span>${t("srv.ver",{v:SERVER.version})}</span></div></div>`;
+function setErr(id,msg){const i=$("#"+id),e=$("#"+id+"-err");if(e)e.textContent=msg||"";if(i)i.setAttribute("aria-invalid",msg?"true":"false");return !msg}
+
+/* ---------- screens ---------- */
+function signinView(variant){
+ const now=Date.now(), throttled=throttleUntil>now, left=Math.ceil((throttleUntil-now)/1000);
+ const banner=variant==="out"?`<div class="banner ok" role="status"><p>${t("b.out")}</p><p class="hint">${t("b.outSub")}</p></div>`
+  :variant==="expired"?`<div class="banner warn" role="status"><p>${t("b.exp",{title:DEMO.title})}</p><p class="hint">${t("b.expWhy")}</p></div>`:"";
+ const throttleBox=throttled?`<div class="banner bad" id="throttleBox"><p aria-hidden="true">${t("e.throttle",{t:`<span class="cd" id="cd">${mmss(left)}</span>`})}</p><p class="sr" role="alert">${t("e.throttle",{t:mmss(left)})}</p><p class="hint">${t("e.throttleHint")}</p></div>`
+  :throttleOver?`<div class="banner" role="status"><p>${t("i.throttleOver")}</p></div>`:"";
+ return `<div class="auth"><section class="auth-card" aria-labelledby="h1">
+  ${serverHead()}${banner}
+  <h1 id="h1" tabindex="-1">${t("signin.title")}</h1>
+  <form id="signinForm" novalidate style="margin-top:16px">
+   ${textField("sName","f.name","username","",variant==="expired"?accountName:"")}
+   ${pwField("sPw","f.pw","current-password")}
+   <div class="err" id="formErr" role="alert"></div>
+   ${throttleBox}
+   <button class="btn primary block" type="submit" id="signinBtn" ${throttled?"disabled":""}>${t("btn.signin")}</button>
+   <p class="hint">${t("signin.stay")}</p>
+  </form>
+  <details class="forgot"><summary>${t("forgot.q")}</summary><p>${t("forgot.a")}</p><p class="muted">${t("forgot.admin")}<br><code>${recoverCmd("&lt;Name&gt;")}</code></p></details>
+  <div class="demo">${t("demo.signin",{n:DEMO.name,p:DEMO.password})}<br>
+   <button class="btn" type="button" id="simThrottle">${t("demo.throttle")}</button> <button class="btn" type="button" id="resetFails">${t("demo.reset")}</button> <span aria-live="polite">${fails?`(${fails}/${THROTTLE_AFTER})`:""}</span></div>
+ </section></div>`;
+}
+function stepsHtml(cur){
+ return `<ol class="steps" aria-label="${t("setup.stepOf",{i:cur})}">
+  <li ${cur===1?'aria-current="step"':'class="done"'}>1 · ${t("setup.step1")}</li>
+  <li ${cur===2?'aria-current="step"':""}>2 · ${t("setup.step2")}</li></ol>`;
+}
+function setupView(){
+ return `<div class="auth"><section class="auth-card wide" aria-labelledby="h1">
+  ${serverHead()}${stepsHtml(1)}
+  <h1 id="h1" tabindex="-1">${t("setup.title")}</h1>
+  <p class="muted" style="margin:4px 0 16px">${t("setup.intro")}</p>
+  <form id="setupForm" novalidate>
+   ${textField("uName","f.name","username","f.nameHint")}
+   ${pwField("uPw","f.pw","new-password","f.pwHint")}
+   ${pwField("uPw2","f.pw2","new-password")}
+   <div class="err" id="setupErr" role="alert"></div>
+   <div class="note"><p><b>🔒 ${t("setup.lanT")}</b></p><p>${t("setup.lan")}</p>
+    <p>${t("setup.recover")}<br><code>${recoverCmd("&lt;Name&gt;")}</code></p>
+    <p class="muted">${t("setup.recoverWhere",{docker:`<code>${dockerCmd()}</code>`})}</p></div>
+   <button class="btn primary block" type="submit">${t("btn.create")}</button>
+  </form>
+ </section></div>`;
+}
+function remoteView(){
+ return `<div class="auth"><section class="auth-card wide" aria-labelledby="h1">
+  ${serverHead()}
+  <div class="big-ico" aria-hidden="true">🏠</div>
+  <h1 id="h1" tabindex="-1" style="margin-top:8px">${t("remote.title")}</h1>
+  <p>${t("remote.body")}</p>
+  <p style="margin-bottom:4px"><b>${t("remote.how")}</b></p>
+  <ol style="margin-top:0;padding-left:20px"><li>${t("remote.s1")}</li><li>${t("remote.s2",{url:`<code>${SERVER.lan}</code>`})}</li><li>${t("remote.s3")}</li></ol>
+  <button class="btn" type="button" id="remoteRetry">${t("remote.retry")}</button>
+  <p class="err" role="status" id="remoteMsg">${remoteChecked?t("remote.still"):""}</p>
+ </section></div>`;
+}
+function shellView(empty){
+ const isAdmin=profile==="anna", p=isAdmin?{n:accountName,c:"#ff9d8f"}:{n:"Max",c:"#7fd1a8"};
+ const libs=empty?`<a href="admin.html">＋ ${t("addLib")}</a>`:`<a href="#" data-noop>${t("lib.movies")}</a><a href="#" data-noop>${t("lib.shows")}</a>`;
+ const main=empty?emptyHome():filledHome();
+ return `<div class="app">
+  <header class="app-top"><span class="logo">${BRAND}</span><div class="search" aria-hidden="true">${t("nav.searchPh")}…</div>
+   <button class="avatar-btn" id="avatarBtn" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-controls="pmenu" aria-label="${t("m.label")}: ${esc(p.n)}"><span class="av" style="background:${p.c}">${esc(p.n[0])}</span></button>
+   ${menuOpen?menuHtml(p,isAdmin):""}</header>
+  <nav class="app-side" aria-label="${t("nav.libs")}"><a href="#" class="cur" aria-current="page" data-noop>${t("nav.home")}</a><h3>${t("nav.libs")}</h3>${libs}</nav>
+  <main class="app-main">${main}</main>
+  <nav class="bottomnav" aria-label="Navigation"><button aria-current="page">${t("nav.home")}</button><button>${t("nav.libs")}</button><button>${t("nav.search")}</button><button id="profileTab" aria-haspopup="menu" aria-expanded="${menuOpen}" aria-controls="pmenu">${t("nav.profile")}</button></nav>
+ </div>`;
+}
+function menuHtml(p,isAdmin){
+ const sub=isAdmin?`<span class="badge" style="border-color:var(--accent);color:var(--accent)">${t("m.adminBadge")}</span> <span class="hint">${t("m.primary")}</span>`:`<span class="hint">${t("m.managed")}</span>`;
+ return `<div class="scrim" data-closemenu></div><div class="menu" role="menu" id="pmenu" aria-label="${t("m.label")}">
+  <div class="who"><span class="av lg" style="background:${p.c}">${esc(p.n[0])}</span><div><b>${esc(p.n)}</b>${sub}</div></div>
+  <a role="menuitem" href="admin.html">${t("m.switch")}<span class="ext">admin.html</span></a>
+  <button role="menuitem" data-act="account">${t("m.account")}</button>
+  ${isAdmin?`<button role="menuitem" data-act="pw">${t("m.pw")}</button>`:""}
+  <a role="menuitem" href="settings.html">${t("m.device")}<span class="ext">settings.html</span></a>
+  ${isAdmin?`<a role="menuitem" href="admin.html">${t("m.admin")}<span class="ext">admin.html</span></a>`:""}
+  <div role="separator"></div>
+  <button role="menuitem" data-act="signout">${t("m.out")}</button></div>`;
+}
+function emptyHome(){
+ return `<div class="emptystate">${stepsHtml(2)}<div class="big-ico" aria-hidden="true">📂</div>
+  <h1 id="h1" tabindex="-1">${t("noLibs")}</h1><p class="muted">${t("noLibsText")}</p>
+  <a class="btn primary" href="admin.html">${t("addLib")}</a><p class="hint">${t("addLibNote")}</p></div>`;
+}
+function filledHome(){
+ const tiles=POSTERS.map(([n,a,b])=>`<li class="poster" style="background:linear-gradient(160deg,${b},${a} 70%)">${n}</li>`).join("");
+ return `<div class="demo-bar" role="group" aria-label="Demo"><span>${t("demo.profile")}</span>
+   <label><input type="radio" name="prof" value="anna" ${profile==="anna"?"checked":""}> ${t("demo.anna")}</label>
+   <label><input type="radio" name="prof" value="max" ${profile==="max"?"checked":""}> ${t("demo.max")}</label>
+   <button class="btn" type="button" id="openMenu" style="padding:3px 8px;font-size:12px">${t("demo.menu")}</button>
+   <span>${t("demo.noPw")}</span></div>
+  <h1 id="h1" tabindex="-1">${t("home.title")}</h1>
+  <section class="row"><h2>${t("row.continue")}</h2><ul class="tiles" style="list-style:none;padding:0">${tiles}</ul></section>`;
+}
+const VIEWS={signin:()=>signinView(""),out:()=>signinView("out"),expired:()=>signinView("expired"),setup:setupView,remote:remoteView,home:()=>shellView(true),menu:()=>shellView(false)};
+
+/* ---------- render ---------- */
+function render(focus){
+ const keep={};$$("#stage input[type=text],#stage input[type=password]").forEach(i=>keep[i.id]={v:i.value,type:i.type});
+ $("#stage").innerHTML=VIEWS[screen]();
+ for(const id in keep){const i=$("#"+id);if(i){i.value=keep[id].v;if(keep[id].type==="text"&&i.closest(".pwrow"))reveal(id,true)}}
+ $("#screens").innerHTML=SCREENS.map(s=>`<button data-go="${s}" ${s===screen?'aria-current="page"':""}>${t("s."+s)}</button>`).join("");
+ $("#vp").innerHTML=VIEWPORTS.map(([k,l])=>`<button data-vp="${k}" aria-pressed="${k===viewport}">${l}</button>`).join("");
+ $("#legendTitle").textContent=t("title");
+ $$(".legend [data-lang]").forEach(d=>d.hidden=d.dataset.lang!==lang);
+ $("#langToggle").innerHTML=lang==="de"?"<b>DE</b> · EN":"DE · <b>EN</b>";
+ document.documentElement.lang=lang;
+ if(menuOpen&&focus!=="none"){const f=$("#pmenu [role=menuitem]");if(f)f.focus();return}
+ if(focus==="h1"){const h=$("#h1");if(h)h.focus()}
+}
+function go(s,{toastKey,toastVars}={}){screen=s;menuOpen=s==="menu"&&menuOpen;render("h1");if(toastKey)toast(t(toastKey,toastVars))}
+function toast(msg){clearTimeout(toastTimer);$("#toast").textContent=msg;toastTimer=setTimeout(()=>$("#toast").textContent="",TOAST_MS)}
+function setViewport(v){
+ viewport=v;const st=$("#stage");st.classList.toggle("framed",v!=="auto");st.style.width=v==="auto"?"":v+"px";
+ $("#pwDlg").style.maxWidth=v==="390"?"366px":"";render("none");
+}
+function reveal(id,show){
+ const i=$("#"+id),b=$(`[data-reveal="${id}"]`);if(!i||!b)return;
+ i.type=show?"text":"password";b.setAttribute("aria-pressed",String(show));b.textContent=show?t("f.hide"):t("f.show");
+}
+
+/* ---------- sign-in and throttling (ADR 0032 §5) ---------- */
+function startThrottle(seconds){
+ throttleUntil=Date.now()+seconds*1000;throttleOver=false;clearInterval(throttleTimer);
+ throttleTimer=setInterval(()=>{
+  const left=Math.ceil((throttleUntil-Date.now())/1000);
+  if(left<=0){clearInterval(throttleTimer);throttleUntil=0;throttleOver=true;if(isSignin())render("none");return}
+  const cd=$("#cd");if(cd)cd.textContent=mmss(left);
+ },1000);
+ if(isSignin())render("none");
+}
+const isSignin=()=>["signin","out","expired"].includes(screen);
+function submitSignin(){
+ if(throttleUntil>Date.now())return;
+ const name=$("#sName").value.trim(),pw=$("#sPw").value;
+ if(name.toLowerCase()===DEMO.name.toLowerCase()&&pw===DEMO.password){
+  const wasExpired=screen==="expired";fails=0;throttleOver=false;accountName=DEMO.name;profile="anna";
+  go("menu",wasExpired?{toastKey:"toast.back",toastVars:{title:DEMO.title}}:{toastKey:"toast.signedin"});return;
+ }
+ fails++;throttleOver=false;
+ if(fails>=THROTTLE_AFTER){startThrottle(Math.min(THROTTLE_BASE_S*2**(fails-THROTTLE_AFTER),THROTTLE_MAX_S))}
+ else{render("none");$("#formErr").textContent=t("e.creds")}
+ $("#sPw").value="";$("#sPw").focus();
+}
+
+/* ---------- setup (ADR 0032 §1, §6) ---------- */
+function validatePassword(id,pw){
+ const n=bytes(pw);return setErr(id,n<PW_MIN_BYTES?t("e.pwShort"):n>PW_MAX_BYTES?t("e.pwLong"):"");
+}
+function submitSetup(){
+ const name=$("#uName").value.trim(),pw=$("#uPw").value,pw2=$("#uPw2").value;
+ const okName=setErr("uName",!name?t("e.nameEmpty"):runes(name)>NAME_MAX_RUNES?t("e.nameLong"):"");
+ const okPw=validatePassword("uPw",pw);
+ const okRep=setErr("uPw2",okPw&&pw!==pw2?t("e.pwMatch"):"");
+ if(!(okName&&okPw&&okRep)){$("#setupErr").textContent=t("e.form");$("[aria-invalid=true]").focus();return}
+ accountName=name;profile="anna";go("home",{toastKey:"toast.created",toastVars:{n:name}});
+}
+
+/* ---------- change password (AU-04) ---------- */
+function openPw(){
+ menuOpen=false;render("none");
+ const d=$("#pwDlg");
+ d.innerHTML=`<form id="pwForm" novalidate><div class="dlg-head"><h2 id="pwTitle">${t("pw.title")}</h2><button type="button" class="btn" style="padding:4px 10px" data-closedlg aria-label="${t("close")}">✕</button></div>
+  <div class="dlg-body">${pwField("cPw","pw.cur","current-password")}${pwField("nPw","pw.new","new-password","f.pwHint")}${pwField("rPw","pw.rep","new-password")}
+  <p class="banner" style="margin:0">${t("pw.note")}</p><p class="hint">${t("pw.demo",{p:DEMO.password})}</p></div>
+  <div class="dlg-foot"><button type="button" class="btn" data-closedlg>${t("cancel")}</button><button type="submit" class="btn primary">${t("pw.save")}</button></div></form>`;
+ d.showModal();$("#cPw").focus();
+}
+function submitPw(){
+ const okCur=setErr("cPw",$("#cPw").value!==DEMO.password?t("e.cur"):"");
+ const okNew=validatePassword("nPw",$("#nPw").value);
+ const okRep=setErr("rPw",okNew&&$("#nPw").value!==$("#rPw").value?t("e.pwMatch"):"");
+ if(!(okCur&&okNew&&okRep)){$("#pwDlg [aria-invalid=true]").focus();return}
+ $("#pwDlg").close();toast(t("toast.pw"));$("#avatarBtn")?.focus();
+}
+
+/* ---------- profile menu (SH-07) ---------- */
+function toggleMenu(open){
+ menuOpen=open;render(open?"menu":"none");
+ if(!open){const a=$("#avatarBtn");if(a&&a.offsetParent)a.focus();else $("#profileTab")?.focus()}
+}
+function menuKeys(e){
+ const items=$$("#pmenu [role=menuitem]");const i=items.indexOf(document.activeElement);
+ if(e.key==="Escape"){e.preventDefault();toggleMenu(false)}
+ else if(e.key==="ArrowDown"){e.preventDefault();items[(i+1)%items.length].focus()}
+ else if(e.key==="ArrowUp"){e.preventDefault();items[(i-1+items.length)%items.length].focus()}
+ else if(e.key==="Home"){e.preventDefault();items[0].focus()}
+ else if(e.key==="End"){e.preventDefault();items[items.length-1].focus()}
+ else if(e.key==="Tab"){toggleMenu(false)}
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+ const g=e.target.closest("[data-go]");if(g){remoteChecked=false;go(g.dataset.go);return}
+ const v=e.target.closest("[data-vp]");if(v){setViewport(v.dataset.vp);return}
+ const r=e.target.closest("[data-reveal]");if(r){reveal(r.dataset.reveal,r.getAttribute("aria-pressed")!=="true");return}
+ if(e.target.closest("[data-closedlg]")){$("#pwDlg").close();return}
+ if(e.target.closest("#avatarBtn,#profileTab,#openMenu")){toggleMenu(!menuOpen);return}
+ if(e.target.closest("[data-closemenu]")){toggleMenu(false);return}
+ const a=e.target.closest("#pmenu [data-act]");
+ if(a){const act=a.dataset.act;
+  if(act==="pw")openPw();
+  else if(act==="signout"){menuOpen=false;go("out")}
+  else{toggleMenu(false);toast(t("m.accountToast"))}
+  return}
+ if(e.target.closest("[data-noop]"))e.preventDefault();
+ if(e.target.id==="simThrottle"){fails=Math.max(fails,THROTTLE_AFTER);startThrottle(THROTTLE_BASE_S);return}
+ if(e.target.id==="resetFails"){fails=0;throttleUntil=0;throttleOver=false;clearInterval(throttleTimer);render("none");return}
+ if(e.target.id==="remoteRetry"){remoteChecked=true;render("none");return}
+ if(menuOpen&&!e.target.closest("#pmenu")){toggleMenu(false)}
+});
+document.addEventListener("submit",e=>{
+ e.preventDefault();
+ if(e.target.id==="signinForm")submitSignin();
+ else if(e.target.id==="setupForm")submitSetup();
+ else if(e.target.id==="pwForm")submitPw();
+});
+document.addEventListener("change",e=>{if(e.target.name==="prof"){profile=e.target.value;menuOpen=false;render("none")}});
+document.addEventListener("keydown",e=>{if(menuOpen&&e.target.closest&&e.target.closest("#pmenu"))menuKeys(e)});
+$("#langToggle").onclick=()=>{lang=lang==="de"?"en":"de";render("none");if($("#pwDlg").open){$("#pwDlg").close();openPw()}};
+render();
+</script>
+</body>
+</html>
