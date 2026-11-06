@@ -331,7 +331,9 @@ func TestLastAdminCountedInStoreTransaction(t *testing.T) {
 		t.Fatalf("promoted admin libraries = %v, want all", promoted.Libraries.IDs())
 	}
 
-	_, err = fixture.service.UpdateAccount(adminContext(), adminID, users.AccountPatch{Role: pointer(account.RoleUser)})
+	_, err = fixture.service.UpdateAccount(adminContext(), adminID, users.AccountPatch{
+		Role: pointer(account.RoleUser), Libraries: pointer(access.AllLibraries()),
+	})
 	wantNoError(t, err)
 
 	otherAdmin := withViewer(context.Background(), access.Viewer{AccountID: otherID, ProfileID: otherPrimaryID, Admin: true})
@@ -340,6 +342,48 @@ func TestLastAdminCountedInStoreTransaction(t *testing.T) {
 	wantError(t, err, domain.ErrConflict)
 
 	wantError(t, fixture.service.DeleteAccount(otherAdmin, otherID), domain.ErrConflict)
+}
+
+// TestDemotionNeedsExplicitLibraries keeps a demoted admin from silently keeping access to
+// every library.
+func TestDemotionNeedsExplicitLibraries(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+
+	_, err := fixture.service.UpdateAccount(adminContext(), otherID, users.AccountPatch{Role: pointer(account.RoleAdmin)})
+	wantNoError(t, err)
+
+	_, err = fixture.service.UpdateAccount(adminContext(), otherID, users.AccountPatch{Role: pointer(account.RoleUser)})
+	wantError(t, err, domain.ErrInvalid)
+
+	if fixture.store.accounts[otherID].Account.Role != account.RoleAdmin {
+		t.Fatal("refused demotion changed the role")
+	}
+
+	demoted, err := fixture.service.UpdateAccount(adminContext(), otherID, users.AccountPatch{
+		Role: pointer(account.RoleUser), Libraries: pointer(access.OnlyLibraries(libraryShows)),
+	})
+	wantNoError(t, err)
+
+	if demoted.Libraries.IsAll() || !demoted.Libraries.Allows(libraryShows) {
+		t.Fatalf("demoted libraries = %v", demoted.Libraries.IDs())
+	}
+}
+
+func TestAccountWriteFailures(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.store.failWrite = true
+
+	_, err := fixture.service.UpdateAccount(adminContext(), ownerID, users.AccountPatch{Disabled: pointer(true)})
+	wantError(t, err, errFake)
+	wantError(t, fixture.service.DeleteAccount(adminContext(), ownerID), errFake)
+
+	if len(fixture.cache.evicted) != 0 || fixture.store.accounts[ownerID].Account.Disabled {
+		t.Fatalf("failed writes evicted %v or changed the account", fixture.cache.evicted)
+	}
 }
 
 func TestDeleteAccount(t *testing.T) {
@@ -388,9 +432,9 @@ func TestResetPasswordRefusals(t *testing.T) {
 	}{
 		"missing account": {accountID: "missing", password: validPassword, want: domain.ErrNotFound},
 		"short password":  {accountID: ownerID, password: "short", want: domain.ErrInvalid},
-		"revoke failure": {
+		"store failure": {
 			accountID: ownerID, password: validPassword,
-			fail: func(fixture *fixture) { fixture.sessions.fail = true }, want: errFake,
+			fail: func(fixture *fixture) { fixture.store.failPassword = true }, want: errFake,
 		},
 	}
 
@@ -412,11 +456,50 @@ func TestResetPasswordRefusals(t *testing.T) {
 	}
 }
 
+// TestResetPasswordEvictsWhenRevokeFails keeps cached resolutions of the old sessions from
+// outliving a reset whose revoke failed.
+func TestResetPasswordEvictsWhenRevokeFails(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	fixture.sessions.fail = true
+
+	wantError(t, fixture.service.ResetPassword(adminContext(), ownerID, validPassword), errFake)
+
+	if !slices.Equal(fixture.cache.evicted, []string{ownerID}) {
+		t.Fatalf("evicted = %v, want [%s]", fixture.cache.evicted, ownerID)
+	}
+}
+
+func newSystem(t *testing.T, fixture *fixture) *users.System {
+	t.Helper()
+
+	options := fixtureOptions(fixture.store, fixture.ids, fixture.sessions, fixture.cache)
+	options.Viewers = nil
+	options.Cache = nil
+
+	system, err := users.NewSystem(options)
+	wantNoError(t, err)
+
+	return system
+}
+
+func TestNewSystemRequiresStores(t *testing.T) {
+	t.Parallel()
+
+	options := fixtureOptions(newFakeStore(), &fakeIDs{}, &fakeSessions{}, &fakeCache{})
+	options.Accounts = nil
+
+	if _, err := users.NewSystem(options); err == nil {
+		t.Fatal("NewSystem() without Accounts succeeded")
+	}
+}
+
 func TestSystemResetPassword(t *testing.T) {
 	t.Parallel()
 
 	fixture := newFixture(t)
-	system := fixture.service.System()
+	system := newSystem(t, fixture)
 
 	wantNoError(t, system.ResetPassword(context.Background(), " owner ", validPassword))
 
@@ -434,7 +517,9 @@ func TestSystemListAccounts(t *testing.T) {
 
 	fixture := newFixture(t)
 
-	summaries, err := fixture.service.System().ListAccounts(context.Background())
+	system := newSystem(t, fixture)
+
+	summaries, err := system.ListAccounts(context.Background())
 	wantNoError(t, err)
 
 	if len(summaries) != 3 {
@@ -443,7 +528,7 @@ func TestSystemListAccounts(t *testing.T) {
 
 	fixture.store.failList = true
 
-	if _, err := fixture.service.System().ListAccounts(context.Background()); !errors.Is(err, errFake) {
+	if _, err := system.ListAccounts(context.Background()); !errors.Is(err, errFake) {
 		t.Fatalf("error = %v, want %v", err, errFake)
 	}
 }

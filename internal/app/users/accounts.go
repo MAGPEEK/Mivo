@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
 )
@@ -209,6 +210,10 @@ func applyAccountPatch(current AccountRecord, patch AccountPatch, enabledAdmins 
 		return AccountRecord{}, err
 	}
 
+	if err := checkDemotionLibraries(current.Account, validated, patch); err != nil {
+		return AccountRecord{}, err
+	}
+
 	next.Account = validated
 	next.Libraries = librariesForRole(validated.Role, next.Libraries)
 
@@ -233,6 +238,17 @@ func checkAdminLoss(current, next account.Account, enabledAdmins int) error {
 	return nil
 }
 
+// checkDemotionLibraries requires an explicit library choice when an admin becomes a user: an
+// admin's stored access is always all libraries, and silently keeping it would hand the new
+// user everything.
+func checkDemotionLibraries(current, next account.Account, patch AccountPatch) error {
+	if current.Role != account.RoleAdmin || next.Role == account.RoleAdmin || patch.Libraries != nil {
+		return nil
+	}
+
+	return fmt.Errorf("demote account %s: library access must be chosen: %w", current.ID, domain.ErrInvalid)
+}
+
 // DeleteAccount removes an account unless it is the last enabled admin.
 func (s *Service) DeleteAccount(ctx context.Context, accountID string) error {
 	if err := s.requireAdmin(ctx); err != nil {
@@ -253,6 +269,8 @@ func (s *Service) DeleteAccount(ctx context.Context, accountID string) error {
 }
 
 // ResetPassword sets a new password chosen by the admin and signs the account out everywhere.
+// An admin resetting their own password therefore also ends their own current session and
+// signs in again with the new password.
 func (s *Service) ResetPassword(ctx context.Context, accountID, password string) error {
 	if err := s.requireAdmin(ctx); err != nil {
 		return err
@@ -266,6 +284,8 @@ func (s *Service) ResetPassword(ctx context.Context, accountID, password string)
 }
 
 // setPassword validates and stores a password, then revokes every session of the account.
+// Once the new hash is stored the cache is evicted even when the revoke fails, so cached
+// resolutions of the old sessions do not outlive the reset.
 func (s *Service) setPassword(ctx context.Context, accountID, password string) error {
 	if err := account.ValidatePassword(password); err != nil {
 		return fmt.Errorf("reset password: %w", err)
@@ -280,11 +300,11 @@ func (s *Service) setPassword(ctx context.Context, accountID, password string) e
 		return fmt.Errorf("store password of %s: %w", accountID, err)
 	}
 
+	defer s.options.Cache.EvictAccount(accountID)
+
 	if err := s.options.Sessions.RevokeAccountSessions(ctx, accountID); err != nil {
 		return fmt.Errorf("revoke sessions of %s: %w", accountID, err)
 	}
-
-	s.options.Cache.EvictAccount(accountID)
 
 	return nil
 }

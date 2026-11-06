@@ -299,3 +299,25 @@ func TestDeleteProfile(t *testing.T) {
 		t.Fatalf("evicted = %v", fixture.cache.evicted)
 	}
 }
+
+// TestDisabledOwnerRefused checks that a viewer whose account was disabled after the session
+// was resolved can no longer manage its profiles: the actor is loaded fresh from the store.
+func TestDisabledOwnerRefused(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t)
+	owner := fixture.store.accounts[ownerID]
+	owner.Account.Disabled = true
+	fixture.store.accounts[ownerID] = owner
+
+	_, err := fixture.service.ListProfiles(ownerContext(), ownerID)
+	wantError(t, err, domain.ErrForbidden)
+
+	_, err = fixture.service.CreateProfile(ownerContext(), ownerID, users.CreateProfileInput{Name: "Kid"})
+	wantError(t, err, domain.ErrForbidden)
+
+	_, err = fixture.service.UpdateProfile(ownerContext(), ownerManagedID, users.ProfilePatch{Name: pointer("Mine")})
+	wantError(t, err, domain.ErrForbidden)
+
+	wantError(t, fixture.service.DeleteProfile(ownerContext(), ownerManagedID), domain.ErrForbidden)
+}

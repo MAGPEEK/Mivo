@@ -42,12 +42,14 @@ var errFake = errors.New("fake failure")
 // fakeStore is an in-memory account and profile store; its write methods run the callbacks
 // under one lock, as the SQLite store runs them inside one transaction.
 type fakeStore struct {
-	mutex     sync.Mutex
-	accounts  map[string]users.AccountRecord
-	profiles  map[string]users.ProfileRecord
-	passwords map[string]string
-	pins      map[string]string
-	failList  bool
+	mutex        sync.Mutex
+	accounts     map[string]users.AccountRecord
+	profiles     map[string]users.ProfileRecord
+	passwords    map[string]string
+	pins         map[string]string
+	failList     bool
+	failWrite    bool
+	failPassword bool
 }
 
 func newFakeStore() *fakeStore {
@@ -166,6 +168,10 @@ func (store *fakeStore) UpdateAccount(
 		return users.AccountRecord{}, fmt.Errorf("name: %w", domain.ErrConflict)
 	}
 
+	if store.failWrite {
+		return users.AccountRecord{}, errFake
+	}
+
 	store.accounts[accountID] = next
 
 	return next, nil
@@ -184,6 +190,10 @@ func (store *fakeStore) DeleteAccount(_ context.Context, accountID string, check
 		return err
 	}
 
+	if store.failWrite {
+		return errFake
+	}
+
 	delete(store.accounts, accountID)
 
 	for profileID, profile := range store.profiles {
@@ -198,6 +208,10 @@ func (store *fakeStore) DeleteAccount(_ context.Context, accountID string, check
 func (store *fakeStore) SetPasswordHash(_ context.Context, accountID, hash string) error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
+
+	if store.failPassword {
+		return errFake
+	}
 
 	store.passwords[accountID] = hash
 
