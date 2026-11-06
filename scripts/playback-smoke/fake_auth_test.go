@@ -22,6 +22,10 @@ type fakeAuth struct {
 	// managedProfiles leaves the session without a selected profile after sign-in.
 	managedProfiles bool
 	primaryHasPIN   bool
+	// noPrimary lists no primary profile and selects none.
+	noPrimary bool
+	// profileStatus, when set, answers the profile selection with it.
+	profileStatus int
 	// noToken makes setup and sign-in answer without a token.
 	noToken bool
 
@@ -175,13 +179,13 @@ func (fake *fakeServer) signIn(w http.ResponseWriter, r *http.Request) {
 func (fake *fakeServer) newSession(name string) apigen.Session {
 	auth := fake.auth
 	auth.token = fakeToken
-	primary := apigen.ProfileSummary{ID: uuid.New(), Name: name, IsPrimary: true, IsAdmin: true, HasPin: auth.primaryHasPIN}
+	primary := apigen.ProfileSummary{ID: uuid.New(), Name: name, IsPrimary: !auth.noPrimary, IsAdmin: true, HasPin: auth.primaryHasPIN}
 	me := apigen.Me{
 		Account:  apigen.Account{ID: uuid.New(), Name: name, Role: apigen.AccountRoleAdmin},
 		Profiles: []apigen.ProfileSummary{primary, {ID: uuid.New(), Name: "Kid"}},
 	}
 
-	auth.profileSelected = !auth.managedProfiles && !auth.primaryHasPIN
+	auth.profileSelected = !auth.managedProfiles && !auth.primaryHasPIN && !auth.noPrimary
 	if auth.profileSelected {
 		me.CurrentProfile = &primary
 	}
@@ -202,6 +206,12 @@ func (fake *fakeServer) selectProfile(w http.ResponseWriter, r *http.Request) {
 	var selection apigen.ProfileSelection
 	if err := json.NewDecoder(r.Body).Decode(&selection); err != nil || selection.ProfileID == (uuid.UUID{}) {
 		fake.problem(w, http.StatusBadRequest, "invalid", 0)
+
+		return
+	}
+
+	if fake.auth.profileStatus != 0 {
+		fake.problem(w, fake.auth.profileStatus, "internal", 0)
 
 		return
 	}

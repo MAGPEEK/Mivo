@@ -18,9 +18,15 @@ const (
 	contentTypeJSON = "application/json"
 	// maxErrorBodyBytes bounds the response body kept for an error message.
 	maxErrorBodyBytes = 4096
+	// maxRedirects matches the limit of the default policy of net/http.
+	maxRedirects = 10
 )
 
-var errUnexpectedStatus = errors.New("unexpected HTTP status")
+var (
+	errUnexpectedStatus    = errors.New("unexpected HTTP status")
+	errCrossOriginRedirect = errors.New("refused a redirect to another origin")
+	errTooManyRedirects    = errors.New("stopped after too many redirects")
+)
 
 // apiClient calls the public HTTP API of a running server. It only knows the contract
 // (api/openapi.yaml), never the server's internals.
@@ -31,8 +37,24 @@ type apiClient struct {
 	token string
 }
 
+// newAPIClient uses a copy of httpClient that follows redirects only within the origin of
+// base: Go would otherwise carry the bearer token to another port or scheme of the same
+// host, and a 307 or 308 re-sends a sign-in body with the password to any host.
 func newAPIClient(base *url.URL, httpClient *http.Client) *apiClient {
-	return &apiClient{base: base, http: httpClient}
+	guarded := *httpClient
+	guarded.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if !sameOrigin(base, request.URL) {
+			return fmt.Errorf("%w: %s", errCrossOriginRedirect, request.URL.Redacted())
+		}
+
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("%w: %d", errTooManyRedirects, len(via))
+		}
+
+		return nil
+	}
+
+	return &apiClient{base: base, http: &guarded}
 }
 
 // problemError is a failed API call. code, detail and retryAfter are filled from an RFC 9457

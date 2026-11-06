@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -162,7 +163,7 @@ func TestSmokeRunsWithoutSignInOnAServerWithoutAccounts(t *testing.T) {
 				t.Fatalf("smoke = %v, want nil; output:\n%s", err, text)
 			}
 
-			if !strings.Contains(text, "without sign-in") {
+			if !strings.Contains(text, "anonymously: the server offers no sign-in") {
 				t.Errorf("output lacks the anonymous run:\n%s", text)
 			}
 		})
@@ -181,6 +182,8 @@ func TestSmokeFailsWhenItCannotSignIn(t *testing.T) {
 		account *credentials
 		wantErr error
 		want    string
+		// signOuts is 1 when the server handed out a token: that session must end too.
+		signOuts int
 	}{
 		{name: "accounts but no -user", auth: fakeAuth{accounts: known}, wantErr: errCredentialsNeeded},
 		{
@@ -188,7 +191,15 @@ func TestSmokeFailsWhenItCannotSignIn(t *testing.T) {
 			account: &credentials{name: testUser, password: "wrong password"}, want: "invalid_credentials",
 		},
 		{name: "no token", auth: fakeAuth{accounts: known, noToken: true}, account: given, wantErr: errNoToken},
-		{name: "primary profile with a PIN", auth: fakeAuth{accounts: known, primaryHasPIN: true}, account: given, wantErr: errProfileNeedsPIN},
+		{
+			name: "primary profile with a PIN", auth: fakeAuth{accounts: known, primaryHasPIN: true}, account: given,
+			wantErr: errProfileNeedsPIN, signOuts: 1,
+		},
+		{name: "no primary profile", auth: fakeAuth{accounts: known, noPrimary: true}, account: given, wantErr: errNoPrimaryProfile, signOuts: 1},
+		{
+			name: "profile selection fails", auth: fakeAuth{accounts: known, managedProfiles: true, profileStatus: http.StatusInternalServerError},
+			account: given, want: "select the primary profile", signOuts: 1,
+		},
 		{name: "setup state fails", auth: fakeAuth{stubStatus: http.StatusInternalServerError}, account: given, want: "read the setup state"},
 	}
 
@@ -209,7 +220,92 @@ func TestSmokeFailsWhenItCannotSignIn(t *testing.T) {
 			if strings.Contains(err.Error(), testPassword) || strings.Contains(text, testPassword) {
 				t.Errorf("the password leaked into %q or the output", err)
 			}
+
+			if got := lockedAuth(fake).signOuts; got != test.signOuts {
+				t.Errorf("sign-outs = %d, want %d", got, test.signOuts)
+			}
 		})
+	}
+}
+
+// A run whose cases fail still ends its session.
+func TestSmokeSignsOutAfterFailingCases(t *testing.T) {
+	t.Parallel()
+
+	files := passingFiles(t)
+	files[0].streamStatus = http.StatusInternalServerError
+	fake, server := newFakeServer(t, files...)
+	fake.auth = &fakeAuth{accounts: map[string]string{testUser: testPassword}}
+
+	text, err := runAgainst(t, server, &credentials{name: testUser, password: testPassword})
+	if !errors.Is(err, errCasesFailed) {
+		t.Fatalf("smoke = %v, want %v; output:\n%s", err, errCasesFailed, text)
+	}
+
+	if got := lockedAuth(fake).signOuts; got != 1 {
+		t.Errorf("sign-outs = %d, want 1", got)
+	}
+}
+
+// A redirect to another origin is refused: the other host sees neither the token nor the
+// password a 307 would re-send. Redirects within the origin still work.
+func TestClientRefusesRedirectsToAnotherOrigin(t *testing.T) {
+	t.Parallel()
+
+	foreignRequests := make(chan string, 1)
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		foreignRequests <- r.Header.Get("Authorization") + " " + string(body)
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(foreign.Close)
+
+	own := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/loop" {
+			http.Redirect(w, r, "/loop", http.StatusFound)
+
+			return
+		}
+
+		if r.URL.Path == "/moved" {
+			http.Redirect(w, r, "/api/v1/setup", http.StatusTemporaryRedirect)
+
+			return
+		}
+
+		if r.URL.Path == "/api/v1/setup" {
+			w.WriteHeader(http.StatusNoContent)
+
+			return
+		}
+
+		http.Redirect(w, r, foreign.URL+"/steal", http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(own.Close)
+
+	client := newAPIClient(mustParseURL(t, own.URL), own.Client())
+	client.token = fakeToken
+
+	_, err := createSignInSession(t.Context(), client, credentials{name: testUser, password: testPassword})
+	if !errors.Is(err, errCrossOriginRedirect) {
+		t.Errorf("sign-in through a cross-origin redirect = %v, want %v", err, errCrossOriginRedirect)
+	}
+
+	select {
+	case seen := <-foreignRequests:
+		t.Errorf("the other origin got a request: %q", seen)
+	default:
+	}
+
+	err = client.call(t.Context(), apiCall{method: http.MethodGet, reference: "/moved", want: http.StatusNoContent})
+	if err != nil {
+		t.Errorf("same-origin redirect = %v, want it followed", err)
+	}
+
+	err = client.call(t.Context(), apiCall{method: http.MethodGet, reference: "/loop", want: http.StatusOK})
+	if !errors.Is(err, errTooManyRedirects) {
+		t.Errorf("redirect loop = %v, want %v", err, errTooManyRedirects)
 	}
 }
 

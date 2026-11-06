@@ -42,16 +42,13 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 	cases = append(cases, discs...)
 	client := newAPIClient(opts.base, dependencies.httpClient)
 
+	// Registered before the sign-in, so a session whose profile selection fails is ended too;
+	// without a token signOut does nothing.
+	defer signOutAfterRun(ctx, client, out)
+
 	if err := connect(ctx, opts, client, out); err != nil {
 		return err
 	}
-
-	defer func() {
-		// Sign out also after a cancelled run; a failure only leaves a device in the account.
-		if err := signOut(context.WithoutCancel(ctx), client); err != nil {
-			printf(out, "warning: %v\n", err)
-		}
-	}()
 
 	printf(out, "profile %s, %d cases\n", opts.profile, len(cases))
 
@@ -65,6 +62,17 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 	}
 
 	return runner.playAll(ctx, cases, out)
+}
+
+// signOutAfterRun ends the session also after a cancelled run, within its own time limit; a
+// failure only leaves a device in the account, so it is a warning.
+func signOutAfterRun(ctx context.Context, client *apiClient, out io.Writer) {
+	signOutContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), signOutTimeout)
+	defer cancel()
+
+	if err := signOut(signOutContext, client); err != nil {
+		printf(out, "warning: %v\n", err)
+	}
 }
 
 // connect checks that the server answers and signs in when the server has accounts.

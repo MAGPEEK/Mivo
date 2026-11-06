@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 )
@@ -19,6 +20,8 @@ const (
 	// generatedAdminName is the administrator the smoke creates on a server in setup state
 	// when no -user is given.
 	generatedAdminName = "playback-smoke"
+	// signOutTimeout bounds the sign-out at the end, which also runs after a cancelled run.
+	signOutTimeout = 10 * time.Second
 )
 
 var (
@@ -47,7 +50,7 @@ type authentication struct {
 func (auth authentication) String() string {
 	switch {
 	case !auth.signedIn:
-		return "without sign-in (the server has no accounts)"
+		return "anonymously: the server offers no sign-in"
 	case auth.createdAdmin:
 		return fmt.Sprintf("signed in as %q, created by the first-run setup", auth.account)
 	default:
