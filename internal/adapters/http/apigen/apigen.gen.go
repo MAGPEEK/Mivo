@@ -15,6 +15,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -49,6 +50,33 @@ func (e AddressClass) Valid() bool {
 	case AddressClassLan:
 		return true
 	case AddressClassRemote:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgeRating.
+const (
+	AgeRatingN0  AgeRating = 0
+	AgeRatingN12 AgeRating = 12
+	AgeRatingN16 AgeRating = 16
+	AgeRatingN18 AgeRating = 18
+	AgeRatingN6  AgeRating = 6
+)
+
+// Valid indicates whether the value is a known member of the AgeRating enum.
+func (e AgeRating) Valid() bool {
+	switch e {
+	case AgeRatingN0:
+		return true
+	case AgeRatingN12:
+		return true
+	case AgeRatingN16:
+		return true
+	case AgeRatingN18:
+		return true
+	case AgeRatingN6:
 		return true
 	default:
 		return false
@@ -127,6 +155,33 @@ func (e ClientKind) Valid() bool {
 	case ClientKindTv:
 		return true
 	case ClientKindWeb:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ContentLimitPreset.
+const (
+	ContentLimitPresetAdults        ContentLimitPreset = "adults"
+	ContentLimitPresetChildren      ContentLimitPreset = "children"
+	ContentLimitPresetCustom        ContentLimitPreset = "custom"
+	ContentLimitPresetTeens         ContentLimitPreset = "teens"
+	ContentLimitPresetYoungChildren ContentLimitPreset = "youngChildren"
+)
+
+// Valid indicates whether the value is a known member of the ContentLimitPreset enum.
+func (e ContentLimitPreset) Valid() bool {
+	switch e {
+	case ContentLimitPresetAdults:
+		return true
+	case ContentLimitPresetChildren:
+		return true
+	case ContentLimitPresetCustom:
+		return true
+	case ContentLimitPresetTeens:
+		return true
+	case ContentLimitPresetYoungChildren:
 		return true
 	default:
 		return false
@@ -850,6 +905,24 @@ func (e ThumbnailState) Valid() bool {
 	}
 }
 
+// Defines values for UserStatus.
+const (
+	UserStatusActive   UserStatus = "active"
+	UserStatusDisabled UserStatus = "disabled"
+)
+
+// Valid indicates whether the value is a known member of the UserStatus enum.
+func (e UserStatus) Valid() bool {
+	switch e {
+	case UserStatusActive:
+		return true
+	case UserStatusDisabled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VideoResolution.
 const (
 	VideoResolutionN1080P VideoResolution = "1080p"
@@ -895,6 +968,58 @@ type Account struct {
 	Role AccountRole `json:"role"`
 }
 
+// AccountDevice A signed-in device of any account, that is one session (US-25).
+type AccountDevice struct {
+	// AddressClass Where a device was last seen from: "lan" (local network) or "remote". Clients must tolerate new values.
+	//
+	// Example: lan
+	AddressClass AddressClass `json:"addressClass"`
+
+	// Client Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+	//
+	// Example: web
+	Client ClientKind `json:"client"`
+
+	// Current True for the device that sends this request.
+	//
+	// Example: true
+	Current bool `json:"current"`
+
+	// ID Stable ID of the device; revokeDevice takes it.
+	//
+	// Example: 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+	ID uuid.UUID `json:"id"`
+
+	// LastSeenAt Last request of the device, exact to about 5 minutes.
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// Name Name given at sign-in or derived from the User-Agent.
+	//
+	// Example: Firefox on Windows
+	Name string `json:"name"`
+
+	// Platform Operating system or platform of the device; omitted when unknown.
+	//
+	// Example: Windows
+	Platform *string `json:"platform,omitempty"`
+
+	// UserID ID of the account the device is signed in to (User.id).
+	//
+	// Example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+	UserID uuid.UUID `json:"userId"`
+
+	// UserName Name of the account the device is signed in to.
+	//
+	// Example: Anna
+	UserName string `json:"userName"`
+}
+
+// AccountDeviceList The devices signed in to any account.
+type AccountDeviceList struct {
+	// Devices Every device, most recently seen first.
+	Devices []AccountDevice `json:"devices"`
+}
+
 // AccountRole Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
 //
 // Example: admin
@@ -904,6 +1029,11 @@ type AccountRole string
 //
 // Example: lan
 type AddressClass string
+
+// AgeRating Age bucket of the content limits (ADR 0032 section 7): content rated for this age or younger is shown. Clients must tolerate new values.
+//
+// Example: 12
+type AgeRating int32
 
 // Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
 type Artwork struct {
@@ -1036,6 +1166,27 @@ type CodecLimit struct {
 	// Example: ["Constrained Baseline","Baseline","Main","High"]
 	Profiles *[]string `json:"profiles,omitempty"`
 }
+
+// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+type ContentLimit struct {
+	// HideUnrated True hides titles without a known age rating; clients default it to true when they set a maxAge.
+	//
+	// Example: true
+	HideUnrated bool `json:"hideUnrated"`
+
+	// MaxAge The highest age rating shown; null for no age limit.
+	MaxAge *AgeRating `json:"maxAge"`
+
+	// Preset Label of a content limit as the clients offer it (US-11): "youngChildren" (maxAge 0), "children" (6), "teens" (12), "adults" (no maxAge) or "custom" (any maxAge). Clients must tolerate new values.
+	//
+	// Example: teens
+	Preset ContentLimitPreset `json:"preset"`
+}
+
+// ContentLimitPreset Label of a content limit as the clients offer it (US-11): "youngChildren" (maxAge 0), "children" (6), "teens" (12), "adults" (no maxAge) or "custom" (any maxAge). Clients must tolerate new values.
+//
+// Example: teens
+type ContentLimitPreset string
 
 // Device A signed-in device, that is one session of the account (US-25).
 type Device struct {
@@ -1962,6 +2113,17 @@ type Library struct {
 	Scan ScanStatus `json:"scan"`
 }
 
+// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+type LibraryAccess struct {
+	// All True for every library; libraryIds is then empty or omitted.
+	//
+	// Example: false
+	All bool `json:"all"`
+
+	// LibraryIds The libraries that may be seen when all is false; an empty list allows none. Unknown IDs answer 400 "invalid".
+	LibraryIds *[]uuid.UUID `json:"libraryIds,omitempty"`
+}
+
 // LibraryCreate Request body of createLibrary.
 type LibraryCreate struct {
 	// Folders The folders of the library, 1 to 16 entries; each names a root and path.
@@ -2473,6 +2635,12 @@ type PasswordChange struct {
 	NewPassword *string `json:"newPassword,omitempty"`
 }
 
+// PasswordReset A new password set by an admin.
+type PasswordReset struct {
+	// Password The new password, 8 to 128 bytes of UTF-8; no composition rules.
+	Password *string `json:"password,omitempty"`
+}
+
 // PersonRole Role of a person in an item; "author" and "narrator" describe audiobooks. Clients must tolerate values added in later versions.
 //
 // Example: actor
@@ -2616,7 +2784,7 @@ type PlaybackSessionState string
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). User administration adds "name_taken" (409, another account or profile of the account has the name), "last_admin" (409, the change would delete, disable or demote the last enabled admin account) and "profile_limit" (409, the account has 10 managed profiles already). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -2650,6 +2818,73 @@ type Problem struct {
 
 	// Type URI reference identifying the problem type; "about:blank" if none.
 	Type string `json:"type"`
+}
+
+// Profile A profile with its settings as the account owner and the administration manage it (ADR 0032 section 1). The PIN itself is never returned.
+type Profile struct {
+	// AvatarColor Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+	//
+	// Example: coral
+	AvatarColor AvatarColor `json:"avatarColor"`
+
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit ContentLimit `json:"contentLimit"`
+
+	// HasPin True when selecting the profile needs its 4-digit PIN.
+	//
+	// Example: false
+	HasPin bool `json:"hasPin"`
+
+	// ID Stable ID of the profile.
+	//
+	// Example: 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+	ID uuid.UUID `json:"id"`
+
+	// IsPrimary True for the account's primary profile, false for a managed profile.
+	//
+	// Example: false
+	IsPrimary bool `json:"isPrimary"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess LibraryAccess `json:"libraryAccess"`
+
+	// Name Profile name.
+	//
+	// Example: Mia
+	Name string `json:"name"`
+
+	// UserID ID of the account the profile belongs to (User.id).
+	//
+	// Example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+	UserID uuid.UUID `json:"userId"`
+}
+
+// ProfileCreate A new managed profile. avatarColor defaults to coral, libraryAccess to all libraries of the account and contentLimit to no limit of its own.
+type ProfileCreate struct {
+	// AvatarColor Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+	//
+	// Example: coral
+	AvatarColor *AvatarColor `json:"avatarColor,omitempty"`
+
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess *LibraryAccess `json:"libraryAccess,omitempty"`
+
+	// Name Profile name, 1 to 40 characters after Unicode NFC normalisation; unique within the account ignoring case.
+	//
+	// Example: Mia
+	Name string `json:"name"`
+
+	// Pin A 4-digit PIN needed to select the profile; omitted for none.
+	Pin *string `json:"pin,omitempty"`
+}
+
+// ProfileList The profiles of an account.
+type ProfileList struct {
+	// Profiles The primary profile first, then the managed profiles by name.
+	Profiles []Profile `json:"profiles"`
 }
 
 // ProfileSelection The profile to use in this session.
@@ -2699,6 +2934,28 @@ type ProfileSummary struct {
 	//
 	// Example: Anna
 	Name string `json:"name"`
+}
+
+// ProfileUpdate A change of a profile; omitted properties stay as they are. For the primary profile only avatarColor and pin may be sent.
+type ProfileUpdate struct {
+	// AvatarColor Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+	//
+	// Example: coral
+	AvatarColor *AvatarColor `json:"avatarColor,omitempty"`
+
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess *LibraryAccess `json:"libraryAccess,omitempty"`
+
+	// Name New profile name, 1 to 40 characters after Unicode NFC normalisation; unique within the account ignoring case.
+	//
+	// Example: Mia
+	Name *string `json:"name,omitempty"`
+
+	// Pin A new 4-digit PIN, or null to remove the PIN; omitted, the PIN stays as it is.
+	Pin nullable.Nullable[string] `json:"pin,omitempty"`
 }
 
 // ProviderIds IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted.
@@ -3006,6 +3263,103 @@ type SystemInfo struct {
 // Example: ready
 type ThumbnailState string
 
+// User An account as the administration shows it (US-20).
+type User struct {
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit ContentLimit `json:"contentLimit"`
+
+	// CreatedAt When the account was created.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ID Stable ID of the account.
+	//
+	// Example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+	ID uuid.UUID `json:"id"`
+
+	// LastActiveAt Last request of any of the account's sessions, exact to about 5 minutes; omitted when the account never signed in.
+	LastActiveAt *time.Time `json:"lastActiveAt,omitempty"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess LibraryAccess `json:"libraryAccess"`
+
+	// Name Account name, also the name of its primary profile.
+	//
+	// Example: Anna
+	Name string `json:"name"`
+
+	// ProfileCount Number of profiles, the primary profile included.
+	//
+	// Example: 3
+	ProfileCount int32 `json:"profileCount"`
+
+	// Role Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+	//
+	// Example: admin
+	Role AccountRole `json:"role"`
+
+	// Status Whether an account may sign in: "active" or "disabled" (a disabled account cannot sign in and has no sessions). Clients must tolerate new values.
+	//
+	// Example: active
+	Status UserStatus `json:"status"`
+}
+
+// UserCreate A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (adults, hideUnrated false).
+type UserCreate struct {
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess *LibraryAccess `json:"libraryAccess,omitempty"`
+
+	// Name Account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also names the primary profile.
+	//
+	// Example: Ben
+	Name string `json:"name"`
+
+	// Password Initial password of 8 to 128 bytes of UTF-8; no composition rules.
+	Password *string `json:"password,omitempty"`
+
+	// Role Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+	//
+	// Example: admin
+	Role AccountRole `json:"role"`
+}
+
+// UserList The accounts of the server.
+type UserList struct {
+	// Users Every account, ordered by name.
+	Users []User `json:"users"`
+}
+
+// UserStatus Whether an account may sign in: "active" or "disabled" (a disabled account cannot sign in and has no sessions). Clients must tolerate new values.
+//
+// Example: active
+type UserStatus string
+
+// UserUpdate A change of an account; omitted properties stay as they are. Room for later account settings stays in objects, not in top-level flags.
+type UserUpdate struct {
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
+
+	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
+	LibraryAccess *LibraryAccess `json:"libraryAccess,omitempty"`
+
+	// Name New account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also renames the primary profile.
+	//
+	// Example: Ben
+	Name *string `json:"name,omitempty"`
+
+	// Role Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+	//
+	// Example: admin
+	Role *AccountRole `json:"role,omitempty"`
+
+	// Status Whether an account may sign in: "active" or "disabled" (a disabled account cannot sign in and has no sessions). Clients must tolerate new values.
+	//
+	// Example: active
+	Status *UserStatus `json:"status,omitempty"`
+}
+
 // VideoResolution Resolution class of a video, decided by width or height so cropped and portrait video land in the expected class: "8k" (width ≥ 7000 or height ≥ 4000), "4k" (≥ 3200 or ≥ 1800), "1080p" (≥ 1600 or ≥ 900), "720p" (≥ 1100 or ≥ 650), else "sd". Clients must tolerate values added in later versions.
 //
 // Example: 1080p
@@ -3046,6 +3400,9 @@ type ItemTypeFilter = ItemKind
 // LibraryID defines model for LibraryId.
 type LibraryID = uuid.UUID
 
+// ProfileID defines model for ProfileId.
+type ProfileID = uuid.UUID
+
 // QuickFilter Quick filter of a library listing: "all" (no filter), "hdr" (any HDR format of the primary video, Dolby Vision included), "dolbyVision", "hdr10plus", "atmos" (a Dolby Atmos audio stream), "uhd" (resolution class 4k or 8k), "unavailable" (the primary file cannot be played, MediaSummary.available false, or its folder is offline) or "duplicates" (items with more than one media file). For a show the episodes decide: it matches when one of its episodes matches. Clients must tolerate values added in later versions.
 //
 // Example: hdr
@@ -3065,6 +3422,9 @@ type SessionID = uuid.UUID
 
 // SubtitleLanguageFilter defines model for SubtitleLanguageFilter.
 type SubtitleLanguageFilter = []string
+
+// UserID defines model for UserId.
+type UserID = uuid.UUID
 
 // VideoCodecFilter defines model for VideoCodecFilter.
 type VideoCodecFilter = []string
@@ -3288,11 +3648,26 @@ type SelectProfileJSONRequestBody = ProfileSelection
 // CreatePlaybackSessionJSONRequestBody defines body for CreatePlaybackSession for application/json ContentType.
 type CreatePlaybackSessionJSONRequestBody = PlaybackRequest
 
+// UpdateProfileJSONRequestBody defines body for UpdateProfile for application/json ContentType.
+type UpdateProfileJSONRequestBody = ProfileUpdate
+
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettingsUpdate
 
 // CompleteSetupJSONRequestBody defines body for CompleteSetup for application/json ContentType.
 type CompleteSetupJSONRequestBody = SetupRequest
+
+// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
+type CreateUserJSONRequestBody = UserCreate
+
+// UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
+type UpdateUserJSONRequestBody = UserUpdate
+
+// ResetUserPasswordJSONRequestBody defines body for ResetUserPassword for application/json ContentType.
+type ResetUserPasswordJSONRequestBody = PasswordReset
+
+// CreateProfileJSONRequestBody defines body for CreateProfile for application/json ContentType.
+type CreateProfileJSONRequestBody = ProfileCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -3302,6 +3677,12 @@ type ServerInterface interface {
 	// CreateSession Sign in with name and password
 	// (POST /api/v1/auth/session)
 	CreateSession(w http.ResponseWriter, r *http.Request)
+	// ListDevices List the devices signed in to any account
+	// (GET /api/v1/devices)
+	ListDevices(w http.ResponseWriter, r *http.Request)
+	// RevokeDevice Sign any device out
+	// (DELETE /api/v1/devices/{deviceId})
+	RevokeDevice(w http.ResponseWriter, r *http.Request, deviceID DeviceID)
 	// ListFolderRoots List the folder roots a library folder may be chosen from
 	// (GET /api/v1/folder-roots)
 	ListFolderRoots(w http.ResponseWriter, r *http.Request)
@@ -3398,6 +3779,12 @@ type ServerInterface interface {
 	// GetPlaybackSession Describe a playback session
 	// (GET /api/v1/playback/sessions/{sessionId})
 	GetPlaybackSession(w http.ResponseWriter, r *http.Request, sessionID SessionID)
+	// DeleteProfile Delete a managed profile
+	// (DELETE /api/v1/profiles/{profileId})
+	DeleteProfile(w http.ResponseWriter, r *http.Request, profileID ProfileID)
+	// UpdateProfile Change a profile
+	// (PATCH /api/v1/profiles/{profileId})
+	UpdateProfile(w http.ResponseWriter, r *http.Request, profileID ProfileID)
 	// GetMetadataSettings Read the online metadata settings
 	// (GET /api/v1/settings/metadata)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -3413,6 +3800,30 @@ type ServerInterface interface {
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
+	// ListUsers List the accounts
+	// (GET /api/v1/users)
+	ListUsers(w http.ResponseWriter, r *http.Request)
+	// CreateUser Create an account
+	// (POST /api/v1/users)
+	CreateUser(w http.ResponseWriter, r *http.Request)
+	// DeleteUser Delete an account
+	// (DELETE /api/v1/users/{userId})
+	DeleteUser(w http.ResponseWriter, r *http.Request, userID UserID)
+	// GetUser Describe one account
+	// (GET /api/v1/users/{userId})
+	GetUser(w http.ResponseWriter, r *http.Request, userID UserID)
+	// UpdateUser Change an account
+	// (PATCH /api/v1/users/{userId})
+	UpdateUser(w http.ResponseWriter, r *http.Request, userID UserID)
+	// ResetUserPassword Set a new password for an account
+	// (PUT /api/v1/users/{userId}/password)
+	ResetUserPassword(w http.ResponseWriter, r *http.Request, userID UserID)
+	// ListUserProfiles List the profiles of an account
+	// (GET /api/v1/users/{userId}/profiles)
+	ListUserProfiles(w http.ResponseWriter, r *http.Request, userID UserID)
+	// CreateProfile Add a managed profile to an account
+	// (POST /api/v1/users/{userId}/profiles)
+	CreateProfile(w http.ResponseWriter, r *http.Request, userID UserID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -3443,6 +3854,46 @@ func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDevices operation middleware
+func (siw *ServerInterfaceWrapper) ListDevices(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDevices(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeDevice operation middleware
+func (siw *ServerInterfaceWrapper) RevokeDevice(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deviceId" -------------
+	var deviceID DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deviceId", r.PathValue("deviceId"), &deviceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deviceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeDevice(w, r, deviceID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4856,6 +5307,58 @@ func (siw *ServerInterfaceWrapper) GetPlaybackSession(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteProfile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileID ProfileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", r.PathValue("profileId"), &profileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteProfile(w, r, profileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateProfile operation middleware
+func (siw *ServerInterfaceWrapper) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "profileId" -------------
+	var profileID ProfileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "profileId", r.PathValue("profileId"), &profileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "profileId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateProfile(w, r, profileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -4917,6 +5420,190 @@ func (siw *ServerInterfaceWrapper) GetSystemInfo(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSystemInfo(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUsers operation middleware
+func (siw *ServerInterfaceWrapper) ListUsers(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUsers(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateUser operation middleware
+func (siw *ServerInterfaceWrapper) CreateUser(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateUser(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteUser operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteUser(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUser operation middleware
+func (siw *ServerInterfaceWrapper) GetUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUser(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateUser operation middleware
+func (siw *ServerInterfaceWrapper) UpdateUser(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateUser(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResetUserPassword operation middleware
+func (siw *ServerInterfaceWrapper) ResetUserPassword(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResetUserPassword(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListUserProfiles operation middleware
+func (siw *ServerInterfaceWrapper) ListUserProfiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListUserProfiles(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProfile operation middleware
+func (siw *ServerInterfaceWrapper) CreateProfile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userId" -------------
+	var userID UserID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userId", r.PathValue("userId"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProfile(w, r, userID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5058,6 +5745,18 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/me/password", wrapper.ChangeOwnPassword)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/devices", wrapper.ListOwnDevices)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/me/devices/{deviceId}", wrapper.RevokeOwnDevice)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/users", wrapper.ListUsers)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/users", wrapper.CreateUser)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/users/{userId}", wrapper.DeleteUser)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/users/{userId}", wrapper.GetUser)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/users/{userId}", wrapper.UpdateUser)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/users/{userId}/password", wrapper.ResetUserPassword)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/users/{userId}/profiles", wrapper.ListUserProfiles)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/users/{userId}/profiles", wrapper.CreateProfile)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/profiles/{profileId}", wrapper.DeleteProfile)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/profiles/{profileId}", wrapper.UpdateProfile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/devices", wrapper.ListDevices)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/devices/{deviceId}", wrapper.RevokeDevice)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries", wrapper.ListLibraries)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries", wrapper.CreateLibrary)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.DeleteLibrary)
@@ -5204,6 +5903,77 @@ type CreateSessiondefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CreateSessiondefaultApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDevicesRequestObject struct {
+}
+
+type ListDevicesResponseObject interface {
+	VisitListDevicesResponse(w http.ResponseWriter) error
+}
+
+type ListDevices200JSONResponse AccountDeviceList
+
+func (response ListDevices200JSONResponse) VisitListDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDevicesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListDevicesdefaultApplicationProblemPlusJSONResponse) VisitListDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeDeviceRequestObject struct {
+	DeviceID DeviceID `json:"deviceId"`
+}
+
+type RevokeDeviceResponseObject interface {
+	VisitRevokeDeviceResponse(w http.ResponseWriter) error
+}
+
+type RevokeDevice204Response struct {
+}
+
+func (response RevokeDevice204Response) VisitRevokeDeviceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeDevicedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeDevicedefaultApplicationProblemPlusJSONResponse) VisitRevokeDeviceResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6631,6 +7401,107 @@ func (response GetPlaybackSessiondefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type DeleteProfileRequestObject struct {
+	ProfileID ProfileID `json:"profileId"`
+}
+
+type DeleteProfileResponseObject interface {
+	VisitDeleteProfileResponse(w http.ResponseWriter) error
+}
+
+type DeleteProfile204Response struct {
+}
+
+func (response DeleteProfile204Response) VisitDeleteProfileResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteProfile409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteProfile409ApplicationProblemPlusJSONResponse) VisitDeleteProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteProfiledefaultApplicationProblemPlusJSONResponse) VisitDeleteProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProfileRequestObject struct {
+	ProfileID ProfileID `json:"profileId"`
+	Body      *UpdateProfileJSONRequestBody
+}
+
+type UpdateProfileResponseObject interface {
+	VisitUpdateProfileResponse(w http.ResponseWriter) error
+}
+
+type UpdateProfile200JSONResponse Profile
+
+func (response UpdateProfile200JSONResponse) VisitUpdateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProfile409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateProfile409ApplicationProblemPlusJSONResponse) VisitUpdateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateProfiledefaultApplicationProblemPlusJSONResponse) VisitUpdateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMetadataSettingsRequestObject struct {
 }
 
@@ -6837,6 +7708,384 @@ func (response GetSystemInfodefaultApplicationProblemPlusJSONResponse) VisitGetS
 	return err
 }
 
+type ListUsersRequestObject struct {
+}
+
+type ListUsersResponseObject interface {
+	VisitListUsersResponse(w http.ResponseWriter) error
+}
+
+type ListUsers200JSONResponse UserList
+
+func (response ListUsers200JSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUsersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListUsersdefaultApplicationProblemPlusJSONResponse) VisitListUsersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserRequestObject struct {
+	Body *CreateUserJSONRequestBody
+}
+
+type CreateUserResponseObject interface {
+	VisitCreateUserResponse(w http.ResponseWriter) error
+}
+
+type CreateUser201ResponseHeaders struct {
+	Location *string
+}
+
+type CreateUser201JSONResponse struct {
+	Body    User
+	Headers CreateUser201ResponseHeaders
+}
+
+func (response CreateUser201JSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateUser409ApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateUserdefaultApplicationProblemPlusJSONResponse) VisitCreateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserRequestObject struct {
+	UserID UserID `json:"userId"`
+}
+
+type DeleteUserResponseObject interface {
+	VisitDeleteUserResponse(w http.ResponseWriter) error
+}
+
+type DeleteUser204Response struct {
+}
+
+func (response DeleteUser204Response) VisitDeleteUserResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteUser409ApplicationProblemPlusJSONResponse) VisitDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteUserdefaultApplicationProblemPlusJSONResponse) VisitDeleteUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserRequestObject struct {
+	UserID UserID `json:"userId"`
+}
+
+type GetUserResponseObject interface {
+	VisitGetUserResponse(w http.ResponseWriter) error
+}
+
+type GetUser200JSONResponse User
+
+func (response GetUser200JSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetUserdefaultApplicationProblemPlusJSONResponse) VisitGetUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserRequestObject struct {
+	UserID UserID `json:"userId"`
+	Body   *UpdateUserJSONRequestBody
+}
+
+type UpdateUserResponseObject interface {
+	VisitUpdateUserResponse(w http.ResponseWriter) error
+}
+
+type UpdateUser200JSONResponse User
+
+func (response UpdateUser200JSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUser409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateUser409ApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateUserdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateUserdefaultApplicationProblemPlusJSONResponse) VisitUpdateUserResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResetUserPasswordRequestObject struct {
+	UserID UserID `json:"userId"`
+	Body   *ResetUserPasswordJSONRequestBody
+}
+
+type ResetUserPasswordResponseObject interface {
+	VisitResetUserPasswordResponse(w http.ResponseWriter) error
+}
+
+type ResetUserPassword204Response struct {
+}
+
+func (response ResetUserPassword204Response) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ResetUserPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResetUserPassworddefaultApplicationProblemPlusJSONResponse) VisitResetUserPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserProfilesRequestObject struct {
+	UserID UserID `json:"userId"`
+}
+
+type ListUserProfilesResponseObject interface {
+	VisitListUserProfilesResponse(w http.ResponseWriter) error
+}
+
+type ListUserProfiles200JSONResponse ProfileList
+
+func (response ListUserProfiles200JSONResponse) VisitListUserProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListUserProfilesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListUserProfilesdefaultApplicationProblemPlusJSONResponse) VisitListUserProfilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProfileRequestObject struct {
+	UserID UserID `json:"userId"`
+	Body   *CreateProfileJSONRequestBody
+}
+
+type CreateProfileResponseObject interface {
+	VisitCreateProfileResponse(w http.ResponseWriter) error
+}
+
+type CreateProfile201ResponseHeaders struct {
+	Location *string
+}
+
+type CreateProfile201JSONResponse struct {
+	Body    Profile
+	Headers CreateProfile201ResponseHeaders
+}
+
+func (response CreateProfile201JSONResponse) VisitCreateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProfile409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateProfile409ApplicationProblemPlusJSONResponse) VisitCreateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateProfiledefaultApplicationProblemPlusJSONResponse) VisitCreateProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// DeleteSession Sign out
@@ -6845,6 +8094,12 @@ type StrictServerInterface interface {
 	// CreateSession Sign in with name and password
 	// (POST /api/v1/auth/session)
 	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
+	// ListDevices List the devices signed in to any account
+	// (GET /api/v1/devices)
+	ListDevices(ctx context.Context, request ListDevicesRequestObject) (ListDevicesResponseObject, error)
+	// RevokeDevice Sign any device out
+	// (DELETE /api/v1/devices/{deviceId})
+	RevokeDevice(ctx context.Context, request RevokeDeviceRequestObject) (RevokeDeviceResponseObject, error)
 	// ListFolderRoots List the folder roots a library folder may be chosen from
 	// (GET /api/v1/folder-roots)
 	ListFolderRoots(ctx context.Context, request ListFolderRootsRequestObject) (ListFolderRootsResponseObject, error)
@@ -6941,6 +8196,12 @@ type StrictServerInterface interface {
 	// GetPlaybackSession Describe a playback session
 	// (GET /api/v1/playback/sessions/{sessionId})
 	GetPlaybackSession(ctx context.Context, request GetPlaybackSessionRequestObject) (GetPlaybackSessionResponseObject, error)
+	// DeleteProfile Delete a managed profile
+	// (DELETE /api/v1/profiles/{profileId})
+	DeleteProfile(ctx context.Context, request DeleteProfileRequestObject) (DeleteProfileResponseObject, error)
+	// UpdateProfile Change a profile
+	// (PATCH /api/v1/profiles/{profileId})
+	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
 	// GetMetadataSettings Read the online metadata settings
 	// (GET /api/v1/settings/metadata)
 	GetMetadataSettings(ctx context.Context, request GetMetadataSettingsRequestObject) (GetMetadataSettingsResponseObject, error)
@@ -6956,6 +8217,30 @@ type StrictServerInterface interface {
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(ctx context.Context, request GetSystemInfoRequestObject) (GetSystemInfoResponseObject, error)
+	// ListUsers List the accounts
+	// (GET /api/v1/users)
+	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
+	// CreateUser Create an account
+	// (POST /api/v1/users)
+	CreateUser(ctx context.Context, request CreateUserRequestObject) (CreateUserResponseObject, error)
+	// DeleteUser Delete an account
+	// (DELETE /api/v1/users/{userId})
+	DeleteUser(ctx context.Context, request DeleteUserRequestObject) (DeleteUserResponseObject, error)
+	// GetUser Describe one account
+	// (GET /api/v1/users/{userId})
+	GetUser(ctx context.Context, request GetUserRequestObject) (GetUserResponseObject, error)
+	// UpdateUser Change an account
+	// (PATCH /api/v1/users/{userId})
+	UpdateUser(ctx context.Context, request UpdateUserRequestObject) (UpdateUserResponseObject, error)
+	// ResetUserPassword Set a new password for an account
+	// (PUT /api/v1/users/{userId}/password)
+	ResetUserPassword(ctx context.Context, request ResetUserPasswordRequestObject) (ResetUserPasswordResponseObject, error)
+	// ListUserProfiles List the profiles of an account
+	// (GET /api/v1/users/{userId}/profiles)
+	ListUserProfiles(ctx context.Context, request ListUserProfilesRequestObject) (ListUserProfilesResponseObject, error)
+	// CreateProfile Add a managed profile to an account
+	// (POST /api/v1/users/{userId}/profiles)
+	CreateProfile(ctx context.Context, request CreateProfileRequestObject) (CreateProfileResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -7045,6 +8330,56 @@ func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
 		if err := validResponse.VisitCreateSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDevices operation middleware
+func (sh *strictHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
+	var request ListDevicesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDevices(ctx, request.(ListDevicesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDevices")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDevicesResponseObject); ok {
+		if err := validResponse.VisitListDevicesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeDevice operation middleware
+func (sh *strictHandler) RevokeDevice(w http.ResponseWriter, r *http.Request, deviceID DeviceID) {
+	var request RevokeDeviceRequestObject
+
+	request.DeviceID = deviceID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeDevice(ctx, request.(RevokeDeviceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeDevice")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeDeviceResponseObject); ok {
+		if err := validResponse.VisitRevokeDeviceResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7918,6 +9253,65 @@ func (sh *strictHandler) GetPlaybackSession(w http.ResponseWriter, r *http.Reque
 	}
 }
 
+// DeleteProfile operation middleware
+func (sh *strictHandler) DeleteProfile(w http.ResponseWriter, r *http.Request, profileID ProfileID) {
+	var request DeleteProfileRequestObject
+
+	request.ProfileID = profileID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteProfile(ctx, request.(DeleteProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteProfileResponseObject); ok {
+		if err := validResponse.VisitDeleteProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateProfile operation middleware
+func (sh *strictHandler) UpdateProfile(w http.ResponseWriter, r *http.Request, profileID ProfileID) {
+	var request UpdateProfileRequestObject
+
+	request.ProfileID = profileID
+
+	var body UpdateProfileJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateProfile(ctx, request.(UpdateProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateProfileResponseObject); ok {
+		if err := validResponse.VisitUpdateProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMetadataSettings operation middleware
 func (sh *strictHandler) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 	var request GetMetadataSettingsRequestObject
@@ -8045,6 +9439,238 @@ func (sh *strictHandler) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSystemInfoResponseObject); ok {
 		if err := validResponse.VisitGetSystemInfoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUsers operation middleware
+func (sh *strictHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	var request ListUsersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUsers(ctx, request.(ListUsersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUsers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUsersResponseObject); ok {
+		if err := validResponse.VisitListUsersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateUser operation middleware
+func (sh *strictHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var request CreateUserRequestObject
+
+	var body CreateUserJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateUser(ctx, request.(CreateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateUserResponseObject); ok {
+		if err := validResponse.VisitCreateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteUser operation middleware
+func (sh *strictHandler) DeleteUser(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request DeleteUserRequestObject
+
+	request.UserID = userID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteUser(ctx, request.(DeleteUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteUserResponseObject); ok {
+		if err := validResponse.VisitDeleteUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUser operation middleware
+func (sh *strictHandler) GetUser(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request GetUserRequestObject
+
+	request.UserID = userID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUser(ctx, request.(GetUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUserResponseObject); ok {
+		if err := validResponse.VisitGetUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateUser operation middleware
+func (sh *strictHandler) UpdateUser(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request UpdateUserRequestObject
+
+	request.UserID = userID
+
+	var body UpdateUserJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateUser(ctx, request.(UpdateUserRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateUser")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateUserResponseObject); ok {
+		if err := validResponse.VisitUpdateUserResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResetUserPassword operation middleware
+func (sh *strictHandler) ResetUserPassword(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request ResetUserPasswordRequestObject
+
+	request.UserID = userID
+
+	var body ResetUserPasswordJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResetUserPassword(ctx, request.(ResetUserPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResetUserPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResetUserPasswordResponseObject); ok {
+		if err := validResponse.VisitResetUserPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListUserProfiles operation middleware
+func (sh *strictHandler) ListUserProfiles(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request ListUserProfilesRequestObject
+
+	request.UserID = userID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListUserProfiles(ctx, request.(ListUserProfilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListUserProfiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListUserProfilesResponseObject); ok {
+		if err := validResponse.VisitListUserProfilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateProfile operation middleware
+func (sh *strictHandler) CreateProfile(w http.ResponseWriter, r *http.Request, userID UserID) {
+	var request CreateProfileRequestObject
+
+	request.UserID = userID
+
+	var body CreateProfileJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateProfile(ctx, request.(CreateProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateProfileResponseObject); ok {
+		if err := validResponse.VisitCreateProfileResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

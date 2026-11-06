@@ -202,6 +202,196 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the accounts
+         * @description Returns every account with its role, status, last activity, the content limit of its primary profile and its profile count, ordered by name (US-20). Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and like every management operation it is served only to local peers (ADR 0028).
+         */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create an account
+         * @description Creates an account with an initial password and its primary profile, which takes the account name, the content limit and the default avatar colour (ADR 0032 section 1). libraryAccess defaults to all libraries and contentLimit to no limit; an admin account always has all libraries. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "invalid" (400, with "field" "name", "password", "libraryAccess" or "contentLimit": a name of 1 to 40 characters, a password of 8 to 128 bytes, known library IDs, no list for an admin account, and a preset that matches maxAge) and "name_taken" (409, another account has the name, ignoring case).
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Describe one account
+         * @description Returns one account as listUsers shows it. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). An unknown ID answers 404 "not_found".
+         */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an account
+         * @description Deletes the account with its profiles, their watch state and its sessions. Media files are never touched. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404) and "last_admin" (409, the account is the last enabled admin account).
+         */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an account
+         * @description Changes the name, role, status, library access or the content limit of the primary profile; omitted properties stay as they are. A new name also renames the primary profile. Disabling an account ends all its sessions; a changed role, library access or content limit applies to its sessions from their next request. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404), "invalid" (400, with "field" as for createUser), "name_taken" (409) and "last_admin" (409, the change would disable or demote the last enabled admin account).
+         */
+        patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a new password for an account
+         * @description Replaces the password of the account without asking for the current one and ends the account's sessions, except the caller's own when an admin resets the own password (ADR 0032 section 1). Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404) and "invalid" (400, with "field" "password": 8 to 128 bytes).
+         */
+        put: operations["resetUserPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the profiles of an account
+         * @description Returns the account's profiles with their content limit and library access, the primary profile first, then the managed ones by name. Allowed for an admin and for the account itself with its primary profile selected (ADR 0032 section 1), else 403 "forbidden". The profiles of another account are an administration operation (ADR 0032 section 9), served only to local peers (ADR 0028). An unknown ID answers 404 "not_found".
+         */
+        get: operations["listUserProfiles"];
+        put?: never;
+        /**
+         * Add a managed profile to an account
+         * @description Adds a managed profile (no password, chosen in the profile picker). avatarColor defaults to coral, libraryAccess to all libraries of the account and contentLimit to no limit of its own; the effective access is the account's set intersected with the profile's, the effective limit the stricter of the profile's and the primary profile's (ADR 0032 section 7). Allowed for an admin and for the account itself with its primary profile selected, else 403 "forbidden"; for another account it is an administration operation (ADR 0032 section 9), served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404), "invalid" (400, with "field" "name", "pin", "libraryAccess" or "contentLimit"), "name_taken" (409, another profile of the account has the name, ignoring case) and "profile_limit" (409, the account has 10 managed profiles already).
+         */
+        post: operations["createProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/profiles/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a profile (Profile.id).
+                 * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+                 */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a managed profile
+         * @description Deletes a managed profile with its watch state; sessions that selected it return to the profile picker. The primary profile cannot be deleted on its own and answers 409 "conflict" (deleteUser removes the whole account). Allowed for an admin and for the owning account with its primary profile selected, else 403 "forbidden"; a profile of another account is an administration operation (ADR 0032 section 9), served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". An unknown ID answers 404 "not_found".
+         */
+        delete: operations["deleteProfile"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a profile
+         * @description Changes the name, avatar colour, PIN, content limit or library access of a profile; omitted properties stay as they are and a pin of null removes the PIN. The primary profile takes its name, content limit and library access from the account, so for it those properties answer 400 "invalid" (updateUser changes them). Allowed for an admin and for the owning account with its primary profile selected, else 403 "forbidden"; a profile of another account is an administration operation (ADR 0032 section 9), served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404), "invalid" (400, with "field") and "name_taken" (409).
+         */
+        patch: operations["updateProfile"];
+        trace?: never;
+    };
+    "/api/v1/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the devices signed in to any account
+         * @description Returns every session of every account as a device with its account (US-25), most recently seen first; current marks the caller's own. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028).
+         */
+        get: operations["listDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/devices/{deviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a signed-in device (Device.id).
+                 * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+                 */
+                deviceId: components["parameters"]["DeviceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Sign any device out
+         * @description Ends the session behind a device of any account; the device has to sign in again. Revoking the caller's own device equals signing out. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". An unknown ID answers 404 "not_found".
+         */
+        delete: operations["revokeDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -1301,6 +1491,238 @@ export interface components {
         DeviceList: {
             /** @description Every device, most recently seen first. */
             devices: components["schemas"]["Device"][];
+        };
+        /**
+         * @description Whether an account may sign in: "active" or "disabled" (a disabled account cannot sign in and has no sessions). Clients must tolerate new values.
+         * @example active
+         * @enum {string}
+         */
+        UserStatus: "active" | "disabled";
+        /**
+         * Format: int32
+         * @description Age bucket of the content limits (ADR 0032 section 7): content rated for this age or younger is shown. Clients must tolerate new values.
+         * @example 12
+         * @enum {integer}
+         */
+        AgeRating: 0 | 6 | 12 | 16 | 18;
+        /**
+         * @description Label of a content limit as the clients offer it (US-11): "youngChildren" (maxAge 0), "children" (6), "teens" (12), "adults" (no maxAge) or "custom" (any maxAge). Clients must tolerate new values.
+         * @example teens
+         * @enum {string}
+         */
+        ContentLimitPreset: "youngChildren" | "children" | "teens" | "adults" | "custom";
+        /** @description The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile. */
+        ContentLimit: {
+            preset: components["schemas"]["ContentLimitPreset"];
+            /** @description The highest age rating shown; null for no age limit. */
+            maxAge: components["schemas"]["AgeRating"] | null;
+            /**
+             * @description True hides titles without a known age rating; clients default it to true when they set a maxAge.
+             * @example true
+             */
+            hideUnrated: boolean;
+        };
+        /** @description The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's. */
+        LibraryAccess: {
+            /**
+             * @description True for every library; libraryIds is then empty or omitted.
+             * @example false
+             */
+            all: boolean;
+            /** @description The libraries that may be seen when all is false; an empty list allows none. Unknown IDs answer 400 "invalid". */
+            libraryIds?: string[];
+        };
+        /** @description An account as the administration shows it (US-20). */
+        User: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the account.
+             * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+             */
+            id: string;
+            /**
+             * @description Account name, also the name of its primary profile.
+             * @example Anna
+             */
+            name: string;
+            role: components["schemas"]["AccountRole"];
+            status: components["schemas"]["UserStatus"];
+            /**
+             * Format: date-time
+             * @description When the account was created.
+             */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Last request of any of the account's sessions, exact to about 5 minutes; omitted when the account never signed in.
+             */
+            lastActiveAt?: string;
+            libraryAccess: components["schemas"]["LibraryAccess"];
+            contentLimit: components["schemas"]["ContentLimit"];
+            /**
+             * Format: int32
+             * @description Number of profiles, the primary profile included.
+             * @example 3
+             */
+            profileCount: number;
+        };
+        /** @description The accounts of the server. */
+        UserList: {
+            /** @description Every account, ordered by name. */
+            users: components["schemas"]["User"][];
+        };
+        /** @description A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (adults, hideUnrated false). */
+        UserCreate: {
+            /**
+             * @description Account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also names the primary profile.
+             * @example Ben
+             */
+            name: string;
+            /**
+             * Format: password
+             * @description Initial password of 8 to 128 bytes of UTF-8; no composition rules.
+             */
+            password: string;
+            role: components["schemas"]["AccountRole"];
+            libraryAccess?: components["schemas"]["LibraryAccess"];
+            contentLimit?: components["schemas"]["ContentLimit"];
+        };
+        /** @description A change of an account; omitted properties stay as they are. Room for later account settings stays in objects, not in top-level flags. */
+        UserUpdate: {
+            /**
+             * @description New account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also renames the primary profile.
+             * @example Ben
+             */
+            name?: string;
+            role?: components["schemas"]["AccountRole"];
+            status?: components["schemas"]["UserStatus"];
+            libraryAccess?: components["schemas"]["LibraryAccess"];
+            contentLimit?: components["schemas"]["ContentLimit"];
+        };
+        /** @description A new password set by an admin. */
+        PasswordReset: {
+            /**
+             * Format: password
+             * @description The new password, 8 to 128 bytes of UTF-8; no composition rules.
+             */
+            password: string;
+        };
+        /** @description A profile with its settings as the account owner and the administration manage it (ADR 0032 section 1). The PIN itself is never returned. */
+        Profile: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the profile.
+             * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the account the profile belongs to (User.id).
+             * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+             */
+            userId: string;
+            /**
+             * @description Profile name.
+             * @example Mia
+             */
+            name: string;
+            avatarColor: components["schemas"]["AvatarColor"];
+            /**
+             * @description True when selecting the profile needs its 4-digit PIN.
+             * @example false
+             */
+            hasPin: boolean;
+            /**
+             * @description True for the account's primary profile, false for a managed profile.
+             * @example false
+             */
+            isPrimary: boolean;
+            contentLimit: components["schemas"]["ContentLimit"];
+            libraryAccess: components["schemas"]["LibraryAccess"];
+        };
+        /** @description The profiles of an account. */
+        ProfileList: {
+            /** @description The primary profile first, then the managed profiles by name. */
+            profiles: components["schemas"]["Profile"][];
+        };
+        /** @description A new managed profile. avatarColor defaults to coral, libraryAccess to all libraries of the account and contentLimit to no limit of its own. */
+        ProfileCreate: {
+            /**
+             * @description Profile name, 1 to 40 characters after Unicode NFC normalisation; unique within the account ignoring case.
+             * @example Mia
+             */
+            name: string;
+            avatarColor?: components["schemas"]["AvatarColor"];
+            /**
+             * Format: password
+             * @description A 4-digit PIN needed to select the profile; omitted for none.
+             */
+            pin?: string;
+            contentLimit?: components["schemas"]["ContentLimit"];
+            libraryAccess?: components["schemas"]["LibraryAccess"];
+        };
+        /** @description A change of a profile; omitted properties stay as they are. For the primary profile only avatarColor and pin may be sent. */
+        ProfileUpdate: {
+            /**
+             * @description New profile name, 1 to 40 characters after Unicode NFC normalisation; unique within the account ignoring case.
+             * @example Mia
+             */
+            name?: string;
+            avatarColor?: components["schemas"]["AvatarColor"];
+            /**
+             * Format: password
+             * @description A new 4-digit PIN, or null to remove the PIN; omitted, the PIN stays as it is.
+             */
+            pin?: string | null;
+            contentLimit?: components["schemas"]["ContentLimit"];
+            libraryAccess?: components["schemas"]["LibraryAccess"];
+        };
+        /** @description A signed-in device of any account, that is one session (US-25). */
+        AccountDevice: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the device; revokeDevice takes it.
+             * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the account the device is signed in to (User.id).
+             * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+             */
+            userId: string;
+            /**
+             * @description Name of the account the device is signed in to.
+             * @example Anna
+             */
+            userName: string;
+            /**
+             * @description Name given at sign-in or derived from the User-Agent.
+             * @example Firefox on Windows
+             */
+            name: string;
+            client: components["schemas"]["ClientKind"];
+            /**
+             * @description Operating system or platform of the device; omitted when unknown.
+             * @example Windows
+             */
+            platform?: string;
+            /**
+             * Format: date-time
+             * @description Last request of the device, exact to about 5 minutes.
+             */
+            lastSeenAt: string;
+            addressClass: components["schemas"]["AddressClass"];
+            /**
+             * @description True for the device that sends this request.
+             * @example true
+             */
+            current: boolean;
+        };
+        /** @description The devices signed in to any account. */
+        AccountDeviceList: {
+            /** @description Every device, most recently seen first. */
+            devices: components["schemas"]["AccountDevice"][];
         };
         /**
          * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks), "audiobooks" (audiobook items with chapters) or "photos" (photo albums following the folder tree with their photos, ADR 0029). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
@@ -2907,7 +3329,7 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). User administration adds "name_taken" (409, another account or profile of the account has the name), "last_admin" (409, the change would delete, disable or demote the last enabled admin account) and "profile_limit" (409, the account has 10 managed profiles already). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
@@ -2976,6 +3398,16 @@ export interface components {
          * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
          */
         DeviceId: string;
+        /**
+         * @description ID of an account (User.id).
+         * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+         */
+        UserId: string;
+        /**
+         * @description ID of a profile (Profile.id).
+         * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+         */
+        ProfileId: string;
         /**
          * @description ID of the library.
          * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
@@ -3342,6 +3774,382 @@ export interface operations {
         };
     };
     revokeOwnDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a signed-in device (Device.id).
+                 * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+                 */
+                deviceId: components["parameters"]["DeviceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The device is signed out. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All accounts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreate"];
+            };
+        };
+        responses: {
+            /** @description The new account. */
+            201: {
+                headers: {
+                    /** @description URL of the new account. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Another account has the name ("name_taken"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account is deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The account is the last enabled admin account ("last_admin"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description Another account has the name ("name_taken"), or the change would disable or demote the last enabled admin account ("last_admin"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    resetUserPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordReset"];
+            };
+        };
+        responses: {
+            /** @description The password is replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listUserProfiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's profiles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of an account (User.id).
+                 * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+                 */
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileCreate"];
+            };
+        };
+        responses: {
+            /** @description The new profile. */
+            201: {
+                headers: {
+                    /** @description URL of the new profile. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Another profile of the account has the name ("name_taken"), or the account has 10 managed profiles already ("profile_limit"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a profile (Profile.id).
+                 * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+                 */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The profile is deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The profile is the primary profile ("conflict"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a profile (Profile.id).
+                 * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+                 */
+                profileId: components["parameters"]["ProfileId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description The changed profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Profile"];
+                };
+            };
+            /** @description Another profile of the account has the name ("name_taken"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All devices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDeviceList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeDevice: {
         parameters: {
             query?: never;
             header?: never;
