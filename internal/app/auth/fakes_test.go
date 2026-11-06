@@ -32,6 +32,9 @@ type fakeStore struct {
 	failLookup     error
 	failSetHash    error
 	failTouch      error
+	pins           map[string]string // PIN hash by profile ID
+	failSelect     error
+	failDevices    error
 }
 
 func newFakeStore() *fakeStore {
@@ -42,6 +45,7 @@ func newFakeStore() *fakeStore {
 		profileAccess: map[string]access.LibraryAccess{},
 		profileLimits: map[string]access.ContentLimit{},
 		sessions:      map[string]Session{},
+		pins:          map[string]string{},
 	}
 }
 
@@ -432,6 +436,7 @@ func newHarness(t *testing.T) harness {
 
 	service, err := NewService(Dependencies{
 		Setup: store, Credentials: store, Profiles: store, Sessions: store, Revoker: store,
+		PINs: store, Selector: store, Devices: store,
 		Hasher: hasher, Tokens: &fakeTokens{}, IDs: &fakeIDs{}, Clock: clock.Now, Compose: composeAcute,
 	})
 	if err != nil {

@@ -52,6 +52,10 @@ func (service *Service) load(ctx context.Context, tokenHash string, now time.Tim
 		return Resolution{}, unauthenticated("session expired")
 	}
 
+	if selectionLapsed(session, now) {
+		service.clearLapsedSelection(ctx, &session)
+	}
+
 	inputs, err := service.deps.Profiles.ViewerInputs(ctx, session.AccountID, session.ProfileID)
 	if errors.Is(err, domain.ErrNotFound) {
 		return Resolution{}, unauthenticated("account or profile gone")
@@ -127,6 +131,23 @@ func expired(session Session, now time.Time) bool {
 	return now.Sub(session.LastSeenAt) >= IdleTimeout || now.Sub(session.CreatedAt) >= AbsoluteLifetime
 }
 
+// selectionLapsed reports a selection without remember that was not used for SelectionLapse.
+// LastSeenAt lags by up to TouchInterval, far below the lapse.
+func selectionLapsed(session Session, now time.Time) bool {
+	return session.ProfileID != "" && !session.Remember && now.Sub(session.LastSeenAt) >= SelectionLapse
+}
+
+// clearLapsedSelection resolves the session without its profile, so the client shows the
+// picker again. A failed store write is logged only: this request still fails closed, and
+// the next one finds the lapse again.
+func (service *Service) clearLapsedSelection(ctx context.Context, session *Session) {
+	session.ProfileID = ""
+
+	if err := service.deps.Selector.SetSessionProfile(ctx, session.ID, "", false); err != nil {
+		service.deps.Logger.WarnContext(ctx, "clear lapsed profile selection", "session", session.ID, "error", err)
+	}
+}
+
 func unauthenticated(reason string) error {
 	return fmt.Errorf("resolve session: %s: %w", reason, domain.ErrUnauthenticated)
 }
@@ -155,6 +176,7 @@ func (service *Service) PurgeExpired(ctx context.Context) (int64, error) {
 
 	service.cache.prune(now)
 	service.throttle.prune(now)
+	service.pinLock.prune(now)
 
 	return deleted, nil
 }

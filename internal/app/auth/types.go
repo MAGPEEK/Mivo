@@ -17,6 +17,11 @@ var (
 	ErrInvalidCredentials = fmt.Errorf("invalid credentials: %w", domain.ErrUnauthenticated)
 	// ErrSetupComplete reports a setup attempt after an account exists.
 	ErrSetupComplete = fmt.Errorf("setup already completed: %w", domain.ErrConflict)
+	// ErrProfileRequired reports a request that needs a selected profile from a session that
+	// has none (ADR 0032 §4); adapters/http maps it to 403 "profile_required".
+	ErrProfileRequired = fmt.Errorf("profile required: %w", domain.ErrForbidden)
+	// ErrPINInvalid reports a missing or wrong PIN; adapters/http maps it to 403 "pin_invalid".
+	ErrPINInvalid = fmt.Errorf("pin invalid: %w", domain.ErrForbidden)
 )
 
 // ThrottledError reports a sign-in refused by the throttle of ADR 0032 §5. It unwraps to
@@ -44,7 +49,40 @@ func (throttled *ThrottledError) RetryAfter() time.Duration {
 // RetryAfterSeconds returns Wait rounded up to whole seconds, at least 1, for the
 // Retry-After header.
 func (throttled *ThrottledError) RetryAfterSeconds() int {
-	return max(1, int(math.Ceil(throttled.Wait.Seconds())))
+	return retryAfterSeconds(throttled.Wait)
+}
+
+// ProfileLockedError reports a profile selection refused by the PIN lockout of ADR 0032 §4.
+// It unwraps to domain.ErrRateLimited; adapters/http tells it apart from ThrottledError with
+// errors.As and answers 429 "profile_locked".
+type ProfileLockedError struct {
+	// Wait is the time until the lock ends.
+	Wait time.Duration
+}
+
+// Error describes the refusal.
+func (locked *ProfileLockedError) Error() string {
+	return fmt.Sprintf("profile locked after too many wrong PINs, retry after %s: %s", locked.Wait, domain.ErrRateLimited)
+}
+
+// Unwrap returns domain.ErrRateLimited.
+func (locked *ProfileLockedError) Unwrap() error {
+	return domain.ErrRateLimited
+}
+
+// RetryAfter returns Wait.
+func (locked *ProfileLockedError) RetryAfter() time.Duration {
+	return locked.Wait
+}
+
+// RetryAfterSeconds returns Wait rounded up to whole seconds, at least 1, for the
+// Retry-After header.
+func (locked *ProfileLockedError) RetryAfterSeconds() int {
+	return retryAfterSeconds(locked.Wait)
+}
+
+func retryAfterSeconds(wait time.Duration) int {
+	return max(1, int(math.Ceil(wait.Seconds())))
 }
 
 // Client is the kind of signed-in device (ADR 0032 §3).
@@ -101,12 +139,18 @@ type Session struct {
 	AccountID string
 	// ProfileID is the selected profile or empty when the client must show the picker.
 	ProfileID string
-	// Remember keeps the profile selection beyond the short lapse of ADR 0032 §4 (M7-16).
+	// Remember keeps the profile selection beyond SelectionLapse (ADR 0032 §4).
 	Remember     bool
 	Device       Device
 	CreatedAt    time.Time
 	LastSeenAt   time.Time
 	AddressClass AddressClass
+}
+
+// AccountSession is a session with the name of its account, for the admin device list.
+type AccountSession struct {
+	Session     Session
+	AccountName string
 }
 
 // Seen is what TouchSession records.

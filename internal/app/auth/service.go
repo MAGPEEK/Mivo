@@ -38,6 +38,9 @@ type Dependencies struct {
 	Profiles    ProfileStore
 	Sessions    SessionStore
 	Revoker     SessionRevoker
+	PINs        PINStore
+	Selector    ProfileSelector
+	Devices     DeviceStore
 	Hasher      Hasher
 	Tokens      TokenSource
 	IDs         IDSource
@@ -48,12 +51,14 @@ type Dependencies struct {
 	Logger  *slog.Logger
 }
 
-// Service implements the auth use cases. It is safe for concurrent use; the throttle and the
-// session cache are owned by it and live in memory (ADR 0032 §5: a restart clears them).
+// Service implements the auth use cases. It is safe for concurrent use; the throttle, the PIN
+// lockout and the session cache are owned by it and live in memory (ADR 0032 §4 and §5: a
+// restart clears them).
 type Service struct {
 	deps     Dependencies
 	throttle *throttle
 	cache    *sessionCache
+	pinLock  *pinLock
 }
 
 // NewService returns a Service or an error wrapping domain.ErrInvalid when a required
@@ -67,7 +72,7 @@ func NewService(deps Dependencies) (*Service, error) {
 		deps.Logger = slog.New(slog.DiscardHandler)
 	}
 
-	return &Service{deps: deps, throttle: newThrottle(), cache: newSessionCache()}, nil
+	return &Service{deps: deps, throttle: newThrottle(), cache: newSessionCache(), pinLock: newPINLock()}, nil
 }
 
 func checkDependencies(deps Dependencies) error {
@@ -80,6 +85,9 @@ func checkDependencies(deps Dependencies) error {
 		{"Profiles", deps.Profiles == nil},
 		{"Sessions", deps.Sessions == nil},
 		{"Revoker", deps.Revoker == nil},
+		{"PINs", deps.PINs == nil},
+		{"Selector", deps.Selector == nil},
+		{"Devices", deps.Devices == nil},
 		{"Hasher", deps.Hasher == nil},
 		{"Tokens", deps.Tokens == nil},
 		{"IDs", deps.IDs == nil},

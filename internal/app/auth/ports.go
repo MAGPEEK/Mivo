@@ -1,6 +1,7 @@
 // Package auth contains the account sign-in use cases of ADR 0032: first-run setup, sign-in
-// and sign-out, password change, session resolution with a short cache, sign-in throttling
-// and the periodic purge of expired sessions. It declares the ports it needs; adapters
+// and sign-out, password change, session resolution with a short cache, sign-in throttling,
+// profile selection with the PIN lockout, the device list with revoke and the periodic purge
+// of expired sessions. It declares the ports it needs; adapters
 // implement them (adapters/sqlite, adapters/credentials) and cmd/mivo wires them.
 package auth
 
@@ -70,7 +71,32 @@ type SessionRevoker interface {
 	PurgeSessions(ctx context.Context, idleBefore, createdBefore time.Time) (int64, error)
 }
 
-// Hasher hashes and verifies passwords. Implemented by adapters/credentials (M7-07).
+// PINStore reads profile PIN hashes. Implemented by adapters/sqlite (M7-08).
+type PINStore interface {
+	// ProfilePINHash returns the profile's PIN hash, empty when it has no PIN, or an error
+	// wrapping domain.ErrNotFound.
+	ProfilePINHash(ctx context.Context, profileID string) (string, error)
+}
+
+// ProfileSelector stores the profile selection of a session. Implemented by adapters/sqlite.
+type ProfileSelector interface {
+	// SetSessionProfile sets the session's profile and remember flag; an empty profileID
+	// clears the selection. An unknown session returns an error wrapping domain.ErrNotFound.
+	SetSessionProfile(ctx context.Context, sessionID, profileID string, remember bool) error
+}
+
+// DeviceStore lists sessions as devices (US-25). Implemented by adapters/sqlite.
+type DeviceStore interface {
+	// AccountSessions returns every session of the account.
+	AccountSessions(ctx context.Context, accountID string) ([]Session, error)
+	// AllSessions returns every session of every account with the account name.
+	AllSessions(ctx context.Context) ([]AccountSession, error)
+	// SessionByID returns the session with sessionID, or an error wrapping
+	// domain.ErrNotFound.
+	SessionByID(ctx context.Context, sessionID string) (Session, error)
+}
+
+// Hasher hashes and verifies passwords and PINs. Implemented by adapters/credentials (M7-07).
 type Hasher interface {
 	// Hash returns an encoded hash of secret with a fresh salt.
 	Hash(ctx context.Context, secret string) (string, error)

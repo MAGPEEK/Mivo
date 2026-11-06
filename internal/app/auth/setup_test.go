@@ -20,7 +20,7 @@ func TestNewServiceRequiresEveryDependency(t *testing.T) {
 		t.Fatalf("NewService(empty) error = %v, want domain.ErrInvalid", err)
 	}
 
-	for _, name := range []string{"Setup", "Credentials", "Profiles", "Sessions", "Revoker", "Hasher", "Tokens", "IDs", "Clock", "Compose"} {
+	for _, name := range []string{"Setup", "Credentials", "Profiles", "Sessions", "Revoker", "PINs", "Selector", "Devices", "Hasher", "Tokens", "IDs", "Clock", "Compose"} {
 		if !strings.Contains(err.Error(), name+" is required") {
 			t.Errorf("error %q does not name missing %s", err, name)
 		}
