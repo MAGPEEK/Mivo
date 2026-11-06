@@ -1,0 +1,71 @@
+{
+  "own": {
+    "heading": "Your devices",
+    "description": "Browsers and apps signed in to your account.",
+    "adminLink": "Devices of all accounts"
+  },
+  "admin": {
+    "heading": "Devices",
+    "description": "Signed-in devices and clients of every account.",
+    "breadcrumbLabel": "Breadcrumb",
+    "breadcrumbSettings": "Settings"
+  },
+  "table": {
+    "label": "Signed-in devices",
+    "name": "Device",
+    "account": "Account",
+    "client": "Client",
+    "platform": "Platform",
+    "lastSeen": "Last seen",
+    "network": "Network",
+    "actions": "Actions",
+    "thisDevice": "This device",
+    "unknownPlatform": "Unknown",
+    "justNow": "just now",
+    "revoke": "Revoke",
+    "revokeNamed": "Revoke {{name}}",
+    "hint": "Revoking ends the device's session; it has to sign in again."
+  },
+  "client": {
+    "web": "Web",
+    "tv": "TV app",
+    "cli": "Command line"
+  },
+  "network": {
+    "lan": "LAN",
+    "remote": "Remote"
+  },
+  "filter": {
+    "label": "Client type",
+    "all": "All"
+  },
+  "state": {
+    "loading": "Loading devices",
+    "empty": "No devices are signed in.",
+    "filteredEmpty": "No devices of this client type.",
+    "retry": "Try again",
+    "notAvailable": {
+      "title": "Not available yet",
+      "hint": "This server does not manage accounts and devices yet. The list appears once it does."
+    },
+    "forbidden": {
+      "title": "Only for administrators",
+      "hint": "Select the primary profile of an administrator account on the local network to see every device."
+    },
+    "network": "The server could not be reached.",
+    "generic": "The devices could not be loaded."
+  },
+  "revoke": {
+    "title": "Revoke {{name}}?",
+    "description": "The device is signed out and has to sign in again.",
+    "descriptionCurrent": "This is the device you are using. Revoking it signs you out here.",
+    "confirm": "Revoke",
+    "cancel": "Cancel",
+    "failed": {
+      "notAvailable": "Revoking devices is not available on this server yet.",
+      "forbidden": "You may not revoke this device.",
+      "network": "The server could not be reached. Try again.",
+      "generic": "The device could not be revoked. Try again."
+    }
+  }
+}

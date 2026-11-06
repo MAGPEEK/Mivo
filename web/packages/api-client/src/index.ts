@@ -107,3 +107,5 @@ export type {
   ThumbnailState,
   ViewerState,
 } from "./schemas";
+// Device types in their own block, so parallel additions to the list above do not collide.
+export type { AccountDevice, AccountDeviceList, AddressClass, Device, DeviceList } from "./schemas";

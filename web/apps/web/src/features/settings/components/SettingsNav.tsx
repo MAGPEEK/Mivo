@@ -31,6 +31,11 @@ export function SettingsNav() {
             {t("nav.about")}
           </Link>
         </li>
+        <li>
+          <Link to="/admin/devices" className={linkClass}>
+            {t("nav.devices")}
+          </Link>
+        </li>
       </ul>
     </nav>
   );

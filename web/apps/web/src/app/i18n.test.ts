@@ -46,6 +46,7 @@ describe("locales", () => {
     expect(namespaces.map(([name]) => name).toSorted()).toEqual([
       "audiobooks",
       "auth",
+      "devices",
       "home",
       "identify",
       "item",

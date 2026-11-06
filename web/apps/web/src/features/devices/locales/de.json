@@ -1,0 +1,71 @@
+{
+  "own": {
+    "heading": "Deine Geräte",
+    "description": "Browser und Apps, die bei deinem Konto angemeldet sind.",
+    "adminLink": "Geräte aller Konten"
+  },
+  "admin": {
+    "heading": "Geräte",
+    "description": "Angemeldete Geräte und Clients aller Konten.",
+    "breadcrumbLabel": "Brotkrumen",
+    "breadcrumbSettings": "Einstellungen"
+  },
+  "table": {
+    "label": "Angemeldete Geräte",
+    "name": "Gerät",
+    "account": "Konto",
+    "client": "Client",
+    "platform": "Plattform",
+    "lastSeen": "Zuletzt gesehen",
+    "network": "Netz",
+    "actions": "Aktionen",
+    "thisDevice": "Dieses Gerät",
+    "unknownPlatform": "Unbekannt",
+    "justNow": "gerade eben",
+    "revoke": "Widerrufen",
+    "revokeNamed": "{{name}} widerrufen",
+    "hint": "Widerrufen beendet die Sitzung des Geräts; es muss sich neu anmelden."
+  },
+  "client": {
+    "web": "Web",
+    "tv": "TV-App",
+    "cli": "Kommandozeile"
+  },
+  "network": {
+    "lan": "LAN",
+    "remote": "Remote"
+  },
+  "filter": {
+    "label": "Client-Typ",
+    "all": "Alle"
+  },
+  "state": {
+    "loading": "Geräte werden geladen",
+    "empty": "Es sind keine Geräte angemeldet.",
+    "filteredEmpty": "Keine Geräte dieses Client-Typs.",
+    "retry": "Erneut versuchen",
+    "notAvailable": {
+      "title": "Noch nicht verfügbar",
+      "hint": "Dieser Server verwaltet noch keine Konten und Geräte. Die Liste erscheint, sobald er es tut."
+    },
+    "forbidden": {
+      "title": "Nur für Administratoren",
+      "hint": "Wähle im lokalen Netz das Hauptprofil eines Administratorkontos, um alle Geräte zu sehen."
+    },
+    "network": "Der Server ist nicht erreichbar.",
+    "generic": "Die Geräte konnten nicht geladen werden."
+  },
+  "revoke": {
+    "title": "{{name}} widerrufen?",
+    "description": "Das Gerät wird abgemeldet und muss sich neu anmelden.",
+    "descriptionCurrent": "Das ist das Gerät, das du gerade benutzt. Widerrufen meldet dich hier ab.",
+    "confirm": "Widerrufen",
+    "cancel": "Abbrechen",
+    "failed": {
+      "notAvailable": "Geräte widerrufen ist auf diesem Server noch nicht verfügbar.",
+      "forbidden": "Du darfst dieses Gerät nicht widerrufen.",
+      "network": "Der Server ist nicht erreichbar. Versuche es erneut.",
+      "generic": "Das Gerät konnte nicht widerrufen werden. Versuche es erneut."
+    }
+  }
+}

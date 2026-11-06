@@ -24,6 +24,12 @@ import {
   signInPath,
   validateAuthSearch,
 } from "../features/auth";
+import {
+  AdminDevicesPage,
+  OwnDevicesPage,
+  adminDevicesPath,
+  ownDevicesPath,
+} from "../features/devices";
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import {
@@ -172,6 +178,18 @@ function settingsPages<Parent extends AnyRoute>(parent: Parent) {
   ] as const;
 }
 
+// The own device list and Admin › Devices (M7-34).
+function devicePages<Parent extends AnyRoute>(parent: Parent) {
+  return [
+    createRoute({ getParentRoute: () => parent, path: ownDevicesPath, component: OwnDevicesPage }),
+    createRoute({
+      getParentRoute: () => parent,
+      path: adminDevicesPath,
+      component: AdminDevicesPage,
+    }),
+  ] as const;
+}
+
 // Code-based route tree: no generated file in milestone 1. Switching to file-based routing
 // needs an ADR note (ADR 0005). Pages with sidebar and top bar sit below the shell layout
 // route; full-screen pages (the player) below their own layout route without them.
@@ -208,6 +226,7 @@ function createRouteTree() {
       validateSearch: validateItemSearch,
       component: ItemRoute,
     }),
+    ...devicePages(shellRoute),
   ] as const;
   const playerRoute = createRoute({
     getParentRoute: () => fullScreenRoute,

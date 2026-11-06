@@ -277,3 +277,18 @@ export type ProgressReport = Schemas["ProgressReport"];
 
 /** The selected profile's watch state of an item; absent on items without state. */
 export type ViewerState = Schemas["ViewerState"];
+
+/** Where a device was last seen from. Later API versions may add values. */
+export type AddressClass = Schemas["AddressClass"];
+
+/** A signed-in device of the account, that is one of its sessions. */
+export type Device = Schemas["Device"];
+
+/** Body of `GET /api/v1/me/devices`. */
+export type DeviceList = Schemas["DeviceList"];
+
+/** A signed-in device of any account, with its account. */
+export type AccountDevice = Schemas["AccountDevice"];
+
+/** Body of `GET /api/v1/devices`. */
+export type AccountDeviceList = Schemas["AccountDeviceList"];
