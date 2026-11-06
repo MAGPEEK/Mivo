@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { storageStateFile } from "./e2e/support/auth";
 import { baseUrlVariable } from "./e2e/support/baseUrl";
 import { brandedChannel } from "./e2e/support/brandedChannel";
 
@@ -33,6 +34,8 @@ export default defineConfig({
   use: {
     // Undefined while the runner loads the config before the global setup; set in workers.
     baseURL: process.env[baseUrlVariable],
+    // Signed in by the global setup (task M7-28); empty while the server has no sign-in.
+    storageState: storageStateFile,
     locale: browserLocale,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

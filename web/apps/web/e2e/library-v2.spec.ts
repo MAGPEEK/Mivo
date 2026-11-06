@@ -2,6 +2,7 @@ import type { PlaybackSession } from "@mivo/api-client";
 import { expect, test as base, type Locator, type Page, type Response } from "@playwright/test";
 import { join } from "node:path";
 
+import { cachedAdminStorageState, type StorageState } from "./support/auth";
 import { blockingAxeViolations } from "./support/axe";
 import {
   expectedLibrary,
@@ -44,6 +45,7 @@ const absoluteNumberedEpisodeCount = 131;
 
 interface Fixtures {
   readonly baseURL: string;
+  readonly storageState: StorageState;
 }
 
 interface WorkerFixtures {
@@ -81,6 +83,9 @@ const test = base.extend<Fixtures, WorkerFixtures>({
   ],
   baseURL: async ({ libraryServer }, provide) => {
     await provide(libraryServer.baseUrl);
+  },
+  storageState: async ({ libraryServer }, provide) => {
+    await provide(await cachedAdminStorageState(libraryServer.baseUrl));
   },
 });
 

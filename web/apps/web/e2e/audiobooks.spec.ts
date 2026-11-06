@@ -2,6 +2,7 @@ import type { ItemDetail, PlaybackRequest, PlaybackSession } from "@mivo/api-cli
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { join } from "node:path";
 
+import { cachedAdminStorageState, type StorageState } from "./support/auth";
 import { blockingAxeViolations } from "./support/axe";
 import {
   audiobookCorpusExists,
@@ -33,6 +34,7 @@ const createdStatus = 201;
 
 interface Fixtures {
   readonly baseURL: string;
+  readonly storageState: StorageState;
 }
 
 interface WorkerFixtures {
@@ -65,6 +67,9 @@ const test = base.extend<Fixtures, WorkerFixtures>({
   ],
   baseURL: async ({ audiobookServer }, provide) => {
     await provide(audiobookServer.baseUrl);
+  },
+  storageState: async ({ audiobookServer }, provide) => {
+    await provide(await cachedAdminStorageState(audiobookServer.baseUrl));
   },
 });
 

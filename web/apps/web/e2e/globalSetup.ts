@@ -2,6 +2,7 @@ import type { FullConfig } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import { writeAdminStorageState } from "./support/auth";
 import { baseUrlVariable } from "./support/baseUrl";
 import { brandedChannel } from "./support/brandedChannel";
 import { assertFFmpegAvailable, generateCorpus } from "./support/corpus";
@@ -23,6 +24,8 @@ export default async function globalSetup(config: FullConfig): Promise<() => Pro
   await mkdir(outputDirectory, { recursive: true });
   const server = await startE2EServer({ logFile: join(outputDirectory, "server.log") });
   try {
+    // First: once sign-in is on, every later API call of the setup needs the session.
+    await writeAdminStorageState(server.baseUrl);
     await waitForStartupScans(server.baseUrl);
     await generateCorpus(server.mediaDirectory);
   } catch (error) {

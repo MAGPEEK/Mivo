@@ -1,6 +1,7 @@
 import { expect, test as base, type Locator, type Page } from "@playwright/test";
 import { join } from "node:path";
 
+import { cachedAdminStorageState, type StorageState } from "./support/auth";
 import { blockingAxeViolations } from "./support/axe";
 import {
   expectedPhotos,
@@ -28,6 +29,7 @@ const rawOnlyAlbum = "Raw Only";
 
 interface Fixtures {
   readonly baseURL: string;
+  readonly storageState: StorageState;
 }
 
 interface WorkerFixtures {
@@ -60,6 +62,9 @@ const test = base.extend<Fixtures, WorkerFixtures>({
   ],
   baseURL: async ({ photoServer }, provide) => {
     await provide(photoServer.baseUrl);
+  },
+  storageState: async ({ photoServer }, provide) => {
+    await provide(await cachedAdminStorageState(photoServer.baseUrl));
   },
 });
 
