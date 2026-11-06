@@ -88,6 +88,7 @@ export type {
   PlaybackSessionState,
   Problem,
   ProfileSummary,
+  ProgressReport,
   ProviderIds,
   Row,
   RowKind,
@@ -104,4 +105,5 @@ export type {
   StreamDecision,
   SystemInfo,
   ThumbnailState,
+  ViewerState,
 } from "./schemas";

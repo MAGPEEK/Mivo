@@ -784,15 +784,19 @@ func (e ProviderState) Valid() bool {
 
 // Defines values for RowKind.
 const (
-	RowKindMoreGenre      RowKind = "moreGenre"
-	RowKindNewReleases    RowKind = "newReleases"
-	RowKindRecentEpisodes RowKind = "recentEpisodes"
-	RowKindRecentlyAdded  RowKind = "recentlyAdded"
+	RowKindContinueWatching RowKind = "continueWatching"
+	RowKindMoreGenre        RowKind = "moreGenre"
+	RowKindNewReleases      RowKind = "newReleases"
+	RowKindRecentEpisodes   RowKind = "recentEpisodes"
+	RowKindRecentlyAdded    RowKind = "recentlyAdded"
+	RowKindUpNext           RowKind = "upNext"
 )
 
 // Valid indicates whether the value is a known member of the RowKind enum.
 func (e RowKind) Valid() bool {
 	switch e {
+	case RowKindContinueWatching:
+		return true
 	case RowKindMoreGenre:
 		return true
 	case RowKindNewReleases:
@@ -800,6 +804,8 @@ func (e RowKind) Valid() bool {
 	case RowKindRecentEpisodes:
 		return true
 	case RowKindRecentlyAdded:
+		return true
+	case RowKindUpNext:
 		return true
 	default:
 		return false
@@ -1799,6 +1805,9 @@ type ItemDetail struct {
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
 
+	// ViewerState The selected profile's watch state of an item (ADR 0032 section 8). Movies, episodes and audiobooks carry it once they have state (absent means not started and never watched); shows and seasons carry it whenever they have episodes, with unwatchedCount for the badge and watched true when every episode is watched. Other kinds (extras, music, photos) never carry it.
+	ViewerState *ViewerState `json:"viewerState,omitempty"`
+
 	// Year Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
 	//
 	// Example: 2008
@@ -1927,7 +1936,7 @@ type ItemQuickFilter string
 // Example: dateAdded
 type ItemSort string
 
-// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; an episode card of a "recentEpisodes" row carries its show's poster; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist, the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it has none). A photo whose thumbnailState is "unsupported" has no square; the client shows a placeholder. media summarises the primary file and is omitted for containers (show, season, artist, album, photo album); for an audiobook of several part files durationSeconds is the sum of its parts. A photo carries media only when it is a video (durationSeconds gives the duration badge of its tile); a still photo has no media, so media-based filters such as quick "unavailable" never match it.
+// ItemSummary An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; an episode card of a "recentEpisodes", "continueWatching" or "upNext" row carries its show's poster; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist, the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it has none). A photo whose thumbnailState is "unsupported" has no square; the client shows a placeholder. media summarises the primary file and is omitted for containers (show, season, artist, album, photo album); for an audiobook of several part files durationSeconds is the sum of its parts. A photo carries media only when it is a video (durationSeconds gives the duration badge of its tile); a still photo has no media, so media-based filters such as quick "unavailable" never match it. viewerState is the selected profile's watch state (ADR 0032 section 8).
 type ItemSummary struct {
 	// AbsoluteNumber Absolute episode number of an episode named by a bare number (Show - 130).
 	//
@@ -2035,6 +2044,9 @@ type ItemSummary struct {
 	//
 	// Example: Big Buck Bunny
 	Title string `json:"title"`
+
+	// ViewerState The selected profile's watch state of an item (ADR 0032 section 8). Movies, episodes and audiobooks carry it once they have state (absent means not started and never watched); shows and seasons carry it whenever they have episodes, with unwatchedCount for the badge and watched true when every episode is watched. Other kinds (extras, music, photos) never carry it.
+	ViewerState *ViewerState `json:"viewerState,omitempty"`
 
 	// Year Release year of a movie or an album, publication year of an audiobook or first-air year of a show.
 	//
@@ -2168,7 +2180,7 @@ type LibraryFolder struct {
 
 // LibraryFolderEntry One child of a library folder.
 type LibraryFolderEntry struct {
-	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; an episode card of a "recentEpisodes" row carries its show's poster; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist, the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it has none). A photo whose thumbnailState is "unsupported" has no square; the client shows a placeholder. media summarises the primary file and is omitted for containers (show, season, artist, album, photo album); for an audiobook of several part files durationSeconds is the sum of its parts. A photo carries media only when it is a video (durationSeconds gives the duration badge of its tile); a still photo has no media, so media-based filters such as quick "unavailable" never match it.
+	// Item An item in a library listing or in a list of children. Fields that do not apply to the item's kind, or that are unknown, are omitted. poster is the poster of a movie, show or season (a season without its own carries its show's poster) or the 2:3 cover of an audiobook; an episode card of a "recentEpisodes", "continueWatching" or "upNext" row carries its show's poster; thumb is the still of an episode or extra (without one the client shows a placeholder); square is the cover of an album or the image of an artist, the 1:1 tile of a photo (the photo itself, ImageRef.id is the photo's item ID) or of a photo album (its newest photo whose thumbnailState is "ready"; omitted when it has none). A photo whose thumbnailState is "unsupported" has no square; the client shows a placeholder. media summarises the primary file and is omitted for containers (show, season, artist, album, photo album); for an audiobook of several part files durationSeconds is the sum of its parts. A photo carries media only when it is a video (durationSeconds gives the duration badge of its tile); a still photo has no media, so media-based filters such as quick "unavailable" never match it. viewerState is the selected profile's watch state (ADR 0032 section 8).
 	Item *ItemSummary `json:"item,omitempty"`
 
 	// Kind What a folder entry is: "folder" (open it with its path) or "item" (a catalog item found in the folder). Clients must tolerate values added in later versions.
@@ -2958,6 +2970,19 @@ type ProfileUpdate struct {
 	Pin nullable.Nullable[string] `json:"pin,omitempty"`
 }
 
+// ProgressReport One playback position report of reportItemProgress (ADR 0032 section 8).
+type ProgressReport struct {
+	// PlaybackSessionID ID of the playback session that plays the item, when there is one. Optional and informational: an unknown or ended session is not an error, and the position is stored either way.
+	//
+	// Example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+	PlaybackSessionID *uuid.UUID `json:"playbackSessionId,omitempty"`
+
+	// PositionSeconds Absolute position in the item in seconds, like startPositionSeconds of a playback session: the media element's time plus the session's startPositionSeconds, and for an audiobook of several part files the position from the start of its first part. It must be a finite number of at least 0: a negative value answers 400 "invalid" with field "positionSeconds", a number outside the double range (for example 1e400) answers 400 "bad_request" (JSON has no NaN or Infinity), and the server rejects any non-finite value that reaches it with 400 "invalid" rather than storing it. A position beyond the duration counts as finished.
+	//
+	// Example: 2530.5
+	PositionSeconds float64 `json:"positionSeconds"`
+}
+
 // ProviderIds IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted.
 type ProviderIds struct {
 	// Imdb IMDb ID ("tt" followed by digits).
@@ -2986,7 +3011,7 @@ type ProviderKeyStatus string
 // Example: ok
 type ProviderState string
 
-// Row One row of Home or of a library's Overview pivot with its first items (HO-07). The title is a translation key with parameters, never a translated text: the server has no UI language. Episode grouping in "recentlyAdded" (HO-05): the recently added episodes of one show become one card; when they all belong to one season the card is that season, else the show, and newEpisodeCount counts them. In "recentEpisodes" every card is an episode with seasonNumber, showTitle and its show's poster in poster. "moreGenre" rows rotate daily: the server ranks the library's genres by number of items and picks up to three of the top ten, seeded by the server's local calendar date as the number YYYYMMDD, so every client sees the same genres for the whole day.
+// Row One row of Home or of a library's Overview pivot with its first items (HO-07). The title is a translation key with parameters, never a translated text: the server has no UI language. Episode grouping in "recentlyAdded" (HO-05): the recently added episodes of one show become one card; when they all belong to one season the card is that season, else the show, and newEpisodeCount counts them. In "recentEpisodes" every card is an episode with seasonNumber, showTitle and its show's poster in poster. "moreGenre" rows rotate daily: the server ranks the library's genres by number of items and picks up to three of the top ten, seeded by the server's local calendar date as the number YYYYMMDD, so every client sees the same genres for the whole day. "continueWatching" (ADR 0032 section 8) holds the selected profile's in-progress movies, episodes and audiobooks that are not hidden and were played within 12 weeks, most recently played first, at most 40, and per show only its most recently played episode. "upNext" holds, per show with an episode watched within 12 weeks and no episode in progress, the first unwatched episode after the last watched one in season and episode order, specials (season 0) skipped, newest show activity first, at most 20. Both use cardFormat "poster"; their items carry viewerState, and their episode cards carry seasonNumber, number (numberEnd for a multi-episode file), showTitle and the show's poster for the compact "S3 · E9" label. Both have no seeAllQuery.
 type Row struct {
 	// CardFormat Card shape of a row (HO-02): "poster" (2:3, the item's poster), "episode" (16:9, the item's thumb, falling back to its poster) or "square" (1:1, albums and photos). Clients must tolerate values added in later versions and render unknown formats as "poster".
 	//
@@ -3003,15 +3028,15 @@ type Row struct {
 	// Example: recentlyAdded:3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	ID string `json:"id"`
 
-	// Items The row's first items in display order, at most the requested limit: movies, shows, seasons (grouped episodes) or episodes, depending on kind.
+	// Items The row's first items in display order, at most the requested limit: movies, shows, seasons (grouped episodes), episodes or audiobooks, depending on kind.
 	Items []ItemSummary `json:"items"`
 
-	// Kind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre) or "recentEpisodes" (episodes by air date, newest first, in shows libraries). Later milestones add kinds such as "people", "topRated", "continueWatching" and "upNext". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
+	// Kind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre), "recentEpisodes" (episodes by air date, newest first, in shows libraries), "continueWatching" (the selected profile's in-progress movies, episodes and audiobooks, HO-03, LB-01) or "upNext" (the next episode of each show the profile is watching, HO-04); see Row for the rules of the last two. Later milestones add kinds such as "people" and "topRated". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
 	//
 	// Example: recentlyAdded
 	Kind RowKind `json:"kind"`
 
-	// LibraryID ID of the library the row comes from; seeAllQuery applies to its Browse pivot. Omitted only for rows across libraries (later milestones).
+	// LibraryID ID of the library the row comes from; seeAllQuery applies to its Browse pivot. Omitted only for rows across libraries: "continueWatching" and "upNext" on Home.
 	//
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID *uuid.UUID `json:"libraryId,omitempty"`
@@ -3019,7 +3044,7 @@ type Row struct {
 	// SeeAllQuery The sort and filters of a Browse pivot listing (listLibraryItems) as a structured object: every property has the name, values and bounds of the listLibraryItems query parameter of the same name, and an absent property means that parameter's default. "See all" opens the Browse pivot of Row.libraryId with these values in the URL. The Browse pivot lists top-level items, so a row of episodes points to their shows.
 	SeeAllQuery *BrowseQuery `json:"seeAllQuery,omitempty"`
 
-	// TitleKey Translation key of the row title: "rows.recentlyAdded", "rows.recentlyAddedIn" (Home, parameter library), "rows.newReleases", "rows.moreGenre" (parameter genre) or "rows.recentEpisodes"; later versions add keys. A client without a translation for the key falls back to a title for kind.
+	// TitleKey Translation key of the row title: "rows.recentlyAdded", "rows.recentlyAddedIn" (Home, parameter library), "rows.newReleases", "rows.moreGenre" (parameter genre), "rows.recentEpisodes", "rows.continueWatching" or "rows.upNext"; later versions add keys. A client without a translation for the key falls back to a title for kind.
 	//
 	// Example: rows.moreGenre
 	TitleKey string `json:"titleKey"`
@@ -3030,7 +3055,7 @@ type Row struct {
 	TitleParams *map[string]string `json:"titleParams,omitempty"`
 }
 
-// RowKind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre) or "recentEpisodes" (episodes by air date, newest first, in shows libraries). Later milestones add kinds such as "people", "topRated", "continueWatching" and "upNext". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
+// RowKind What a row shows: "recentlyAdded" (newest items of a library by dateAdded; episodes are grouped into show or season cards, see Row), "newReleases" (newest movies or shows by release or first air date), "moreGenre" (items of one genre, named in Row.genre), "recentEpisodes" (episodes by air date, newest first, in shows libraries), "continueWatching" (the selected profile's in-progress movies, episodes and audiobooks, HO-03, LB-01) or "upNext" (the next episode of each show the profile is watching, HO-04); see Row for the rules of the last two. Later milestones add kinds such as "people" and "topRated". Clients must tolerate values added in later versions; a client that does not know a kind still renders the row from titleKey, cardFormat and items.
 //
 // Example: recentlyAdded
 type RowKind string
@@ -3365,6 +3390,34 @@ type UserUpdate struct {
 // Example: 1080p
 type VideoResolution string
 
+// ViewerState The selected profile's watch state of an item (ADR 0032 section 8). Movies, episodes and audiobooks carry it once they have state (absent means not started and never watched); shows and seasons carry it whenever they have episodes, with unwatchedCount for the badge and watched true when every episode is watched. Other kinds (extras, music, photos) never carry it.
+type ViewerState struct {
+	// LastPlayedAt When the profile last played the item or marked it watched; for a show or season, the newest of its episodes. Omitted when never.
+	//
+	// Example: 2026-11-05T20:14:03Z
+	LastPlayedAt *time.Time `json:"lastPlayedAt,omitempty"`
+
+	// PlayCount How often the item was played to the end or marked watched; 0 for a show or season.
+	//
+	// Example: 1
+	PlayCount int32 `json:"playCount"`
+
+	// PositionSeconds Resume position in seconds; 0 when there is none (not started, finished or a show or season). A value above 0 means "in progress": the client offers Resume and passes it as startPositionSeconds. A watched item being rewatched has both.
+	//
+	// Example: 2530.5
+	PositionSeconds float64 `json:"positionSeconds"`
+
+	// UnwatchedCount Only for a show or season: the number of its episodes that are not watched, out of the episodes leafCount counts for a show and childCount for a season. Omitted for other kinds.
+	//
+	// Example: 4
+	UnwatchedCount *int32 `json:"unwatchedCount,omitempty"`
+
+	// Watched Whether the item is watched; for a show or season, whether every one of its episodes is.
+	//
+	// Example: false
+	Watched bool `json:"watched"`
+}
+
 // AudioCodecFilter defines model for AudioCodecFilter.
 type AudioCodecFilter = []string
 
@@ -3633,6 +3686,9 @@ type IdentifyItemJSONRequestBody = IdentifyRequest
 // SearchIdentifyCandidatesJSONRequestBody defines body for SearchIdentifyCandidates for application/json ContentType.
 type SearchIdentifyCandidatesJSONRequestBody = IdentifySearchRequest
 
+// ReportItemProgressJSONRequestBody defines body for ReportItemProgress for application/json ContentType.
+type ReportItemProgressJSONRequestBody = ProgressReport
+
 // CreateLibraryJSONRequestBody defines body for CreateLibrary for application/json ContentType.
 type CreateLibraryJSONRequestBody = LibraryCreate
 
@@ -3701,6 +3757,9 @@ type ServerInterface interface {
 	// ListItemChildren Page through the children of an item
 	// (GET /api/v1/items/{itemId}/children)
 	ListItemChildren(w http.ResponseWriter, r *http.Request, itemID ItemID, params ListItemChildrenParams)
+	// HideFromContinueWatching Remove an item from Continue watching
+	// (DELETE /api/v1/items/{itemId}/continue-watching)
+	HideFromContinueWatching(w http.ResponseWriter, r *http.Request, itemID ItemID)
 	// IdentifyItem Match an item with a provider candidate
 	// (POST /api/v1/items/{itemId}/identify)
 	IdentifyItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
@@ -3710,9 +3769,18 @@ type ServerInterface interface {
 	// RemoveItemMatch Remove the online match of an item
 	// (DELETE /api/v1/items/{itemId}/match)
 	RemoveItemMatch(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// ReportItemProgress Report the playback position of an item
+	// (PUT /api/v1/items/{itemId}/progress)
+	ReportItemProgress(w http.ResponseWriter, r *http.Request, itemID ItemID)
 	// RefreshItemMetadata Queue a metadata refresh of an item
 	// (POST /api/v1/items/{itemId}/refresh)
 	RefreshItemMetadata(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// MarkItemUnwatched Mark an item unwatched
+	// (DELETE /api/v1/items/{itemId}/watched)
+	MarkItemUnwatched(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// MarkItemWatched Mark an item watched
+	// (PUT /api/v1/items/{itemId}/watched)
+	MarkItemWatched(w http.ResponseWriter, r *http.Request, itemID ItemID)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
@@ -4100,6 +4168,32 @@ func (siw *ServerInterfaceWrapper) ListItemChildren(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// HideFromContinueWatching operation middleware
+func (siw *ServerInterfaceWrapper) HideFromContinueWatching(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.HideFromContinueWatching(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // IdentifyItem operation middleware
 func (siw *ServerInterfaceWrapper) IdentifyItem(w http.ResponseWriter, r *http.Request) {
 
@@ -4178,6 +4272,32 @@ func (siw *ServerInterfaceWrapper) RemoveItemMatch(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ReportItemProgress operation middleware
+func (siw *ServerInterfaceWrapper) ReportItemProgress(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportItemProgress(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RefreshItemMetadata operation middleware
 func (siw *ServerInterfaceWrapper) RefreshItemMetadata(w http.ResponseWriter, r *http.Request) {
 
@@ -4195,6 +4315,58 @@ func (siw *ServerInterfaceWrapper) RefreshItemMetadata(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RefreshItemMetadata(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkItemUnwatched operation middleware
+func (siw *ServerInterfaceWrapper) MarkItemUnwatched(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkItemUnwatched(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MarkItemWatched operation middleware
+func (siw *ServerInterfaceWrapper) MarkItemWatched(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MarkItemWatched(w, r, itemID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5777,6 +5949,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify", wrapper.IdentifyItem)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/match", wrapper.RemoveItemMatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/refresh", wrapper.RefreshItemMetadata)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/items/{itemId}/progress", wrapper.ReportItemProgress)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/watched", wrapper.MarkItemUnwatched)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/items/{itemId}/watched", wrapper.MarkItemWatched)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/continue-watching", wrapper.HideFromContinueWatching)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/refresh", wrapper.RefreshLibraryMetadata)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.GetMetadataSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.UpdateMetadataSettings)
@@ -6233,6 +6409,39 @@ func (response ListItemChildrendefaultApplicationProblemPlusJSONResponse) VisitL
 	return err
 }
 
+type HideFromContinueWatchingRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type HideFromContinueWatchingResponseObject interface {
+	VisitHideFromContinueWatchingResponse(w http.ResponseWriter) error
+}
+
+type HideFromContinueWatching204Response struct {
+}
+
+func (response HideFromContinueWatching204Response) VisitHideFromContinueWatchingResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type HideFromContinueWatchingdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response HideFromContinueWatchingdefaultApplicationProblemPlusJSONResponse) VisitHideFromContinueWatchingResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type IdentifyItemRequestObject struct {
 	ItemID ItemID `json:"itemId"`
 	Body   *IdentifyItemJSONRequestBody
@@ -6403,6 +6612,40 @@ func (response RemoveItemMatchdefaultApplicationProblemPlusJSONResponse) VisitRe
 	return err
 }
 
+type ReportItemProgressRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+	Body   *ReportItemProgressJSONRequestBody
+}
+
+type ReportItemProgressResponseObject interface {
+	VisitReportItemProgressResponse(w http.ResponseWriter) error
+}
+
+type ReportItemProgress204Response struct {
+}
+
+func (response ReportItemProgress204Response) VisitReportItemProgressResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportItemProgressdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReportItemProgressdefaultApplicationProblemPlusJSONResponse) VisitReportItemProgressResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RefreshItemMetadataRequestObject struct {
 	ItemID ItemID `json:"itemId"`
 }
@@ -6441,6 +6684,72 @@ type RefreshItemMetadatadefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RefreshItemMetadatadefaultApplicationProblemPlusJSONResponse) VisitRefreshItemMetadataResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkItemUnwatchedRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type MarkItemUnwatchedResponseObject interface {
+	VisitMarkItemUnwatchedResponse(w http.ResponseWriter) error
+}
+
+type MarkItemUnwatched204Response struct {
+}
+
+func (response MarkItemUnwatched204Response) VisitMarkItemUnwatchedResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type MarkItemUnwatcheddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response MarkItemUnwatcheddefaultApplicationProblemPlusJSONResponse) VisitMarkItemUnwatchedResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MarkItemWatchedRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type MarkItemWatchedResponseObject interface {
+	VisitMarkItemWatchedResponse(w http.ResponseWriter) error
+}
+
+type MarkItemWatched204Response struct {
+}
+
+func (response MarkItemWatched204Response) VisitMarkItemWatchedResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type MarkItemWatcheddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response MarkItemWatcheddefaultApplicationProblemPlusJSONResponse) VisitMarkItemWatchedResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8118,6 +8427,9 @@ type StrictServerInterface interface {
 	// ListItemChildren Page through the children of an item
 	// (GET /api/v1/items/{itemId}/children)
 	ListItemChildren(ctx context.Context, request ListItemChildrenRequestObject) (ListItemChildrenResponseObject, error)
+	// HideFromContinueWatching Remove an item from Continue watching
+	// (DELETE /api/v1/items/{itemId}/continue-watching)
+	HideFromContinueWatching(ctx context.Context, request HideFromContinueWatchingRequestObject) (HideFromContinueWatchingResponseObject, error)
 	// IdentifyItem Match an item with a provider candidate
 	// (POST /api/v1/items/{itemId}/identify)
 	IdentifyItem(ctx context.Context, request IdentifyItemRequestObject) (IdentifyItemResponseObject, error)
@@ -8127,9 +8439,18 @@ type StrictServerInterface interface {
 	// RemoveItemMatch Remove the online match of an item
 	// (DELETE /api/v1/items/{itemId}/match)
 	RemoveItemMatch(ctx context.Context, request RemoveItemMatchRequestObject) (RemoveItemMatchResponseObject, error)
+	// ReportItemProgress Report the playback position of an item
+	// (PUT /api/v1/items/{itemId}/progress)
+	ReportItemProgress(ctx context.Context, request ReportItemProgressRequestObject) (ReportItemProgressResponseObject, error)
 	// RefreshItemMetadata Queue a metadata refresh of an item
 	// (POST /api/v1/items/{itemId}/refresh)
 	RefreshItemMetadata(ctx context.Context, request RefreshItemMetadataRequestObject) (RefreshItemMetadataResponseObject, error)
+	// MarkItemUnwatched Mark an item unwatched
+	// (DELETE /api/v1/items/{itemId}/watched)
+	MarkItemUnwatched(ctx context.Context, request MarkItemUnwatchedRequestObject) (MarkItemUnwatchedResponseObject, error)
+	// MarkItemWatched Mark an item watched
+	// (PUT /api/v1/items/{itemId}/watched)
+	MarkItemWatched(ctx context.Context, request MarkItemWatchedRequestObject) (MarkItemWatchedResponseObject, error)
 	// ListLibraries List the configured libraries
 	// (GET /api/v1/libraries)
 	ListLibraries(ctx context.Context, request ListLibrariesRequestObject) (ListLibrariesResponseObject, error)
@@ -8541,6 +8862,32 @@ func (sh *strictHandler) ListItemChildren(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// HideFromContinueWatching operation middleware
+func (sh *strictHandler) HideFromContinueWatching(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request HideFromContinueWatchingRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.HideFromContinueWatching(ctx, request.(HideFromContinueWatchingRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "HideFromContinueWatching")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(HideFromContinueWatchingResponseObject); ok {
+		if err := validResponse.VisitHideFromContinueWatchingResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // IdentifyItem operation middleware
 func (sh *strictHandler) IdentifyItem(w http.ResponseWriter, r *http.Request, itemID ItemID) {
 	var request IdentifyItemRequestObject
@@ -8633,6 +8980,39 @@ func (sh *strictHandler) RemoveItemMatch(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// ReportItemProgress operation middleware
+func (sh *strictHandler) ReportItemProgress(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request ReportItemProgressRequestObject
+
+	request.ItemID = itemID
+
+	var body ReportItemProgressJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportItemProgress(ctx, request.(ReportItemProgressRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportItemProgress")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportItemProgressResponseObject); ok {
+		if err := validResponse.VisitReportItemProgressResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // RefreshItemMetadata operation middleware
 func (sh *strictHandler) RefreshItemMetadata(w http.ResponseWriter, r *http.Request, itemID ItemID) {
 	var request RefreshItemMetadataRequestObject
@@ -8652,6 +9032,58 @@ func (sh *strictHandler) RefreshItemMetadata(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshItemMetadataResponseObject); ok {
 		if err := validResponse.VisitRefreshItemMetadataResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkItemUnwatched operation middleware
+func (sh *strictHandler) MarkItemUnwatched(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request MarkItemUnwatchedRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkItemUnwatched(ctx, request.(MarkItemUnwatchedRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkItemUnwatched")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkItemUnwatchedResponseObject); ok {
+		if err := validResponse.VisitMarkItemUnwatchedResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MarkItemWatched operation middleware
+func (sh *strictHandler) MarkItemWatched(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request MarkItemWatchedRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MarkItemWatched(ctx, request.(MarkItemWatchedRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MarkItemWatched")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MarkItemWatchedResponseObject); ok {
+		if err := validResponse.VisitMarkItemWatchedResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

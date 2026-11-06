@@ -37,7 +37,7 @@ func TestRowEnums(t *testing.T) {
 	spec := loadSpec(t)
 
 	tests := map[string][]any{
-		"RowKind":    {"recentlyAdded", "newReleases", "moreGenre", "recentEpisodes"},
+		"RowKind":    {"recentlyAdded", "newReleases", "moreGenre", "recentEpisodes", "continueWatching", "upNext"},
 		"CardFormat": {"poster", "episode", "square"},
 		"RowsHint":   {"noLibraries", "noItems", "scanning", "notEnoughData"},
 	}

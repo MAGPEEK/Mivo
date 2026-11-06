@@ -83,8 +83,8 @@ describe("HomePage", () => {
   it("labels episode cards with show, episode code and title, and names unknown rows", async () => {
     const episodesRow: Row = {
       id: "future:1",
-      kind: "upNext" as Row["kind"],
-      titleKey: "rows.upNext",
+      kind: "topRated" as Row["kind"],
+      titleKey: "rows.topRated",
       cardFormat: "banner" as Row["cardFormat"],
       items: [
         fakeItem({

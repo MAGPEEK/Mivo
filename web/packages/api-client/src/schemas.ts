@@ -271,3 +271,9 @@ export type Me = Schemas["Me"];
 
 /** Body of `PUT /api/v1/me/password`. */
 export type PasswordChange = Schemas["PasswordChange"];
+
+/** Body of `PUT /api/v1/items/{itemId}/progress`: the absolute playback position in seconds. */
+export type ProgressReport = Schemas["ProgressReport"];
+
+/** The selected profile's watch state of an item; absent on items without state. */
+export type ViewerState = Schemas["ViewerState"];
