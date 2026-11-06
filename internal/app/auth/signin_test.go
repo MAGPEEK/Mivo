@@ -109,7 +109,7 @@ func TestSignInFailuresLookAlike(t *testing.T) {
 			prepareFake: func(h harness) { h.store.setDisabled("alice", true) },
 		},
 		{
-			name: "corrupt stored hash", username: "Alice", password: alicePassword, wantVerify: true,
+			name: "corrupt stored hash", username: "Alice", password: alicePassword, wantVerify: true, wantDummy: true,
 			prepareFake: func(h harness) { _ = h.store.SetPasswordHash(context.Background(), "alice", "garbage") },
 		},
 	}

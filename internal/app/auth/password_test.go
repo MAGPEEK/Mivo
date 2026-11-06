@@ -176,6 +176,23 @@ func TestChangePasswordReportsStoreFailures(t *testing.T) {
 		}
 	})
 
+	t.Run("account disabled", func(t *testing.T) {
+		t.Parallel()
+
+		h, _ := withAlice(t)
+		ctx := viewerContext(t, h, signedIn(t, h, alicePassword).Token)
+		h.store.setDisabled("alice", true)
+
+		err := h.service.ChangePassword(ctx, PasswordChange{Current: alicePassword, New: newPassword})
+		if !errors.Is(err, domain.ErrUnauthenticated) {
+			t.Fatalf("ChangePassword error = %v, want domain.ErrUnauthenticated", err)
+		}
+
+		if got := h.store.passwordHash("alice"); got != hashPrefix+alicePassword {
+			t.Fatalf("a disabled account changed its hash to %q", got)
+		}
+	})
+
 	t.Run("account gone", func(t *testing.T) {
 		t.Parallel()
 

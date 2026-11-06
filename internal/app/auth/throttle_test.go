@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -244,5 +245,129 @@ func TestSessionCachePrunesWhenFull(t *testing.T) {
 
 	if len(cache.entries) != 1 {
 		t.Fatalf("entries = %d after a full cache was pruned, want 1", len(cache.entries))
+	}
+}
+
+func TestThrottleMemoryStaysBoundedForRefusedAndSuccessfulAttempts(t *testing.T) {
+	t.Parallel()
+
+	const uniqueNames = 1_000
+
+	limiter := newThrottle()
+	now := newFakeClock().Now()
+	peer := netip.MustParseAddr("10.0.0.1")
+
+	for index := range peerFailureLimit {
+		admitted, err := limiter.begin(fmt.Sprintf("failed-%d", index), peer, now)
+		if err != nil {
+			t.Fatalf("begin %d: %v", index, err)
+		}
+
+		admitted.finish(outcomeFailed, now)
+	}
+
+	for index := range uniqueNames {
+		var throttled *ThrottledError
+		if _, err := limiter.begin(fmt.Sprintf("refused-%d", index), peer, now); !errors.As(err, &throttled) {
+			t.Fatalf("begin at the peer limit = %v, want *ThrottledError", err)
+		}
+	}
+
+	successPeer := netip.MustParseAddr("10.0.0.2")
+
+	for index := range uniqueNames {
+		admitted, err := limiter.begin(fmt.Sprintf("ok-%d", index), successPeer, now)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+
+		admitted.finish(outcomeSucceeded, now)
+	}
+
+	if len(limiter.names) != peerFailureLimit || len(limiter.peers) != 1 {
+		t.Fatalf("tracked names %d, peers %d; want only the %d failures of one peer",
+			len(limiter.names), len(limiter.peers), peerFailureLimit)
+	}
+}
+
+func TestThrottleSkipsThePeerCountForAnInvalidAddress(t *testing.T) {
+	t.Parallel()
+
+	limiter := newThrottle()
+	now := newFakeClock().Now()
+
+	for index := range peerFailureLimit + 1 {
+		admitted, err := limiter.begin(fmt.Sprintf("name-%d", index), netip.Addr{}, now)
+		if err != nil {
+			t.Fatalf("begin %d without a peer address: %v (the per-peer limit must not apply)", index, err)
+		}
+
+		admitted.finish(outcomeFailed, now)
+	}
+
+	if len(limiter.peers) != 0 {
+		t.Fatalf("an invalid address was tracked: %d peers", len(limiter.peers))
+	}
+
+	for range nameFailuresBeforeLock {
+		admitted, err := limiter.begin("alice", netip.Addr{}, now)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+
+		admitted.finish(outcomeFailed, now)
+	}
+
+	var throttled *ThrottledError
+	if _, err := limiter.begin("alice", netip.Addr{}, now); !errors.As(err, &throttled) || throttled.Wait != nameFirstLock {
+		t.Fatalf("begin after %d failures without a peer = %v, want the name lock", nameFailuresBeforeLock, err)
+	}
+}
+
+func TestParallelAttemptsAfterALockEndAdmitOnlyOne(t *testing.T) {
+	t.Parallel()
+
+	const parallel = 10
+
+	h, _ := withAlice(t)
+
+	for range nameFailuresBeforeLock {
+		_, _ = h.service.SignIn(context.Background(), signInRequest("Alice", "wrong password"))
+	}
+
+	h.clock.Advance(nameFirstLock)
+	h.hasher.mutex.Lock()
+	h.hasher.gate = make(chan struct{})
+	h.hasher.mutex.Unlock()
+
+	_, before, _ := h.hasher.counts()
+
+	var (
+		wait    sync.WaitGroup
+		refused atomic.Int32
+	)
+
+	for range parallel {
+		wait.Add(1)
+
+		go func() {
+			defer wait.Done()
+
+			request := signInRequest("Alice", "wrong password")
+			request.Peer = otherPeer()
+
+			var throttled *ThrottledError
+			if _, err := h.service.SignIn(context.Background(), request); errors.As(err, &throttled) {
+				refused.Add(1)
+			}
+		}()
+	}
+
+	waitUntil(t, func() bool { return refused.Load() == parallel-1 })
+	close(h.hasher.gate)
+	wait.Wait()
+
+	if _, after, _ := h.hasher.counts(); after-before != 1 {
+		t.Fatalf("%d attempts were verified after the lock ended, want exactly 1", after-before)
 	}
 }

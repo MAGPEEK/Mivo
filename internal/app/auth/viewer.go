@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
 )
@@ -8,14 +10,19 @@ import (
 // buildViewer derives the effective access of ADR 0032 §7 from the stored inputs. Without a
 // selected profile the viewer sees no library and has the strictest limit, so a use case that
 // forgets to demand a profile still fails closed.
-func buildViewer(sessionID string, inputs ViewerInputs, profileSelected bool) access.Viewer {
+func buildViewer(sessionID string, inputs ViewerInputs, profileSelected bool) (access.Viewer, error) {
 	viewer := access.Viewer{AuthSessionID: sessionID, AccountID: inputs.Account.ID}
 
 	if !profileSelected {
-		viewer.Libraries = access.OnlyLibraries()
-		viewer.Limit = strictestLimit()
+		// MaxAgeLimit cannot fail for AgeAll; should it ever, resolving fails closed.
+		limit, err := access.MaxAgeLimit(access.AgeAll, true)
+		if err != nil {
+			return access.Viewer{}, fmt.Errorf("strictest content limit: %w", err)
+		}
 
-		return viewer
+		viewer.Libraries, viewer.Limit = access.OnlyLibraries(), limit
+
+		return viewer, nil
 	}
 
 	viewer.ProfileID = inputs.Profile.ID
@@ -23,7 +30,7 @@ func buildViewer(sessionID string, inputs ViewerInputs, profileSelected bool) ac
 	viewer.Libraries = effectiveLibraries(inputs)
 	viewer.Limit = effectiveLimit(inputs)
 
-	return viewer
+	return viewer, nil
 }
 
 // effectiveLibraries is the account's set, narrowed by a managed profile's own set. An admin
@@ -49,15 +56,4 @@ func effectiveLimit(inputs ViewerInputs) access.ContentLimit {
 	}
 
 	return access.Stricter(inputs.ProfileLimit, inputs.PrimaryLimit)
-}
-
-// strictestLimit allows only the lowest age bucket and hides unrated titles. MaxAgeLimit
-// cannot fail for AgeAll; should it ever, unrated titles stay hidden.
-func strictestLimit() access.ContentLimit {
-	limit, err := access.MaxAgeLimit(access.AgeAll, true)
-	if err != nil {
-		return access.NoLimit().HidingUnrated(true)
-	}
-
-	return limit
 }

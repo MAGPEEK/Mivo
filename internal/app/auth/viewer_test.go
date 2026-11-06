@@ -106,7 +106,11 @@ func TestBuildViewer(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			viewer := buildViewer("session", test.inputs, true)
+			viewer, err := buildViewer("session", test.inputs, true)
+			if err != nil {
+				t.Fatalf("buildViewer: %v", err)
+			}
+
 			checkViewer(t, viewer, test.inputs.Profile.ID)
 
 			restriction := viewer.Restriction()
@@ -137,7 +141,10 @@ func TestBuildViewerWithoutProfileFailsClosed(t *testing.T) {
 	t.Parallel()
 
 	admin := account.Account{ID: "acc", Role: account.RoleAdmin}
-	viewer := buildViewer("session", ViewerInputs{Account: admin, AccountLibraries: access.AllLibraries()}, false)
+	viewer, err := buildViewer("session", ViewerInputs{Account: admin, AccountLibraries: access.AllLibraries()}, false)
+	if err != nil {
+		t.Fatalf("buildViewer: %v", err)
+	}
 
 	restriction := viewer.Restriction()
 	maxAge, hasMaxAge := restriction.MaxAge()

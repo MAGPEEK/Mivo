@@ -38,13 +38,9 @@ func (service *Service) ChangePassword(ctx context.Context, change PasswordChang
 		return fmt.Errorf("change password: %w", err)
 	}
 
-	credentials, err := service.deps.Credentials.CredentialsByID(ctx, viewer.AccountID)
-	if errors.Is(err, domain.ErrNotFound) {
-		return fmt.Errorf("change password: account gone: %w", domain.ErrUnauthenticated)
-	}
-
+	credentials, err := service.enabledCredentials(ctx, viewer.AccountID)
 	if err != nil {
-		return fmt.Errorf("change password: load credentials: %w", err)
+		return fmt.Errorf("change password: %w", err)
 	}
 
 	if err := service.checkCurrentPassword(ctx, credentials, change); err != nil {
@@ -73,6 +69,25 @@ func (service *Service) requirePrimaryProfile(ctx context.Context, accountID, pr
 	}
 
 	return fmt.Errorf("only the primary profile may change the password: %w", domain.ErrForbidden)
+}
+
+// enabledCredentials loads the account's credentials; a missing or disabled account wraps
+// domain.ErrUnauthenticated, because the cached viewer may predate the change.
+func (service *Service) enabledCredentials(ctx context.Context, accountID string) (Credentials, error) {
+	credentials, err := service.deps.Credentials.CredentialsByID(ctx, accountID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return Credentials{}, fmt.Errorf("account gone: %w", domain.ErrUnauthenticated)
+	}
+
+	if err != nil {
+		return Credentials{}, fmt.Errorf("load credentials: %w", err)
+	}
+
+	if credentials.Account.Disabled {
+		return Credentials{}, fmt.Errorf("account disabled: %w", domain.ErrUnauthenticated)
+	}
+
+	return credentials, nil
 }
 
 func (service *Service) checkCurrentPassword(ctx context.Context, credentials Credentials, change PasswordChange) error {

@@ -17,6 +17,9 @@ const (
 	// nameFailureMemory forgets a name's failures after this long without a new one. It
 	// equals nameMaxLock, so a forgotten name is never still locked.
 	nameFailureMemory = nameMaxLock
+	// lockedNameAttemptsInFlight is how many attempts may run at once for a name that already
+	// reached the lock threshold, so the attempts admitted after a lock ends cannot overshoot.
+	lockedNameAttemptsInFlight = 1
 	// peerFailureLimit is the number of failures per peer address within peerWindow.
 	peerFailureLimit = 20
 	// peerWindow is the fixed window in which peerFailureLimit applies.
@@ -25,11 +28,14 @@ const (
 	// parallel requests cannot overshoot the failure limits.
 	inFlightRetry = time.Second
 	// pruneThreshold is the number of tracked names or peers above which stale entries are
-	// dropped on the next failure, so attacker-chosen names cannot grow memory without bound.
+	// dropped on the next failure.
 	pruneThreshold = 10_000
 )
 
-// throttle counts failed sign-ins per normalised name key and per peer address.
+// throttle counts failed sign-ins per normalised name key and per peer address. Entries exist
+// only while an attempt runs or failures are remembered: refused attempts insert nothing and
+// finished attempts without remembered failures remove their entries, so memory grows only
+// with failures, which the per-peer limit bounds.
 type throttle struct {
 	mutex sync.Mutex
 	names map[string]*nameFailures
@@ -60,24 +66,25 @@ type attempt struct {
 	peer     netip.Addr
 }
 
-// begin admits a sign-in attempt or returns a *ThrottledError.
+// begin admits a sign-in attempt or returns a *ThrottledError. An invalid peer address is
+// not counted per peer (only per name); the HTTP adapter must always set the address.
 func (t *throttle) begin(nameKey string, peer netip.Addr, now time.Time) (attempt, error) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	name := t.nameEntry(nameKey, now)
-	peerEntry := t.peerEntry(peer, now)
-
-	if wait := name.wait(now); wait > 0 {
+	if wait := t.names[nameKey].refresh(now).wait(now); wait > 0 {
 		return attempt{}, &ThrottledError{Wait: wait}
 	}
 
-	if wait := peerEntry.wait(now); wait > 0 {
-		return attempt{}, &ThrottledError{Wait: wait}
+	if peer.IsValid() {
+		if wait := t.peers[peer].refresh(now).wait(now); wait > 0 {
+			return attempt{}, &ThrottledError{Wait: wait}
+		}
+
+		t.peerEntry(peer, now).inFlight++
 	}
 
-	name.inFlight++
-	peerEntry.inFlight++
+	t.nameEntry(nameKey).inFlight++
 
 	return attempt{throttle: t, nameKey: nameKey, peer: peer}, nil
 }
@@ -101,26 +108,41 @@ func (a attempt) finish(result outcome, now time.Time) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	name := t.nameEntry(a.nameKey, now)
-	peerEntry := t.peerEntry(a.peer, now)
+	name := t.nameEntry(a.nameKey).refresh(now)
 	name.inFlight--
-	peerEntry.inFlight--
 
 	switch result {
 	case outcomeAborted:
-		return
 	case outcomeSucceeded:
 		name.count, name.lockedUntil = 0, time.Time{}
-
-		return
 	case outcomeFailed:
+		name.recordFailure(now)
 	}
 
-	name.recordFailure(now)
-	peerEntry.count++
+	if a.peer.IsValid() {
+		peer := t.peerEntry(a.peer, now).refresh(now)
+		peer.inFlight--
+
+		if result == outcomeFailed {
+			peer.count++
+		}
+	}
+
+	t.dropIdle(a.nameKey, a.peer)
 
 	if len(t.names) > pruneThreshold || len(t.peers) > pruneThreshold {
 		t.pruneLocked(now)
+	}
+}
+
+// dropIdle removes the entries of a finished attempt that remember nothing.
+func (t *throttle) dropIdle(nameKey string, peer netip.Addr) {
+	if name := t.names[nameKey]; name != nil && name.count == 0 && name.inFlight == 0 {
+		delete(t.names, nameKey)
+	}
+
+	if entry := t.peers[peer]; entry != nil && entry.count == 0 && entry.inFlight == 0 {
+		delete(t.peers, peer)
 	}
 }
 
@@ -134,27 +156,23 @@ func (t *throttle) prune(now time.Time) {
 
 func (t *throttle) pruneLocked(now time.Time) {
 	for key, name := range t.names {
-		if name.inFlight == 0 && (name.count == 0 || now.Sub(name.last) > nameFailureMemory) {
+		if name.refresh(now).count == 0 && name.inFlight == 0 {
 			delete(t.names, key)
 		}
 	}
 
 	for address, peer := range t.peers {
-		if peer.inFlight == 0 && (peer.count == 0 || now.Sub(peer.windowStart) >= peerWindow) {
+		if peer.refresh(now).count == 0 && peer.inFlight == 0 {
 			delete(t.peers, address)
 		}
 	}
 }
 
-func (t *throttle) nameEntry(nameKey string, now time.Time) *nameFailures {
+func (t *throttle) nameEntry(nameKey string) *nameFailures {
 	name, ok := t.names[nameKey]
 	if !ok {
 		name = &nameFailures{}
 		t.names[nameKey] = name
-	}
-
-	if name.count > 0 && now.Sub(name.last) > nameFailureMemory {
-		name.count, name.lockedUntil = 0, time.Time{}
 	}
 
 	return name
@@ -167,19 +185,31 @@ func (t *throttle) peerEntry(peer netip.Addr, now time.Time) *peerFailures {
 		t.peers[peer] = entry
 	}
 
-	if now.Sub(entry.windowStart) >= peerWindow {
-		entry.count, entry.windowStart = 0, now
-	}
-
 	return entry
 }
 
+// refresh forgets failures older than nameFailureMemory. It accepts a nil entry (an
+// untracked name) and returns it unchanged.
+func (name *nameFailures) refresh(now time.Time) *nameFailures {
+	if name != nil && name.count > 0 && now.Sub(name.last) > nameFailureMemory {
+		name.count, name.lockedUntil = 0, time.Time{}
+	}
+
+	return name
+}
+
+// wait returns how long the name is refused; a nil entry is never refused.
 func (name *nameFailures) wait(now time.Time) time.Duration {
+	if name == nil {
+		return 0
+	}
+
 	if now.Before(name.lockedUntil) {
 		return name.lockedUntil.Sub(now)
 	}
 
-	if name.count < nameFailuresBeforeLock && name.count+name.inFlight >= nameFailuresBeforeLock {
+	allowedInFlight := max(nameFailuresBeforeLock-name.count, lockedNameAttemptsInFlight)
+	if name.inFlight >= allowedInFlight {
 		return inFlightRetry
 	}
 
@@ -209,7 +239,21 @@ func lockDuration(failures int) time.Duration {
 	return lock
 }
 
+// refresh starts a new window once peerWindow has passed; it accepts a nil entry.
+func (peer *peerFailures) refresh(now time.Time) *peerFailures {
+	if peer != nil && now.Sub(peer.windowStart) >= peerWindow {
+		peer.count, peer.windowStart = 0, now
+	}
+
+	return peer
+}
+
+// wait returns how long the peer is refused; a nil entry is never refused.
 func (peer *peerFailures) wait(now time.Time) time.Duration {
+	if peer == nil {
+		return 0
+	}
+
 	if peer.count >= peerFailureLimit {
 		return peer.windowStart.Add(peerWindow).Sub(now)
 	}

@@ -67,12 +67,17 @@ func (service *Service) load(ctx context.Context, tokenHash string, now time.Tim
 
 	selected := session.ProfileID != ""
 
+	viewer, err := buildViewer(session.ID, inputs, selected)
+	if err != nil {
+		return Resolution{}, fmt.Errorf("resolve session: %w", err)
+	}
+
 	return Resolution{
 		Session:         session,
 		Account:         inputs.Account,
 		Profile:         inputs.Profile,
 		ProfileSelected: selected,
-		Viewer:          buildViewer(session.ID, inputs, selected),
+		Viewer:          viewer,
 	}, nil
 }
 

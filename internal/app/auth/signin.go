@@ -134,6 +134,12 @@ func (service *Service) verifyStored(ctx context.Context, credentials Credential
 	service.deps.Logger.ErrorContext(ctx, "stored password hash is unusable",
 		"account", credentials.Account.ID, "error", err)
 
+	// A corrupt hash fails before any hash work; spend it anyway, so the answer takes as
+	// long as a wrong password.
+	if err := service.deps.Hasher.DummyVerify(ctx, password); err != nil {
+		return false, false, fmt.Errorf("dummy verify: %w", err)
+	}
+
 	return false, false, nil
 }
 
