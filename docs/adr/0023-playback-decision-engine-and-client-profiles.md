@@ -69,8 +69,9 @@ identifiers)
   stream with the `attached_pic` disposition), preferring one with the `default` disposition.
 - Audio: the requested stream index; otherwise the first stream with the `default` disposition;
   otherwise the first audio stream. A file without audio or without video is allowed.
+  Superseded for the default pick by the track preference of Notes (M4-04a).
 - Subtitles are ignored in milestone 2 (warning `subtitles_not_supported` when the file has
-  any). Milestone 4 adds them.
+  any). Milestone 4 adds them; the selection rules are in Notes (M4-04a).
 
 **Modes, in order of preference** (the plan's three stages)
 1. `direct_play`: the source container has a direct-play key, the profile lists that key with the
@@ -224,3 +225,44 @@ AAC in MKV and MP4) partly played without sound. Measured on 2026-11-05 with hea
 - Milestone 4 (audio track switching, M4-02a/M4-04a/M4-13a/M4-16a/b) takes over: a channel
   limit per client profile (the webOS TV decodes 7.1 and Dolby), track switching in the player
   and the language preference for the default pick.
+
+## Notes (M4-04a)
+
+Default audio and subtitle selection (ADR 0030 §3, §4) is a pure domain policy
+(`internal/domain/playback/track_policy.go`). The client profile carries a track preference:
+preferred audio languages, preferred subtitle languages, a subtitle mode (`off`, `forced`,
+`always`) and an SDH choice; each language list holds at most 8 tags.
+
+- **Audio rank**, best first: no commentary or audio description (disposition `comment` or
+  `visual_impaired`, or a title such as "Commentary", "Kommentar", "Audio Description"), then
+  the earliest preferred language, then the `default` disposition, then file order. Channel
+  counts do not rank: when no default flag and no preferred language decides, the first track
+  wins, because browsers play only the first track of a progressive file and "stereo first,
+  5.1 second" must keep direct play. A pick that is not the first track still gets
+  `audio_track_not_first` (Notes FIX-audio-codecs).
+- **Accepted deviation 1:** commentary and audio description rank before the language (the
+  task listed language first), so a commentary in the first preferred language never wins over
+  the film in the second one. A file with only commentary tracks still plays one.
+- **Language matching** normalises ISO 639-1, 639-2/B and 639-2/T to 639-2/T (`de`, `ger`,
+  `deu`), including the deprecated `iw`, `in`, `ji` and Norwegian `nb`/`nn`/`no` as one
+  language. Only the primary subtag counts (`pt-BR` matches `por`). `und` and empty never match.
+  Codes outside the table match only themselves.
+- **Subtitle modes:** `off` shows nothing. `forced` shows a forced track in the language of the
+  selected audio (the translation of foreign-language parts); an undetermined audio language
+  shows nothing. `always` shows a full track in the earliest preferred subtitle language; an
+  empty subtitle list falls back to the audio languages, and with no language at all the first
+  track qualifies. If languages are set and none matches, nothing is shown. In `always`, a full
+  track ranks above a forced-only one before the language, then the SDH kind the preference
+  asks for (SDH or plain, never excluding the other), then the `default` disposition, then order.
+- **Accepted deviation 2:** an empty mode means `forced`, without the task's condition "only when
+  the audio differs from the first preferred language". Forced tracks are exactly what a viewer
+  of the audio language needs, so they are not hidden when the audio is the preferred language.
+- **Request overrides:** `audioStreamIndex` and `subtitleTrackId` win over the policy. For the
+  subtitle id, nil applies the policy, `""` switches subtitles off, and any other id must name an
+  embedded track (`s:<index>`) or an external file of the input (`x:<hash>`). An unknown audio
+  index or subtitle id wraps `domain.ErrInvalid` (HTTP 400), never `ErrNotFound`. External
+  tracks are validated too: at most 64, ids start with `x:` and are unique.
+- Forced and SDH are read from the disposition or, when the muxer only named them, from the
+  title. The `comment`, `hearing_impaired` and `visual_impaired` dispositions are fields of
+  `media.Stream`; the probe adapter and SQLite fill them in a follow-up (BACKLOG), until then
+  the title fallback applies.

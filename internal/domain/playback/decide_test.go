@@ -3,6 +3,7 @@ package playback_test
 import (
 	"errors"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -563,6 +564,24 @@ func TestDecideRejectsInvalidInput(t *testing.T) {
 		{name: "audio index of a subtitle", modify: func(input *playback.Input) {
 			input.Request.AudioStreamIndex = audioIndex(2)
 		}},
+		{name: "unknown subtitle track", modify: func(input *playback.Input) { input.Request.SubtitleTrackID = trackID("s:9") }},
+		{name: "subtitle id of an audio stream", modify: func(input *playback.Input) { input.Request.SubtitleTrackID = trackID("s:1") }},
+		{name: "external subtitle without x prefix", modify: func(input *playback.Input) {
+			input.ExternalSubtitles = []playback.SubtitleTrack{{ID: "s:2"}}
+		}},
+		{name: "external subtitle with an empty hash", modify: func(input *playback.Input) {
+			input.ExternalSubtitles = []playback.SubtitleTrack{{ID: "x:"}}
+		}},
+		{name: "duplicate external subtitles", modify: func(input *playback.Input) {
+			input.ExternalSubtitles = []playback.SubtitleTrack{{ID: "x:ab"}, {ID: "x:ab"}}
+		}},
+		{name: "too many external subtitles", modify: func(input *playback.Input) {
+			const overLimit = 65
+			for index := range overLimit {
+				input.ExternalSubtitles = append(input.ExternalSubtitles, playback.SubtitleTrack{ID: "x:" + strconv.Itoa(index)})
+			}
+		}},
+		{name: "invalid track preference", modify: func(input *playback.Input) { input.Profile.Tracks.SubtitleMode = "sometimes" }},
 	}
 
 	for _, test := range tests {

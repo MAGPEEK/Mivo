@@ -14,7 +14,8 @@ type streamPlanner func(stream media.Stream, input Input) (StreamDecision, []Rea
 // rules of ADR 0023 in order: stream selection, direct play, remux, transcode.
 //
 // Errors wrap domain.ErrInvalid for input that breaks a rule (profile, description, start
-// position, unknown audio index, policy), ErrNoCompatibleFormat when the client can play
+// position, unknown audio index or subtitle track id, invalid external subtitles, policy),
+// ErrNoCompatibleFormat when the client can play
 // nothing the server could deliver, ErrTranscodeUnavailable when the server's FFmpeg cannot
 // produce what the client plays, and domain.ErrUnsupported for a file without audio and
 // video.
@@ -23,7 +24,7 @@ func Decide(input Input) (Plan, error) {
 		return Plan{}, fmt.Errorf("decide playback: %w", err)
 	}
 
-	chosen, err := selectStreams(input.Description, input.Request)
+	chosen, err := selectStreams(input)
 	if err != nil {
 		return Plan{}, fmt.Errorf("decide playback: %w", err)
 	}

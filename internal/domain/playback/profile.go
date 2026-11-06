@@ -62,6 +62,11 @@ type ClientProfile struct {
 	DirectPlay  []DirectPlayProfile
 	HLS         HLSProfile
 	CodecLimits []CodecLimit
+	// Tracks is how the profile wants audio and subtitles picked without a choice in the
+	// request (M4-04a). The zero value prefers no language: audio is the non-commentary
+	// track with the default disposition, else the first one, and only a forced subtitle in the
+	// audio language is shown.
+	Tracks TrackPreference
 }
 
 // DirectPlayProfile is a container the client plays as a progressive file with the codecs
@@ -92,7 +97,8 @@ type CodecLimit struct {
 
 // Validate checks the bounds of ADR 0023: the name and profile texts are valid UTF-8 within
 // their length, lists stay within their size, codec and container names are lower-case
-// identifiers, the HLS delivery is known and bit depths lie between 0 and 16. Errors wrap
+// identifiers, the HLS delivery is known, bit depths lie between 0 and 16 and the track
+// preference holds bounded language tags and a known subtitle mode. Errors wrap
 // domain.ErrInvalid.
 func (profile ClientProfile) Validate() error {
 	if err := validateText("name", profile.Name, maxProfileNameLength); err != nil {
@@ -121,6 +127,10 @@ func (profile ClientProfile) Validate() error {
 		if err := limit.validate(); err != nil {
 			return fmt.Errorf("%s: codec limit %d: %w", profileValidationPrefix, index, err)
 		}
+	}
+
+	if err := profile.Tracks.Validate(); err != nil {
+		return fmt.Errorf("%s: tracks: %w", profileValidationPrefix, err)
 	}
 
 	return nil

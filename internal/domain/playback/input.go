@@ -13,18 +13,24 @@ type Input struct {
 	Description media.Description
 	// Layout says how the source is stored; empty is a single file. A disc layout
 	// (media.Layout.IsDisc) never plays directly (ReasonDiscSource).
-	Layout       media.Layout
-	Profile      ClientProfile
-	Capabilities ServerCapabilities
-	Request      Request
-	Policy       Policy
+	Layout media.Layout
+	// ExternalSubtitles are the subtitle files found next to the media file; together with the
+	// embedded subtitle streams they are the tracks a request may name.
+	ExternalSubtitles []SubtitleTrack
+	Profile           ClientProfile
+	Capabilities      ServerCapabilities
+	Request           Request
+	Policy            Policy
 }
 
 // Request carries the options of one playback request.
 type Request struct {
 	// AudioStreamIndex is the ffprobe index of the audio stream the user picked; nil plays
-	// the default audio stream.
+	// the audio stream the profile's track preference selects.
 	AudioStreamIndex *int
+	// SubtitleTrackID is the id of the subtitle the user picked ("s:3", "x:<hash>"); nil applies
+	// the profile's track preference and an empty id switches subtitles off.
+	SubtitleTrackID *string
 	// StartPosition is where playback starts. It does not change the decision, but a
 	// position outside the file makes the request invalid.
 	StartPosition time.Duration
@@ -49,6 +55,10 @@ func (input Input) validate() error {
 
 	if input.Layout != "" && !input.Layout.Valid() {
 		return fmt.Errorf("unknown source layout %q: %w", input.Layout, domain.ErrInvalid)
+	}
+
+	if err := validateExternalSubtitles(input.ExternalSubtitles); err != nil {
+		return err
 	}
 
 	if err := input.Request.validate(input.Description.Duration); err != nil {

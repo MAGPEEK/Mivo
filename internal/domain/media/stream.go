@@ -77,6 +77,13 @@ type Stream struct {
 	Title    string
 	Default  bool
 	Forced   bool
+	// Commentary marks a commentary track (ffprobe disposition "comment").
+	Commentary bool
+	// HearingImpaired marks subtitles for the deaf and hard of hearing (SDH) or an audio
+	// track for them (ffprobe disposition "hearing_impaired").
+	HearingImpaired bool
+	// VisualImpaired marks an audio description track (ffprobe disposition "visual_impaired").
+	VisualImpaired bool
 	// AttachedPicture marks cover art stored as a video stream (attached_pic disposition).
 	AttachedPicture bool
 
