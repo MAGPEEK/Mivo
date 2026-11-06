@@ -47,6 +47,9 @@ type chainSettings struct {
 	interfacePrefixes InterfacePrefixProvider
 	// now is the clock of the interface prefix cache, time.Now outside tests.
 	now func() time.Time
+	// authentication is Options.Authentication; its zero value leaves the session
+	// middleware off.
+	authentication Authentication
 }
 
 // newChainSettings validates the parts of options only the middleware understands.
@@ -64,6 +67,7 @@ func newChainSettings(options Options) (chainSettings, error) {
 	return chainSettings{
 		logger: options.Logger, quiet: quiet, bodyReadTimeout: BodyReadTimeout,
 		allowPublicClients: options.AllowPublicClients, interfacePrefixes: interfacePrefixes, now: time.Now,
+		authentication: options.Authentication,
 	}, nil
 }
 
@@ -73,9 +77,23 @@ func newChainSettings(options Options) (chainSettings, error) {
 // recover middleware writes. The guards are innermost, so a refusal carries the request ID
 // and security headers and appears in the access log like any other answer. The management
 // guard stays on when the LAN guard is off: server.lan_only never opens the administration.
+// The guards run in the order LAN guard, authentication, management guard, setup gate
+// (ADR 0032): the management guard needs the viewer the authentication stores, and the
+// setup gate answers only peers the management guard admitted. Authentication and the setup
+// gate exist only when Options.Authentication is wired.
 func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 	lan := newLANGuard(settings)
-	handler := newManageGuard(settings, lan).wrap(next)
+	handler := next
+
+	if settings.authentication.enabled() {
+		handler = setupGate{logger: settings.logger, setup: settings.authentication.Setup}.wrap(handler)
+	}
+
+	handler = newManageGuard(settings, lan).wrap(handler)
+
+	if settings.authentication.enabled() {
+		handler = newAuthGuard(settings, lan).wrap(handler)
+	}
 
 	if !settings.allowPublicClients {
 		handler = lan.wrap(handler)

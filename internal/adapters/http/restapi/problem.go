@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
@@ -122,22 +123,19 @@ func InternalProblem() apigen.Problem {
 	return NewProblem(http.StatusInternalServerError, CodeInternal)
 }
 
-// ProblemForError maps a domain error to its problem: the playback failures
-// no_compatible_format and transcode_unavailable 422 and session_limit_reached 503, then
-// ErrNotFound 404, ErrForbidden 403, ErrConflict 409, ErrInvalid 400, ErrUnsupported 422,
-// ErrUnavailable 503 and anything else 500. Only this adapter maps domain errors to HTTP
-// (ADR 0017). A session_limit_reached answer also needs Retry-After, which the caller sets.
+// ProblemForError maps a domain error to its problem: the query, library, settings and
+// account problems first (see authProblem: profile_required 403, setup_required,
+// invalid_credentials and unauthenticated 401, too_many_attempts 429), then the playback
+// failures no_compatible_format and transcode_unavailable 422 and session_limit_reached 503,
+// then ErrNotFound 404, ErrForbidden 403, ErrConflict 409, ErrInvalid 400, ErrUnsupported
+// 422, ErrUnavailable 503 and anything else 500. Only this adapter maps domain errors to HTTP
+// (ADR 0017). A session_limit_reached answer also needs Retry-After, which the caller sets;
+// WriteProblem sends Retry-After for every problem with retryAfterSeconds.
 func ProblemForError(err error) apigen.Problem {
-	if problem, ok := queryProblem(err); ok {
-		return problem
-	}
-
-	if problem, ok := libraryProblem(err); ok {
-		return problem
-	}
-
-	if problem, ok := settingsProblem(err); ok {
-		return problem
+	for _, specific := range specificProblems() {
+		if problem, ok := specific(err); ok {
+			return problem
+		}
 	}
 
 	for _, mapping := range domainErrorMappings() {
@@ -149,7 +147,16 @@ func ProblemForError(err error) apigen.Problem {
 	return InternalProblem()
 }
 
-// WriteProblem sends problem as application/problem+json with its status.
+// specificProblems are the mappers ProblemForError asks before the generic sentinels.
+func specificProblems() []func(error) (apigen.Problem, bool) {
+	return []func(error) (apigen.Problem, bool){queryProblem, libraryProblem, settingsProblem, authProblem}
+}
+
+// headerRetryAfter tells the client when a retry may succeed (RFC 9110 §10.2.3).
+const headerRetryAfter = "Retry-After"
+
+// WriteProblem sends problem as application/problem+json with its status, and with a
+// Retry-After header when the problem names retryAfterSeconds.
 func WriteProblem(writer http.ResponseWriter, problem apigen.Problem) {
 	body, err := json.Marshal(problem)
 	if err != nil {
@@ -163,6 +170,11 @@ func WriteProblem(writer http.ResponseWriter, problem apigen.Problem) {
 	header := writer.Header()
 	header.Del("Content-Length")
 	header.Set("Content-Type", ProblemMediaType)
+
+	if problem.RetryAfterSeconds != nil {
+		header.Set(headerRetryAfter, strconv.Itoa(int(*problem.RetryAfterSeconds)))
+	}
+
 	writer.WriteHeader(int(problem.Status))
 
 	// A failed write means the client has gone away; there is nobody left to tell.

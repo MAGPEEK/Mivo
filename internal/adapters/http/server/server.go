@@ -74,6 +74,11 @@ type Options struct {
 	// the last known ones for about two minutes and then refuses such peers. Nil means the
 	// interfaces of this host.
 	InterfacePrefixes InterfacePrefixProvider
+	// Authentication switches the session middleware of ADR 0032 on: every API path but
+	// health, system info, the setup pair and sign-in then needs the session cookie or a
+	// bearer token, cookie writes must keep the same-origin rule, and the management guard
+	// also demands an admin viewer. The zero value leaves it off (until task M7-25 wires it).
+	Authentication Authentication
 }
 
 // Server is an HTTP server built by New. Run it once.
@@ -131,6 +136,10 @@ func (options Options) validate() (chainSettings, error) {
 
 	if options.APIHandler == nil {
 		problems = append(problems, errors.New("missing api handler"))
+	}
+
+	if !options.Authentication.valid() {
+		problems = append(problems, errors.New("authentication needs both a session resolver and a setup state reader"))
 	}
 
 	settings, err := newChainSettings(options)

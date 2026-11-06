@@ -19,6 +19,9 @@ var (
 	ErrSetupComplete = fmt.Errorf("setup already completed: %w", domain.ErrConflict)
 	// ErrPINInvalid reports a missing or wrong PIN; adapters/http maps it to 403 "pin_invalid".
 	ErrPINInvalid = fmt.Errorf("pin invalid: %w", domain.ErrForbidden)
+	// ErrSetupRequired reports a sign-in or session request while no account exists yet
+	// (ADR 0032 §6); the client shows the setup wizard instead of the sign-in screen.
+	ErrSetupRequired = fmt.Errorf("setup required: %w", domain.ErrUnauthenticated)
 )
 
 // ThrottledError reports a sign-in refused by the throttle of ADR 0032 §5. It unwraps to

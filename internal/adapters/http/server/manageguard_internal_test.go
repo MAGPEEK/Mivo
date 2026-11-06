@@ -201,7 +201,7 @@ func TestManageGuardRefusalDetailIsFixed(t *testing.T) {
 		t.Errorf("detail = %v, want %q", problem.Detail, manageRefusalDetail)
 	}
 
-	if want := "Library management is only available from the local network until accounts exist."; manageRefusalDetail != want {
+	if want := "Library management needs an administrator on the local network."; manageRefusalDetail != want {
 		t.Errorf("manageRefusalDetail = %q, want %q", manageRefusalDetail, want)
 	}
 }
@@ -212,8 +212,10 @@ func TestManageGuardRefusalDetailNamesTheMetadataArea(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]string{
-		"/api/v1/settings/metadata":                           "Metadata settings are only available from the local network until accounts exist.",
-		"/api/v1/metadata/posters/" + strings.Repeat("a", 32): "Metadata management is only available from the local network until accounts exist.",
+		"/api/v1/settings/metadata":                           "Metadata settings need an administrator on the local network.",
+		"/api/v1/metadata/posters/" + strings.Repeat("a", 32): "Metadata management needs an administrator on the local network.",
+		"/api/v1/users":   "User administration needs an administrator on the local network.",
+		"/api/v1/devices": "Device administration needs an administrator on the local network.",
 	}
 	for target, want := range tests {
 		logger, _ := newDebugLogger()
@@ -269,6 +271,18 @@ func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/health", false},
 		{http.MethodPost, "/api/v1/playback/sessions", false},
 		{http.MethodGet, "/", false},
+		{http.MethodGet, "/api/v1/users", true},
+		{http.MethodPost, "/api/v1/users", true},
+		{http.MethodGet, "/api/v1/users/" + manageLibraryID + "/profiles", true},
+		{http.MethodDelete, "/api/v1/users/" + manageLibraryID, true},
+		{http.MethodGet, "/api/v1/devices", true},
+		{http.MethodDelete, "/api/v1/devices/" + manageLibraryID, true},
+		{http.MethodPost, "/api/v1/setup", true},
+		{http.MethodPost, "/api/v1/setup/", true},
+		{http.MethodGet, "/api/v1/setup", false},
+		{http.MethodPatch, "/api/v1/profiles/" + manageLibraryID, false},
+		{http.MethodDelete, "/api/v1/profiles/" + manageLibraryID, false},
+		{http.MethodGet, "/api/v1/me", false},
 	}
 
 	for _, route := range routes {

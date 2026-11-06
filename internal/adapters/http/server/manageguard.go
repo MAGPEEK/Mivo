@@ -2,24 +2,25 @@ package server
 
 import (
 	"log/slog"
-	"mime"
-	"net"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 )
 
 // Fixed details of the management guard's 403 problem, one per guarded area, so the client
 // can tell the user what is refused.
 const (
-	manageRefusalDetail           = "Library management is only available from the local network until accounts exist."
-	metadataSettingsRefusalDetail = "Metadata settings are only available from the local network until accounts exist."
-	metadataRefusalDetail         = "Metadata management is only available from the local network until accounts exist."
+	manageRefusalDetail           = "Library management needs an administrator on the local network."
+	metadataSettingsRefusalDetail = "Metadata settings need an administrator on the local network."
+	metadataRefusalDetail         = "Metadata management needs an administrator on the local network."
+	usersRefusalDetail            = "User administration needs an administrator on the local network."
+	devicesRefusalDetail          = "Device administration needs an administrator on the local network."
+	setupRefusalDetail            = "The first-run setup is only available from the local network."
 )
 
 // manageArea is the guarded area a request belongs to; areaNone is not guarded.
@@ -30,22 +31,11 @@ const (
 	areaLibraries
 	areaMetadataSettings
 	areaMetadata
-)
-
-// Request headers and values the management guard reads.
-const (
-	headerOrigin       = "Origin"
-	headerFetchSite    = "Sec-Fetch-Site"
-	fetchSiteCrossSite = "cross-site"
-	jsonMediaType      = "application/json"
-)
-
-// Default ports of the origin scheme, which browsers leave out of the Origin header.
-const (
-	schemeHTTP  = "http"
-	schemeHTTPS = "https"
-	portHTTP    = "80"
-	portHTTPS   = "443"
+	areaUsers
+	areaDevices
+	// areaSetup needs a local peer and the same-origin rule, but no viewer: nobody can be
+	// signed in before the first account exists.
+	areaSetup
 )
 
 // Paths of the guarded routes (api/openapi.yaml).
@@ -55,52 +45,60 @@ const (
 	apiV1Items            = "/api/v1/items"
 	apiV1MetadataSettings = "/api/v1/settings/metadata"
 	apiV1Posters          = "/api/v1/metadata/posters"
+	apiV1Users            = "/api/v1/users"
+	apiV1Devices          = "/api/v1/devices"
+	apiV1Setup            = "/api/v1/setup"
 
 	// settingsSegments and posterSegments are the path segments of the settings route and of
 	// one poster ("api", "v1", ... and the poster ID).
 	settingsSegments = 4
 	posterSegments   = 5
+	// collectionSegments counts "api", "v1" and a collection name; userProfilesSegments adds
+	// the account ID and "profiles".
+	collectionSegments   = 3
+	userProfilesSegments = 5
 )
 
-// manageGuard protects the management operations until accounts exist (milestone 7,
-// ADR 0028): creating, changing and deleting libraries, starting a scan, browsing the
-// server's folders and the online metadata operations (see managementArea). It refuses a
-// request with 403 forbidden when
+// manageGuard protects the management and administration operations (ADR 0028, ADR 0032
+// §9): creating, changing and deleting libraries, starting a scan, browsing the server's
+// folders, the online metadata operations, the user and device administration and the
+// first-run setup (see managementArea). It refuses a request with 403 forbidden when
 //
 //   - the socket peer is not in the local network, also when server.lan_only is off: that
 //     setting opens the media endpoints to the internet, never the administration;
-//   - an Origin header names another origin than the request's own, or Sec-Fetch-Site says
-//     cross-site: a page on another site must not drive a LAN-side browser into the API;
-//   - a request with a body does not declare application/json, which keeps simple form
-//     posts (no CORS preflight) from reaching the handlers.
+//   - the request breaks the same-origin rule (crossOriginRefusal);
+//   - authentication is on and the viewer is no admin (every area but the setup).
 //
 // Only RemoteAddr counts for the peer, as in lanGuard; X-Forwarded-* headers are ignored.
+// The profiles of the caller's own account (/users/{ownId}/profiles, /profiles/{id}) are not
+// guarded: the use case checks that the caller owns them (CanManageProfile).
 //
-// Residual risks, accepted until accounts exist (ADR 0028): a reverse proxy or tunnel that
-// connects from the LAN or the host itself makes every client look local, and its
-// https origin differs from the plain-http request seen here, so such a setup is refused
-// rather than trusted; DNS rebinding can make a hostile page address the server under its
-// own name, in which case Origin and Host match. The Host header is therefore not a
-// defence, only the local-network peer rule and the later account check are.
+// Residual risks (ADR 0032 §9): a reverse proxy or tunnel that connects from the LAN or the
+// host itself makes every client look local, so the admin sign-in is the remaining check;
+// DNS rebinding can make a hostile page address the server under its own name, in which case
+// Origin and Host match, but it cannot reach admin endpoints without the SameSite=Lax session
+// cookie. The Host header is no defence (BACKLOG m3-19k keeps the Host allow-list open).
 type manageGuard struct {
 	logger *slog.Logger
 	lan    lanGuard
+	// requireAdmin is on once authentication is wired (Options.Authentication).
+	requireAdmin bool
 }
 
 func newManageGuard(settings chainSettings, lan lanGuard) manageGuard {
-	return manageGuard{logger: settings.logger, lan: lan}
+	return manageGuard{logger: settings.logger, lan: lan, requireAdmin: settings.authentication.enabled()}
 }
 
 func (guard manageGuard) wrap(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		area := managementArea(request)
-		if area == areaNone {
+		if area == areaNone || (area == areaUsers && isOwnProfilesRequest(request)) {
 			next.ServeHTTP(writer, request)
 
 			return
 		}
 
-		if reason := guard.refusal(request); reason != "" {
+		if reason := guard.refusal(request, area); reason != "" {
 			guard.logger.DebugContext(request.Context(), "management request refused",
 				logtext.RequestAttributes(request, slog.String("reason", reason),
 					slog.String("remote_address", logtext.Truncate(request.RemoteAddr)))...)
@@ -114,37 +112,75 @@ func (guard manageGuard) wrap(next http.Handler) http.Handler {
 }
 
 // refusal names why the request is refused, or returns "" when it may pass.
-func (guard manageGuard) refusal(request *http.Request) string {
-	switch {
-	case !guard.lan.admitsPeer(request):
+func (guard manageGuard) refusal(request *http.Request, area manageArea) string {
+	if !guard.lan.admitsPeer(request) {
 		return "peer outside the local network"
-	case request.Header.Get(headerFetchSite) == fetchSiteCrossSite:
-		return "cross-site request"
-	case !originMatches(request):
-		return "foreign origin"
-	case hasBody(request) && !isJSON(request):
-		return "body is not JSON"
-	default:
-		return ""
 	}
+
+	if reason := crossOriginRefusal(request); reason != "" {
+		return reason
+	}
+
+	if guard.requireAdmin && area != areaSetup && !isAdminViewer(request) {
+		return "viewer is no administrator"
+	}
+
+	return ""
+}
+
+// isAdminViewer reports an admin viewer stored by the authentication middleware; a missing
+// viewer is no admin (fail closed).
+func isAdminViewer(request *http.Request) bool {
+	viewer, ok := appaccess.ViewerFrom(request.Context())
+
+	return ok && viewer.Admin
+}
+
+// isOwnProfilesRequest reports a request to /api/v1/users/{accountId}/profiles of the
+// viewer's own account. Only a plain path counts, so an encoded or unclean variant stays
+// guarded.
+func isOwnProfilesRequest(request *http.Request) bool {
+	viewer, ok := appaccess.ViewerFrom(request.Context())
+	if !ok || viewer.AccountID == "" {
+		return false
+	}
+
+	plain, ok := plainPath(request)
+	if !ok {
+		return false
+	}
+
+	segments := strings.Split(strings.Trim(plain, "/"), "/")
+
+	return len(segments) == userProfilesSegments && isPrefixOf(segments, apiV1Users) &&
+		segments[3] == viewer.AccountID && segments[4] == "profiles"
 }
 
 func manageRefusalProblem(area manageArea) apigen.Problem {
 	problem := restapi.NewProblem(http.StatusForbidden, restapi.CodeForbidden)
-
-	detail := manageRefusalDetail
-
-	switch area {
-	case areaMetadataSettings:
-		detail = metadataSettingsRefusalDetail
-	case areaMetadata:
-		detail = metadataRefusalDetail
-	case areaNone, areaLibraries:
-	}
-
+	detail := areaRefusalDetail(area)
 	problem.Detail = &detail
 
 	return problem
+}
+
+func areaRefusalDetail(area manageArea) string {
+	switch area {
+	case areaMetadataSettings:
+		return metadataSettingsRefusalDetail
+	case areaMetadata:
+		return metadataRefusalDetail
+	case areaUsers:
+		return usersRefusalDetail
+	case areaDevices:
+		return devicesRefusalDetail
+	case areaSetup:
+		return setupRefusalDetail
+	case areaNone, areaLibraries:
+		return manageRefusalDetail
+	default:
+		return manageRefusalDetail
+	}
 }
 
 // managementArea names the area of a request the guard protects, areaNone for the rest:
@@ -155,6 +191,8 @@ func manageRefusalProblem(area manageArea) apigen.Problem {
 //   - metadata settings: reading and changing the online metadata settings (ADR 0031).
 //   - metadata: identify search and apply, removing a match, the item and library refreshes
 //     and the candidate poster previews (M6-13). The metadata status stays open.
+//   - users and devices: every request below /api/v1/users and /api/v1/devices.
+//   - setup: every write to /api/v1/setup; reading the setup state stays open.
 //
 // The decoded path is matched, like the router does, so an encoded variant of a path cannot
 // slip past.
@@ -165,7 +203,7 @@ func managementArea(request *http.Request) manageArea {
 	switch {
 	case isPrefixOf(segments, apiV1Roots):
 		// /api/v1/folder-roots and /api/v1/folder-roots/{rootId}/folders
-		return areaIf(len(segments) == 3 || (len(segments) == 5 && segments[4] == "folders"), areaLibraries)
+		return areaIf(len(segments) == collectionSegments || (len(segments) == 5 && segments[4] == "folders"), areaLibraries)
 	case isPrefixOf(segments, apiV1Libraries):
 		return libraryArea(segments, isRead)
 	case isPrefixOf(segments, apiV1Items):
@@ -176,6 +214,20 @@ func managementArea(request *http.Request) manageArea {
 	case isPrefixOf(segments, apiV1Posters):
 		// /api/v1/metadata/posters/{posterId}
 		return areaIf(len(segments) == posterSegments, areaMetadata)
+	default:
+		return accountArea(segments, isRead)
+	}
+}
+
+// accountArea classifies the account administration and the setup.
+func accountArea(segments []string, isRead bool) manageArea {
+	switch {
+	case isPrefixOf(segments, apiV1Users):
+		return areaUsers
+	case isPrefixOf(segments, apiV1Devices):
+		return areaDevices
+	case isPrefixOf(segments, apiV1Setup):
+		return areaIf(!isRead && len(segments) == collectionSegments, areaSetup)
 	default:
 		return areaNone
 	}
@@ -223,59 +275,4 @@ func isPrefixOf(segments []string, prefix string) bool {
 	}
 
 	return true
-}
-
-func hasBody(request *http.Request) bool {
-	return request.ContentLength != 0 || len(request.TransferEncoding) > 0
-}
-
-func isJSON(request *http.Request) bool {
-	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
-
-	return err == nil && mediaType == jsonMediaType
-}
-
-// originMatches reports true without an Origin header (same-origin GET requests and
-// non-browser clients send none); otherwise scheme, host and port of the origin must equal
-// those the request arrived with. The server speaks plain http itself, so the scheme is
-// https only on a TLS connection.
-func originMatches(request *http.Request) bool {
-	origin := request.Header.Get(headerOrigin)
-	if origin == "" {
-		return true
-	}
-
-	parsed, err := url.Parse(origin)
-	if err != nil || parsed.Host == "" || parsed.Path != "" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.Fragment != "" {
-		return false
-	}
-
-	scheme := schemeHTTP
-	if request.TLS != nil {
-		scheme = schemeHTTPS
-	}
-
-	requestHost, requestPort := splitHostPort(request.Host, scheme)
-	originHost, originPort := splitHostPort(parsed.Host, strings.ToLower(parsed.Scheme))
-
-	return strings.EqualFold(parsed.Scheme, scheme) &&
-		strings.EqualFold(originHost, requestHost) && originPort == requestPort
-}
-
-// splitHostPort separates host and port and fills in the default port of scheme.
-func splitHostPort(hostport, scheme string) (host, port string) {
-	host, port, err := net.SplitHostPort(hostport)
-	if err != nil {
-		host, port = strings.Trim(hostport, "[]"), ""
-	}
-
-	if port == "" {
-		port = portHTTP
-		if scheme == schemeHTTPS {
-			port = portHTTPS
-		}
-	}
-
-	return host, port
 }
