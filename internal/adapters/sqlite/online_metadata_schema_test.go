@@ -170,15 +170,25 @@ func TestMigrationDownToVersion4RestoresTheVersion4Schema(t *testing.T) {
 const version4LibraryColumns = `SELECT id, name, kind, metadata_language, scan_extras, read_nfo,
 	local_artwork, imported_from_config, created_at, updated_at FROM libraries ORDER BY id`
 
+// version4ItemColumns selects the columns items had before 00014 added the age buckets.
+const version4ItemColumns = `SELECT id, library_id, parent_id, kind, match_key, title, sort_title,
+	original_title, year, release_date, summary, tagline, content_rating, number, number_end,
+	absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at
+	FROM items ORDER BY 1, 2`
+
 // dumpVersion4Rows returns every row of the 00004 tables as "table: values" in a stable
-// order, libraries with their 00004 columns only.
+// order, libraries and items with their 00004 columns only.
 func dumpVersion4Rows(t *testing.T, inspection *sql.DB) []string {
 	t.Helper()
 
 	dump := dumpQuery(t, inspection, "libraries", version4LibraryColumns)
 
 	for _, table := range slices.Concat(catalogTables(), catalogV2Tables(), libraryManagementTables()) {
-		if table != "libraries" {
+		switch table {
+		case "libraries":
+		case "items":
+			dump = append(dump, dumpQuery(t, inspection, table, version4ItemColumns)...)
+		default:
 			dump = append(dump, dumpQuery(t, inspection, table, "SELECT * FROM "+table+" ORDER BY 1, 2")...)
 		}
 	}

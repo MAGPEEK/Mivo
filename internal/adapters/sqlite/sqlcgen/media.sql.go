@@ -149,7 +149,7 @@ func (q *Queries) GetFileWithRoot(ctx context.Context, id string) (GetFileWithRo
 }
 
 const getItem = `-- name: GetItem :one
-SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at
+SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at, age_rating, effective_age_rating, age_rating_source
 FROM items
 WHERE id = ?
 `
@@ -179,6 +179,9 @@ func (q *Queries) GetItem(ctx context.Context, id string) (Item, error) {
 		&i.MetadataLanguage,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AgeRating,
+		&i.EffectiveAgeRating,
+		&i.AgeRatingSource,
 	)
 	return i, err
 }

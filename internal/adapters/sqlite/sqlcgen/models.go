@@ -55,27 +55,30 @@ type EnrichmentQueue struct {
 }
 
 type Item struct {
-	ID               string
-	LibraryID        string
-	ParentID         sql.NullString
-	Kind             string
-	MatchKey         string
-	Title            string
-	SortTitle        string
-	OriginalTitle    string
-	Year             int64
-	ReleaseDate      string
-	Summary          string
-	Tagline          string
-	ContentRating    string
-	Number           sql.NullInt64
-	NumberEnd        sql.NullInt64
-	AbsoluteNumber   sql.NullInt64
-	DiscNumber       sql.NullInt64
-	ExtraType        sql.NullString
-	MetadataLanguage string
-	CreatedAt        int64
-	UpdatedAt        int64
+	ID                 string
+	LibraryID          string
+	ParentID           sql.NullString
+	Kind               string
+	MatchKey           string
+	Title              string
+	SortTitle          string
+	OriginalTitle      string
+	Year               int64
+	ReleaseDate        string
+	Summary            string
+	Tagline            string
+	ContentRating      string
+	Number             sql.NullInt64
+	NumberEnd          sql.NullInt64
+	AbsoluteNumber     sql.NullInt64
+	DiscNumber         sql.NullInt64
+	ExtraType          sql.NullString
+	MetadataLanguage   string
+	CreatedAt          int64
+	UpdatedAt          int64
+	AgeRating          sql.NullInt64
+	EffectiveAgeRating sql.NullInt64
+	AgeRatingSource    sql.NullString
 }
 
 type ItemFieldLock struct {

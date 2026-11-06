@@ -117,7 +117,7 @@ func (q *Queries) GetPhotoMainFile(ctx context.Context, id string) (GetPhotoMain
 }
 
 const listAlbumPhotos = `-- name: ListAlbumPhotos :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, photo_info.item_id, photo_info.library_id, photo_info.parent_id, photo_info.primary_file_id, photo_info.name_key, photo_info.taken_at, photo_info.taken_at_source, photo_info.make, photo_info.model, photo_info.lens, photo_info.exposure, photo_info.f_number, photo_info.iso, photo_info.focal_mm, photo_info.orientation, photo_info.lat, photo_info.lon, photo_info.width, photo_info.height, photo_info.thumbnail_state
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, photo_info.item_id, photo_info.library_id, photo_info.parent_id, photo_info.primary_file_id, photo_info.name_key, photo_info.taken_at, photo_info.taken_at_source, photo_info.make, photo_info.model, photo_info.lens, photo_info.exposure, photo_info.f_number, photo_info.iso, photo_info.focal_mm, photo_info.orientation, photo_info.lat, photo_info.lon, photo_info.width, photo_info.height, photo_info.thumbnail_state
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.parent_id = ?1
@@ -182,6 +182,9 @@ func (q *Queries) ListAlbumPhotos(ctx context.Context, arg ListAlbumPhotosParams
 			&i.Item.MetadataLanguage,
 			&i.Item.CreatedAt,
 			&i.Item.UpdatedAt,
+			&i.Item.AgeRating,
+			&i.Item.EffectiveAgeRating,
+			&i.Item.AgeRatingSource,
 			&i.PhotoInfo.ItemID,
 			&i.PhotoInfo.LibraryID,
 			&i.PhotoInfo.ParentID,
@@ -217,7 +220,7 @@ func (q *Queries) ListAlbumPhotos(ctx context.Context, arg ListAlbumPhotosParams
 }
 
 const listLibraryPhotos = `-- name: ListLibraryPhotos :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, photo_info.item_id, photo_info.library_id, photo_info.parent_id, photo_info.primary_file_id, photo_info.name_key, photo_info.taken_at, photo_info.taken_at_source, photo_info.make, photo_info.model, photo_info.lens, photo_info.exposure, photo_info.f_number, photo_info.iso, photo_info.focal_mm, photo_info.orientation, photo_info.lat, photo_info.lon, photo_info.width, photo_info.height, photo_info.thumbnail_state
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, photo_info.item_id, photo_info.library_id, photo_info.parent_id, photo_info.primary_file_id, photo_info.name_key, photo_info.taken_at, photo_info.taken_at_source, photo_info.make, photo_info.model, photo_info.lens, photo_info.exposure, photo_info.f_number, photo_info.iso, photo_info.focal_mm, photo_info.orientation, photo_info.lat, photo_info.lon, photo_info.width, photo_info.height, photo_info.thumbnail_state
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.library_id = ?1
@@ -281,6 +284,9 @@ func (q *Queries) ListLibraryPhotos(ctx context.Context, arg ListLibraryPhotosPa
 			&i.Item.MetadataLanguage,
 			&i.Item.CreatedAt,
 			&i.Item.UpdatedAt,
+			&i.Item.AgeRating,
+			&i.Item.EffectiveAgeRating,
+			&i.Item.AgeRatingSource,
 			&i.PhotoInfo.ItemID,
 			&i.PhotoInfo.LibraryID,
 			&i.PhotoInfo.ParentID,
@@ -425,7 +431,7 @@ func (q *Queries) ListPhotoMainFiles(ctx context.Context) ([]ListPhotoMainFilesR
 }
 
 const listPhotoSubAlbums = `-- name: ListPhotoSubAlbums :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
        (SELECT COUNT(*) FROM items AS children
         WHERE children.parent_id = items.id AND children.kind = 'photo_album')
        + (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id = items.id) AS child_count
@@ -490,6 +496,9 @@ func (q *Queries) ListPhotoSubAlbums(ctx context.Context, arg ListPhotoSubAlbums
 			&i.Item.MetadataLanguage,
 			&i.Item.CreatedAt,
 			&i.Item.UpdatedAt,
+			&i.Item.AgeRating,
+			&i.Item.EffectiveAgeRating,
+			&i.Item.AgeRatingSource,
 			&i.ChildCount,
 		); err != nil {
 			return nil, err

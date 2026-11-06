@@ -199,7 +199,7 @@ func updateItemColumns(ctx context.Context, queries *sqlcgen.Queries, itemID str
 		return domain.ErrNotFound
 	}
 
-	return nil
+	return storeAgeRating(ctx, queries, itemID, record.ContentRating)
 }
 
 // metadataWriter replaces the tags, credits and provider IDs of one item.
