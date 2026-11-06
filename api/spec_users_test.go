@@ -157,11 +157,39 @@ func TestContentLimitStoresAgeAndUnratedDirectly(t *testing.T) {
 		t.Error("ContentLimit.maxAge must be a nullable AgeRating")
 	}
 
+	// The preset is derived from maxAge, never stored (orchestrator decision, M7-02 review).
+	for _, text := range []string{"preset is never stored", "derived from maxAge", "custom when no fixed preset matches", "must match maxAge"} {
+		if !strings.Contains(limit.Description, text) {
+			t.Errorf("ContentLimit does not say %q", text)
+		}
+	}
+
 	access := spec.Components.Schemas["LibraryAccess"].Value
 	ids := access.Properties["libraryIds"]
 
 	if !slices.Contains(access.Required, "all") || ids == nil || ids.Value.Items.Value.Format != "uuid" || ids.Value.MaxItems == nil {
 		t.Error("LibraryAccess needs a required all and a bounded uuid list libraryIds")
+	}
+}
+
+// TestUserAccessRules pins the access rules of the M7-02 review: a demoted admin needs an
+// explicit library set, all excludes a list, and the admin lists are bounded.
+func TestUserAccessRules(t *testing.T) {
+	spec := loadSpec(t)
+
+	update := getOperation(t, spec, http.MethodPatch, userPath)
+	if !strings.Contains(update.Description, `demoting one to the role user needs libraryAccess`) {
+		t.Error("updateUser does not require libraryAccess when demoting an admin")
+	}
+
+	if all := propertySchema(spec, "LibraryAccess.all"); all == nil || !strings.Contains(all.Value.Description, `400 "invalid"`) {
+		t.Error("LibraryAccess.all does not refuse a non-empty libraryIds")
+	}
+
+	for _, location := range []string{"UserList.users", "AccountDeviceList.devices"} {
+		if list := propertySchema(spec, location); list == nil || list.Value.MaxItems == nil {
+			t.Errorf("%s has no maxItems", location)
+		}
 	}
 }
 

@@ -1167,7 +1167,7 @@ type CodecLimit struct {
 	Profiles *[]string `json:"profiles,omitempty"`
 }
 
-// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 type ContentLimit struct {
 	// HideUnrated True hides titles without a known age rating; clients default it to true when they set a maxAge.
 	//
@@ -2115,7 +2115,7 @@ type Library struct {
 
 // LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
 type LibraryAccess struct {
-	// All True for every library; libraryIds is then empty or omitted.
+	// All True for every library; libraryIds must then be empty or omitted, else 400 "invalid" with "field" "libraryAccess".
 	//
 	// Example: false
 	All bool `json:"all"`
@@ -2827,7 +2827,7 @@ type Profile struct {
 	// Example: coral
 	AvatarColor AvatarColor `json:"avatarColor"`
 
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit ContentLimit `json:"contentLimit"`
 
 	// HasPin True when selecting the profile needs its 4-digit PIN.
@@ -2866,7 +2866,7 @@ type ProfileCreate struct {
 	// Example: coral
 	AvatarColor *AvatarColor `json:"avatarColor,omitempty"`
 
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
 
 	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
@@ -2943,7 +2943,7 @@ type ProfileUpdate struct {
 	// Example: coral
 	AvatarColor *AvatarColor `json:"avatarColor,omitempty"`
 
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
 
 	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
@@ -3265,7 +3265,7 @@ type ThumbnailState string
 
 // User An account as the administration shows it (US-20).
 type User struct {
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit ContentLimit `json:"contentLimit"`
 
 	// CreatedAt When the account was created.
@@ -3303,9 +3303,9 @@ type User struct {
 	Status UserStatus `json:"status"`
 }
 
-// UserCreate A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (adults, hideUnrated false).
+// UserCreate A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (maxAge null, hideUnrated false).
 type UserCreate struct {
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
 
 	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.
@@ -3338,7 +3338,7 @@ type UserStatus string
 
 // UserUpdate A change of an account; omitted properties stay as they are. Room for later account settings stays in objects, not in top-level flags.
 type UserUpdate struct {
-	// ContentLimit The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile.
+	// ContentLimit The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile.
 	ContentLimit *ContentLimit `json:"contentLimit,omitempty"`
 
 	// LibraryAccess The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's.

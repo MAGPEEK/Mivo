@@ -255,7 +255,7 @@ export interface paths {
         head?: never;
         /**
          * Change an account
-         * @description Changes the name, role, status, library access or the content limit of the primary profile; omitted properties stay as they are. A new name also renames the primary profile. Disabling an account ends all its sessions; a changed role, library access or content limit applies to its sessions from their next request. Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404), "invalid" (400, with "field" as for createUser), "name_taken" (409) and "last_admin" (409, the change would disable or demote the last enabled admin account).
+         * @description Changes the name, role, status, library access or the content limit of the primary profile; omitted properties stay as they are. A new name also renames the primary profile. Disabling an account ends all its sessions; a changed role, library access or content limit applies to its sessions from their next request. An admin account always has all libraries, so demoting one to the role user needs libraryAccess in the same request, else 400 "invalid" with "field" "libraryAccess". Administration operation (ADR 0032 section 9): it needs the primary profile of an admin account selected, else 403 "forbidden", and it is served only to local peers (ADR 0028). Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404), "invalid" (400, with "field" as for createUser), "name_taken" (409) and "last_admin" (409, the change would disable or demote the last enabled admin account).
          */
         patch: operations["updateUser"];
         trace?: never;
@@ -1511,7 +1511,7 @@ export interface components {
          * @enum {string}
          */
         ContentLimitPreset: "youngChildren" | "children" | "teens" | "adults" | "custom";
-        /** @description The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are stored as sent and are what the server enforces; preset is the label the client chose and is stored with them. preset must match maxAge (youngChildren 0, children 6, teens 12, adults null, custom any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is free for every preset, so "no age limit but hide unrated titles" is adults with hideUnrated true, and no limit at all is adults with hideUnrated false. A managed profile's effective limit is the stricter of its own and its account's primary profile. */
+        /** @description The content limit of a profile (ADR 0032 section 7). The server stores maxAge and hideUnrated and enforces them; preset is never stored. In responses preset is derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is custom when no fixed preset matches. In requests preset is a convenience that must match maxAge (custom matches any value), else 400 "invalid" with "field" "contentLimit". hideUnrated is independent of the preset. A managed profile's effective limit is the stricter of its own and its account's primary profile. */
         ContentLimit: {
             preset: components["schemas"]["ContentLimitPreset"];
             /** @description The highest age rating shown; null for no age limit. */
@@ -1525,7 +1525,7 @@ export interface components {
         /** @description The libraries an account or profile may see (ADR 0032 section 7). all true includes libraries added later; a list does not. For an account, all is its whole set (an admin account always has all); for a managed profile, all means the account's set, and the effective set is the account's intersected with the profile's. */
         LibraryAccess: {
             /**
-             * @description True for every library; libraryIds is then empty or omitted.
+             * @description True for every library; libraryIds must then be empty or omitted, else 400 "invalid" with "field" "libraryAccess".
              * @example false
              */
             all: boolean;
@@ -1571,7 +1571,7 @@ export interface components {
             /** @description Every account, ordered by name. */
             users: components["schemas"]["User"][];
         };
-        /** @description A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (adults, hideUnrated false). */
+        /** @description A new account with its initial password. libraryAccess defaults to all libraries and contentLimit to no limit (maxAge null, hideUnrated false). */
         UserCreate: {
             /**
              * @description Account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also names the primary profile.

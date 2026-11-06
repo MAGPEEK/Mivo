@@ -478,7 +478,9 @@ paths:
         Changes the name, role, status, library access or the content limit of the primary
         profile; omitted properties stay as they are. A new name also renames the primary
         profile. Disabling an account ends all its sessions; a changed role, library access
-        or content limit applies to its sessions from their next request. Administration
+        or content limit applies to its sessions from their next request. An admin account
+        always has all libraries, so demoting one to the role user needs libraryAccess in
+        the same request, else 400 "invalid" with "field" "libraryAccess". Administration
         operation (ADR 0032 section 9): it needs the primary profile of an admin account
         selected, else 403 "forbidden", and it is served only to local peers (ADR 0028).
         Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule
@@ -2903,14 +2905,13 @@ components:
     ContentLimit:
       type: object
       description: >-
-        The content limit of a profile (ADR 0032 section 7). maxAge and hideUnrated are
-        stored as sent and are what the server enforces; preset is the label the client
-        chose and is stored with them. preset must match maxAge (youngChildren 0, children
-        6, teens 12, adults null, custom any value), else 400 "invalid" with "field"
-        "contentLimit". hideUnrated is free for every preset, so "no age limit but hide
-        unrated titles" is adults with hideUnrated true, and no limit at all is adults with
-        hideUnrated false. A managed profile's effective limit is the stricter of its own and
-        its account's primary profile.
+        The content limit of a profile (ADR 0032 section 7). The server stores maxAge and
+        hideUnrated and enforces them; preset is never stored. In responses preset is
+        derived from maxAge (youngChildren 0, children 6, teens 12, adults null), and it is
+        custom when no fixed preset matches. In requests preset is a convenience that must
+        match maxAge (custom matches any value), else 400 "invalid" with "field"
+        "contentLimit". hideUnrated is independent of the preset. A managed profile's
+        effective limit is the stricter of its own and its account's primary profile.
       additionalProperties: false
       required:
         - preset
@@ -2943,7 +2944,9 @@ components:
       properties:
         all:
           type: boolean
-          description: True for every library; libraryIds is then empty or omitted.
+          description: >-
+            True for every library; libraryIds must then be empty or omitted, else 400
+            "invalid" with "field" "libraryAccess".
           example: false
         libraryIds:
           type: array
@@ -3012,13 +3015,14 @@ components:
         users:
           type: array
           description: Every account, ordered by name.
+          maxItems: 1000
           items:
             $ref: "#/components/schemas/User"
     UserCreate:
       type: object
       description: >-
         A new account with its initial password. libraryAccess defaults to all libraries
-        and contentLimit to no limit (adults, hideUnrated false).
+        and contentLimit to no limit (maxAge null, hideUnrated false).
       additionalProperties: false
       required:
         - name
@@ -3257,6 +3261,7 @@ components:
         devices:
           type: array
           description: Every device, most recently seen first.
+          maxItems: 1000
           items:
             $ref: "#/components/schemas/AccountDevice"
     LibraryKind:
@@ -5755,9 +5760,10 @@ components:
             retryAfterSeconds). User administration adds "name_taken" (409, another account
             or profile of the account has the name), "last_admin" (409, the change would
             delete, disable or demote the last enabled admin account) and "profile_limit"
-            (409, the account has 10 managed profiles already). "not_implemented" (501) answers an operation or a parameter
-            value the contract declares but this server does not serve yet. New codes may be
-            added; clients show a generic message for unknown codes.
+            (409, the account has 10 managed profiles already). "not_implemented" (501)
+            answers an operation or a parameter value the contract declares but this server
+            does not serve yet. New codes may be added; clients show a generic message for
+            unknown codes.
           example: not_found
         field:
           type: string

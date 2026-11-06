@@ -29,6 +29,10 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - **Admin powers** apply only when the selected profile is the primary profile of an admin
   account. A managed profile of the admin account is never admin.
 - The **last enabled admin** cannot be deleted, disabled or demoted (`409 conflict`).
+  Amendment (M7-02 contract, orchestrator 2026-11-06): the conflicts carry their own problem
+  codes, `409 last_admin` (last enabled admin), `409 name_taken` (duplicate account name, or
+  duplicate profile name within an account) and `409 profile_limit` (more than 10 managed
+  profiles).
 - Passwords: 8–128 bytes UTF-8, no composition rules; an admin reset or a self change
   revokes the account's other sessions.
 - Deferred (after 0.1.0): invites (US-21), guest (US-24), per-user permissions (US-23),
