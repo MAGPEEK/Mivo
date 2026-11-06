@@ -8,7 +8,7 @@ reference for every setting of the image; the step-by-step user guides are
 Container Manager, QNAP Container Station) with the ready-made
 [docker-compose.yml](docker-compose.yml) next to this file.
 
-Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.5` and `alpha`
+Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.6` and `alpha`
 (no `latest`), platforms `linux/amd64` and `linux/arm64`. The examples below use the
 published tag; replace it with `mivo:dev` for an image you built yourself.
 
@@ -49,7 +49,7 @@ docker run --rm --entrypoint cat mivo:dev /usr/local/share/doc/ffmpeg-capabiliti
 ```
 docker run -d --name mivo -p 0.0.0.0:8460:8460 --stop-timeout 20 \
   -v /path/to/config:/config -v /path/to/media:/media:ro -v /path/to/transcode:/transcode \
-  docker.io/magpeek/mivo-media-server:0.1.0-alpha.5
+  docker.io/magpeek/mivo-media-server:0.1.0-alpha.6
 ```
 
 `--stop-timeout 20` (compose: `stop_grace_period: 20s`) gives the server time for its
@@ -231,7 +231,7 @@ Synology (Container Manager project), one library from the `video` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.5
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.6
     user: "1026:100"
     stop_grace_period: 20s
     ports:
@@ -250,7 +250,7 @@ QNAP (Container Station application), two libraries from the `Multimedia` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.5
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.6
     user: "1000:100"
     stop_grace_period: 20s
     ports:
@@ -273,7 +273,7 @@ into a volume only when it creates the empty volume. They work with the default 
 with `--user` / `user:` set to another ID the server cannot write them. Use bind mounts in
 that case, or `chown` the volume to that user once before the first start (a one-off root
 container that only changes ownership, not the server):
-`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.5 -R 1026:100 /config`.
+`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.6 -R 1026:100 /config`.
 Note that Docker re-initialises a volume from the image while it is still empty, so the
 `chown` only sticks once the volume holds a file; bind mounts avoid the problem.
 

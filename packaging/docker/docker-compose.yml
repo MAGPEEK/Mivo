@@ -15,7 +15,7 @@ name: mivo
 services:
   mivo:
     # Pin a release tag. "alpha" moves to the newest alpha; there is no "latest" tag.
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.5
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.6
     container_name: mivo
     restart: unless-stopped
 
