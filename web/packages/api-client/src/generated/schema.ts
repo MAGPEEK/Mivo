@@ -44,6 +44,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report whether the first-run setup is still needed
+         * @description Says whether the server is in setup state, that is no account exists yet (ADR 0032 section 6). Clients show the setup wizard instead of the sign-in screen while required is true. The endpoint is unauthenticated.
+         */
+        get: operations["getSetupState"];
+        put?: never;
+        /**
+         * Create the first administrator account and sign in
+         * @description Creates the first account with the role admin and its primary profile, and signs in like createSession (the session cookie for client "web", the token in the body for "tv" and "cli"). The endpoint is unauthenticated, but it is served only to local peers, same-origin and with application/json (the ADR 0028 local-peer and same-origin rule, ADR 0032 section 6), also when server.lan_only is off; any other caller gets 403 "forbidden", so a fresh server reachable from the internet cannot be taken over. Once any account exists it answers 409 "conflict". Problem codes: "invalid" (400, with "field" "name" or "password": a name of 1 to 40 characters and a password of 8 to 128 bytes), "forbidden" (403) and "conflict" (409). There are no default credentials.
+         */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with name and password
+         * @description Checks the name and password and creates a session, which is also the device of the caller (ADR 0032 section 3). For client "web" the response sets the HttpOnly session cookie and carries no token; for "tv" and "cli" the token is in the body and no cookie is set. The server selects the primary profile when the account has no managed profiles and the primary profile has no PIN; otherwise Session.me.currentProfile is null and the client shows the profile picker. The endpoint is unauthenticated; like every write it must pass the ADR 0028 same-origin rule and send application/json (ADR 0032 section 3), else 403 "forbidden". Problem codes: "invalid_credentials" (401, wrong name or password, an unknown name or a disabled account; the answer never says whether the name exists or is disabled), "too_many_attempts" (429, too many failures for the name or from the caller's address, with retryAfterSeconds and Retry-After) and "setup_required" (401, no account exists yet). Failures for an unknown name count toward the throttle exactly like failures for a known one, so the throttle reveals no names either.
+         */
+        post: operations["createSession"];
+        /**
+         * Sign out
+         * @description Ends the caller's session and so removes its device; a browser's session cookie is cleared. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden".
+         */
+        delete: operations["deleteSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe the signed-in account and its profiles
+         * @description Returns the account of the session, the selected profile (null before a profile is chosen) and the profiles for the picker. It works without a selected profile. The session token is never part of the answer.
+         */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Select the profile of this session
+         * @description Selects one of the account's profiles for this session (ADR 0032 section 4). A profile with a PIN needs it; so does switching from a managed profile to a primary profile that has one. remember false (the default for profiles with a PIN) ends the selection after 4 hours without requests. Five wrong PINs lock the profile for 5 minutes. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "not_found" (404, no profile of this account), "pin_invalid" (403, the PIN is missing or wrong) and "profile_locked" (429, with retryAfterSeconds and Retry-After).
+         */
+        put: operations["selectProfile"];
+        post?: never;
+        /**
+         * Leave the selected profile
+         * @description Clears the profile of this session, so the client shows the picker again ("Switch profile"). The session stays signed in. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden".
+         */
+        delete: operations["clearProfileSelection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the account's own password
+         * @description Replaces the password of the signed-in account and ends its other sessions; the caller's session stays. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes: "invalid_credentials" (403, the current password is wrong; 403, not 401, because the session stays signed in), "invalid" (400, with "field" "newPassword": 8 to 128 bytes) and "too_many_attempts" (429, with retryAfterSeconds and Retry-After).
+         */
+        put: operations["changeOwnPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the devices signed in to the account
+         * @description Returns every session of the signed-in account as a device (US-25), most recently seen first; current marks the caller's own.
+         */
+        get: operations["listOwnDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/devices/{deviceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a signed-in device (Device.id).
+                 * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+                 */
+                deviceId: components["parameters"]["DeviceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Sign a device of the account out
+         * @description Ends the session behind the device; the device has to sign in again. Revoking the current device equals signing out. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". A device of another account or an unknown ID answers 404 "not_found".
+         */
+        delete: operations["revokeOwnDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/libraries": {
         parameters: {
             query?: never;
@@ -565,7 +723,7 @@ export interface paths {
         };
         /**
          * Download the poster preview of an identify candidate
-         * @description Serves the poster of a candidate from the last identify searches, fetched by the server from the TMDB image host and kept in memory for a short time, so the browser never contacts a provider (ADR 0010, ADR 0031). The server sends no client header or cookie to the provider. An ID expires about an hour after the search that issued it. Management operation (ADR 0028): until accounts exist only local peers of the same origin may load it; like getImage the endpoint is unauthenticated, because an img element cannot send credentials (milestone 7 protects it by cookie). Problem codes: "not_found" (404, an unknown or expired ID, or the provider has no such picture), "invalid" (400, a malformed ID), "online_disabled" (409, online metadata or TMDB is switched off: the server serves only a picture it already holds and opens no connection) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
+         * @description Serves the poster of a candidate from the last identify searches, fetched by the server from the TMDB image host and kept in memory for a short time, so the browser never contacts a provider (ADR 0010, ADR 0031). The server sends no client header or cookie to the provider. An ID expires about an hour after the search that issued it. Management operation (ADR 0028): only local peers of the same origin may load it, and like getImage it needs the signed-in session (ADR 0032; the same-origin session cookie covers img elements). Problem codes: "not_found" (404, an unknown or expired ID, or the provider has no such picture), "invalid" (400, a malformed ID), "online_disabled" (409, online metadata or TMDB is switched off: the server serves only a picture it already holds and opens no connection) and "provider_unavailable" (503 with retryAfterSeconds and Retry-After).
          */
         get: operations["getCandidatePoster"];
         put?: never;
@@ -591,7 +749,7 @@ export interface paths {
         };
         /**
          * Download an artwork image in a fixed width
-         * @description Serves the artwork image of an ImageRef rendered to the requested width, never upscaled: a narrower source is served at its own width. Logos are PNG to keep transparency, every other kind is JPEG. imageId may also be the ID of a photo item (ADR 0029): the photo is served as JPEG in its own aspect ratio with its EXIF orientation applied; the lightbox uses the same reference at a large width. A photo whose thumbnailState is "unsupported" answers 422 "unsupported". Every rendered image is re-encoded and carries no EXIF, GPS or XMP metadata of its source. The endpoint is unauthenticated for now (milestone 7 protects it by cookie or signed URL, ADR 0024). Clients build the URL only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and never take values out of it. Caching: a request whose tag equals the current tag of the image is answered with Cache-Control "private, max-age=31536000, immutable", any other request (no tag or an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a source file deleted from disk), "unsupported" (422, the source cannot be decoded) and "unavailable" (503, for example the library folder is unreachable or too many images are rendered at once).
+         * @description Serves the artwork image of an ImageRef rendered to the requested width, never upscaled: a narrower source is served at its own width. Logos are PNG to keep transparency, every other kind is JPEG. imageId may also be the ID of a photo item (ADR 0029): the photo is served as JPEG in its own aspect ratio with its EXIF orientation applied; the lightbox uses the same reference at a large width. A photo whose thumbnailState is "unsupported" answers 422 "unsupported". Every rendered image is re-encoded and carries no EXIF, GPS or XMP metadata of its source. The endpoint needs a signed-in session like every other one (ADR 0032; the same-origin session cookie covers img elements); signed URLs for casting follow in milestone 8. Clients build the URL only through the api-client helper imageUrl (or imageSrcSet) from an ImageRef and never take values out of it. Caching: a request whose tag equals the current tag of the image is answered with Cache-Control "private, max-age=31536000, immutable", any other request (no tag or an outdated one) with "private, no-cache". Both carry ETag "<tag>-<width>" and answer a matching If-None-Match with 304. Problem codes: "invalid" (400, a width outside ImageWidth or a malformed tag), "not_found" (404, an unknown image or a source file deleted from disk), "unsupported" (422, the source cannot be decoded) and "unavailable" (503, for example the library folder is unreachable or too many images are rendered at once).
          */
         get: operations["getImage"];
         put?: never;
@@ -667,7 +825,7 @@ export interface paths {
         };
         /**
          * Download the original file of a direct-play session
-         * @description Serves the original media file of a session in mode direct_play with HTTP range support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients load streamUrl as it is and never build it. Content-Type follows the direct-play container (for example video/mp4 or video/webm). Sessions in another mode answer 404 "not_found", a file deleted from disk 404, a file whose path now leads outside its library folder 422 "unsupported".
+         * @description Serves the original media file of a session in mode direct_play with HTTP range support (Range, If-Range, 206, 416). The URL is opaque and needs the signed-in session (ADR 0032; the same-origin session cookie covers media elements): clients load streamUrl as it is and never build it. Content-Type follows the direct-play container (for example video/mp4 or video/webm). Sessions in another mode answer 404 "not_found", a file deleted from disk 404, a file whose path now leads outside its library folder 422 "unsupported".
          */
         get: operations["getPlaybackFile"];
         put?: never;
@@ -676,7 +834,7 @@ export interface paths {
         options?: never;
         /**
          * Describe the original file of a direct-play session
-         * @description Like getPlaybackFile without a body, so players can read the size and the range support. The URL is unauthenticated and opaque.
+         * @description Like getPlaybackFile without a body, so players can read the size and the range support. The URL is opaque and needs the signed-in session (ADR 0032).
          */
         head: operations["headPlaybackFile"];
         patch?: never;
@@ -702,7 +860,7 @@ export interface paths {
         };
         /**
          * Download a file of an HLS session
-         * @description Serves the playlist and segments of a session in mode remux or transcode. The URL is unauthenticated and opaque: clients load streamUrl and follow the relative URIs inside the playlist. Every file request, not only the playlist, waits up to 20 seconds for the session's first segment, then answers 503 "stream_not_ready" with Retry-After; once the first segment exists it answers at once. Sessions in another mode answer 404 "not_found", a session whose FFmpeg failed answers 500 for every file. Every file supports HTTP range requests (Range, If-Range, 206, 416). The playlist is sent with Cache-Control no-store, init and media segments with private, max-age=3600.
+         * @description Serves the playlist and segments of a session in mode remux or transcode. The URL is opaque and needs the signed-in session (ADR 0032; the same-origin session cookie covers media elements): clients load streamUrl and follow the relative URIs inside the playlist. Every file request, not only the playlist, waits up to 20 seconds for the session's first segment, then answers 503 "stream_not_ready" with Retry-After; once the first segment exists it answers at once. Sessions in another mode answer 404 "not_found", a session whose FFmpeg failed answers 500 for every file. Every file supports HTTP range requests (Range, If-Range, 206, 416). The playlist is sent with Cache-Control no-store, init and media segments with private, max-age=3600.
          */
         get: operations["getPlaybackHlsFile"];
         put?: never;
@@ -711,7 +869,7 @@ export interface paths {
         options?: never;
         /**
          * Describe a file of an HLS session
-         * @description Like getPlaybackHlsFile without a body, including the wait for the first segment, so players can read the size and the range support. The URL is unauthenticated and opaque.
+         * @description Like getPlaybackHlsFile without a body, including the wait for the first segment, so players can read the size and the range support. The URL is opaque and needs the signed-in session (ADR 0032).
          */
         head: operations["headPlaybackHlsFile"];
         patch?: never;
@@ -943,6 +1101,206 @@ export interface components {
              * @example 1
              */
             apiVersion: string;
+        };
+        /** @description Whether the server still waits for its first account (ADR 0032 section 6). */
+        SetupState: {
+            /**
+             * @description True while no account exists; completeSetup then creates the first one.
+             * @example true
+             */
+            required: boolean;
+        };
+        /**
+         * @description Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+         * @example web
+         * @enum {string}
+         */
+        ClientKind: "web" | "tv" | "cli";
+        /** @description The first administrator account and the client that signs in with it; client defaults to "web" when omitted. */
+        SetupRequest: {
+            /**
+             * @description Account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also names the primary profile.
+             * @example Anna
+             */
+            name: string;
+            /**
+             * Format: password
+             * @description Password of 8 to 128 bytes of UTF-8; no composition rules.
+             */
+            password: string;
+            client?: components["schemas"]["ClientKind"];
+            /**
+             * @description Name of the device in the device list; omitted, the server derives a short label from the User-Agent.
+             * @example Living room PC
+             */
+            deviceName?: string;
+        };
+        /** @description Credentials and the client that signs in. */
+        SignInRequest: {
+            /**
+             * @description Account name; compared ignoring case after NFC normalisation.
+             * @example Anna
+             */
+            name: string;
+            /**
+             * Format: password
+             * @description Password of the account.
+             */
+            password: string;
+            client: components["schemas"]["ClientKind"];
+            /**
+             * @description Name of the device in the device list; omitted, the server derives a short label from the User-Agent.
+             * @example Living room TV
+             */
+            deviceName?: string;
+        };
+        /** @description A new session (ADR 0032 section 3). For client "web" the session cookie carries it and token is omitted. */
+        Session: {
+            me: components["schemas"]["Me"];
+            /**
+             * @description Bearer token for client "tv" or "cli", returned only here and only once; the server stores just its hash. Send it as "Authorization: Bearer <token>".
+             * @example example-token
+             */
+            token?: string;
+        };
+        /**
+         * @description Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+         * @example admin
+         * @enum {string}
+         */
+        AccountRole: "admin" | "user";
+        /** @description A local account (ADR 0032 section 1). */
+        Account: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the account.
+             * @example 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+             */
+            id: string;
+            /**
+             * @description Account name.
+             * @example Anna
+             */
+            name: string;
+            role: components["schemas"]["AccountRole"];
+        };
+        /**
+         * @description Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+         * @example coral
+         * @enum {string}
+         */
+        AvatarColor: "coral" | "blue" | "green" | "amber" | "violet" | "teal" | "pink" | "slate";
+        /** @description A profile of the signed-in account as the profile picker shows it. */
+        ProfileSummary: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the profile.
+             * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+             */
+            id: string;
+            /**
+             * @description Profile name.
+             * @example Anna
+             */
+            name: string;
+            avatarColor: components["schemas"]["AvatarColor"];
+            /**
+             * @description True when selecting the profile needs its 4-digit PIN.
+             * @example false
+             */
+            hasPin: boolean;
+            /**
+             * @description True for the account's primary profile, false for a managed profile.
+             * @example true
+             */
+            isPrimary: boolean;
+            /**
+             * @description True when the profile carries admin powers: the primary profile of an admin account.
+             * @example true
+             */
+            isAdmin: boolean;
+        };
+        /** @description The signed-in account, its selected profile and its profiles. It never contains the session token. */
+        Me: {
+            account: components["schemas"]["Account"];
+            /** @description The profile selected for this session; null until one is chosen. */
+            currentProfile: components["schemas"]["ProfileSummary"] | null;
+            /** @description The account's profiles for the picker, the primary profile first, then the managed ones by name. */
+            profiles: components["schemas"]["ProfileSummary"][];
+        };
+        /** @description The profile to use in this session. */
+        ProfileSelection: {
+            /**
+             * Format: uuid
+             * @description ID of a profile of the signed-in account (ProfileSummary.id).
+             * @example 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+             */
+            profileId: string;
+            /**
+             * Format: password
+             * @description The profile's 4-digit PIN; needed when the profile has one.
+             */
+            pin?: string;
+            /**
+             * @description Keep the selection on this device until it is changed. False ends it after 4 hours without requests. Omitted, it is false for a profile with a PIN and true otherwise.
+             * @example false
+             */
+            remember?: boolean;
+        };
+        /** @description A change of the signed-in account's own password. */
+        PasswordChange: {
+            /**
+             * Format: password
+             * @description The password in use now.
+             */
+            currentPassword: string;
+            /**
+             * Format: password
+             * @description The new password, 8 to 128 bytes of UTF-8; no composition rules.
+             */
+            newPassword: string;
+        };
+        /**
+         * @description Where a device was last seen from: "lan" (local network) or "remote". Clients must tolerate new values.
+         * @example lan
+         * @enum {string}
+         */
+        AddressClass: "lan" | "remote";
+        /** @description A signed-in device, that is one session of the account (US-25). */
+        Device: {
+            /**
+             * Format: uuid
+             * @description Stable ID of the device; revokeOwnDevice takes it.
+             * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+             */
+            id: string;
+            /**
+             * @description Name given at sign-in or derived from the User-Agent.
+             * @example Firefox on Windows
+             */
+            name: string;
+            client: components["schemas"]["ClientKind"];
+            /**
+             * @description Operating system or platform of the device; omitted when unknown.
+             * @example Windows
+             */
+            platform?: string;
+            /**
+             * Format: date-time
+             * @description Last request of the device, exact to about 5 minutes.
+             */
+            lastSeenAt: string;
+            addressClass: components["schemas"]["AddressClass"];
+            /**
+             * @description True for the device that sends this request.
+             * @example true
+             */
+            current: boolean;
+        };
+        /** @description The devices signed in to the account. */
+        DeviceList: {
+            /** @description Every device, most recently seen first. */
+            devices: components["schemas"]["Device"][];
         };
         /**
          * @description What a library contains: "movies" (movie items), "shows" (show items with seasons and episodes), "music" (artist items with albums and tracks), "audiobooks" (audiobook items with chapters) or "photos" (photo albums following the folder tree with their photos, ADR 0029). Clients must tolerate values added in later versions. SystemInfo.libraryKinds lists the kinds a new library may have.
@@ -2549,7 +2907,7 @@ export interface components {
              */
             instance?: string;
             /**
-             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
+             * @description Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
              * @example not_found
              */
             code: string;
@@ -2566,7 +2924,7 @@ export interface components {
             libraryId?: string;
             /**
              * Format: int32
-             * @description For "provider_unavailable", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
+             * @description For "provider_unavailable", "profile_locked" and "too_many_attempts", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
              * @example 30
              */
             retryAfterSeconds?: number;
@@ -2601,8 +2959,23 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description Too many failed attempts ("too_many_attempts" for passwords, "profile_locked" for PINs); retryAfterSeconds and Retry-After say when to try again. */
+        TooManyAttempts: {
+            headers: {
+                "Retry-After": components["headers"]["RetryAfter"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
     };
     parameters: {
+        /**
+         * @description ID of a signed-in device (Device.id).
+         * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+         */
+        DeviceId: string;
         /**
          * @description ID of the library.
          * @example 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
@@ -2726,6 +3099,269 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
                 };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSetupState: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setup state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupState"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            /** @description The administrator exists and is signed in. For client "web" the response sets the session cookie. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description An account exists already ("conflict"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignInRequest"];
+            };
+        };
+        responses: {
+            /** @description Signed in. For client "web" the response sets the session cookie. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Wrong name or password ("invalid_credentials"). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            429: components["responses"]["TooManyAttempts"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session is ended. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The signed-in account. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    selectProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileSelection"];
+            };
+        };
+        responses: {
+            /** @description The account with the newly selected profile. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description The PIN is missing or wrong ("pin_invalid"), or the same-origin rule failed ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            429: components["responses"]["TooManyAttempts"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    clearProfileSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No profile is selected any more. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    changeOwnPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description The password is changed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The current password is wrong ("invalid_credentials"), or the same-origin rule failed ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            429: components["responses"]["TooManyAttempts"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listOwnDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's devices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceList"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeOwnDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of a signed-in device (Device.id).
+                 * @example 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+                 */
+                deviceId: components["parameters"]["DeviceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The device is signed out. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Problem"];
         };

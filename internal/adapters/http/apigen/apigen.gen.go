@@ -19,6 +19,78 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AccountRole.
+const (
+	AccountRoleAdmin AccountRole = "admin"
+	AccountRoleUser  AccountRole = "user"
+)
+
+// Valid indicates whether the value is a known member of the AccountRole enum.
+func (e AccountRole) Valid() bool {
+	switch e {
+	case AccountRoleAdmin:
+		return true
+	case AccountRoleUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AddressClass.
+const (
+	AddressClassLan    AddressClass = "lan"
+	AddressClassRemote AddressClass = "remote"
+)
+
+// Valid indicates whether the value is a known member of the AddressClass enum.
+func (e AddressClass) Valid() bool {
+	switch e {
+	case AddressClassLan:
+		return true
+	case AddressClassRemote:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AvatarColor.
+const (
+	AvatarColorAmber  AvatarColor = "amber"
+	AvatarColorBlue   AvatarColor = "blue"
+	AvatarColorCoral  AvatarColor = "coral"
+	AvatarColorGreen  AvatarColor = "green"
+	AvatarColorPink   AvatarColor = "pink"
+	AvatarColorSlate  AvatarColor = "slate"
+	AvatarColorTeal   AvatarColor = "teal"
+	AvatarColorViolet AvatarColor = "violet"
+)
+
+// Valid indicates whether the value is a known member of the AvatarColor enum.
+func (e AvatarColor) Valid() bool {
+	switch e {
+	case AvatarColorAmber:
+		return true
+	case AvatarColorBlue:
+		return true
+	case AvatarColorCoral:
+		return true
+	case AvatarColorGreen:
+		return true
+	case AvatarColorPink:
+		return true
+	case AvatarColorSlate:
+		return true
+	case AvatarColorTeal:
+		return true
+	case AvatarColorViolet:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CardFormat.
 const (
 	CardFormatEpisode CardFormat = "episode"
@@ -34,6 +106,27 @@ func (e CardFormat) Valid() bool {
 	case CardFormatPoster:
 		return true
 	case CardFormatSquare:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientKind.
+const (
+	ClientKindCli ClientKind = "cli"
+	ClientKindTv  ClientKind = "tv"
+	ClientKindWeb ClientKind = "web"
+)
+
+// Valid indicates whether the value is a known member of the ClientKind enum.
+func (e ClientKind) Valid() bool {
+	switch e {
+	case ClientKindCli:
+		return true
+	case ClientKindTv:
+		return true
+	case ClientKindWeb:
 		return true
 	default:
 		return false
@@ -784,6 +877,34 @@ func (e VideoResolution) Valid() bool {
 	}
 }
 
+// Account A local account (ADR 0032 section 1).
+type Account struct {
+	// ID Stable ID of the account.
+	//
+	// Example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+	ID uuid.UUID `json:"id"`
+
+	// Name Account name.
+	//
+	// Example: Anna
+	Name string `json:"name"`
+
+	// Role Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+	//
+	// Example: admin
+	Role AccountRole `json:"role"`
+}
+
+// AccountRole Role of an account: "admin" may manage the server through its primary profile, "user" may not. Clients must tolerate new values.
+//
+// Example: admin
+type AccountRole string
+
+// AddressClass Where a device was last seen from: "lan" (local network) or "remote". Clients must tolerate new values.
+//
+// Example: lan
+type AddressClass string
+
 // Artwork The selected artwork of an item, one image per ArtworkKind; a kind without an image is omitted. A season without its own poster carries its show's poster.
 type Artwork struct {
 	// Backdrop Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
@@ -804,6 +925,11 @@ type Artwork struct {
 	// Thumb Reference to an artwork image or to a photo (ADR 0029). Clients pass it to the api-client helper imageUrl, which builds the getImage URL; they never build that URL themselves.
 	Thumb *ImageRef `json:"thumb,omitempty"`
 }
+
+// AvatarColor Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+//
+// Example: coral
+type AvatarColor string
 
 // BrowseQuery The sort and filters of a Browse pivot listing (listLibraryItems) as a structured object: every property has the name, values and bounds of the listLibraryItems query parameter of the same name, and an absent property means that parameter's default. "See all" opens the Browse pivot of Row.libraryId with these values in the URL. The Browse pivot lists top-level items, so a row of episodes points to their shows.
 type BrowseQuery struct {
@@ -871,6 +997,11 @@ type BrowseQuery struct {
 // Example: poster
 type CardFormat string
 
+// ClientKind Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+//
+// Example: web
+type ClientKind string
+
 // ClientProfile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
 type ClientProfile struct {
 	// CodecLimits Per-codec limits; omitted or empty when no codec has extra limits.
@@ -904,6 +1035,48 @@ type CodecLimit struct {
 	//
 	// Example: ["Constrained Baseline","Baseline","Main","High"]
 	Profiles *[]string `json:"profiles,omitempty"`
+}
+
+// Device A signed-in device, that is one session of the account (US-25).
+type Device struct {
+	// AddressClass Where a device was last seen from: "lan" (local network) or "remote". Clients must tolerate new values.
+	//
+	// Example: lan
+	AddressClass AddressClass `json:"addressClass"`
+
+	// Client Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+	//
+	// Example: web
+	Client ClientKind `json:"client"`
+
+	// Current True for the device that sends this request.
+	//
+	// Example: true
+	Current bool `json:"current"`
+
+	// ID Stable ID of the device; revokeOwnDevice takes it.
+	//
+	// Example: 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+	ID uuid.UUID `json:"id"`
+
+	// LastSeenAt Last request of the device, exact to about 5 minutes.
+	LastSeenAt time.Time `json:"lastSeenAt"`
+
+	// Name Name given at sign-in or derived from the User-Agent.
+	//
+	// Example: Firefox on Windows
+	Name string `json:"name"`
+
+	// Platform Operating system or platform of the device; omitted when unknown.
+	//
+	// Example: Windows
+	Platform *string `json:"platform,omitempty"`
+}
+
+// DeviceList The devices signed in to the account.
+type DeviceList struct {
+	// Devices Every device, most recently seen first.
+	Devices []Device `json:"devices"`
 }
 
 // DirectPlayProfile A container the client plays as a progressive file, with the codecs it plays inside it.
@@ -1962,6 +2135,18 @@ type LibraryUpdate struct {
 // Example: matched
 type MatchState string
 
+// Me The signed-in account, its selected profile and its profiles. It never contains the session token.
+type Me struct {
+	// Account A local account (ADR 0032 section 1).
+	Account Account `json:"account"`
+
+	// CurrentProfile The profile selected for this session; null until one is chosen.
+	CurrentProfile *ProfileSummary `json:"currentProfile"`
+
+	// Profiles The account's profiles for the picker, the primary profile first, then the managed ones by name.
+	Profiles []ProfileSummary `json:"profiles"`
+}
+
 // MediaFile One media file and what probing found in it. The API never exposes file system paths; files are addressed by ID only.
 type MediaFile struct {
 	// Available Whether the file was probed successfully and can be played.
@@ -2279,6 +2464,15 @@ type MetadataStatus struct {
 	QueueLength int32 `json:"queueLength"`
 }
 
+// PasswordChange A change of the signed-in account's own password.
+type PasswordChange struct {
+	// CurrentPassword The password in use now.
+	CurrentPassword *string `json:"currentPassword,omitempty"`
+
+	// NewPassword The new password, 8 to 128 bytes of UTF-8; no composition rules.
+	NewPassword *string `json:"newPassword,omitempty"`
+}
+
 // PersonRole Role of a person in an item; "author" and "narrator" describe audiobooks. Clients must tolerate values added in later versions.
 //
 // Example: actor
@@ -2422,7 +2616,7 @@ type PlaybackSessionState string
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
-	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
+	// Code Stable machine-readable error code that clients map to a translated message. Published codes: "bad_request" (400, the request could not be parsed), "invalid" (400, the input breaks a rule), "forbidden" (403), "not_found" (404, also for unknown routes), "method_not_allowed" (405), "conflict" (409), "payload_too_large" (413, the request body exceeds 64 KiB), "unsupported" (422, the server cannot handle this input, for example an unprobed file), "no_compatible_format" (422, the client plays no format the server can produce), "transcode_unavailable" (422, transcoding is needed but the server cannot encode), "internal_error" (500), "unavailable" (503, for example while the server shuts down), "session_limit_reached" (503, too many playback sessions; see Retry-After) and "stream_not_ready" (503, the stream has no segment yet; see Retry-After). Library management adds "folder_not_found" (400), "folder_unreadable" (400), "folder_overlap" (409), "folder_reserved" (400), "folder_outside_roots" (400), "kind_unsupported" (400), "name_invalid" (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata adds "online_disabled" (409, the feature is switched off) and "provider_unavailable" (503, the provider is offline or rate limiting; see retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid session), "setup_required" (401, no account exists yet; run the setup), "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong current password in changeOwnPassword), "profile_required" (403, the session has no selected profile), "pin_invalid" (403, a missing or wrong PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and "too_many_attempts" (429, too many failed sign-ins or password checks; see retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter value the contract declares but this server does not serve yet. New codes may be added; clients show a generic message for unknown codes.
 	//
 	// Example: not_found
 	Code string `json:"code"`
@@ -2443,7 +2637,7 @@ type Problem struct {
 	// Example: 3f6c1d2a-9b8e-4f70-8a1c-2d3e4f5a6b7c
 	LibraryID *uuid.UUID `json:"libraryId,omitempty"`
 
-	// RetryAfterSeconds For "provider_unavailable", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
+	// RetryAfterSeconds For "provider_unavailable", "profile_locked" and "too_many_attempts", the seconds after which a retry may succeed (the Retry-After header carries the same value); omitted when unknown.
 	//
 	// Example: 30
 	RetryAfterSeconds *int32 `json:"retryAfterSeconds,omitempty"`
@@ -2456,6 +2650,55 @@ type Problem struct {
 
 	// Type URI reference identifying the problem type; "about:blank" if none.
 	Type string `json:"type"`
+}
+
+// ProfileSelection The profile to use in this session.
+type ProfileSelection struct {
+	// Pin The profile's 4-digit PIN; needed when the profile has one.
+	Pin *string `json:"pin,omitempty"`
+
+	// ProfileID ID of a profile of the signed-in account (ProfileSummary.id).
+	//
+	// Example: 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+	ProfileID uuid.UUID `json:"profileId"`
+
+	// Remember Keep the selection on this device until it is changed. False ends it after 4 hours without requests. Omitted, it is false for a profile with a PIN and true otherwise.
+	//
+	// Example: false
+	Remember *bool `json:"remember,omitempty"`
+}
+
+// ProfileSummary A profile of the signed-in account as the profile picker shows it.
+type ProfileSummary struct {
+	// AvatarColor Token colour of a profile avatar; the clients map each name to a colour of their design tokens. Clients must tolerate new values.
+	//
+	// Example: coral
+	AvatarColor AvatarColor `json:"avatarColor"`
+
+	// HasPin True when selecting the profile needs its 4-digit PIN.
+	//
+	// Example: false
+	HasPin bool `json:"hasPin"`
+
+	// ID Stable ID of the profile.
+	//
+	// Example: 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+	ID uuid.UUID `json:"id"`
+
+	// IsAdmin True when the profile carries admin powers: the primary profile of an admin account.
+	//
+	// Example: true
+	IsAdmin bool `json:"isAdmin"`
+
+	// IsPrimary True for the account's primary profile, false for a managed profile.
+	//
+	// Example: true
+	IsPrimary bool `json:"isPrimary"`
+
+	// Name Profile name.
+	//
+	// Example: Anna
+	Name string `json:"name"`
 }
 
 // ProviderIds IDs of the item at external metadata providers, read from local NFO files. No connection to a provider is made (ADR 0010). Absent IDs are omitted.
@@ -2609,6 +2852,67 @@ type ScanStatus struct {
 	UnavailableFolderCount int32 `json:"unavailableFolderCount"`
 }
 
+// Session A new session (ADR 0032 section 3). For client "web" the session cookie carries it and token is omitted.
+type Session struct {
+	// Me The signed-in account, its selected profile and its profiles. It never contains the session token.
+	Me Me `json:"me"`
+
+	// Token Bearer token for client "tv" or "cli", returned only here and only once; the server stores just its hash. Send it as "Authorization: Bearer <token>".
+	//
+	// Example: example-token
+	Token *string `json:"token,omitempty"`
+}
+
+// SetupRequest The first administrator account and the client that signs in with it; client defaults to "web" when omitted.
+type SetupRequest struct {
+	// Client Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+	//
+	// Example: web
+	Client *ClientKind `json:"client,omitempty"`
+
+	// DeviceName Name of the device in the device list; omitted, the server derives a short label from the User-Agent.
+	//
+	// Example: Living room PC
+	DeviceName *string `json:"deviceName,omitempty"`
+
+	// Name Account name, 1 to 40 characters after Unicode NFC normalisation; unique ignoring case. It also names the primary profile.
+	//
+	// Example: Anna
+	Name string `json:"name"`
+
+	// Password Password of 8 to 128 bytes of UTF-8; no composition rules.
+	Password *string `json:"password,omitempty"`
+}
+
+// SetupState Whether the server still waits for its first account (ADR 0032 section 6).
+type SetupState struct {
+	// Required True while no account exists; completeSetup then creates the first one.
+	//
+	// Example: true
+	Required bool `json:"required"`
+}
+
+// SignInRequest Credentials and the client that signs in.
+type SignInRequest struct {
+	// Client Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app, bearer token) or "cli" (command-line or script, bearer token). Clients must tolerate new values.
+	//
+	// Example: web
+	Client ClientKind `json:"client"`
+
+	// DeviceName Name of the device in the device list; omitted, the server derives a short label from the User-Agent.
+	//
+	// Example: Living room TV
+	DeviceName *string `json:"deviceName,omitempty"`
+
+	// Name Account name; compared ignoring case after NFC normalisation.
+	//
+	// Example: Anna
+	Name string `json:"name"`
+
+	// Password Password of the account.
+	Password *string `json:"password,omitempty"`
+}
+
 // SortOrder Sort direction: "asc" (ascending) or "desc" (descending). Clients must tolerate values added in later versions.
 //
 // Example: asc
@@ -2722,6 +3026,9 @@ type ContentRatingFilter = []string
 // DecadeFilter defines model for DecadeFilter.
 type DecadeFilter = []int32
 
+// DeviceID defines model for DeviceId.
+type DeviceID = uuid.UUID
+
 // GenreFilter defines model for GenreFilter.
 type GenreFilter = []string
 
@@ -2770,6 +3077,9 @@ type OnlineDisabled = Problem
 
 // ProviderUnavailable Problem details (RFC 9457) with a machine-readable code that clients translate.
 type ProviderUnavailable = Problem
+
+// TooManyAttempts Problem details (RFC 9457) with a machine-readable code that clients translate.
+type TooManyAttempts = Problem
 
 // ListFoldersParams defines parameters for ListFolders.
 type ListFoldersParams struct {
@@ -2954,6 +3264,9 @@ type ListLibraryRowsParams struct {
 	Limit *RowItemLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
+type CreateSessionJSONRequestBody = SignInRequest
+
 // IdentifyItemJSONRequestBody defines body for IdentifyItem for application/json ContentType.
 type IdentifyItemJSONRequestBody = IdentifyRequest
 
@@ -2966,14 +3279,29 @@ type CreateLibraryJSONRequestBody = LibraryCreate
 // UpdateLibraryJSONRequestBody defines body for UpdateLibrary for application/json ContentType.
 type UpdateLibraryJSONRequestBody = LibraryUpdate
 
+// ChangeOwnPasswordJSONRequestBody defines body for ChangeOwnPassword for application/json ContentType.
+type ChangeOwnPasswordJSONRequestBody = PasswordChange
+
+// SelectProfileJSONRequestBody defines body for SelectProfile for application/json ContentType.
+type SelectProfileJSONRequestBody = ProfileSelection
+
 // CreatePlaybackSessionJSONRequestBody defines body for CreatePlaybackSession for application/json ContentType.
 type CreatePlaybackSessionJSONRequestBody = PlaybackRequest
 
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettingsUpdate
 
+// CompleteSetupJSONRequestBody defines body for CompleteSetup for application/json ContentType.
+type CompleteSetupJSONRequestBody = SetupRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// DeleteSession Sign out
+	// (DELETE /api/v1/auth/session)
+	DeleteSession(w http.ResponseWriter, r *http.Request)
+	// CreateSession Sign in with name and password
+	// (POST /api/v1/auth/session)
+	CreateSession(w http.ResponseWriter, r *http.Request)
 	// ListFolderRoots List the folder roots a library folder may be chosen from
 	// (GET /api/v1/folder-roots)
 	ListFolderRoots(w http.ResponseWriter, r *http.Request)
@@ -3040,6 +3368,24 @@ type ServerInterface interface {
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(w http.ResponseWriter, r *http.Request, libraryID LibraryID)
+	// GetMe Describe the signed-in account and its profiles
+	// (GET /api/v1/me)
+	GetMe(w http.ResponseWriter, r *http.Request)
+	// ListOwnDevices List the devices signed in to the account
+	// (GET /api/v1/me/devices)
+	ListOwnDevices(w http.ResponseWriter, r *http.Request)
+	// RevokeOwnDevice Sign a device of the account out
+	// (DELETE /api/v1/me/devices/{deviceId})
+	RevokeOwnDevice(w http.ResponseWriter, r *http.Request, deviceID DeviceID)
+	// ChangeOwnPassword Change the account's own password
+	// (PUT /api/v1/me/password)
+	ChangeOwnPassword(w http.ResponseWriter, r *http.Request)
+	// ClearProfileSelection Leave the selected profile
+	// (DELETE /api/v1/me/profile)
+	ClearProfileSelection(w http.ResponseWriter, r *http.Request)
+	// SelectProfile Select the profile of this session
+	// (PUT /api/v1/me/profile)
+	SelectProfile(w http.ResponseWriter, r *http.Request)
 	// GetMetadataStatus Report the state of the online metadata providers
 	// (GET /api/v1/metadata/status)
 	GetMetadataStatus(w http.ResponseWriter, r *http.Request)
@@ -3058,6 +3404,12 @@ type ServerInterface interface {
 	// UpdateMetadataSettings Change the online metadata settings
 	// (PUT /api/v1/settings/metadata)
 	UpdateMetadataSettings(w http.ResponseWriter, r *http.Request)
+	// GetSetupState Report whether the first-run setup is still needed
+	// (GET /api/v1/setup)
+	GetSetupState(w http.ResponseWriter, r *http.Request)
+	// CompleteSetup Create the first administrator account and sign in
+	// (POST /api/v1/setup)
+	CompleteSetup(w http.ResponseWriter, r *http.Request)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
@@ -3071,6 +3423,34 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// DeleteSession operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSession operation middleware
+func (siw *ServerInterfaceWrapper) CreateSession(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSession(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListFolderRoots operation middleware
 func (siw *ServerInterfaceWrapper) ListFolderRoots(w http.ResponseWriter, r *http.Request) {
@@ -4300,6 +4680,102 @@ func (siw *ServerInterfaceWrapper) StartLibraryScan(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetMe operation middleware
+func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMe(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOwnDevices operation middleware
+func (siw *ServerInterfaceWrapper) ListOwnDevices(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOwnDevices(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeOwnDevice operation middleware
+func (siw *ServerInterfaceWrapper) RevokeOwnDevice(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "deviceId" -------------
+	var deviceID DeviceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "deviceId", r.PathValue("deviceId"), &deviceID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "deviceId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeOwnDevice(w, r, deviceID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeOwnPassword operation middleware
+func (siw *ServerInterfaceWrapper) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeOwnPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearProfileSelection operation middleware
+func (siw *ServerInterfaceWrapper) ClearProfileSelection(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearProfileSelection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SelectProfile operation middleware
+func (siw *ServerInterfaceWrapper) SelectProfile(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SelectProfile(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -4399,6 +4875,34 @@ func (siw *ServerInterfaceWrapper) UpdateMetadataSettings(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMetadataSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSetupState operation middleware
+func (siw *ServerInterfaceWrapper) GetSetupState(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSetupState(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteSetup operation middleware
+func (siw *ServerInterfaceWrapper) CompleteSetup(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteSetup(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4544,6 +5048,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system/info", wrapper.GetSystemInfo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/setup", wrapper.GetSetupState)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/setup", wrapper.CompleteSetup)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/auth/session", wrapper.DeleteSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/session", wrapper.CreateSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/me/profile", wrapper.ClearProfileSelection)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/me/profile", wrapper.SelectProfile)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/me/password", wrapper.ChangeOwnPassword)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/devices", wrapper.ListOwnDevices)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/me/devices/{deviceId}", wrapper.RevokeOwnDevice)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries", wrapper.ListLibraries)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/libraries", wrapper.CreateLibrary)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/libraries/{libraryId}", wrapper.DeleteLibrary)
@@ -4586,6 +5100,119 @@ type ProviderUnavailableApplicationProblemPlusJSONResponse struct {
 	Body Problem
 
 	Headers ProviderUnavailableResponseHeaders
+}
+
+type TooManyAttemptsResponseHeaders struct {
+	RetryAfter *int32
+}
+type TooManyAttemptsApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers TooManyAttemptsResponseHeaders
+}
+
+type DeleteSessionRequestObject struct {
+}
+
+type DeleteSessionResponseObject interface {
+	VisitDeleteSessionResponse(w http.ResponseWriter) error
+}
+
+type DeleteSession204Response struct {
+}
+
+func (response DeleteSession204Response) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSessiondefaultApplicationProblemPlusJSONResponse) VisitDeleteSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessionRequestObject struct {
+	Body *CreateSessionJSONRequestBody
+}
+
+type CreateSessionResponseObject interface {
+	VisitCreateSessionResponse(w http.ResponseWriter) error
+}
+
+type CreateSession200JSONResponse Session
+
+func (response CreateSession200JSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSession401ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSession429ApplicationProblemPlusJSONResponse struct {
+	TooManyAttemptsApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSession429ApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSessiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSessiondefaultApplicationProblemPlusJSONResponse) VisitCreateSessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type ListFolderRootsRequestObject struct {
@@ -5542,6 +6169,285 @@ func (response StartLibraryScandefaultApplicationProblemPlusJSONResponse) VisitS
 	return err
 }
 
+type GetMeRequestObject struct {
+}
+
+type GetMeResponseObject interface {
+	VisitGetMeResponse(w http.ResponseWriter) error
+}
+
+type GetMe200JSONResponse Me
+
+func (response GetMe200JSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMedefaultApplicationProblemPlusJSONResponse) VisitGetMeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOwnDevicesRequestObject struct {
+}
+
+type ListOwnDevicesResponseObject interface {
+	VisitListOwnDevicesResponse(w http.ResponseWriter) error
+}
+
+type ListOwnDevices200JSONResponse DeviceList
+
+func (response ListOwnDevices200JSONResponse) VisitListOwnDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOwnDevicesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListOwnDevicesdefaultApplicationProblemPlusJSONResponse) VisitListOwnDevicesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeOwnDeviceRequestObject struct {
+	DeviceID DeviceID `json:"deviceId"`
+}
+
+type RevokeOwnDeviceResponseObject interface {
+	VisitRevokeOwnDeviceResponse(w http.ResponseWriter) error
+}
+
+type RevokeOwnDevice204Response struct {
+}
+
+func (response RevokeOwnDevice204Response) VisitRevokeOwnDeviceResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeOwnDevicedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeOwnDevicedefaultApplicationProblemPlusJSONResponse) VisitRevokeOwnDeviceResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOwnPasswordRequestObject struct {
+	Body *ChangeOwnPasswordJSONRequestBody
+}
+
+type ChangeOwnPasswordResponseObject interface {
+	VisitChangeOwnPasswordResponse(w http.ResponseWriter) error
+}
+
+type ChangeOwnPassword204Response struct {
+}
+
+func (response ChangeOwnPassword204Response) VisitChangeOwnPasswordResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ChangeOwnPassword403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOwnPassword403ApplicationProblemPlusJSONResponse) VisitChangeOwnPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOwnPassword429ApplicationProblemPlusJSONResponse struct {
+	TooManyAttemptsApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeOwnPassword429ApplicationProblemPlusJSONResponse) VisitChangeOwnPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOwnPassworddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChangeOwnPassworddefaultApplicationProblemPlusJSONResponse) VisitChangeOwnPasswordResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ClearProfileSelectionRequestObject struct {
+}
+
+type ClearProfileSelectionResponseObject interface {
+	VisitClearProfileSelectionResponse(w http.ResponseWriter) error
+}
+
+type ClearProfileSelection204Response struct {
+}
+
+func (response ClearProfileSelection204Response) VisitClearProfileSelectionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ClearProfileSelectiondefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ClearProfileSelectiondefaultApplicationProblemPlusJSONResponse) VisitClearProfileSelectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SelectProfileRequestObject struct {
+	Body *SelectProfileJSONRequestBody
+}
+
+type SelectProfileResponseObject interface {
+	VisitSelectProfileResponse(w http.ResponseWriter) error
+}
+
+type SelectProfile200JSONResponse Me
+
+func (response SelectProfile200JSONResponse) VisitSelectProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SelectProfile403ApplicationProblemPlusJSONResponse Problem
+
+func (response SelectProfile403ApplicationProblemPlusJSONResponse) VisitSelectProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SelectProfile429ApplicationProblemPlusJSONResponse struct {
+	TooManyAttemptsApplicationProblemPlusJSONResponse
+}
+
+func (response SelectProfile429ApplicationProblemPlusJSONResponse) VisitSelectProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if response.Headers.RetryAfter != nil {
+		w.Header().Set("Retry-After", fmt.Sprint(*response.Headers.RetryAfter))
+	}
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SelectProfiledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SelectProfiledefaultApplicationProblemPlusJSONResponse) VisitSelectProfileResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMetadataStatusRequestObject struct {
 }
 
@@ -5802,6 +6708,97 @@ func (response UpdateMetadataSettingsdefaultApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type GetSetupStateRequestObject struct {
+}
+
+type GetSetupStateResponseObject interface {
+	VisitGetSetupStateResponse(w http.ResponseWriter) error
+}
+
+type GetSetupState200JSONResponse SetupState
+
+func (response GetSetupState200JSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSetupStatedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSetupStatedefaultApplicationProblemPlusJSONResponse) VisitGetSetupStateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetupRequestObject struct {
+	Body *CompleteSetupJSONRequestBody
+}
+
+type CompleteSetupResponseObject interface {
+	VisitCompleteSetupResponse(w http.ResponseWriter) error
+}
+
+type CompleteSetup201JSONResponse Session
+
+func (response CompleteSetup201JSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetup409ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteSetup409ApplicationProblemPlusJSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteSetupdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CompleteSetupdefaultApplicationProblemPlusJSONResponse) VisitCompleteSetupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetSystemInfoRequestObject struct {
 }
 
@@ -5842,6 +6839,12 @@ func (response GetSystemInfodefaultApplicationProblemPlusJSONResponse) VisitGetS
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// DeleteSession Sign out
+	// (DELETE /api/v1/auth/session)
+	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
+	// CreateSession Sign in with name and password
+	// (POST /api/v1/auth/session)
+	CreateSession(ctx context.Context, request CreateSessionRequestObject) (CreateSessionResponseObject, error)
 	// ListFolderRoots List the folder roots a library folder may be chosen from
 	// (GET /api/v1/folder-roots)
 	ListFolderRoots(ctx context.Context, request ListFolderRootsRequestObject) (ListFolderRootsResponseObject, error)
@@ -5908,6 +6911,24 @@ type StrictServerInterface interface {
 	// StartLibraryScan Start a scan of a library
 	// (POST /api/v1/libraries/{libraryId}/scan)
 	StartLibraryScan(ctx context.Context, request StartLibraryScanRequestObject) (StartLibraryScanResponseObject, error)
+	// GetMe Describe the signed-in account and its profiles
+	// (GET /api/v1/me)
+	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
+	// ListOwnDevices List the devices signed in to the account
+	// (GET /api/v1/me/devices)
+	ListOwnDevices(ctx context.Context, request ListOwnDevicesRequestObject) (ListOwnDevicesResponseObject, error)
+	// RevokeOwnDevice Sign a device of the account out
+	// (DELETE /api/v1/me/devices/{deviceId})
+	RevokeOwnDevice(ctx context.Context, request RevokeOwnDeviceRequestObject) (RevokeOwnDeviceResponseObject, error)
+	// ChangeOwnPassword Change the account's own password
+	// (PUT /api/v1/me/password)
+	ChangeOwnPassword(ctx context.Context, request ChangeOwnPasswordRequestObject) (ChangeOwnPasswordResponseObject, error)
+	// ClearProfileSelection Leave the selected profile
+	// (DELETE /api/v1/me/profile)
+	ClearProfileSelection(ctx context.Context, request ClearProfileSelectionRequestObject) (ClearProfileSelectionResponseObject, error)
+	// SelectProfile Select the profile of this session
+	// (PUT /api/v1/me/profile)
+	SelectProfile(ctx context.Context, request SelectProfileRequestObject) (SelectProfileResponseObject, error)
 	// GetMetadataStatus Report the state of the online metadata providers
 	// (GET /api/v1/metadata/status)
 	GetMetadataStatus(ctx context.Context, request GetMetadataStatusRequestObject) (GetMetadataStatusResponseObject, error)
@@ -5926,6 +6947,12 @@ type StrictServerInterface interface {
 	// UpdateMetadataSettings Change the online metadata settings
 	// (PUT /api/v1/settings/metadata)
 	UpdateMetadataSettings(ctx context.Context, request UpdateMetadataSettingsRequestObject) (UpdateMetadataSettingsResponseObject, error)
+	// GetSetupState Report whether the first-run setup is still needed
+	// (GET /api/v1/setup)
+	GetSetupState(ctx context.Context, request GetSetupStateRequestObject) (GetSetupStateResponseObject, error)
+	// CompleteSetup Create the first administrator account and sign in
+	// (POST /api/v1/setup)
+	CompleteSetup(ctx context.Context, request CompleteSetupRequestObject) (CompleteSetupResponseObject, error)
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(ctx context.Context, request GetSystemInfoRequestObject) (GetSystemInfoResponseObject, error)
@@ -5968,6 +6995,61 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// DeleteSession operation middleware
+func (sh *strictHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	var request DeleteSessionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSession(ctx, request.(DeleteSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSessionResponseObject); ok {
+		if err := validResponse.VisitDeleteSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSession operation middleware
+func (sh *strictHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	var request CreateSessionRequestObject
+
+	var body CreateSessionJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSession(ctx, request.(CreateSessionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSession")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSessionResponseObject); ok {
+		if err := validResponse.VisitCreateSessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListFolderRoots operation middleware
@@ -6569,6 +7651,166 @@ func (sh *strictHandler) StartLibraryScan(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetMe operation middleware
+func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	var request GetMeRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMe(ctx, request.(GetMeRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMe")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMeResponseObject); ok {
+		if err := validResponse.VisitGetMeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListOwnDevices operation middleware
+func (sh *strictHandler) ListOwnDevices(w http.ResponseWriter, r *http.Request) {
+	var request ListOwnDevicesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListOwnDevices(ctx, request.(ListOwnDevicesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListOwnDevices")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListOwnDevicesResponseObject); ok {
+		if err := validResponse.VisitListOwnDevicesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeOwnDevice operation middleware
+func (sh *strictHandler) RevokeOwnDevice(w http.ResponseWriter, r *http.Request, deviceID DeviceID) {
+	var request RevokeOwnDeviceRequestObject
+
+	request.DeviceID = deviceID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeOwnDevice(ctx, request.(RevokeOwnDeviceRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeOwnDevice")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeOwnDeviceResponseObject); ok {
+		if err := validResponse.VisitRevokeOwnDeviceResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeOwnPassword operation middleware
+func (sh *strictHandler) ChangeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	var request ChangeOwnPasswordRequestObject
+
+	var body ChangeOwnPasswordJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeOwnPassword(ctx, request.(ChangeOwnPasswordRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeOwnPassword")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeOwnPasswordResponseObject); ok {
+		if err := validResponse.VisitChangeOwnPasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ClearProfileSelection operation middleware
+func (sh *strictHandler) ClearProfileSelection(w http.ResponseWriter, r *http.Request) {
+	var request ClearProfileSelectionRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ClearProfileSelection(ctx, request.(ClearProfileSelectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ClearProfileSelection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ClearProfileSelectionResponseObject); ok {
+		if err := validResponse.VisitClearProfileSelectionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SelectProfile operation middleware
+func (sh *strictHandler) SelectProfile(w http.ResponseWriter, r *http.Request) {
+	var request SelectProfileRequestObject
+
+	var body SelectProfileJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SelectProfile(ctx, request.(SelectProfileRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SelectProfile")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SelectProfileResponseObject); ok {
+		if err := validResponse.VisitSelectProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMetadataStatus operation middleware
 func (sh *strictHandler) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
 	var request GetMetadataStatusRequestObject
@@ -6724,6 +7966,61 @@ func (sh *strictHandler) UpdateMetadataSettings(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateMetadataSettingsResponseObject); ok {
 		if err := validResponse.VisitUpdateMetadataSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSetupState operation middleware
+func (sh *strictHandler) GetSetupState(w http.ResponseWriter, r *http.Request) {
+	var request GetSetupStateRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSetupState(ctx, request.(GetSetupStateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSetupState")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSetupStateResponseObject); ok {
+		if err := validResponse.VisitGetSetupStateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteSetup operation middleware
+func (sh *strictHandler) CompleteSetup(w http.ResponseWriter, r *http.Request) {
+	var request CompleteSetupRequestObject
+
+	var body CompleteSetupJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteSetup(ctx, request.(CompleteSetupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteSetup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteSetupResponseObject); ok {
+		if err := validResponse.VisitCompleteSetupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

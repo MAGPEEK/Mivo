@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.11.0"
+  version: "1.12.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -17,18 +17,33 @@ info:
     rejected with 413 and the problem code "payload_too_large". While the server setting
     server.lan_only is on (the default), every request from a peer outside the local
     network is refused with 403 and the problem code "forbidden", except the health check.
+    Every operation needs a signed-in session (ADR 0032), sent as the session cookie by
+    browsers or as a bearer token by other clients, unless it declares an empty security
+    list. Without a session the server answers 401 "unauthenticated", or 401
+    "setup_required" while no account exists yet; catalog, media and watch operations
+    without a selected profile answer 403 "profile_required". Every unsafe request (POST,
+    PUT, PATCH, DELETE) authenticated by the session cookie must pass the same-origin rule
+    of ADR 0028 (Origin matches the server or is absent, Sec-Fetch-Site is not
+    "cross-site") and send application/json when it has a body, else it answers 403
+    "forbidden"; bearer requests are exempt (ADR 0032 section 3).
   license:
     name: GPL-3.0-or-later
     url: https://www.gnu.org/licenses/gpl-3.0.html
 servers:
   - url: /
+security:
+  - sessionCookie: []
+  - bearer: []
 tags:
   - name: system
     description: Server health and identity.
+  - name: auth
+    description: >-
+      First-run setup, sign-in and sign-out, the signed-in account with its profiles,
+      profile selection and the account's own devices (ADR 0032).
   - name: libraries
     description: >-
       Media libraries defined in the server configuration (ADR 0022) and their scans.
-      Libraries are read-only through the API until accounts exist.
   - name: items
     description: >-
       Items of a library (movies, shows with their seasons and episodes, extras, music
@@ -96,6 +111,272 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SystemInfo"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/setup:
+    get:
+      operationId: getSetupState
+      summary: Report whether the first-run setup is still needed
+      description: >-
+        Says whether the server is in setup state, that is no account exists yet (ADR 0032
+        section 6). Clients show the setup wizard instead of the sign-in screen while
+        required is true. The endpoint is unauthenticated.
+      tags:
+        - auth
+      security: []
+      responses:
+        "200":
+          description: The setup state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupState"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: completeSetup
+      summary: Create the first administrator account and sign in
+      description: >-
+        Creates the first account with the role admin and its primary profile, and signs
+        in like createSession (the session cookie for client "web", the token in the body
+        for "tv" and "cli"). The endpoint is unauthenticated, but it is served only to
+        local peers, same-origin and with application/json (the ADR 0028 local-peer and
+        same-origin rule, ADR 0032 section 6), also when server.lan_only is off; any other
+        caller gets 403 "forbidden", so a fresh server reachable from the internet cannot
+        be taken over. Once any account exists it answers 409 "conflict". Problem codes:
+        "invalid" (400, with "field" "name" or "password": a name of 1 to 40 characters and
+        a password of 8 to 128 bytes), "forbidden" (403) and "conflict" (409). There are
+        no default credentials.
+      tags:
+        - auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "201":
+          description: >-
+            The administrator exists and is signed in. For client "web" the response sets
+            the session cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "409":
+          description: An account exists already ("conflict").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/auth/session:
+    post:
+      operationId: createSession
+      summary: Sign in with name and password
+      description: >-
+        Checks the name and password and creates a session, which is also the device of
+        the caller (ADR 0032 section 3). For client "web" the response sets the HttpOnly
+        session cookie and carries no token; for "tv" and "cli" the token is in the body
+        and no cookie is set. The server selects the primary profile when the account has
+        no managed profiles and the primary profile has no PIN; otherwise
+        Session.me.currentProfile is null and the client shows the profile picker. The
+        endpoint is unauthenticated; like every write it must pass the ADR 0028 same-origin
+        rule and send application/json (ADR 0032 section 3), else 403 "forbidden". Problem
+        codes: "invalid_credentials" (401, wrong name or password, an unknown name or a
+        disabled account; the answer never says whether the name exists or is disabled),
+        "too_many_attempts" (429, too many failures for the name or from the caller's
+        address, with retryAfterSeconds and Retry-After) and "setup_required" (401, no
+        account exists yet). Failures for an unknown name count toward the throttle exactly
+        like failures for a known one, so the throttle reveals no names either.
+      tags:
+        - auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+      responses:
+        "200":
+          description: >-
+            Signed in. For client "web" the response sets the session cookie.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Wrong name or password ("invalid_credentials").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteSession
+      summary: Sign out
+      description: >-
+        Ends the caller's session and so removes its device; a browser's session cookie is
+        cleared. Write operation: a cookie-authenticated call must pass the ADR 0028
+        same-origin rule (ADR 0032 section 3), else 403 "forbidden".
+      tags:
+        - auth
+      responses:
+        "204":
+          description: The session is ended.
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/me:
+    get:
+      operationId: getMe
+      summary: Describe the signed-in account and its profiles
+      description: >-
+        Returns the account of the session, the selected profile (null before a profile is
+        chosen) and the profiles for the picker. It works without a selected profile. The
+        session token is never part of the answer.
+      tags:
+        - auth
+      responses:
+        "200":
+          description: The signed-in account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/me/profile:
+    put:
+      operationId: selectProfile
+      summary: Select the profile of this session
+      description: >-
+        Selects one of the account's profiles for this session (ADR 0032 section 4). A
+        profile with a PIN needs it; so does switching from a managed profile to a primary
+        profile that has one. remember false (the default for profiles with a PIN) ends the
+        selection after 4 hours without requests. Five wrong PINs lock the profile for 5
+        minutes. Write operation: a cookie-authenticated call must pass the ADR 0028
+        same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem codes:
+        "not_found" (404, no profile of this account), "pin_invalid" (403, the PIN is
+        missing or wrong) and "profile_locked" (429, with retryAfterSeconds and
+        Retry-After).
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileSelection"
+      responses:
+        "200":
+          description: The account with the newly selected profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Me"
+        "403":
+          description: >-
+            The PIN is missing or wrong ("pin_invalid"), or the same-origin rule failed
+            ("forbidden").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: clearProfileSelection
+      summary: Leave the selected profile
+      description: >-
+        Clears the profile of this session, so the client shows the picker again ("Switch
+        profile"). The session stays signed in. Write operation: a cookie-authenticated
+        call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403
+        "forbidden".
+      tags:
+        - auth
+      responses:
+        "204":
+          description: No profile is selected any more.
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/me/password:
+    put:
+      operationId: changeOwnPassword
+      summary: Change the account's own password
+      description: >-
+        Replaces the password of the signed-in account and ends its other sessions; the
+        caller's session stays. Write operation: a cookie-authenticated call must pass the
+        ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". Problem
+        codes: "invalid_credentials" (403, the current password is wrong; 403, not 401,
+        because the session stays signed in), "invalid" (400, with "field" "newPassword":
+        8 to 128 bytes) and "too_many_attempts" (429, with retryAfterSeconds and
+        Retry-After).
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordChange"
+      responses:
+        "204":
+          description: The password is changed.
+        "403":
+          description: >-
+            The current password is wrong ("invalid_credentials"), or the same-origin rule
+            failed ("forbidden").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/TooManyAttempts"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/me/devices:
+    get:
+      operationId: listOwnDevices
+      summary: List the devices signed in to the account
+      description: >-
+        Returns every session of the signed-in account as a device (US-25), most recently
+        seen first; current marks the caller's own.
+      tags:
+        - auth
+      responses:
+        "200":
+          description: The account's devices.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceList"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/me/devices/{deviceId}:
+    parameters:
+      - $ref: "#/components/parameters/DeviceId"
+    delete:
+      operationId: revokeOwnDevice
+      summary: Sign a device of the account out
+      description: >-
+        Ends the session behind the device; the device has to sign in again. Revoking the
+        current device equals signing out. Write operation: a cookie-authenticated call
+        must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden".
+        A device of another account or an unknown ID answers 404 "not_found".
+      tags:
+        - auth
+      responses:
+        "204":
+          description: The device is signed out.
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/libraries:
@@ -883,9 +1164,9 @@ paths:
         server from the TMDB image host and kept in memory for a short time, so the browser
         never contacts a provider (ADR 0010, ADR 0031). The server sends no client header or
         cookie to the provider. An ID expires about an hour after the search that issued
-        it. Management operation (ADR 0028): until accounts exist only local peers of the
-        same origin may load it; like getImage the endpoint is unauthenticated, because an
-        img element cannot send credentials (milestone 7 protects it by cookie). Problem
+        it. Management operation (ADR 0028): only local peers of the same origin may load
+        it, and like getImage it needs the signed-in session (ADR 0032; the same-origin
+        session cookie covers img elements). Problem
         codes: "not_found" (404, an unknown or expired ID, or the provider has no such
         picture), "invalid" (400, a malformed ID), "online_disabled" (409, online metadata
         or TMDB is switched off: the server serves only a picture it already holds and opens
@@ -893,7 +1174,6 @@ paths:
         Retry-After).
       tags:
         - images
-      security: []
       responses:
         "200":
           description: The poster as the provider serves it.
@@ -932,8 +1212,9 @@ paths:
         orientation applied; the lightbox uses the same reference at a large width. A
         photo whose thumbnailState is "unsupported" answers 422 "unsupported". Every
         rendered image is re-encoded and carries no EXIF, GPS or XMP metadata of its
-        source. The endpoint is unauthenticated for now (milestone 7 protects it by cookie
-        or signed URL, ADR 0024). Clients build the URL only through the api-client helper
+        source. The endpoint needs a signed-in session like every other one (ADR 0032; the
+        same-origin session cookie covers img elements); signed URLs for casting follow in
+        milestone 8. Clients build the URL only through the api-client helper
         imageUrl (or imageSrcSet) from an ImageRef and never take values out of it.
         Caching: a request whose tag equals the current tag of the image is answered with
         Cache-Control "private, max-age=31536000, immutable", any other request (no tag or
@@ -945,7 +1226,6 @@ paths:
         images are rendered at once).
       tags:
         - images
-      security: []
       parameters:
         - name: width
           in: query
@@ -1084,14 +1364,14 @@ paths:
       summary: Download the original file of a direct-play session
       description: >-
         Serves the original media file of a session in mode direct_play with HTTP range
-        support (Range, If-Range, 206, 416). The URL is unauthenticated and opaque: clients
+        support (Range, If-Range, 206, 416). The URL is opaque and needs the signed-in
+        session (ADR 0032; the same-origin session cookie covers media elements): clients
         load streamUrl as it is and never build it. Content-Type follows the direct-play
         container (for example video/mp4 or video/webm). Sessions in another mode answer
         404 "not_found", a file deleted from disk 404, a file whose path now leads outside
         its library folder 422 "unsupported".
       tags:
         - stream
-      security: []
       parameters:
         - $ref: "#/components/parameters/Range"
       responses:
@@ -1116,10 +1396,9 @@ paths:
       summary: Describe the original file of a direct-play session
       description: >-
         Like getPlaybackFile without a body, so players can read the size and the range
-        support. The URL is unauthenticated and opaque.
+        support. The URL is opaque and needs the signed-in session (ADR 0032).
       tags:
         - stream
-      security: []
       responses:
         "200":
           description: The headers of the whole file.
@@ -1143,7 +1422,8 @@ paths:
       summary: Download a file of an HLS session
       description: >-
         Serves the playlist and segments of a session in mode remux or transcode. The URL is
-        unauthenticated and opaque: clients load streamUrl and follow the relative
+        opaque and needs the signed-in session (ADR 0032; the same-origin session cookie
+        covers media elements): clients load streamUrl and follow the relative
         URIs inside the playlist. Every file request, not only the playlist, waits up to 20
         seconds for the session's first segment, then answers 503 "stream_not_ready" with
         Retry-After; once the first segment exists it answers at once. Sessions in another
@@ -1153,7 +1433,6 @@ paths:
         max-age=3600.
       tags:
         - stream
-      security: []
       parameters:
         - $ref: "#/components/parameters/Range"
       responses:
@@ -1200,11 +1479,10 @@ paths:
       summary: Describe a file of an HLS session
       description: >-
         Like getPlaybackHlsFile without a body, including the wait for the first segment,
-        so players can read the size and the range support. The URL is unauthenticated and
-        opaque.
+        so players can read the size and the range support. The URL is opaque and needs the
+        signed-in session (ADR 0032).
       tags:
         - stream
-      security: []
       parameters:
         - $ref: "#/components/parameters/Range"
       responses:
@@ -1224,7 +1502,35 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      # Derived from the brand ID (internal/platform/brand, ADR 0002 rename list).
+      name: mivo_session
+      description: >-
+        Session cookie of browsers (client "web", ADR 0032 section 3). Its name is the
+        brand ID of the server followed by "_session"; with the working title that is
+        "mivo_session". It is HttpOnly, SameSite=Lax, Path=/ and Secure on TLS
+        connections, and is set by completeSetup and createSession. Unsafe requests it
+        authenticates must pass the ADR 0028 same-origin rule.
+    bearer:
+      type: http
+      scheme: bearer
+      description: >-
+        Session token of TV and command-line clients (client "tv" or "cli"), returned once
+        in Session.token by completeSetup and createSession and sent as "Authorization:
+        Bearer <token>". Bearer requests are exempt from the same-origin rule.
   parameters:
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      description: ID of a signed-in device (Device.id).
+      schema:
+        type: string
+        format: uuid
+      example: 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
     LibraryId:
       name: libraryId
       in: path
@@ -1493,6 +1799,17 @@ components:
       description: >-
         The provider cannot be reached or is rate limiting ("provider_unavailable");
         retryAfterSeconds and Retry-After say when to try again.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyAttempts:
+      description: >-
+        Too many failed attempts ("too_many_attempts" for passwords, "profile_locked" for
+        PINs); retryAfterSeconds and Retry-After say when to try again.
       headers:
         Retry-After:
           $ref: "#/components/headers/RetryAfter"
@@ -1861,6 +2178,315 @@ components:
             Major version of the HTTP API this server speaks. It changes only on breaking
             changes.
           example: "1"
+    SetupState:
+      type: object
+      description: Whether the server still waits for its first account (ADR 0032 section 6).
+      required:
+        - required
+      properties:
+        required:
+          type: boolean
+          description: True while no account exists; completeSetup then creates the first one.
+          example: true
+    ClientKind:
+      type: string
+      description: >-
+        Kind of client that signs in: "web" (browser, session cookie), "tv" (TV app,
+        bearer token) or "cli" (command-line or script, bearer token). Clients must
+        tolerate new values.
+      enum:
+        - web
+        - tv
+        - cli
+      example: web
+    SetupRequest:
+      type: object
+      description: >-
+        The first administrator account and the client that signs in with it; client
+        defaults to "web" when omitted.
+      additionalProperties: false
+      required:
+        - name
+        - password
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: >-
+            Account name, 1 to 40 characters after Unicode NFC normalisation; unique
+            ignoring case. It also names the primary profile.
+          example: Anna
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+          description: Password of 8 to 128 bytes of UTF-8; no composition rules.
+        client:
+          $ref: "#/components/schemas/ClientKind"
+        deviceName:
+          type: string
+          maxLength: 64
+          description: >-
+            Name of the device in the device list; omitted, the server derives a short label
+            from the User-Agent.
+          example: Living room PC
+    SignInRequest:
+      type: object
+      description: Credentials and the client that signs in.
+      additionalProperties: false
+      required:
+        - name
+        - password
+        - client
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Account name; compared ignoring case after NFC normalisation.
+          example: Anna
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+          description: Password of the account.
+        client:
+          $ref: "#/components/schemas/ClientKind"
+        deviceName:
+          type: string
+          maxLength: 64
+          description: >-
+            Name of the device in the device list; omitted, the server derives a short label
+            from the User-Agent.
+          example: Living room TV
+    Session:
+      type: object
+      description: >-
+        A new session (ADR 0032 section 3). For client "web" the session cookie carries it
+        and token is omitted.
+      required:
+        - me
+      properties:
+        me:
+          $ref: "#/components/schemas/Me"
+        token:
+          type: string
+          description: >-
+            Bearer token for client "tv" or "cli", returned only here and only once; the
+            server stores just its hash. Send it as "Authorization: Bearer <token>".
+          example: example-token
+    AccountRole:
+      type: string
+      description: >-
+        Role of an account: "admin" may manage the server through its primary profile,
+        "user" may not. Clients must tolerate new values.
+      enum:
+        - admin
+        - user
+      example: admin
+    Account:
+      type: object
+      description: A local account (ADR 0032 section 1).
+      required:
+        - id
+        - name
+        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable ID of the account.
+          example: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+        name:
+          type: string
+          description: Account name.
+          example: Anna
+        role:
+          $ref: "#/components/schemas/AccountRole"
+    AvatarColor:
+      type: string
+      description: >-
+        Token colour of a profile avatar; the clients map each name to a colour of their
+        design tokens. Clients must tolerate new values.
+      enum:
+        - coral
+        - blue
+        - green
+        - amber
+        - violet
+        - teal
+        - pink
+        - slate
+      example: coral
+    ProfileSummary:
+      type: object
+      description: A profile of the signed-in account as the profile picker shows it.
+      required:
+        - id
+        - name
+        - avatarColor
+        - hasPin
+        - isPrimary
+        - isAdmin
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable ID of the profile.
+          example: 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+        name:
+          type: string
+          description: Profile name.
+          example: Anna
+        avatarColor:
+          $ref: "#/components/schemas/AvatarColor"
+        hasPin:
+          type: boolean
+          description: True when selecting the profile needs its 4-digit PIN.
+          example: false
+        isPrimary:
+          type: boolean
+          description: True for the account's primary profile, false for a managed profile.
+          example: true
+        isAdmin:
+          type: boolean
+          description: >-
+            True when the profile carries admin powers: the primary profile of an admin
+            account.
+          example: true
+    Me:
+      type: object
+      description: >-
+        The signed-in account, its selected profile and its profiles. It never contains
+        the session token.
+      required:
+        - account
+        - currentProfile
+        - profiles
+      properties:
+        account:
+          $ref: "#/components/schemas/Account"
+        currentProfile:
+          nullable: true
+          description: The profile selected for this session; null until one is chosen.
+          allOf:
+            - $ref: "#/components/schemas/ProfileSummary"
+        profiles:
+          type: array
+          description: >-
+            The account's profiles for the picker, the primary profile first, then the
+            managed ones by name.
+          maxItems: 11
+          items:
+            $ref: "#/components/schemas/ProfileSummary"
+    ProfileSelection:
+      type: object
+      description: The profile to use in this session.
+      additionalProperties: false
+      required:
+        - profileId
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          description: ID of a profile of the signed-in account (ProfileSummary.id).
+          example: 6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c
+        pin:
+          type: string
+          format: password
+          writeOnly: true
+          pattern: "^[0-9]{4}$"
+          description: The profile's 4-digit PIN; needed when the profile has one.
+        remember:
+          type: boolean
+          description: >-
+            Keep the selection on this device until it is changed. False ends it after 4
+            hours without requests. Omitted, it is false for a profile with a PIN and true
+            otherwise.
+          example: false
+    PasswordChange:
+      type: object
+      description: A change of the signed-in account's own password.
+      additionalProperties: false
+      required:
+        - currentPassword
+        - newPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+          description: The password in use now.
+        newPassword:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 128
+          description: The new password, 8 to 128 bytes of UTF-8; no composition rules.
+    AddressClass:
+      type: string
+      description: >-
+        Where a device was last seen from: "lan" (local network) or "remote". Clients must
+        tolerate new values.
+      enum:
+        - lan
+        - remote
+      example: lan
+    Device:
+      type: object
+      description: A signed-in device, that is one session of the account (US-25).
+      required:
+        - id
+        - name
+        - client
+        - lastSeenAt
+        - addressClass
+        - current
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable ID of the device; revokeOwnDevice takes it.
+          example: 8e7d6c5b-4a3f-4e2d-9c1b-0a9f8e7d6c5b
+        name:
+          type: string
+          description: Name given at sign-in or derived from the User-Agent.
+          example: Firefox on Windows
+        client:
+          $ref: "#/components/schemas/ClientKind"
+        platform:
+          type: string
+          description: Operating system or platform of the device; omitted when unknown.
+          example: Windows
+        lastSeenAt:
+          type: string
+          format: date-time
+          description: Last request of the device, exact to about 5 minutes.
+        addressClass:
+          $ref: "#/components/schemas/AddressClass"
+        current:
+          type: boolean
+          description: True for the device that sends this request.
+          example: true
+    DeviceList:
+      type: object
+      description: The devices signed in to the account.
+      required:
+        - devices
+      properties:
+        devices:
+          type: array
+          description: Every device, most recently seen first.
+          items:
+            $ref: "#/components/schemas/Device"
     LibraryKind:
       type: string
       description: >-
@@ -4347,6 +4973,13 @@ components:
             (400), "language_invalid" (400) and "too_many_folders" (400). Online metadata
             adds "online_disabled" (409, the feature is switched off) and
             "provider_unavailable" (503, the provider is offline or rate limiting; see
+            retryAfterSeconds). Accounts (ADR 0032) add "unauthenticated" (401, no valid
+            session), "setup_required" (401, no account exists yet; run the setup),
+            "invalid_credentials" (401, wrong name or password at sign-in; 403 for a wrong
+            current password in changeOwnPassword), "profile_required" (403,
+            the session has no selected profile), "pin_invalid" (403, a missing or wrong
+            PIN), "profile_locked" (429, too many wrong PINs; see retryAfterSeconds) and
+            "too_many_attempts" (429, too many failed sign-ins or password checks; see
             retryAfterSeconds). "not_implemented" (501) answers an operation or a parameter
             value the contract declares but this server does not serve yet. New codes may be
             added; clients show a generic message for unknown codes.
@@ -4369,6 +5002,7 @@ components:
           format: int32
           minimum: 1
           description: >-
-            For "provider_unavailable", the seconds after which a retry may succeed (the
-            Retry-After header carries the same value); omitted when unknown.
+            For "provider_unavailable", "profile_locked" and "too_many_attempts", the seconds
+            after which a retry may succeed (the Retry-After header carries the same value);
+            omitted when unknown.
           example: 30

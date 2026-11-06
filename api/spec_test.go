@@ -234,17 +234,17 @@ func operationCases() []operationCase {
 		{method: http.MethodGet, path: "/api/v1/home/rows", operationID: "getHomeRows", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "HomeRows"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}", operationID: "getItem", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
 		{method: http.MethodGet, path: "/api/v1/items/{itemId}/children", operationID: "listItemChildren", tag: "items", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemPage"},
-		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes", unauthenticated: true},
-		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/png", schema: "ImageBytes", unauthenticated: true},
+		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/jpeg", schema: "ImageBytes"},
+		{method: http.MethodGet, path: imagePath, operationID: "getImage", tag: imagesTag, statuses: []int{http.StatusOK}, mediaType: "image/png", schema: "ImageBytes"},
 		{method: http.MethodPost, path: sessions, operationID: "createPlaybackSession", tag: "playback", statuses: []int{http.StatusCreated}, mediaType: jsonMediaType, schema: "PlaybackSession"},
 		{method: http.MethodPost, path: sessions, operationID: "createPlaybackSession", tag: "playback", statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem"},
 		{method: http.MethodGet, path: session, operationID: "getPlaybackSession", tag: "playback", statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "PlaybackSession"},
 		{method: http.MethodDelete, path: session, operationID: "stopPlaybackSession", tag: "playback"},
-		{method: http.MethodGet, path: session + "/file", operationID: "getPlaybackFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/*", schema: "MediaBytes", unauthenticated: true},
-		{method: http.MethodHead, path: session + "/file", operationID: "headPlaybackFile", tag: streamTag, unauthenticated: true},
-		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/iso.segment", schema: "MediaBytes", unauthenticated: true},
-		{method: http.MethodHead, path: session + "/hls/{fileName}", operationID: "headPlaybackHlsFile", tag: streamTag, unauthenticated: true},
-		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem", unauthenticated: true},
+		{method: http.MethodGet, path: session + "/file", operationID: "getPlaybackFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/*", schema: "MediaBytes"},
+		{method: http.MethodHead, path: session + "/file", operationID: "headPlaybackFile", tag: streamTag},
+		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusOK, http.StatusPartialContent}, mediaType: "video/iso.segment", schema: "MediaBytes"},
+		{method: http.MethodHead, path: session + "/hls/{fileName}", operationID: "headPlaybackHlsFile", tag: streamTag},
+		{method: http.MethodGet, path: session + "/hls/{fileName}", operationID: "getPlaybackHlsFile", tag: streamTag, statuses: []int{http.StatusServiceUnavailable}, mediaType: problemMediaType, schema: "Problem"},
 		{method: http.MethodPost, path: item + "/identify/search", operationID: "searchIdentifyCandidates", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "IdentifyCandidateList"},
 		{method: http.MethodPost, path: item + "/identify", operationID: "identifyItem", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
 		{method: http.MethodDelete, path: item + "/match", operationID: "removeItemMatch", tag: metadataTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ItemDetail"},
@@ -359,7 +359,8 @@ func TestEveryOperationDeclaresProblemDefault(t *testing.T) {
 
 // TestPlainHandlerOperationsAreExcludedFromTheStrictServer keeps oapi-codegen.yaml in step
 // with the stream and images tags: a plain-handler route the generator still emitted would
-// clash with its mount, and any other route left out would have no handler.
+// clash with its mount, and any other route left out would have no handler. Since ADR 0032
+// they need the signed-in session like every other operation.
 func TestPlainHandlerOperationsAreExcludedFromTheStrictServer(t *testing.T) {
 	spec := loadSpec(t)
 
@@ -368,7 +369,7 @@ func TestPlainHandlerOperationsAreExcludedFromTheStrictServer(t *testing.T) {
 	for _, entry := range allOperations(spec) {
 		if entry.isPlainHandler() {
 			plainOperationIDs = append(plainOperationIDs, entry.operation.OperationID)
-			assertUnauthenticated(t, entry.operation)
+			assertSessionRequired(t, entry)
 		}
 	}
 
