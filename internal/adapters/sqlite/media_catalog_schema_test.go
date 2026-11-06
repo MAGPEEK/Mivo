@@ -60,7 +60,7 @@ type foreignKey struct {
 	table, column, parent, onDelete string
 }
 
-// Every reference cascades, and every referencing column leads a full index: without one,
+// Every reference cascades (or sets NULL where listed), and every referencing column leads a full index: without one,
 // SQLite scans the whole child table for each deleted parent row. A partial index does not
 // help a cascade, because it does not hold every row.
 func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
@@ -73,6 +73,8 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "artwork", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "artwork", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
 		{table: "artwork", column: "root_id", parent: "library_roots", onDelete: "CASCADE"},
+		{table: "auth_sessions", column: "profile_id", parent: "profiles", onDelete: "SET NULL"},
+		{table: "auth_sessions", column: "user_id", parent: "users", onDelete: "CASCADE"},
 		{table: "enrichment_queue", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_field_locks", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_match", column: "item_id", parent: "items", onDelete: "CASCADE"},
@@ -95,7 +97,12 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "photo_info", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
 		{table: "photo_info", column: "parent_id", parent: "items", onDelete: "CASCADE"},
 		{table: "photo_info", column: "primary_file_id", parent: "media_files", onDelete: "SET NULL"},
+		{table: "profile_libraries", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
+		{table: "profile_libraries", column: "profile_id", parent: "profiles", onDelete: "CASCADE"},
+		{table: "profiles", column: "user_id", parent: "users", onDelete: "CASCADE"},
 		{table: "search_docs", column: "item_id", parent: "items", onDelete: "CASCADE"},
+		{table: "user_libraries", column: "library_id", parent: "libraries", onDelete: "CASCADE"},
+		{table: "user_libraries", column: "user_id", parent: "users", onDelete: "CASCADE"},
 	}
 
 	if got := foreignKeys(t, inspection); !slices.Equal(got, want) {

@@ -12,11 +12,11 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 10
+const latestSchemaVersion = 11
 
 // schemaTables returns all tables the migrations create, in creation order.
 func schemaTables() []string {
-	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(), onlineMetadataTables(), []string{"media_chapters", "search_docs", "item_search"})
+	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(), onlineMetadataTables(), []string{"media_chapters", "search_docs", "item_search"}, accountTables())
 }
 
 func TestMigrateCreatesTheSchemaAndASecondRunIsANoOp(t *testing.T) {

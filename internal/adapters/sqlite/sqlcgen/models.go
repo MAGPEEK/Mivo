@@ -29,6 +29,20 @@ type Artwork struct {
 	CreatedAt    int64
 }
 
+type AuthSession struct {
+	ID           string
+	TokenHash    string
+	UserID       string
+	ProfileID    sql.NullString
+	Remember     int64
+	DeviceName   string
+	Client       string
+	Platform     string
+	AddressClass string
+	CreatedAt    int64
+	LastSeenAt   int64
+}
+
 type EnrichmentQueue struct {
 	ItemID       string
 	Reason       string
@@ -231,6 +245,25 @@ type PhotoInfo struct {
 	ThumbnailState string
 }
 
+type Profile struct {
+	ID           string
+	UserID       string
+	Name         string
+	IsPrimary    int64
+	AvatarColor  string
+	PinHash      sql.NullString
+	MaxAge       sql.NullInt64
+	HideUnrated  int64
+	AllLibraries int64
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+type ProfileLibrary struct {
+	ProfileID string
+	LibraryID string
+}
+
 type ProviderCache struct {
 	Provider  string
 	CacheKey  string
@@ -266,4 +299,21 @@ type Tag struct {
 	ID   string
 	Kind string
 	Name string
+}
+
+type User struct {
+	ID           string
+	Name         string
+	NameKey      string
+	Role         string
+	Disabled     int64
+	PasswordHash string
+	AllLibraries int64
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+type UserLibrary struct {
+	UserID    string
+	LibraryID string
 }
