@@ -48,6 +48,8 @@ func TestNormalizeName(t *testing.T) {
 		{name: "collapses mixed space separators", raw: "Anna \U00003000\U00002009 Lena", want: "Anna Lena"},
 		{name: "trims a leading no-break space", raw: "\U000000A0Anna", want: "Anna"},
 		{name: "number only", raw: "42", want: "42"},
+		{name: "Chinese name", raw: "\U0000674E\U0000534E", want: "\U0000674E\U0000534E"},
+		{name: "Arabic name", raw: "\U00000645\U0000062D\U00000645\U0000062F", want: "\U00000645\U0000062D\U00000645\U0000062F"},
 		{name: "letter with combining mark", raw: "a\U00000301", want: "a\U00000301"},
 		{name: "one rune", raw: "A", want: "A"},
 		{name: "forty runes", raw: strings.Repeat(composedUUmlaut, account.MaxNameRunes), want: strings.Repeat(composedUUmlaut, account.MaxNameRunes)},
@@ -82,6 +84,12 @@ func TestNormalizeName(t *testing.T) {
 		{name: "Hangul jungseong filler", raw: "\U00001160", wantErr: true},
 		{name: "halfwidth Hangul filler", raw: "\U0000FFA0", wantErr: true},
 		{name: "braille blank", raw: "\U00002800\U00002800", wantErr: true},
+		{name: "emoji variation selector VS16", raw: "Anna\U0000FE0F", wantErr: true},
+		{name: "ideographic variation selector", raw: "Anna\U000E0100", wantErr: true},
+		{name: "combining grapheme joiner", raw: "An\U0000034Fna", wantErr: true},
+		{name: "Mongolian free variation selector", raw: "An\U0000180Bna", wantErr: true},
+		{name: "Khmer inherent vowel", raw: "An\U000017B4na", wantErr: true},
+		{name: "unassigned default-ignorable", raw: "An\U00002065na", wantErr: true},
 		{name: "invalid UTF-8", raw: "An\xffna", wantErr: true},
 	}
 

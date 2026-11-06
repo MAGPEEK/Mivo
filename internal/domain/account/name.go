@@ -15,15 +15,9 @@ const (
 	MaxNameRunes = 40
 )
 
-// Letters that render as blank space. They are in category Lo (or So), so the category checks
-// below do not catch them.
-const (
-	hangulChoseongFiller  = '\U0000115F'
-	hangulJungseongFiller = '\U00001160'
-	hangulFiller          = '\U00003164'
-	halfwidthHangulFiller = '\U0000FFA0'
-	brailleBlank          = '\U00002800'
-)
+// brailleBlank renders as blank space but is a symbol (So) without the default-ignorable
+// property, so neither the category nor the property checks below catch it.
+const brailleBlank = '\U00002800'
 
 // Composer converts text to Unicode NFC. The domain is standard-library only (ADR 0019), so
 // the adapter boundary passes golang.org/x/text/unicode/norm.NFC.String. NFKC is not used on
@@ -117,18 +111,17 @@ func collapseSpaces(text string) string {
 
 // isForbiddenNameRune rejects runes that break single-line display or hide text: C0/C1
 // controls (Cc), line and paragraph separators (Zl, Zp), every format character (Cf, such as
-// bidi overrides, zero-width space and joiners, word joiner, byte order mark, soft hyphen)
-// and blank fillers. ZWNJ and ZWJ are refused too, so invisible joiners cannot make two
-// names look alike; emoji sequences and Persian ZWNJ spellings are not needed for 0.1.0
-// (possible later relaxation, docs/tasks/BACKLOG.md).
+// bidi overrides, zero-width space and joiners, word joiner, byte order mark, soft hyphen),
+// default-ignorable code points that are letters or marks (the Hangul fillers U+115F, U+1160,
+// U+3164, U+FFA0, the combining grapheme joiner, Khmer inherent vowels), variation selectors
+// and the braille blank. ZWNJ, ZWJ and the emoji variation selector VS16 are refused too, so
+// invisible runes cannot make two names look alike; emoji sequences and Persian ZWNJ
+// spellings are not needed for 0.1.0 (possible later relaxation, docs/tasks/BACKLOG.md).
 func isForbiddenNameRune(character rune) bool {
-	switch character {
-	case hangulChoseongFiller, hangulJungseongFiller, hangulFiller, halfwidthHangulFiller, brailleBlank:
-		return true
-	default:
-		return unicode.IsControl(character) ||
-			unicode.In(character, unicode.Zl, unicode.Zp, unicode.Cf)
-	}
+	return character == brailleBlank ||
+		unicode.IsControl(character) ||
+		unicode.In(character, unicode.Zl, unicode.Zp, unicode.Cf,
+			unicode.Other_Default_Ignorable_Code_Point, unicode.Variation_Selector)
 }
 
 // isLetterOrNumber accepts runes of the categories L and N; a name of only marks, symbols or
