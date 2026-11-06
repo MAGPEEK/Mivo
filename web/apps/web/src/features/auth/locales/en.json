@@ -1,0 +1,98 @@
+{
+  "server": {
+    "version": "{{productName}} {{version}} · local network",
+    "versionUnknown": "{{productName}} · local network"
+  },
+  "loading": "Checking your session",
+  "fields": {
+    "name": "Name",
+    "password": "Password",
+    "repeatPassword": "Repeat password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "repeatNewPassword": "Repeat new password",
+    "show": "Show",
+    "hide": "Hide",
+    "showLabel": "Show password",
+    "hideLabel": "Hide password",
+    "nameHint": "You sign in with this name (1–40 characters). No e-mail address needed.",
+    "passwordHint": "8 to 128 characters, no other rules. A sentence of several words makes a good password."
+  },
+  "errors": {
+    "nameEmpty": "Please enter a name.",
+    "nameTooLong": "At most 40 characters.",
+    "nameRejected": "This name cannot be used.",
+    "passwordEmpty": "Please enter your password.",
+    "passwordTooShort": "At least 8 characters.",
+    "passwordTooLong": "At most 128 characters.",
+    "passwordMismatch": "The passwords do not match.",
+    "passwordRejected": "This password cannot be used.",
+    "currentPasswordWrong": "The current password is incorrect.",
+    "checkFields": "Please check the marked fields.",
+    "credentials": "Name or password is incorrect.",
+    "network": "The server cannot be reached. Check the connection and try again.",
+    "generic": "That did not work. Please try again.",
+    "tooManyAttempts": "Too many failed attempts. Try again in {{time}}."
+  },
+  "signIn": {
+    "title": "Sign in to {{productName}}",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "stay": "You stay signed in on this device until you sign out or don't use it for 30 days.",
+    "throttled": "Too many failed attempts. Try again in {{time}}.",
+    "throttleHint": "The wait doubles with every further failure, up to 15 minutes.",
+    "throttleOver": "You can try again now.",
+    "forgot": {
+      "question": "Forgot your password?",
+      "answer": "Ask the person who runs this server to reset your password (Administration › Users).",
+      "admin": "For the admin account: run this on the server machine and enter the new password:"
+    },
+    "signedOut": "You have signed out.",
+    "signedOutHint": "Your other devices stay signed in.",
+    "expired": "Your session has expired or was ended. Sign in again to continue where you left off.",
+    "expiredHint": "Possible reasons: not used for 30 days, password changed, signed out on another device or ended by an admin."
+  },
+  "setup": {
+    "steps": "Step {{step}} of 2",
+    "stepAccount": "Admin account",
+    "stepLibrary": "Add library",
+    "title": "Create admin account",
+    "intro": "Welcome to {{productName}}. First create the account you use to manage the server. Then add your first library.",
+    "localOnlyTitle": "Local network only",
+    "localOnly": "While no account exists, this page can only be reached from devices in the same network as the server. There are no default credentials.",
+    "recover": "Forget the password later? This command on the server machine resets it and signs out all devices of the account:",
+    "recoverWhere": "Docker: via {{dockerCommand}}. Synology: over SSH on the DiskStation.",
+    "submit": "Create account and sign in",
+    "submitting": "Creating the account…",
+    "namePlaceholder": "<Name>"
+  },
+  "remote": {
+    "title": "Setup only from the local network",
+    "body": "This {{productName}} server is not set up yet. So that nobody on the internet can take it over, the first admin account can only be created from a device in the same network as the server.",
+    "how": "How to continue:",
+    "step1": "Connect your device to the network the server is in (Wi-Fi or cable).",
+    "step2": "Open the server's local address there, for example http://192.168.1.10:8460.",
+    "step3": "Create the admin account. You set up remote access later in Administration.",
+    "retry": "Check again",
+    "checking": "Checking…",
+    "still": "This connection still does not come from the local network."
+  },
+  "profiles": {
+    "title": "Choose a profile",
+    "placeholder": "Choosing a profile is not available in this version yet. Sign out and sign in with an account without managed profiles or PIN."
+  },
+  "signOut": {
+    "action": "Sign out",
+    "pending": "Signing out…",
+    "failed": "Signing out did not work. Please try again."
+  },
+  "changePassword": {
+    "title": "Change password",
+    "note": "Your other devices are signed out afterwards. This device stays signed in.",
+    "submit": "Change password",
+    "submitting": "Changing…",
+    "cancel": "Cancel",
+    "close": "Close",
+    "done": "Password changed. Your other devices were signed out."
+  }
+}

@@ -3,7 +3,9 @@ import {
   type ApiClient,
   type HomeRows,
   type LibraryList,
+  type Me,
   type Problem,
+  type SetupState,
   type SystemInfo,
 } from "@mivo/api-client";
 
@@ -53,10 +55,25 @@ export function respondWithProblem(problem: Problem): FakeFetch {
   return respondWithJson(problem, problem.status, "application/problem+json");
 }
 
-/** Never answers, so the request stays loading. */
+/**
+ * Never answers, so the request stays loading. Only the session check of the app (`GET /setup`,
+ * `GET /me`) is answered as signed in: otherwise the session gate would hold back every page.
+ * {@link respondNeverAtAll} keeps that check loading too.
+ */
 export function respondNever(): FakeFetch {
+  const sessionServer = createFakeServer();
+  return (request) =>
+    sessionCheckPaths.includes(new URL(request.url).pathname)
+      ? sessionServer.fetch(request)
+      : new Promise<Response>(() => undefined);
+}
+
+/** Never answers any request, the session check included. */
+export function respondNeverAtAll(): FakeFetch {
   return () => new Promise<Response>(() => undefined);
 }
+
+const sessionCheckPaths: readonly string[] = ["/api/v1/setup", "/api/v1/me"];
 
 /** A request that matched a {@link FakeRoute}, with the values of its `:name` path segments. */
 export interface FakeRouteRequest {
@@ -83,8 +100,32 @@ export interface FakeServer {
   readonly countRequests: (method: string, path: string) => number;
 }
 
+/** The signed-in admin of the fake server, with the primary profile selected. */
+export const fakeMe: Me = {
+  account: { id: "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", name: "Anna", role: "admin" },
+  currentProfile: {
+    id: "6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c",
+    name: "Anna",
+    avatarColor: "coral",
+    hasPin: false,
+    isPrimary: true,
+    isAdmin: true,
+  },
+  profiles: [],
+};
+
 /** The routes every fake server has unless a test overrides them. */
 export const defaultRoutes: readonly FakeRoute[] = [
+  {
+    method: "GET",
+    path: "/api/v1/setup",
+    respond: () => jsonResponse({ required: false } satisfies SetupState),
+  },
+  {
+    method: "GET",
+    path: "/api/v1/me",
+    respond: () => jsonResponse(fakeMe),
+  },
   {
     method: "GET",
     path: "/api/v1/system/info",

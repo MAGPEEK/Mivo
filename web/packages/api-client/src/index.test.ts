@@ -6,6 +6,7 @@ describe("package entry", () => {
   it("exposes only the runtime API, not generated internals", () => {
     expect(Object.keys(apiClient).sort()).toEqual([
       "ApiError",
+      "addResponseListener",
       "clientErrorCodes",
       "createApiClient",
       "imageSrcSet",

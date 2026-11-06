@@ -3,6 +3,7 @@ import {
   type AnyRoute,
   createRoute,
   createRouter,
+  Outlet,
   useNavigate,
   useParams,
   useSearch,
@@ -11,6 +12,18 @@ import {
 import { createElement, useCallback } from "react";
 
 import { AudiobookGrid } from "../features/audiobooks";
+import {
+  ProfilesPlaceholderPage,
+  RemoteSetupPage,
+  SessionGate,
+  SetupPage,
+  SignInPage,
+  profilesPath,
+  remoteSetupPath,
+  setupPath,
+  signInPath,
+  validateAuthSearch,
+} from "../features/auth";
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import {
@@ -108,6 +121,41 @@ function PlayerRoute() {
   return createElement(PlayerPage, { itemId, search });
 }
 
+// Every page sits below the session gate: it decides whether the page may show (ADR 0032).
+function GatedRoot() {
+  return createElement(SessionGate, { children: createElement(Outlet) });
+}
+
+function SignInRoute() {
+  const search = useSearch({ from: "/full-screen/sign-in" });
+  return createElement(SignInPage, { search });
+}
+
+// Sign-in, setup and the profile picker: full screen, without sidebar and top bar.
+function authPages<Parent extends AnyRoute>(parent: Parent) {
+  return [
+    createRoute({
+      getParentRoute: () => parent,
+      path: signInPath,
+      validateSearch: validateAuthSearch,
+      component: SignInRoute,
+    }),
+    createRoute({ getParentRoute: () => parent, path: setupPath, component: SetupPage }),
+    createRoute({
+      getParentRoute: () => parent,
+      path: remoteSetupPath,
+      component: RemoteSetupPage,
+    }),
+    // M7-31 replaces the placeholder with the profile picker.
+    createRoute({
+      getParentRoute: () => parent,
+      path: profilesPath,
+      validateSearch: validateAuthSearch,
+      component: ProfilesPlaceholderPage,
+    }),
+  ] as const;
+}
+
 // Settings pages without search params; split off to keep the route tree function short.
 function settingsPages<Parent extends AnyRoute>(parent: Parent) {
   return [
@@ -128,7 +176,7 @@ function settingsPages<Parent extends AnyRoute>(parent: Parent) {
 // needs an ADR note (ADR 0005). Pages with sidebar and top bar sit below the shell layout
 // route; full-screen pages (the player) below their own layout route without them.
 function createRouteTree() {
-  const rootRoute = createRootRoute({ notFoundComponent: ShellNotFound });
+  const rootRoute = createRootRoute({ component: GatedRoot, notFoundComponent: ShellNotFound });
   const shellRoute = createRoute({
     getParentRoute: () => rootRoute,
     id: shellLayoutId,
@@ -169,7 +217,7 @@ function createRouteTree() {
   });
   return rootRoute.addChildren([
     shellRoute.addChildren(shellPages),
-    fullScreenRoute.addChildren([playerRoute]),
+    fullScreenRoute.addChildren([playerRoute, ...authPages(fullScreenRoute)]),
   ]);
 }
 

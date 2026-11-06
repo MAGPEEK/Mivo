@@ -1,0 +1,98 @@
+{
+  "server": {
+    "version": "{{productName}} {{version}} · lokales Netzwerk",
+    "versionUnknown": "{{productName}} · lokales Netzwerk"
+  },
+  "loading": "Anmeldung wird geprüft",
+  "fields": {
+    "name": "Name",
+    "password": "Passwort",
+    "repeatPassword": "Passwort wiederholen",
+    "currentPassword": "Aktuelles Passwort",
+    "newPassword": "Neues Passwort",
+    "repeatNewPassword": "Neues Passwort wiederholen",
+    "show": "Anzeigen",
+    "hide": "Verbergen",
+    "showLabel": "Passwort anzeigen",
+    "hideLabel": "Passwort verbergen",
+    "nameHint": "Mit diesem Namen meldest du dich an (1–40 Zeichen). Eine E-Mail-Adresse ist nicht nötig.",
+    "passwordHint": "8 bis 128 Zeichen, sonst keine Regeln. Ein Satz aus mehreren Wörtern ist ein gutes Passwort."
+  },
+  "errors": {
+    "nameEmpty": "Bitte einen Namen eingeben.",
+    "nameTooLong": "Höchstens 40 Zeichen.",
+    "nameRejected": "Dieser Name kann nicht verwendet werden.",
+    "passwordEmpty": "Bitte dein Passwort eingeben.",
+    "passwordTooShort": "Mindestens 8 Zeichen.",
+    "passwordTooLong": "Höchstens 128 Zeichen.",
+    "passwordMismatch": "Die Passwörter stimmen nicht überein.",
+    "passwordRejected": "Dieses Passwort kann nicht verwendet werden.",
+    "currentPasswordWrong": "Das aktuelle Passwort stimmt nicht.",
+    "checkFields": "Bitte die markierten Felder prüfen.",
+    "credentials": "Name oder Passwort ist falsch.",
+    "network": "Der Server ist nicht erreichbar. Prüfe die Verbindung und versuche es erneut.",
+    "generic": "Das hat nicht geklappt. Bitte versuche es erneut.",
+    "tooManyAttempts": "Zu viele Fehlversuche. Nächster Versuch in {{time}}."
+  },
+  "signIn": {
+    "title": "Bei {{productName}} anmelden",
+    "submit": "Anmelden",
+    "submitting": "Anmeldung läuft…",
+    "stay": "Du bleibst auf diesem Gerät angemeldet, bis du dich abmeldest oder es 30 Tage nicht benutzt.",
+    "throttled": "Zu viele Fehlversuche. Nächster Versuch in {{time}}.",
+    "throttleHint": "Die Wartezeit verdoppelt sich mit jedem weiteren Fehlversuch, höchstens 15 Minuten.",
+    "throttleOver": "Du kannst es jetzt erneut versuchen.",
+    "forgot": {
+      "question": "Passwort vergessen?",
+      "answer": "Bitte die Person, die diesen Server verwaltet, dein Passwort zurückzusetzen (Verwaltung › Benutzer).",
+      "admin": "Für das Admin-Konto: auf dem Server-Rechner ausführen und das neue Passwort eingeben:"
+    },
+    "signedOut": "Du hast dich abgemeldet.",
+    "signedOutHint": "Auf deinen anderen Geräten bleibst du angemeldet.",
+    "expired": "Deine Sitzung ist abgelaufen oder wurde beendet. Melde dich erneut an, um dort weiterzumachen, wo du warst.",
+    "expiredHint": "Mögliche Gründe: 30 Tage nicht benutzt, Passwort geändert, auf einem anderen Gerät abgemeldet oder von einem Admin beendet."
+  },
+  "setup": {
+    "steps": "Schritt {{step}} von 2",
+    "stepAccount": "Admin-Konto",
+    "stepLibrary": "Mediathek hinzufügen",
+    "title": "Admin-Konto anlegen",
+    "intro": "Willkommen bei {{productName}}. Lege zuerst das Konto an, mit dem du den Server verwaltest. Danach fügst du deine erste Mediathek hinzu.",
+    "localOnlyTitle": "Nur im lokalen Netzwerk",
+    "localOnly": "Solange es kein Konto gibt, ist diese Seite nur von Geräten im selben Netzwerk wie der Server erreichbar. Es gibt keine Standard-Zugangsdaten.",
+    "recover": "Passwort später vergessen? Dieser Befehl auf dem Server-Rechner setzt es zurück und meldet alle Geräte des Kontos ab:",
+    "recoverWhere": "Docker: über {{dockerCommand}}. Synology: per SSH auf der DiskStation.",
+    "submit": "Konto anlegen und anmelden",
+    "submitting": "Konto wird angelegt…",
+    "namePlaceholder": "<Name>"
+  },
+  "remote": {
+    "title": "Einrichtung nur im lokalen Netzwerk",
+    "body": "Dieser {{productName}}-Server ist noch nicht eingerichtet. Damit niemand aus dem Internet ihn übernehmen kann, lässt sich das erste Admin-Konto nur von einem Gerät im selben Netzwerk wie der Server anlegen.",
+    "how": "So geht es weiter:",
+    "step1": "Verbinde dein Gerät mit dem Netzwerk, in dem der Server steht (WLAN oder Kabel).",
+    "step2": "Öffne dort die lokale Adresse des Servers, zum Beispiel http://192.168.1.10:8460.",
+    "step3": "Lege das Admin-Konto an. Fernzugriff richtest du später in der Verwaltung ein.",
+    "retry": "Erneut prüfen",
+    "checking": "Wird geprüft…",
+    "still": "Diese Verbindung kommt weiterhin nicht aus dem lokalen Netzwerk."
+  },
+  "profiles": {
+    "title": "Profil wählen",
+    "placeholder": "Die Profilwahl gibt es in dieser Version noch nicht. Melde dich ab und mit einem Konto ohne verwaltete Profile oder PIN wieder an."
+  },
+  "signOut": {
+    "action": "Abmelden",
+    "pending": "Abmeldung läuft…",
+    "failed": "Das Abmelden hat nicht geklappt. Bitte versuche es erneut."
+  },
+  "changePassword": {
+    "title": "Passwort ändern",
+    "note": "Danach werden deine anderen Geräte abgemeldet. Dieses Gerät bleibt angemeldet.",
+    "submit": "Passwort ändern",
+    "submitting": "Wird geändert…",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "done": "Passwort geändert. Deine anderen Geräte wurden abgemeldet."
+  }
+}

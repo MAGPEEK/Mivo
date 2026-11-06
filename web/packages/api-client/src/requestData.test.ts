@@ -127,6 +127,36 @@ describe("requestData", () => {
     expect(error.libraryId).toBeUndefined();
   });
 
+  it.each([
+    { name: "the body member", body: { retryAfterSeconds: 42 }, header: "7", expected: 42 },
+    { name: "the header without a member", body: {}, header: " 7 ", expected: 7 },
+    {
+      name: "the header for a broken member",
+      body: { retryAfterSeconds: -3 },
+      header: "9",
+      expected: 9,
+    },
+    {
+      name: "nothing for a broken header",
+      body: { retryAfterSeconds: "x" },
+      header: "soon",
+      expected: undefined,
+    },
+    { name: "nothing for a zero header", body: {}, header: "0", expected: undefined },
+  ])("takes retryAfterSeconds from $name", async ({ body, header, expected }) => {
+    const throttled = { ...notFound, status: 429, code: "too_many_attempts", ...body };
+    const error = await captureApiError(
+      respondWith(() => {
+        const response = jsonResponse(throttled, 429, problemMediaType);
+        response.headers.set("Retry-After", header);
+        return response;
+      }),
+    );
+
+    expect(error.code).toBe("too_many_attempts");
+    expect(error.retryAfterSeconds).toBe(expected);
+  });
+
   it("reports unexpected_response for a non-string field", async () => {
     const error = await captureApiError(
       respondWith(() => jsonResponse({ ...notFound, field: 3 }, 400, problemMediaType)),

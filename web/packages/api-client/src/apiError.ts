@@ -29,6 +29,11 @@ export interface ApiErrorFields {
   readonly field?: string | undefined;
   /** For `folder_overlap`: the library that holds the overlapping folder, when there is one. */
   readonly libraryId?: string | undefined;
+  /**
+   * For `too_many_attempts`, `profile_locked` and `provider_unavailable`: whole seconds after
+   * which a retry may succeed, from the problem body or else the `Retry-After` header.
+   */
+  readonly retryAfterSeconds?: number | undefined;
 }
 
 /** The single error type every failed API call is normalized to. */
@@ -40,6 +45,7 @@ export class ApiError extends Error implements ApiErrorFields {
   readonly detail: string | undefined;
   readonly field: string | undefined;
   readonly libraryId: string | undefined;
+  readonly retryAfterSeconds: number | undefined;
 
   /**
    * @param options `cause` is for diagnostics only: engines without error causes (webOS 6
@@ -53,6 +59,7 @@ export class ApiError extends Error implements ApiErrorFields {
     this.detail = fields.detail;
     this.field = fields.field;
     this.libraryId = fields.libraryId;
+    this.retryAfterSeconds = fields.retryAfterSeconds;
   }
 }
 
@@ -81,6 +88,7 @@ export function toApiError(result: ErrorResult): ApiError {
       detail: body.detail,
       field: body.field,
       libraryId: body.libraryId,
+      retryAfterSeconds: retryAfterSeconds(body, response),
     });
   }
   return new ApiError({
@@ -154,6 +162,23 @@ interface ProblemSummary {
   readonly detail?: string | undefined;
   readonly field?: string | undefined;
   readonly libraryId?: string | undefined;
+  /** Not checked by {@link isProblemSummary}; {@link retryAfterSeconds} validates it. */
+  readonly retryAfterSeconds?: unknown;
+}
+
+const retryAfterHeader = "Retry-After";
+const delaySecondsPattern = /^\d+$/;
+
+// The body member comes first; the header carries the same value (api/openapi.yaml). Anything
+// but a positive whole number counts as unknown: a broken hint must not spoil the error.
+function retryAfterSeconds(body: ProblemSummary, response: Response): number | undefined {
+  const fromBody = body.retryAfterSeconds;
+  if (typeof fromBody === "number" && Number.isInteger(fromBody) && fromBody > 0) {
+    return fromBody;
+  }
+  const header = response.headers.get(retryAfterHeader)?.trim() ?? "";
+  const fromHeader = delaySecondsPattern.test(header) ? Number(header) : 0;
+  return fromHeader > 0 ? fromHeader : undefined;
 }
 
 function isOptionalString(value: unknown): boolean {

@@ -9,12 +9,21 @@ export {
   type ErrorResult,
 } from "./apiError";
 export { imageSrcSet, imageUrl, imageWidths } from "./images";
+export {
+  addResponseListener,
+  type ObservedResponse,
+  type ResponseListener,
+} from "./responseListener";
 export { requestData, type RequestResult } from "./requestData";
 export type {
+  Account,
+  AccountRole,
   Artwork,
   ArtworkKind,
   BrowseQuery,
+  AvatarColor,
   CardFormat,
+  ClientKind,
   ClientProfile,
   CodecLimit,
   DirectPlayProfile,
@@ -60,6 +69,7 @@ export type {
   LibraryRows,
   LibraryUpdate,
   MatchState,
+  Me,
   MediaFile,
   MediaIdentifier,
   MediaStream,
@@ -67,6 +77,7 @@ export type {
   MediaSummary,
   MetadataProvider,
   PersonRole,
+  PasswordChange,
   PhotoTimeSource,
   PlaybackDelivery,
   PlaybackMode,
@@ -76,6 +87,7 @@ export type {
   PlaybackSession,
   PlaybackSessionState,
   Problem,
+  ProfileSummary,
   ProviderIds,
   Row,
   RowKind,
@@ -83,6 +95,10 @@ export type {
   ScanCounts,
   ScanState,
   ScanStatus,
+  Session,
+  SetupRequest,
+  SetupState,
+  SignInRequest,
   SortOrder,
   StreamAction,
   StreamDecision,

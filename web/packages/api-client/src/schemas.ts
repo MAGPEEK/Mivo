@@ -238,3 +238,36 @@ export type HomeRows = Schemas["HomeRows"];
 
 /** Body of `GET /api/v1/libraries/{libraryId}/rows`: the rows of a library's Overview. */
 export type LibraryRows = Schemas["LibraryRows"];
+
+/** Body of `GET /api/v1/setup`: whether the server still waits for its first account. */
+export type SetupState = Schemas["SetupState"];
+
+/** Body of `POST /api/v1/setup`: the first administrator account. */
+export type SetupRequest = Schemas["SetupRequest"];
+
+/** Body of `POST /api/v1/auth/session`: name, password and the signing-in client. */
+export type SignInRequest = Schemas["SignInRequest"];
+
+/** A new session; for client "web" the cookie carries it and `token` is absent. */
+export type Session = Schemas["Session"];
+
+/** Kind of client that signs in. Later API versions may add values. */
+export type ClientKind = Schemas["ClientKind"];
+
+/** A local account. */
+export type Account = Schemas["Account"];
+
+/** Role of an account. Later API versions may add values. */
+export type AccountRole = Schemas["AccountRole"];
+
+/** A profile of the signed-in account as the profile picker shows it. */
+export type ProfileSummary = Schemas["ProfileSummary"];
+
+/** Token colour of a profile avatar. Later API versions may add values. */
+export type AvatarColor = Schemas["AvatarColor"];
+
+/** Body of `GET /api/v1/me`: the signed-in account, its selected profile and its profiles. */
+export type Me = Schemas["Me"];
+
+/** Body of `PUT /api/v1/me/password`. */
+export type PasswordChange = Schemas["PasswordChange"];

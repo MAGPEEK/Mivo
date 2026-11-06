@@ -45,6 +45,7 @@ describe("locales", () => {
   it("registers the shared namespace and one namespace per feature", () => {
     expect(namespaces.map(([name]) => name).toSorted()).toEqual([
       "audiobooks",
+      "auth",
       "home",
       "identify",
       "item",
