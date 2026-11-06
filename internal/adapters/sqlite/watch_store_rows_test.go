@@ -216,6 +216,31 @@ func TestWatchUpNextLooksPastFinishedShows(t *testing.T) {
 	assertRow(t, upNextOf(fixture), query, []string{"older-s01e02"})
 }
 
+// A season without a show (the schema allows a parentless season) has no Up next of its own
+// and must not empty the row of the real shows, neither through a watched nor through an
+// in-progress episode.
+func TestWatchUpNextIgnoresEpisodesOfAParentlessSeason(t *testing.T) {
+	t.Parallel()
+
+	fixture := newWatchFixture(t)
+	fixture.insertRowShow(t, upNextShows()[0])
+
+	orphanSeason := newItemSpec("orphan-season", showsLibraryID, "season", "Orphan season")
+	orphanSeason.number = 1
+	insertItem(t, fixture.inspection, orphanSeason)
+
+	for number, state := range []watch.State{watchedAt(hoursAgo(1)), inProgressAt(hoursAgo(1))} {
+		id := fmt.Sprintf("orphan-e%02d", number+1)
+		spec := newItemSpec(id, showsLibraryID, "episode", id)
+		spec.parentID, spec.number = orphanSeason.id, number+1
+		insertItem(t, fixture.inspection, spec)
+		fixture.put(t, watchProfileID, id, state)
+	}
+
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	assertRow(t, upNextOf(fixture), query, []string{"gap-s02e01"})
+}
+
 // Deleting an episode or the whole show leaves its rows but drops it from the rows.
 func TestWatchUpNextIgnoresRowsOfDeletedItems(t *testing.T) {
 	t.Parallel()

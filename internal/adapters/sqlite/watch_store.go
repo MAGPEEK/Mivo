@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
@@ -21,34 +22,17 @@ const watchBatchSize = 500
 // transactions start with BEGIN IMMEDIATE, so a read-modify-write never loses a concurrent
 // one.
 //
-// The request and result types mirror the ports of app/watch (M7-18) field for field; this
-// package cannot import app/watch, so cmd/mivo needs a thin adapter from the store to
-// StateWriter and StateReader (type conversions only).
+// It implements the app/watch StateStore port (M7-18) directly.
 type WatchStore struct {
 	writer *sql.DB
 	reader *sql.DB
 }
 
+var _ appwatch.StateStore = (*WatchStore)(nil)
+
 // NewWatchStore returns a store on db, which must be migrated.
 func NewWatchStore(db *DB) *WatchStore {
 	return &WatchStore{writer: db.writer, reader: db.reader}
-}
-
-// WatchStateKey names the stored state of one item of a profile and the attach key (the
-// item's provider reference, empty when unmatched) to store with it.
-type WatchStateKey struct {
-	ItemID    string
-	AttachKey string
-}
-
-// WatchStateUpdate is one read-modify-write of a profile's states: Change applied to the
-// stored state of each key's item (the zero State when there is none), Now stored as
-// updated_at.
-type WatchStateUpdate struct {
-	ProfileID string
-	Keys      []WatchStateKey
-	Change    func(watch.State) watch.State
-	Now       time.Time
 }
 
 // UpdateStates applies update.Change to the stored state of every key's item and upserts the
@@ -56,7 +40,7 @@ type WatchStateUpdate struct {
 // state (with the same attach key) is not written, and neither is a zero result for an item
 // without a row, so marking never-started episodes unwatched adds no rows. A key named twice
 // is changed once, with its first attach key. An unknown profile wraps domain.ErrNotFound.
-func (store *WatchStore) UpdateStates(ctx context.Context, update WatchStateUpdate) error {
+func (store *WatchStore) UpdateStates(ctx context.Context, update appwatch.StateUpdate) error {
 	keys := uniqueKeys(update.Keys)
 	if len(keys) == 0 {
 		return nil
@@ -78,7 +62,7 @@ func (store *WatchStore) UpdateStates(ctx context.Context, update WatchStateUpda
 	return nil
 }
 
-func updateBatch(ctx context.Context, queries *sqlcgen.Queries, update WatchStateUpdate, keys []WatchStateKey) error {
+func updateBatch(ctx context.Context, queries *sqlcgen.Queries, update appwatch.StateUpdate, keys []appwatch.StateKey) error {
 	stored, err := readRows(ctx, queries, update.ProfileID, itemIDsOf(keys))
 	if err != nil {
 		return err
@@ -118,9 +102,9 @@ func readRows(ctx context.Context, queries *sqlcgen.Queries, profileID string, i
 	return stored, nil
 }
 
-func uniqueKeys(keys []WatchStateKey) []WatchStateKey {
+func uniqueKeys(keys []appwatch.StateKey) []appwatch.StateKey {
 	seen := make(map[string]bool, len(keys))
-	unique := make([]WatchStateKey, 0, len(keys))
+	unique := make([]appwatch.StateKey, 0, len(keys))
 
 	for _, key := range keys {
 		if !seen[key.ItemID] {
@@ -132,7 +116,7 @@ func uniqueKeys(keys []WatchStateKey) []WatchStateKey {
 	return unique
 }
 
-func itemIDsOf(keys []WatchStateKey) []string {
+func itemIDsOf(keys []appwatch.StateKey) []string {
 	itemIDs := make([]string, len(keys))
 	for index, key := range keys {
 		itemIDs[index] = key.ItemID

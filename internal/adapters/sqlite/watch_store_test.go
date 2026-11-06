@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
@@ -53,8 +54,8 @@ func watchFixtureOn(t *testing.T, catalog catalogFixture) watchFixture {
 func (fixture watchFixture) put(t *testing.T, profileID, itemID string, state watch.State) {
 	t.Helper()
 
-	err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{
-		ProfileID: profileID, Keys: []sqlite.WatchStateKey{{ItemID: itemID}},
+	err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{
+		ProfileID: profileID, Keys: []appwatch.StateKey{{ItemID: itemID}},
 		Change: func(watch.State) watch.State { return state }, Now: watchNow(),
 	})
 	if err != nil {
@@ -112,9 +113,9 @@ func TestWatchUpdateStatesReadsModifiesAndSkipsUnchanged(t *testing.T) {
 
 	fixture := newWatchFixture(t)
 	ctx := t.Context()
-	keys := []sqlite.WatchStateKey{{ItemID: "episode-1", AttachKey: "tmdb:episode:1"}, {ItemID: "episode-2"}}
+	keys := []appwatch.StateKey{{ItemID: "episode-1", AttachKey: "tmdb:episode:1"}, {ItemID: "episode-2"}}
 
-	mark := sqlite.WatchStateUpdate{ProfileID: watchProfileID, Keys: keys, Change: markWatchedAt(watchNow()), Now: watchNow()}
+	mark := appwatch.StateUpdate{ProfileID: watchProfileID, Keys: keys, Change: markWatchedAt(watchNow()), Now: watchNow()}
 	if err := fixture.store.UpdateStates(ctx, mark); err != nil {
 		t.Fatalf("UpdateStates error = %v", err)
 	}
@@ -141,8 +142,8 @@ func TestWatchUpdateStatesReadsModifiesAndSkipsUnchanged(t *testing.T) {
 		t.Errorf("episode-2 = %+v, want one play at the first mark", got)
 	}
 
-	unmark := sqlite.WatchStateUpdate{
-		ProfileID: watchProfileID, Keys: []sqlite.WatchStateKey{{ItemID: "episode-3"}},
+	unmark := appwatch.StateUpdate{
+		ProfileID: watchProfileID, Keys: []appwatch.StateKey{{ItemID: "episode-3"}},
 		Change: watch.MarkUnwatched, Now: watchNow(),
 	}
 	if err := fixture.store.UpdateStates(ctx, unmark); err != nil {
@@ -160,9 +161,9 @@ func TestWatchUpdateStatesChangesADuplicateKeyOnce(t *testing.T) {
 
 	fixture := newWatchFixture(t)
 	increment := func(state watch.State) watch.State { state.PlayCount++; return state }
-	keys := []sqlite.WatchStateKey{{ItemID: "movie-1", AttachKey: "first"}, {ItemID: "movie-1", AttachKey: "second"}}
+	keys := []appwatch.StateKey{{ItemID: "movie-1", AttachKey: "first"}, {ItemID: "movie-1", AttachKey: "second"}}
 
-	err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{
+	err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{
 		ProfileID: watchProfileID, Keys: keys, Change: increment, Now: watchNow(),
 	})
 	if err != nil {
@@ -182,12 +183,12 @@ func TestWatchUpdateStatesWritesMoreKeysThanOneBatch(t *testing.T) {
 
 	const episodes = 1_201
 
-	keys := make([]sqlite.WatchStateKey, episodes)
+	keys := make([]appwatch.StateKey, episodes)
 	for index := range keys {
-		keys[index] = sqlite.WatchStateKey{ItemID: fmt.Sprintf("episode-%04d", index)}
+		keys[index] = appwatch.StateKey{ItemID: fmt.Sprintf("episode-%04d", index)}
 	}
 
-	err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{
+	err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{
 		ProfileID: watchProfileID, Keys: keys, Change: markWatchedAt(watchNow()), Now: watchNow(),
 	})
 	if err != nil {
@@ -226,8 +227,8 @@ func TestWatchUpdateStatesConcurrentIncrementsAreNotLost(t *testing.T) {
 	for range writers {
 		group.Go(func() {
 			for range updatesPerWriter {
-				err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{
-					ProfileID: watchProfileID, Keys: []sqlite.WatchStateKey{{ItemID: "movie-1"}}, Change: increment, Now: watchNow(),
+				err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{
+					ProfileID: watchProfileID, Keys: []appwatch.StateKey{{ItemID: "movie-1"}}, Change: increment, Now: watchNow(),
 				})
 				if err != nil {
 					t.Errorf("UpdateStates error = %v", err)
@@ -248,15 +249,15 @@ func TestWatchUpdateStatesOfAnUnknownProfileIsNotFound(t *testing.T) {
 
 	fixture := newWatchFixture(t)
 
-	err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{
-		ProfileID: "profile-unknown", Keys: []sqlite.WatchStateKey{{ItemID: "movie-1"}},
+	err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{
+		ProfileID: "profile-unknown", Keys: []appwatch.StateKey{{ItemID: "movie-1"}},
 		Change: markWatchedAt(watchNow()), Now: watchNow(),
 	})
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("UpdateStates error = %v, want domain.ErrNotFound", err)
 	}
 
-	if err := fixture.store.UpdateStates(t.Context(), sqlite.WatchStateUpdate{ProfileID: watchProfileID}); err != nil {
+	if err := fixture.store.UpdateStates(t.Context(), appwatch.StateUpdate{ProfileID: watchProfileID}); err != nil {
 		t.Errorf("UpdateStates without keys error = %v, want nil", err)
 	}
 }
@@ -307,7 +308,7 @@ func TestWatchEpisodeCountsCountTheEpisodesBelowShowsAndSeasons(t *testing.T) {
 		t.Fatalf("EpisodeCounts error = %v", err)
 	}
 
-	want := map[string]sqlite.WatchEpisodeCount{
+	want := map[string]appwatch.EpisodeCount{
 		show.showID:    {Total: 4, Unwatched: 3},
 		show.season1ID: {Total: 3, Unwatched: 2},
 	}
@@ -325,9 +326,9 @@ func TestWatchStoreFailsWithACancelledContext(t *testing.T) {
 
 	operations := map[string]func() error{
 		"UpdateStates": func() error {
-			return fixture.store.UpdateStates(ctx, sqlite.WatchStateUpdate{
+			return fixture.store.UpdateStates(ctx, appwatch.StateUpdate{
 				ProfileID: watchProfileID,
-				Keys:      []sqlite.WatchStateKey{{ItemID: "movie-1"}}, Change: markWatchedAt(watchNow()), Now: watchNow(),
+				Keys:      []appwatch.StateKey{{ItemID: "movie-1"}}, Change: markWatchedAt(watchNow()), Now: watchNow(),
 			})
 		},
 		"States":           func() error { _, err := fixture.store.States(ctx, watchProfileID, []string{"movie-1"}); return err },

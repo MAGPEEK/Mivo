@@ -91,29 +91,33 @@ LIMIT sqlc.arg(row_limit);
 -- most one of the two rows. An empty library_id means all libraries. Which episode is next
 -- is decided per show by domain/watch.NextUp on ListShowEpisodeStates; a show may have none.
 -- Walking every episode of every active show in SQL instead costs a multiple of this.
+-- Both CTEs join the show item, so a parentless season adds no NULL show_id (which would
+-- make NOT IN unknown and empty the row).
 -- name: ListUpNextShows :many
 WITH active_shows AS (
-    SELECT seasons.parent_id AS show_id, MAX(watch_state.last_played_at) AS last_activity
+    SELECT shows.id AS show_id, MAX(watch_state.last_played_at) AS last_activity
     FROM watch_state
     JOIN items AS episodes ON episodes.id = watch_state.item_id AND episodes.kind = 'episode'
     JOIN items AS seasons ON seasons.id = episodes.parent_id AND seasons.kind = 'season'
+    JOIN items AS shows ON shows.id = seasons.parent_id AND shows.kind = 'show'
     WHERE watch_state.profile_id = sqlc.arg(profile_id)
       AND watch_state.watched = 1
       AND watch_state.last_played_at >= CAST(sqlc.arg(played_since) AS INTEGER)
       AND (CAST(sqlc.arg(library_id) AS TEXT) = '' OR episodes.library_id = sqlc.arg(library_id))
-    GROUP BY seasons.parent_id
+    GROUP BY shows.id
 ),
 continuing_shows AS (
-    SELECT seasons.parent_id AS show_id
+    SELECT shows.id AS show_id
     FROM watch_state
     JOIN items AS episodes ON episodes.id = watch_state.item_id AND episodes.kind = 'episode'
     JOIN items AS seasons ON seasons.id = episodes.parent_id AND seasons.kind = 'season'
+    JOIN items AS shows ON shows.id = seasons.parent_id AND shows.kind = 'show'
     WHERE watch_state.profile_id = sqlc.arg(profile_id)
       AND watch_state.position_seconds > 0
       AND watch_state.hidden_from_continue = 0
       AND watch_state.last_played_at >= CAST(sqlc.arg(played_since) AS INTEGER)
 )
-SELECT CAST(show_id AS TEXT) AS show_id
+SELECT show_id
 FROM active_shows
 WHERE show_id NOT IN (SELECT show_id FROM continuing_shows)
 ORDER BY last_activity DESC, show_id;

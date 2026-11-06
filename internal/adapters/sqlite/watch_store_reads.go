@@ -7,15 +7,9 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
-
-// WatchEpisodeCount is the number of episodes below a show or season and how many of them
-// the profile has not watched.
-type WatchEpisodeCount struct {
-	Total     int
-	Unwatched int
-}
 
 // WatchRowQuery selects a profile's Continue watching or Up next row.
 type WatchRowQuery struct {
@@ -66,12 +60,13 @@ func (store *WatchStore) States(ctx context.Context, profileID string, itemIDs [
 // limit can differ: an episode with its own stricter age rating (ADR 0032 §7) is hidden from
 // the viewer but still counted here, until the age rating column exists and the restriction
 // predicate is added to CountSeasonEpisodes and CountShowEpisodes (M7-14).
-func (store *WatchStore) EpisodeCounts(ctx context.Context, profileID string, containerIDs []string) (map[string]WatchEpisodeCount, error) {
-	counts := make(map[string]WatchEpisodeCount, len(containerIDs))
+func (store *WatchStore) EpisodeCounts(ctx context.Context, profileID string, containerIDs []string) (map[string]appwatch.EpisodeCount, error) {
+	counts := make(map[string]appwatch.EpisodeCount, len(containerIDs))
 
 	err := inReadTransaction(ctx, store.reader, func(queries *sqlcgen.Queries) error {
 		for batch := range slices.Chunk(containerIDs, watchBatchSize) {
-			if err := countBatch(ctx, queries, sqlcgen.CountSeasonEpisodesParams{ProfileID: profileID, ContainerIds: batch}, counts); err != nil {
+			params := sqlcgen.CountSeasonEpisodesParams{ProfileID: profileID, ContainerIds: batch}
+			if err := countBatch(ctx, queries, params, counts); err != nil {
 				return err
 			}
 		}
@@ -86,14 +81,14 @@ func (store *WatchStore) EpisodeCounts(ctx context.Context, profileID string, co
 }
 
 // countBatch adds the counts of the containers of params (at most watchBatchSize) to counts.
-func countBatch(ctx context.Context, queries *sqlcgen.Queries, params sqlcgen.CountSeasonEpisodesParams, counts map[string]WatchEpisodeCount) error {
+func countBatch(ctx context.Context, queries *sqlcgen.Queries, params sqlcgen.CountSeasonEpisodesParams, counts map[string]appwatch.EpisodeCount) error {
 	seasons, err := queries.CountSeasonEpisodes(ctx, params)
 	if err != nil {
 		return fmt.Errorf("count season episodes: %w", err)
 	}
 
 	for _, row := range seasons {
-		counts[row.ContainerID] = WatchEpisodeCount{Total: int(row.Total), Unwatched: int(row.Unwatched)}
+		counts[row.ContainerID] = appwatch.EpisodeCount{Total: int(row.Total), Unwatched: int(row.Unwatched)}
 	}
 
 	shows, err := queries.CountShowEpisodes(ctx, sqlcgen.CountShowEpisodesParams(params))
@@ -102,7 +97,7 @@ func countBatch(ctx context.Context, queries *sqlcgen.Queries, params sqlcgen.Co
 	}
 
 	for _, row := range shows {
-		counts[row.ContainerID] = WatchEpisodeCount{Total: int(row.Total), Unwatched: int(row.Unwatched)}
+		counts[row.ContainerID] = appwatch.EpisodeCount{Total: int(row.Total), Unwatched: int(row.Unwatched)}
 	}
 
 	return nil
