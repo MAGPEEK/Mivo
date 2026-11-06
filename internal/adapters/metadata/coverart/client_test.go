@@ -289,7 +289,7 @@ func TestHosts(t *testing.T) {
 		t.Errorf("AllowedHosts() = %v", got)
 	}
 
-	if got := coverart.RedirectHosts(); !slices.Equal(got, []string{"coverartarchive.org", ".archive.org"}) {
+	if got := coverart.RedirectHosts(); !slices.Equal(got, []string{"coverartarchive.org", "archive.org", ".archive.org"}) {
 		t.Errorf("RedirectHosts() = %v", got)
 	}
 

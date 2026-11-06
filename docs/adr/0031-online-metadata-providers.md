@@ -14,8 +14,8 @@ offline, must not leak the user's files, and CI must never touch the network.
 ## Decision
 
 1. **Hosts (complete list).** `api.themoviedb.org`, `image.tmdb.org`, `musicbrainz.org`,
-   `coverartarchive.org` (redirects to `*.archive.org` are followed for images only). Nothing
-   else is contacted by this feature. Documented in `docs/privacy.md` (M6-16).
+   `coverartarchive.org` (redirects to `archive.org` and `*.archive.org` are followed, for
+   cover JSON and images). Nothing else is contacted by this feature. Documented in `docs/privacy.md` (M6-16).
 2. **Switches.** Global `metadata.online.enabled` (config + Settings) and per library
    `online_metadata` (both default **on** for new installs so the first scan yields posters;
    first-run text in Settings names the hosts). Off means no connection at all. Each provider

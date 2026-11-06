@@ -23,7 +23,10 @@ const DefaultBaseURL = "https://coverartarchive.org"
 
 const (
 	apiHost = "coverartarchive.org"
-	// redirectDomain covers the archive.org mirrors the API and its images redirect to.
+	// archiveHost is the first hop of the API and its images (307 to archive.org/download);
+	// the ".domain" suffix below does not match the bare host.
+	archiveHost = "archive.org"
+	// redirectDomain covers the archive.org mirrors (ia….us.archive.org) of the second hop.
 	redirectDomain = ".archive.org"
 
 	pathReleaseGroup = "/release-group/"
@@ -37,7 +40,7 @@ var errBadResponse = fmt.Errorf("cover art archive returned an unreadable answer
 func AllowedHosts() []string { return []string{apiHost} }
 
 // RedirectHosts returns where the outbound client may follow a redirect to.
-func RedirectHosts() []string { return []string{apiHost, redirectDomain} }
+func RedirectHosts() []string { return []string{apiHost, archiveHost, redirectDomain} }
 
 // HTTPGetter performs a hardened GET; *outbound.Client satisfies it and adds the brand
 // User-Agent (ADR 0031 §5), the rate limit and the retries.

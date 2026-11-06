@@ -63,6 +63,27 @@ func TestForcedOffSwitchesStayOffAndAreNeverStored(t *testing.T) {
 	}
 }
 
+func TestAChangeToAForcedSwitchIsStoredButNotAnnounced(t *testing.T) {
+	t.Parallel()
+
+	store := &recordingStore{}
+	listener := &countingListener{}
+	service := metadatasettings.NewService(metadatasettings.Options{
+		Initial:   metadatasettings.State{Online: true, TMDB: true, MusicBrainz: true},
+		ForcedOff: metadatasettings.ForcedOff{MusicBrainz: true},
+		Store:     store, Listener: listener,
+	})
+
+	off := false
+	if _, err := service.Update(t.Context(), metadatasettings.Change{MusicBrainz: &off}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	if store.saved.MusicBrainz || listener.calls != 0 {
+		t.Errorf("stored %+v, listener calls %d; want the choice stored and nothing announced", store.saved, listener.calls)
+	}
+}
+
 // readingListener reads the settings while it is told about a change, which deadlocks if
 // the service still holds its lock.
 type readingListener struct {

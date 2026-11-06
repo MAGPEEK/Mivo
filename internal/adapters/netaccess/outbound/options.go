@@ -43,9 +43,10 @@ type Options struct {
 	TotalTimeout time.Duration
 	// AllowedHosts restricts requests to exact host names or ".domain" suffixes (matched
 	// case-insensitively, ASCII only); empty allows any public host. Provider adapters
-	// (M6-07/09/10) must set it from the ADR 0031 §1 list. Only the first hop is checked:
-	// redirects (for example coverartarchive.org to archive.org) are limited by the SSRF
-	// guard, the redirect cap and HTTPS only.
+	// (M6-07/09/10) must set it from the ADR 0031 §1 list. Only the first hop is checked
+	// here: where a redirect may lead (for example coverartarchive.org to archive.org) is
+	// governed by RedirectHosts, empty meaning the same host only, plus the SSRF guard, the
+	// redirect cap and HTTPS only.
 	AllowedHosts []string
 	// RedirectHosts are the exact hosts or ".domain" suffixes a redirect may lead to when it
 	// leaves the original host (ADR 0031 §1, for example ".archive.org" for Cover Art

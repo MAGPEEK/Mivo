@@ -190,9 +190,12 @@ func (service *Service) apply(ctx context.Context, change Change) (State, bool, 
 		}
 	}
 
+	previous := service.state
 	service.state = next
 
-	return next, true, nil
+	// The listener hears only about what takes effect: a switch the configuration forces
+	// off changes nothing for the providers.
+	return next, service.effective(next) != service.effective(previous), nil
 }
 
 // current returns the effective state: the user's with the forced switches off.

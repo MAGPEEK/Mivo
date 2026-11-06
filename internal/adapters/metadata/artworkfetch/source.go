@@ -28,9 +28,10 @@ func TMDBHosts() []string { return []string{"image.tmdb.org"} }
 // CoverArtHosts returns the hosts Cover Art Archive references may name (ADR 0031 §1).
 func CoverArtHosts() []string { return []string{"coverartarchive.org"} }
 
-// CoverArtRedirectHosts returns where a Cover Art Archive request may be redirected to; the
-// outbound client for Cover Art Archive should use it for RedirectHosts.
-func CoverArtRedirectHosts() []string { return []string{".archive.org"} }
+// CoverArtRedirectHosts returns where a Cover Art Archive request may be redirected to:
+// archive.org itself (first hop, archive.org/download) and its mirrors *.archive.org (second
+// hop); the outbound client for Cover Art Archive should use it for RedirectHosts.
+func CoverArtRedirectHosts() []string { return []string{"archive.org", ".archive.org"} }
 
 // refTag names the stored file of a reference. It depends on the provider reference only,
 // so a re-fetch finds the file without a download and no part of the URL reaches the path.
