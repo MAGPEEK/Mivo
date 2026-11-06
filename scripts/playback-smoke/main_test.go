@@ -30,6 +30,12 @@ func TestRunRejectsInvalidCommandLines(t *testing.T) {
 		{name: "extra argument", args: []string{"-base", "http://nas:8460", "now"}, want: `unexpected argument "now"`},
 		{name: "zero timeout", args: []string{"-base", "http://nas:8460", "-case-timeout", "0s"}, want: "must be positive"},
 		{name: "unknown flag", args: []string{"-bse", "http://nas:8460"}, want: "flag provided but not defined"},
+		{name: "user without password", args: []string{"-base", "http://nas:8460", "-user", "smoke"}, want: "-user and -password-env go together"},
+		{name: "password without user", args: []string{"-base", "http://nas:8460", "-password-env", "X"}, want: "go together"},
+		{
+			name: "unset password variable", args: []string{"-base", "http://nas:8460", "-user", "smoke", "-password-env", "MIVO_SMOKE_TEST_UNSET_VARIABLE"},
+			want: "unset or empty: MIVO_SMOKE_TEST_UNSET_VARIABLE",
+		},
 	}
 
 	for _, test := range tests {
@@ -46,6 +52,32 @@ func TestRunRejectsInvalidCommandLines(t *testing.T) {
 				t.Errorf("stderr = %q, want %q and the usage", stderr.String(), test.want)
 			}
 		})
+	}
+}
+
+func TestParseOptionsReadsThePasswordFromTheNamedVariable(t *testing.T) {
+	t.Parallel()
+
+	lookup := func(name string) (string, bool) {
+		if name == "SMOKE_SECRET" {
+			return "from the environment", true
+		}
+
+		return "", false
+	}
+
+	opts, err := parseOptions([]string{"-base", "http://nas:8460", "-user", "smoke", "-password-env", "SMOKE_SECRET"}, &bytes.Buffer{}, lookup)
+	if err != nil {
+		t.Fatalf("parseOptions = %v, want nil", err)
+	}
+
+	if opts.account == nil || *opts.account != (credentials{name: "smoke", password: "from the environment"}) {
+		t.Errorf("account = %+v, want smoke with the password of SMOKE_SECRET", opts.account)
+	}
+
+	opts, err = parseOptions([]string{"-base", "http://nas:8460"}, &bytes.Buffer{}, lookup)
+	if err != nil || opts.account != nil {
+		t.Errorf("parseOptions without -user = %+v, %v; want no account", opts.account, err)
 	}
 }
 

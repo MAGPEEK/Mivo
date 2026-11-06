@@ -15,6 +15,15 @@
 //	                                [-profile chromium-desktop] [-ffprobe ffprobe]
 //	                                [-case-timeout 2m] [-scan-timeout 5m]
 //	                                [-disc-manifest testdata/library/manifest.json]
+//	                                [-user smoke -password-env MIVO_SMOKE_PASSWORD]
+//
+// It first reads GET /api/v1/setup (ADR 0032). A fresh server gets its first administrator
+// through the first-run setup, the -user account or a generated one; a server with accounts
+// needs -user, whose password comes from the environment variable -password-env names so it
+// never shows up in the process list. Both sign in as client "cli" and every API and media
+// request carries the bearer token; the run signs out at the end. A server without the
+// endpoint (404 before M7-01, 501 while the account handlers are stubs) is used without
+// sign-in.
 //
 // The server must serve the same corpus, for example the Docker image with
 // testdata/media mounted at /media (packaging/docker/README.md). With -disc-manifest it also
@@ -57,7 +66,11 @@ const (
 	maxRetryAfter = 2 * time.Second
 )
 
-var errInvalidBase = errors.New("-base must be an absolute http or https URL, e.g. http://localhost:8460")
+var (
+	errInvalidBase   = errors.New("-base must be an absolute http or https URL, e.g. http://localhost:8460")
+	errAccountFlags  = errors.New("-user and -password-env go together")
+	errPasswordUnset = errors.New("the -password-env variable is unset or empty")
+)
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -77,11 +90,14 @@ type options struct {
 	ffprobe      string
 	caseTimeout  time.Duration
 	scanTimeout  time.Duration
+	// account signs in on a server with accounts or names the first administrator of a
+	// fresh one; nil: a generated administrator on a fresh server, anonymous otherwise.
+	account *credentials
 }
 
 // run executes the command with the given arguments and returns the process exit code.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
-	opts, err := parseOptions(args, stderr)
+	opts, err := parseOptions(args, stderr, os.LookupEnv)
 	if errors.Is(err, flag.ErrHelp) {
 		return exitOK
 	}
@@ -115,10 +131,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-func parseOptions(args []string, stderr io.Writer) (options, error) {
+// lookupEnv reads an environment variable, like os.LookupEnv.
+type lookupEnv func(name string) (string, bool)
+
+func parseOptions(args []string, stderr io.Writer, lookup lookupEnv) (options, error) {
 	opts := options{}
 
-	var base string
+	var base, user, passwordEnv string
 
 	flags := flag.NewFlagSet("playback-smoke", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -130,6 +149,10 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&opts.ffprobe, "ffprobe", defaultFFprobe, "local ffprobe executable (name on PATH or path)")
 	flags.DurationVar(&opts.caseTimeout, "case-timeout", defaultCaseTimeout, "time limit of one case")
 	flags.DurationVar(&opts.scanTimeout, "scan-timeout", defaultScanTimeout, "time limit of the library scan")
+	flags.StringVar(&user, "user", "",
+		"account to sign in with, or to create by the first-run setup of a fresh server; empty: a generated administrator on a fresh server")
+	flags.StringVar(&passwordEnv, "password-env", "",
+		"name of the environment variable that holds the password of -user (never pass the password itself)")
 
 	if err := flags.Parse(args); err != nil {
 		return options{}, fmt.Errorf("parse flags: %w", err)
@@ -148,9 +171,33 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options{}, usageError(flags, errors.New("-case-timeout and -scan-timeout must be positive"))
 	}
 
-	opts.base = parsed
+	account, err := accountFromFlags(user, passwordEnv, lookup)
+	if err != nil {
+		return options{}, usageError(flags, err)
+	}
+
+	opts.base, opts.account = parsed, account
 
 	return opts, nil
+}
+
+// accountFromFlags reads the password of -user from the variable -password-env names, so the
+// password never shows up in the process list. Both flags empty: no account (nil).
+func accountFromFlags(user, passwordEnv string, lookup lookupEnv) (*credentials, error) {
+	if user == "" && passwordEnv == "" {
+		return nil, nil //nolint:nilnil // no account is a valid result: the smoke signs in only when the server needs it
+	}
+
+	if user == "" || passwordEnv == "" {
+		return nil, errAccountFlags
+	}
+
+	password, found := lookup(passwordEnv)
+	if !found || password == "" {
+		return nil, fmt.Errorf("%w: %s", errPasswordUnset, passwordEnv)
+	}
+
+	return &credentials{name: user, password: password}, nil
 }
 
 // usageError prints the problem and the usage, like the flag package does for unknown flags.

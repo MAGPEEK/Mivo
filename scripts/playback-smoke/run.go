@@ -42,12 +42,18 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 	cases = append(cases, discs...)
 	client := newAPIClient(opts.base, dependencies.httpClient)
 
-	info, err := client.systemInfo(ctx)
-	if err != nil {
-		return fmt.Errorf("reach the server at %s: %w", opts.base, err)
+	if err := connect(ctx, opts, client, out); err != nil {
+		return err
 	}
 
-	printf(out, "server %s %s at %s, profile %s, %d cases\n", info.ProductName, info.Version, opts.base, opts.profile, len(cases))
+	defer func() {
+		// Sign out also after a cancelled run; a failure only leaves a device in the account.
+		if err := signOut(context.WithoutCancel(ctx), client); err != nil {
+			printf(out, "warning: %v\n", err)
+		}
+	}()
+
+	printf(out, "profile %s, %d cases\n", opts.profile, len(cases))
 
 	runner := &smokeRunner{
 		client: client, prober: dependencies.prober, profile: profile,
@@ -59,6 +65,23 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 	}
 
 	return runner.playAll(ctx, cases, out)
+}
+
+// connect checks that the server answers and signs in when the server has accounts.
+func connect(ctx context.Context, opts options, client *apiClient, out io.Writer) error {
+	info, err := client.systemInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("reach the server at %s: %w", opts.base, err)
+	}
+
+	auth, err := signIn(ctx, client, opts.account)
+	if err != nil {
+		return fmt.Errorf("sign in at %s: %w", opts.base, err)
+	}
+
+	printf(out, "server %s %s at %s, %s\n", info.ProductName, info.Version, opts.base, auth)
+
+	return nil
 }
 
 // scanAndIndex scans every library and fills the runner's file index.

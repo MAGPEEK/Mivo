@@ -27,6 +27,8 @@ var errUnexpectedStatus = errors.New("unexpected HTTP status")
 type apiClient struct {
 	base *url.URL
 	http *http.Client
+	// token is the bearer token of the signed-in session; empty on a server without sign-in.
+	token string
 }
 
 func newAPIClient(base *url.URL, httpClient *http.Client) *apiClient {
@@ -120,7 +122,7 @@ func (c *apiClient) call(ctx context.Context, request apiCall) error {
 		httpRequest.Header.Set("Content-Type", contentTypeJSON)
 	}
 
-	response, err := c.http.Do(httpRequest)
+	response, err := c.send(httpRequest)
 	if err != nil {
 		return fmt.Errorf("%s %s: %w", request.method, target, err)
 	}
@@ -128,6 +130,22 @@ func (c *apiClient) call(ctx context.Context, request apiCall) error {
 	defer closeBody(response)
 
 	return decodeResponse(response, request.want, request.out)
+}
+
+// send performs a request and adds the bearer token when the request goes to the server.
+// The origin check keeps the token from leaking to another host should a URL of the API
+// ever point elsewhere.
+func (c *apiClient) send(request *http.Request) (*http.Response, error) {
+	if c.token != "" && sameOrigin(c.base, request.URL) {
+		request.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	// The callers wrap the error with the method and the URL.
+	return c.http.Do(request)
+}
+
+func sameOrigin(base, target *url.URL) bool {
+	return strings.EqualFold(base.Scheme, target.Scheme) && strings.EqualFold(base.Host, target.Host)
 }
 
 func decodeResponse(response *http.Response, want int, out any) error {

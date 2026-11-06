@@ -68,6 +68,9 @@ type fakeServer struct {
 	sessionLimitOnce bool
 	sessions         map[uuid.UUID]*fakeSession
 	stopped          []uuid.UUID
+	// auth turns on the account endpoints and the bearer check; nil is a server from before
+	// sign-in, which answers 404 for them.
+	auth *fakeAuth
 }
 
 func newFakeServer(t *testing.T, files ...*fakeFile) (*fakeServer, *httptest.Server) {
@@ -99,8 +102,9 @@ func (fake *fakeServer) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/playback/sessions/{id}", fake.deleteSession)
 	mux.HandleFunc("GET /api/v1/playback/sessions/{id}/file", fake.streamFile)
 	mux.HandleFunc("GET /api/v1/playback/sessions/{id}/hls/{name}", fake.hlsFile)
+	fake.authRoutes(mux)
 
-	return mux
+	return fake.requireSession(mux)
 }
 
 func (fake *fakeServer) writeJSON(w http.ResponseWriter, status int, value any) {

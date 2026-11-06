@@ -45,7 +45,7 @@ func (downloader streamDownloader) direct(ctx context.Context, target *url.URL, 
 
 	request.Header.Set("Range", wholeFileRange)
 
-	response, err := downloader.client.http.Do(request)
+	response, err := downloader.client.send(request)
 	if err != nil {
 		return fmt.Errorf("range request %s: %w", target, err)
 	}
@@ -159,7 +159,7 @@ func (downloader streamDownloader) fetchOnce(ctx context.Context, target *url.UR
 		return fmt.Errorf("build GET %s: %w", target, err)
 	}
 
-	response, err := downloader.client.http.Do(request)
+	response, err := downloader.client.send(request)
 	if err != nil {
 		return fmt.Errorf("GET %s: %w", target, err)
 	}

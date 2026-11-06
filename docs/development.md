@@ -519,8 +519,9 @@ play; the whole playlist, init segment and media segments for HLS), probes it wi
 go run ./scripts/gen-testmedia
 docker build -f packaging/docker/Dockerfile -t mivo:dev .
 docker run -d --name mivo-smoke -p 127.0.0.1:8460:8460 -v "${PWD}/testdata/media:/media:ro" mivo:dev
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -profile firefox-desktop
+$env:MIVO_SMOKE_PASSWORD = [guid]::NewGuid().ToString()
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD -profile firefox-desktop
 docker exec mivo-smoke ls /transcode/sessions
 docker rm -f -v mivo-smoke
 ```
@@ -529,6 +530,17 @@ docker rm -f -v mivo-smoke
   `testdata/media/manifest.json`); a local `ffprobe` is needed (`-ffprobe <path>` otherwise).
 - `-profile` is `chromium-desktop` (default) or `firefox-desktop`; `-case-timeout` (default
   `2m`) and `-scan-timeout` (default `5m`) bound one case and the scan.
+- Sign-in (ADR 0032): the script first reads `GET /api/v1/setup`. On a fresh server it runs
+  the first-run setup as `-user` (or, without `-user`, as a generated administrator
+  `playback-smoke` whose password it never prints); on a server with accounts it signs in as
+  `-user`. Both use client `cli`, send the bearer token with every API and media request,
+  select the primary profile when the server selected none and sign out at the end. The
+  password comes from the environment variable that `-password-env` names, never from the
+  command line, so it does not show up in the process list. Pass the same `-user` and
+  variable to every run against one server: the first run creates the account, the later
+  ones sign in with it. A server without the endpoint (404 before M7-01, 501 while the
+  account handlers are stubs) is used without sign-in, and `-user` is ignored. In bash:
+  `export MIVO_SMOKE_PASSWORD="$(openssl rand -hex 16)"`.
 - `docker exec … ls /transcode/sessions` must print nothing: every session was removed.
 - A server without a library gets one over its first available browse root (`/media` preferred) through `POST /api/v1/libraries`. It works against any server, for example `go run ./cmd/mivo` with `MIVO_LIBRARIES` set to
   the corpus. Linux file modes and `--user` for the bind mount: `packaging/docker/README.md`,
