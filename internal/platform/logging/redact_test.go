@@ -33,7 +33,8 @@ func TestNewRedactsSensitiveKeys(t *testing.T) {
 	keys := []string{
 		// The words from sensitiveWords in their plain form.
 		"password", "passwd", "passphrase", "secret", "token", "apikey", "authorization",
-		"cookie", "credential", "privatekey", "signingkey", "encryptionkey", "sessionid", "pin",
+		"cookie", "credential", "privatekey", "signingkey", "encryptionkey", "session", "jwt",
+		"passcode", "bearer", "pin", "otp", "pwd",
 		// Matching is case-insensitive.
 		"PASSWORD", "ApiKey", "Authorization",
 		// Every character that is not an ASCII letter or digit is ignored.
@@ -53,6 +54,11 @@ func TestNewRedactsSensitiveKeys(t *testing.T) {
 		// shows the other side of the boundary (spinner, pinned, mapping).
 		"profilePin", "profile.pin", "PIN", "pins", "pinHash", "pinCode", "PINCode", "pin2",
 		"userpin", "spin",
+		// Account and session credentials (M7): word parts of camel-case, header and prefixed keys.
+		"sessionid", "session_id", "newPassword", "currentPassword", "X-Session", "X-Session-Id",
+		"sessionToken", "playbackSession", "sessions", "sessionIdTTL", "PASSCODE", "profilePasscode",
+		"Bearer", "bearerToken", "jwtClaims", "OTP", "otpCode", "userOtp", "totp", "otps",
+		"newPwd", "pwdHash", "user_pwd",
 	}
 
 	for _, key := range keys {
@@ -165,7 +171,10 @@ func TestNewKeepsNonSensitiveAttributes(t *testing.T) {
 		{name: "qualifier length", key: "passwordLength"},
 		{name: "qualifier expiry", key: "tokenExpiry"},
 		{name: "qualifier expiresAt", key: "token_expires_at"},
-		{name: "qualifier ttl", key: "sessionIdTTL"},
+		{name: "qualifier ttl", key: "sessionTTL"},
+		{name: "session with a qualifier", key: "sessionCount"},
+		{name: "otp inside footprint", key: "footprint"},
+		{name: "otp inside a camel-case word", key: "hotPath"},
 		{name: "whole word with a qualifier", key: "pinCount"},
 		{name: "pin inside spinner", key: "spinner"},
 		{name: "pin at the start of pinned", key: "pinned"},

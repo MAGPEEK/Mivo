@@ -40,8 +40,17 @@ func sensitiveWords() []sensitiveWord {
 		{text: "privatekey"},
 		{text: "signingkey"},
 		{text: "encryptionkey"},
-		{text: "sessionid"},
+		// "session" also covers sessionid, sessionToken and X-Session (sign-in sessions, ADR
+		// 0032). Playback session ids are redacted with them: failing closed is cheaper than a
+		// rule that tells the two kinds apart by key name.
+		{text: "session"},
+		{text: "passcode"},
+		{text: "bearer"},
+		{text: "jwt"},
 		{text: "pin", wholeWord: true},
+		// "otp" occurs inside footprint and hotPath, "pwd" is short enough to be one too.
+		{text: "otp", wholeWord: true},
+		{text: "pwd", wholeWord: true},
 	}
 }
 
