@@ -334,3 +334,15 @@ type UserLibrary struct {
 	UserID    string
 	LibraryID string
 }
+
+type WatchState struct {
+	ProfileID          string
+	ItemID             string
+	PositionSeconds    float64
+	Watched            int64
+	PlayCount          int64
+	LastPlayedAt       sql.NullInt64
+	HiddenFromContinue int64
+	AttachKey          string
+	UpdatedAt          int64
+}

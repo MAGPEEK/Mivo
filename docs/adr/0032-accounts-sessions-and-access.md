@@ -151,6 +151,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - **Up next** (HO-04): per show with a watched episode in the last 12 weeks and no in-progress
   episode, the first unwatched episode after the last watched one in season/episode order,
   specials (season 0) skipped; newest show activity first, at most 20.
+  Amendment (M7-10): "in-progress episode" means an episode in Continue watching (in progress,
+  not hidden, played within 12 weeks), so a show is in at most one of the two rows; a hidden
+  or stale position no longer keeps a show out of both.
 - Clients report progress with `PUT /api/v1/items/{id}/progress` every 10 s while playing and
   on pause, stop and page hide (`fetch` with `keepalive`).
 
@@ -164,8 +167,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   `SameSite=Lax` session cookie.
 
 ### 10 Migrations
-- `00011` accounts, profiles, library access, sessions/devices; `00012` metadata settings and local records (M6-14); `00013` watch state; `00014`
-  age ratings. They merge in numeric order (goose refuses gaps on existing databases).
+- `00011` accounts, profiles, library access, sessions/devices; `00012` metadata settings and
+  local records (M6-14); `00013` watch state; `00014` age ratings. They merge in numeric order
+  (goose refuses missing (out-of-order) versions on existing databases).
 
 ## Consequences
 

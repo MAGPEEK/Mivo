@@ -15,7 +15,7 @@ import (
 const testDatabaseFile = "server.db"
 
 // openTestDB opens a fresh database in t.TempDir() and closes it when the test ends.
-func openTestDB(t *testing.T, logger *slog.Logger) (*sqlite.DB, string) {
+func openTestDB(t testing.TB, logger *slog.Logger) (*sqlite.DB, string) {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), testDatabaseFile)
@@ -35,7 +35,7 @@ func openTestDB(t *testing.T, logger *slog.Logger) (*sqlite.DB, string) {
 }
 
 // openMigratedTestDB is openTestDB followed by Migrate.
-func openMigratedTestDB(t *testing.T) (*sqlite.DB, string) {
+func openMigratedTestDB(t testing.TB) (*sqlite.DB, string) {
 	t.Helper()
 
 	db, path := openTestDB(t, nil)
@@ -48,7 +48,7 @@ func openMigratedTestDB(t *testing.T) (*sqlite.DB, string) {
 
 // openInspectionDB opens a plain connection to the file at path, independent of the adapter,
 // so tests can check and tamper with what the adapter stored.
-func openInspectionDB(t *testing.T, path string) *sql.DB {
+func openInspectionDB(t testing.TB, path string) *sql.DB {
 	t.Helper()
 
 	inspection, err := sql.Open("sqlite", path)

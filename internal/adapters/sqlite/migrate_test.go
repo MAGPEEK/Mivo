@@ -12,7 +12,7 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 12
+const latestSchemaVersion = 13
 
 // migrationFiles is the number of files in migrations/; the numbering has no gaps, so it
 // equals latestSchemaVersion.
@@ -22,7 +22,7 @@ const migrationFiles = latestSchemaVersion
 func schemaTables() []string {
 	return slices.Concat([]string{"server_identity"}, catalogTables(), catalogV2Tables(), libraryManagementTables(),
 		onlineMetadataTables(), []string{"media_chapters", "search_docs", "item_search"}, accountTables(),
-		[]string{"metadata_settings", "item_local_records"})
+		[]string{"metadata_settings", "item_local_records", "watch_state"})
 }
 
 func TestMigrateCreatesTheSchemaAndASecondRunIsANoOp(t *testing.T) {
