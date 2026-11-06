@@ -257,6 +257,10 @@ preferred audio languages, preferred subtitle languages, a subtitle mode (`off`,
 - **Accepted deviation 2:** an empty mode means `forced`, without the task's condition "only when
   the audio differs from the first preferred language". Forced tracks are exactly what a viewer
   of the audio language needs, so they are not hidden when the audio is the preferred language.
+- **Accepted deviation 3 (orchestrator, 2026-11-06):** the channel count does not rank audio
+  tracks (the task and ADR 0030 §4 listed "most channels"). Ties go to file order, because
+  browsers play the first track: a "stereo first, 5.1 second" file without default flags keeps
+  direct play instead of a remux.
 - **Request overrides:** `audioStreamIndex` and `subtitleTrackId` win over the policy. For the
   subtitle id, nil applies the policy, `""` switches subtitles off, and any other id must name an
   embedded track (`s:<index>`) or an external file of the input (`x:<hash>`). An unknown audio

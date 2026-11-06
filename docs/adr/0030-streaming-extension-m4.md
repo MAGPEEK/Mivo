@@ -54,7 +54,7 @@ unchanged. This also bounds transcode-directory growth to about the lead plus th
 
 **4. Audio.** Track choice stays `audioStreamIndex` on session creation (ADR 0024), changing a
 track replaces the session. New: a pure domain default policy (language list, default flag,
-no commentary, most channels), multichannel output when the profile says `maxAudioChannels >= 6`
+no commentary; channel count is not ranked – see ADR 0023 Notes (M4-04a)), multichannel output when the profile says `maxAudioChannels >= 6`
 (AAC 5.1; passthrough where the profile lists the codec), DSD (DSF/DFF) always decoded to PCM
 (24 bit, 88.2/96 kHz max, FLAC for lossless clients) and hi-res PCM downsampled to the
 profile limit.
