@@ -15,6 +15,10 @@ var (
 	ErrInvalid = errors.New("invalid")
 	// ErrForbidden reports that the caller is not allowed to perform the operation.
 	ErrForbidden = errors.New("forbidden")
+	// ErrUnauthenticated reports that the operation needs a signed-in viewer and the caller
+	// has none, for example a missing or expired session (ADR 0032). Unlike ErrForbidden the
+	// caller's identity is unknown, so signing in may help.
+	ErrUnauthenticated = errors.New("unauthenticated")
 	// ErrUnsupported reports well-formed input the server cannot handle, for example a
 	// media file that could not be probed or a format no client profile can play. Unlike
 	// ErrInvalid, the request itself breaks no rule.
