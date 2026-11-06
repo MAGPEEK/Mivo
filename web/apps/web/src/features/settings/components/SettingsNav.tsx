@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
+import { useAdminViewer } from "../../auth";
+import { adminDevicesPath } from "../../devices";
 import { settingsNamespace } from "../locales";
 
 // TanStack Router marks the link of the current page with aria-current="page".
@@ -13,6 +15,7 @@ const linkClass =
  */
 export function SettingsNav() {
   const { t } = useTranslation(settingsNamespace);
+  const admin = useAdminViewer();
   return (
     <nav aria-label={t("nav.label")} className="mb-6 border-b border-divider pb-3">
       <ul className="flex flex-wrap gap-2">
@@ -31,11 +34,21 @@ export function SettingsNav() {
             {t("nav.about")}
           </Link>
         </li>
-        <li>
-          <Link to="/admin/devices" className={linkClass}>
-            {t("nav.devices")}
-          </Link>
-        </li>
+        {/* Admin › Users (M7-32) and Admin › Devices (M7-34): only admins manage accounts. */}
+        {admin && (
+          <>
+            <li>
+              <Link to="/admin/users" className={linkClass}>
+                {t("nav.users")}
+              </Link>
+            </li>
+            <li>
+              <Link to={adminDevicesPath} className={linkClass}>
+                {t("nav.devices")}
+              </Link>
+            </li>
+          </>
+        )}
       </ul>
     </nav>
   );

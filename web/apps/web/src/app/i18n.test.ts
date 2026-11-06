@@ -57,6 +57,7 @@ describe("locales", () => {
       "profiles",
       "settings",
       "translation",
+      "users",
     ]);
   });
 

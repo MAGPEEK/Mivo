@@ -137,7 +137,8 @@
     "libraries": "Libraries",
     "metadata": "Metadata",
     "about": "About",
-    "devices": "Devices"
+    "devices": "Devices",
+    "users": "Users"
   },
   "metadata": {
     "heading": "Metadata",

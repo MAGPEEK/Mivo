@@ -1,0 +1,132 @@
+{
+  "users": {
+    "heading": "Benutzer",
+    "description": "Konten, verwaltete Profile und Zugriff.",
+    "add": "Benutzer hinzufügen",
+    "loading": "Benutzer werden geladen",
+    "loadFailed": "Die Benutzer konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "unavailable": {
+      "title": "Benutzerverwaltung noch nicht verfügbar",
+      "hint": "Dieser {{productName}}-Server verwaltet noch keine Konten. Aktualisiere den Server, um hier Benutzer anzulegen und zu bearbeiten."
+    },
+    "forbidden": "Nur ein Administrator im lokalen Netzwerk kann Benutzer verwalten.",
+    "table": {
+      "label": "Konten und Profile",
+      "name": "Name",
+      "role": "Rolle",
+      "contentLimit": "Inhaltsgrenze",
+      "libraries": "Bibliotheken",
+      "lastActivity": "Letzte Aktivität",
+      "status": "Status",
+      "profiles": "Profile",
+      "actions": "Aktionen"
+    },
+    "role": {
+      "admin": "Admin",
+      "user": "Benutzer",
+      "profile": "Profil",
+      "unknown": "Andere"
+    },
+    "status": {
+      "active": "Aktiv",
+      "disabled": "Deaktiviert",
+      "unknown": "Unbekannt"
+    },
+    "limit": {
+      "youngChildren": "Kleinkinder (Freigabe 0)",
+      "children": "Kinder (Freigabe bis 6)",
+      "teens": "Jugendliche (Freigabe bis 12)",
+      "adults": "Erwachsene (keine Grenze)",
+      "custom": "Benutzerdefiniert",
+      "customAge": "Benutzerdefiniert (Freigabe bis {{age}})",
+      "hidesUnrated": "blendet nicht bewertete Titel aus"
+    },
+    "access": {
+      "all": "Alle",
+      "none": "Keine",
+      "count_one": "{{count}} Bibliothek",
+      "count_other": "{{count}} Bibliotheken"
+    },
+    "lastActivity": {
+      "never": "Nie"
+    },
+    "profile": {
+      "pin": "PIN",
+      "managedOf": "Verwaltetes Profil von {{name}}"
+    },
+    "actions": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "editLabel": "{{name}} bearbeiten",
+      "deleteLabel": "{{name}} löschen"
+    },
+    "dialog": {
+      "createTitle": "Benutzer hinzufügen",
+      "editTitle": "{{name}} bearbeiten",
+      "close": "Schließen",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Wird gespeichert …",
+      "name": "Name",
+      "password": "Erstes Passwort",
+      "passwordHint": "{{min}} bis {{max}} Zeichen. Nach der Anmeldung kann der Benutzer es ändern.",
+      "resetPassword": "Passwort zurücksetzen",
+      "keepPassword": "Aktuelles Passwort behalten",
+      "newPassword": "Neues Passwort",
+      "newPasswordHint": "Speichern setzt es und meldet das Konto auf allen Geräten ab.",
+      "show": "Anzeigen",
+      "hide": "Verbergen",
+      "showLabel": "Passwort anzeigen",
+      "hideLabel": "Passwort verbergen",
+      "role": "Rolle",
+      "disabled": "Konto deaktiviert",
+      "disabledHint": "Ein deaktiviertes Konto kann sich nicht anmelden; seine Sitzungen enden.",
+      "access": {
+        "legend": "Bibliotheken",
+        "all": "Alle Bibliotheken",
+        "selected": "Ausgewählte Bibliotheken",
+        "selectionLabel": "Bibliotheken, die dieser Benutzer sieht",
+        "adminHint": "Administratoren sehen immer alle Bibliotheken.",
+        "noLibraries": "Es gibt noch keine Bibliotheken."
+      },
+      "limit": {
+        "legend": "Inhaltsgrenze",
+        "preset": "Voreinstellung",
+        "customAge": "Höchste Altersfreigabe",
+        "age": "Freigabe bis {{age}}",
+        "hideUnrated": "Nicht bewertete Titel ausblenden",
+        "enforce": "Die Grenze wird serverseitig bei jeder Liste, Suche, Detail- und Stream-Anfrage durchgesetzt."
+      }
+    },
+    "validation": {
+      "nameRequired": "Gib einen Namen ein.",
+      "nameTooLong": "Verwende höchstens {{max}} Zeichen.",
+      "passwordRequired": "Gib ein erstes Passwort ein.",
+      "passwordTooShort": "Verwende mindestens {{min}} Zeichen.",
+      "passwordTooLong": "Verwende höchstens {{max}} Bytes."
+    },
+    "problems": {
+      "nameTaken": "Ein anderes Konto hat diesen Namen bereits.",
+      "nameInvalid": "Der Server akzeptiert diesen Namen nicht.",
+      "passwordInvalid": "Der Server akzeptiert dieses Passwort nicht (8 bis 128 Zeichen).",
+      "accessInvalid": "Wähle Bibliotheken, die noch existieren.",
+      "limitInvalid": "Der Server akzeptiert diese Inhaltsgrenze nicht.",
+      "lastAdmin": "Dies ist der letzte aktive Administrator. Mache zuerst ein anderes Konto zum Administrator.",
+      "forbidden": "Nur ein Administrator im lokalen Netzwerk kann Benutzer verwalten.",
+      "notImplemented": "Dieser Server kann noch keine Konten verwalten.",
+      "notFound": "Das Konto existiert nicht mehr.",
+      "failed": "Speichern fehlgeschlagen. Versuche es erneut."
+    },
+    "remove": {
+      "title": "Konto löschen?",
+      "description": "Löscht {{name}} mit allen Profilen, deren Wiedergabestatus und Sitzungen. Mediendateien bleiben unberührt.",
+      "confirm": "Konto löschen",
+      "cancel": "Abbrechen"
+    },
+    "announce": {
+      "saved": "{{name}} gespeichert.",
+      "removed": "Konto gelöscht."
+    }
+  }
+}

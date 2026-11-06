@@ -18,3 +18,5 @@ export { formatCountdown } from "./lib/countdown";
 export { sanitizeNextPath } from "./lib/nextPath";
 export type { SessionState, SessionStatus } from "./lib/sessionStatus";
 export { authLocales, authNamespace } from "./locales";
+export { useAdminViewer } from "./hooks/useAdminViewer";
+export { isAdminViewer } from "./lib/adminViewer";

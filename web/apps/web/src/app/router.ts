@@ -22,6 +22,7 @@ import {
   setupPath,
   signInPath,
   validateAuthSearch,
+  useAdminViewer,
 } from "../features/auth";
 import {
   AdminDevicesPage,
@@ -47,6 +48,7 @@ import {
   MetadataSettingsPage,
   validateSettingsSearch,
 } from "../features/settings";
+import { UsersPage } from "../features/users";
 import { NotFoundPage } from "./NotFoundPage";
 import { AppLayout } from "./layout/AppLayout";
 import { FullScreenLayout } from "./layout/FullScreenLayout";
@@ -127,6 +129,13 @@ function PlayerRoute() {
   return createElement(PlayerPage, { itemId, search });
 }
 
+// Admin › Users (M7-32): a viewer without admin powers gets the not-found page, so the URL
+// does not even reveal that the page exists.
+function AdminUsersRoute() {
+  const admin = useAdminViewer();
+  return createElement(admin ? UsersPage : NotFoundPage);
+}
+
 // Every page sits below the session gate: it decides whether the page may show (ADR 0032).
 function GatedRoot() {
   return createElement(SessionGate, { children: createElement(Outlet) });
@@ -174,6 +183,11 @@ function settingsPages<Parent extends AnyRoute>(parent: Parent) {
       getParentRoute: () => parent,
       path: "/admin/settings/about",
       component: AboutSettingsPage,
+    }),
+    createRoute({
+      getParentRoute: () => parent,
+      path: "/admin/users",
+      component: AdminUsersRoute,
     }),
   ] as const;
 }

@@ -109,3 +109,18 @@ export type {
 } from "./schemas";
 // Device types in their own block, so parallel additions to the list above do not collide.
 export type { AccountDevice, AccountDeviceList, AddressClass, Device, DeviceList } from "./schemas";
+// User administration (US-20…22).
+export type {
+  AgeRating,
+  ContentLimit,
+  ContentLimitPreset,
+  LibraryAccess,
+  PasswordReset,
+  Profile,
+  ProfileList,
+  User,
+  UserCreate,
+  UserList,
+  UserStatus,
+  UserUpdate,
+} from "./schemas";

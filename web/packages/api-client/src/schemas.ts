@@ -292,3 +292,38 @@ export type AccountDevice = Schemas["AccountDevice"];
 
 /** Body of `GET /api/v1/devices`. */
 export type AccountDeviceList = Schemas["AccountDeviceList"];
+/** An account as the user administration shows it (US-20). */
+export type User = Schemas["User"];
+
+/** Body of `GET /api/v1/users`. */
+export type UserList = Schemas["UserList"];
+
+/** Body of `POST /api/v1/users`: a new account with its initial password. */
+export type UserCreate = Schemas["UserCreate"];
+
+/** Body of `PATCH /api/v1/users/{userId}`; omitted properties stay as they are. */
+export type UserUpdate = Schemas["UserUpdate"];
+
+/** Whether an account may sign in. Later API versions may add values. */
+export type UserStatus = Schemas["UserStatus"];
+
+/** Body of `PUT /api/v1/users/{userId}/password`. */
+export type PasswordReset = Schemas["PasswordReset"];
+
+/** A profile with its settings as the account owner and the administration manage it. */
+export type Profile = Schemas["Profile"];
+
+/** Body of `GET /api/v1/users/{userId}/profiles`. */
+export type ProfileList = Schemas["ProfileList"];
+
+/** The content limit of a profile; `preset` is derived from `maxAge` in responses. */
+export type ContentLimit = Schemas["ContentLimit"];
+
+/** Label of a content limit. Later API versions may add values. */
+export type ContentLimitPreset = Schemas["ContentLimitPreset"];
+
+/** Age bucket of a content limit. Later API versions may add values. */
+export type AgeRating = Schemas["AgeRating"];
+
+/** The libraries an account or profile may see. */
+export type LibraryAccess = Schemas["LibraryAccess"];

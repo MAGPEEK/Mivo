@@ -25,7 +25,10 @@ const webClient = "web";
 const maxNetworkRetries = 1;
 
 // Answers are final: a 401, 403 or 501 does not change on a retry. Only a lost connection is
-// tried once more, to ride out a server restart.
+// tried once more, to ride out a server restart. A component that reads the session below the
+// gate must not restart a failed check either (`retryOnMount: false`): the refetch puts the
+// query back to pending, the gate unmounts the page, the page mounts again and the check
+// loops (M7-32, seen on a server answering 501).
 function retryOnlyNetwork(failureCount: number, error: unknown): boolean {
   const answered = error instanceof ApiError && error.status !== noResponseStatus;
   return !answered && failureCount < maxNetworkRetries;
@@ -39,6 +42,7 @@ export function setupStateQueryOptions(client: ApiClient) {
     // Setup happens once; the setup and sign-in flows update the cache themselves.
     staleTime: Infinity,
     retry: retryOnlyNetwork,
+    retryOnMount: false,
   });
 }
 
@@ -48,6 +52,7 @@ export function meQueryOptions(client: ApiClient) {
     queryKey: meQueryKey,
     queryFn: ({ signal }) => requestData(client.GET("/api/v1/me", { signal })),
     retry: retryOnlyNetwork,
+    retryOnMount: false,
   });
 }
 

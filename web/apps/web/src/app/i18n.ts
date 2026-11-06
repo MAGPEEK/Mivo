@@ -12,6 +12,7 @@ import { photosLocales, photosNamespace } from "../features/photos";
 import { playerLocales, playerNamespace } from "../features/player";
 import { profilesLocales, profilesNamespace } from "../features/profiles";
 import { settingsLocales, settingsNamespace } from "../features/settings";
+import { usersLocales, usersNamespace } from "../features/users";
 import { createI18n } from "../shared/i18n";
 
 // The single registry of feature namespaces. It lives in the app layer because `shared` must
@@ -31,6 +32,7 @@ export const featureNamespaces = {
   [authNamespace]: authLocales,
   [devicesNamespace]: devicesLocales,
   [profilesNamespace]: profilesLocales,
+  [usersNamespace]: usersLocales,
 } as const;
 
 /** Type of {@link featureNamespaces}; `i18next.d.ts` types `t()` keys with it. */

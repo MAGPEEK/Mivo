@@ -1,0 +1,132 @@
+{
+  "users": {
+    "heading": "Users",
+    "description": "Accounts, managed profiles and access.",
+    "add": "Add user",
+    "loading": "Loading users",
+    "loadFailed": "The users could not be loaded.",
+    "retry": "Try again",
+    "unavailable": {
+      "title": "User management is not available yet",
+      "hint": "This {{productName}} server does not manage accounts yet. Update the server to add and edit users here."
+    },
+    "forbidden": "Only an administrator on the local network can manage users.",
+    "table": {
+      "label": "Accounts and profiles",
+      "name": "Name",
+      "role": "Role",
+      "contentLimit": "Content limit",
+      "libraries": "Libraries",
+      "lastActivity": "Last activity",
+      "status": "Status",
+      "profiles": "Profiles",
+      "actions": "Actions"
+    },
+    "role": {
+      "admin": "Admin",
+      "user": "User",
+      "profile": "Profile",
+      "unknown": "Other"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "unknown": "Unknown"
+    },
+    "limit": {
+      "youngChildren": "Young children (rated 0)",
+      "children": "Children (rated up to 6)",
+      "teens": "Teens (rated up to 12)",
+      "adults": "Adults (no limit)",
+      "custom": "Custom",
+      "customAge": "Custom (rated up to {{age}})",
+      "hidesUnrated": "hides unrated titles"
+    },
+    "access": {
+      "all": "All",
+      "none": "None",
+      "count_one": "{{count}} library",
+      "count_other": "{{count}} libraries"
+    },
+    "lastActivity": {
+      "never": "Never"
+    },
+    "profile": {
+      "pin": "PIN",
+      "managedOf": "Managed profile of {{name}}"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "editLabel": "Edit {{name}}",
+      "deleteLabel": "Delete {{name}}"
+    },
+    "dialog": {
+      "createTitle": "Add user",
+      "editTitle": "Edit {{name}}",
+      "close": "Close",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "name": "Name",
+      "password": "Initial password",
+      "passwordHint": "{{min}} to {{max}} characters. The user can change it after signing in.",
+      "resetPassword": "Reset password",
+      "keepPassword": "Keep the current password",
+      "newPassword": "New password",
+      "newPasswordHint": "Saving sets it and signs the account out on all its devices.",
+      "show": "Show",
+      "hide": "Hide",
+      "showLabel": "Show password",
+      "hideLabel": "Hide password",
+      "role": "Role",
+      "disabled": "Account disabled",
+      "disabledHint": "A disabled account cannot sign in; its sessions end.",
+      "access": {
+        "legend": "Libraries",
+        "all": "All libraries",
+        "selected": "Selected libraries",
+        "selectionLabel": "Libraries this user may see",
+        "adminHint": "Administrators always see all libraries.",
+        "noLibraries": "There are no libraries yet."
+      },
+      "limit": {
+        "legend": "Content limit",
+        "preset": "Preset",
+        "customAge": "Highest age rating",
+        "age": "Rated up to {{age}}",
+        "hideUnrated": "Hide unrated titles",
+        "enforce": "The limit is enforced on the server for every list, search, detail and stream request."
+      }
+    },
+    "validation": {
+      "nameRequired": "Enter a name.",
+      "nameTooLong": "Use at most {{max}} characters.",
+      "passwordRequired": "Enter an initial password.",
+      "passwordTooShort": "Use at least {{min}} characters.",
+      "passwordTooLong": "Use at most {{max}} bytes."
+    },
+    "problems": {
+      "nameTaken": "Another account already has this name.",
+      "nameInvalid": "The server does not accept this name.",
+      "passwordInvalid": "The server does not accept this password (8 to 128 characters).",
+      "accessInvalid": "Choose libraries that still exist.",
+      "limitInvalid": "The server does not accept this content limit.",
+      "lastAdmin": "This is the last active administrator. Make another account an administrator first.",
+      "forbidden": "Only an administrator on the local network can manage users.",
+      "notImplemented": "This server cannot manage accounts yet.",
+      "notFound": "The account no longer exists.",
+      "failed": "Saving failed. Try again."
+    },
+    "remove": {
+      "title": "Delete account?",
+      "description": "Deletes {{name}} with all its profiles, their watch state and sessions. Media files are not touched.",
+      "confirm": "Delete account",
+      "cancel": "Cancel"
+    },
+    "announce": {
+      "saved": "{{name}} saved.",
+      "removed": "Account deleted."
+    }
+  }
+}
