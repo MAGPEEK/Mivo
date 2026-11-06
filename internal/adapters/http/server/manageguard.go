@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -21,6 +22,7 @@ const (
 	usersRefusalDetail            = "User administration needs an administrator on the local network."
 	devicesRefusalDetail          = "Device administration needs an administrator on the local network."
 	setupRefusalDetail            = "The first-run setup is only available from the local network."
+	profilesRefusalDetail         = "Administrators manage profiles from the local network only."
 )
 
 // manageArea is the guarded area a request belongs to; areaNone is not guarded.
@@ -36,6 +38,9 @@ const (
 	// areaSetup needs a local peer and the same-origin rule, but no viewer: nobody can be
 	// signed in before the first account exists.
 	areaSetup
+	// areaProfiles refuses only admin viewers outside the local network; owners pass to the
+	// use case's ownership check.
+	areaProfiles
 )
 
 // Paths of the guarded routes (api/openapi.yaml).
@@ -48,6 +53,7 @@ const (
 	apiV1Users            = "/api/v1/users"
 	apiV1Devices          = "/api/v1/devices"
 	apiV1Setup            = "/api/v1/setup"
+	apiV1Profiles         = "/api/v1/profiles"
 
 	// settingsSegments and posterSegments are the path segments of the settings route and of
 	// one poster ("api", "v1", ... and the poster ID).
@@ -70,8 +76,9 @@ const (
 //   - authentication is on and the viewer is no admin (every area but the setup).
 //
 // Only RemoteAddr counts for the peer, as in lanGuard; X-Forwarded-* headers are ignored.
-// The profiles of the caller's own account (/users/{ownId}/profiles, /profiles/{id}) are not
-// guarded: the use case checks that the caller owns them (CanManageProfile).
+// The profiles of the caller's own account (/users/{ownId}/profiles) are not guarded, and
+// /profiles/{id} only refuses admins outside the local network (see profileRefusal): the use
+// case checks that the caller owns them (CanManageProfile).
 //
 // Residual risks (ADR 0032 §9): a reverse proxy or tunnel that connects from the LAN or the
 // host itself makes every client look local, so the admin sign-in is the remaining check;
@@ -113,6 +120,10 @@ func (guard manageGuard) wrap(next http.Handler) http.Handler {
 
 // refusal names why the request is refused, or returns "" when it may pass.
 func (guard manageGuard) refusal(request *http.Request, area manageArea) string {
+	if area == areaProfiles {
+		return guard.profileRefusal(request)
+	}
+
 	if !guard.lan.admitsPeer(request) {
 		return "peer outside the local network"
 	}
@@ -123,6 +134,20 @@ func (guard manageGuard) refusal(request *http.Request, area manageArea) string 
 
 	if guard.requireAdmin && area != areaSetup && !isAdminViewer(request) {
 		return "viewer is no administrator"
+	}
+
+	return ""
+}
+
+// profileRefusal guards /api/v1/profiles/{id}. Owners may manage their own managed profiles
+// from anywhere, and the use case checks ownership (CanManageProfile); only an admin may
+// reach other accounts' profiles, which ADR 0032 §9 allows from the local network only. The
+// guard cannot tell whose profile the ID names, so it refuses every admin viewer outside the
+// local network (admin from remote networks waits for M7b). Cookie writes already passed the
+// same-origin rule in the authentication middleware.
+func (guard manageGuard) profileRefusal(request *http.Request) string {
+	if guard.requireAdmin && isAdminViewer(request) && !guard.lan.admitsPeer(request) {
+		return "administrator outside the local network"
 	}
 
 	return ""
@@ -176,6 +201,8 @@ func areaRefusalDetail(area manageArea) string {
 		return devicesRefusalDetail
 	case areaSetup:
 		return setupRefusalDetail
+	case areaProfiles:
+		return profilesRefusalDetail
 	case areaNone, areaLibraries:
 		return manageRefusalDetail
 	default:
@@ -193,13 +220,37 @@ func areaRefusalDetail(area manageArea) string {
 //     and the candidate poster previews (M6-13). The metadata status stays open.
 //   - users and devices: every request below /api/v1/users and /api/v1/devices.
 //   - setup: every write to /api/v1/setup; reading the setup state stays open.
+//   - profiles: every request below /api/v1/profiles (see profileRefusal).
 //
-// The decoded path is matched, like the router does, so an encoded variant of a path cannot
-// slip past.
+// The path is classified twice and the first guarded answer wins (fail closed): once split
+// into segments that are unescaped one by one, as ServeMux matches them, so an encoded slash
+// inside an ID (items/a%2Fb/identify) keeps the segment count; and once from the fully
+// decoded path, so encoded letters or slashes in the fixed parts cannot slip past either.
 func managementArea(request *http.Request) manageArea {
-	segments := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 	isRead := request.Method == http.MethodGet || request.Method == http.MethodHead
 
+	if area := segmentArea(routerSegments(request), isRead); area != areaNone {
+		return area
+	}
+
+	return segmentArea(strings.Split(strings.Trim(request.URL.Path, "/"), "/"), isRead)
+}
+
+// routerSegments splits the escaped path at its literal slashes and unescapes each segment,
+// as ServeMux does when it matches a pattern. A segment that does not unescape stays raw.
+func routerSegments(request *http.Request) []string {
+	segments := strings.Split(strings.Trim(request.URL.EscapedPath(), "/"), "/")
+	for index, segment := range segments {
+		if unescaped, err := url.PathUnescape(segment); err == nil {
+			segments[index] = unescaped
+		}
+	}
+
+	return segments
+}
+
+// segmentArea classifies the path segments of one reading of the request path.
+func segmentArea(segments []string, isRead bool) manageArea {
 	switch {
 	case isPrefixOf(segments, apiV1Roots):
 		// /api/v1/folder-roots and /api/v1/folder-roots/{rootId}/folders
@@ -226,6 +277,8 @@ func accountArea(segments []string, isRead bool) manageArea {
 		return areaUsers
 	case isPrefixOf(segments, apiV1Devices):
 		return areaDevices
+	case isPrefixOf(segments, apiV1Profiles):
+		return areaProfiles
 	case isPrefixOf(segments, apiV1Setup):
 		return areaIf(!isRead && len(segments) == collectionSegments, areaSetup)
 	default:

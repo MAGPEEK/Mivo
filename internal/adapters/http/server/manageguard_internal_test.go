@@ -283,6 +283,17 @@ func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 		{http.MethodPatch, "/api/v1/profiles/" + manageLibraryID, false},
 		{http.MethodDelete, "/api/v1/profiles/" + manageLibraryID, false},
 		{http.MethodGet, "/api/v1/me", false},
+		// ServeMux unescapes per segment, so an encoded slash inside an ID keeps the
+		// segment count; the guard must not lose these routes.
+		{http.MethodPost, "/api/v1/items/a%2Fb/identify", true},
+		{http.MethodPost, "/api/v1/items/a%2Fb/identify/search", true},
+		{http.MethodPatch, "/api/v1/libraries/a%2Fb", true},
+		{http.MethodPost, "/api/v1/libraries/a%2Fb/scan", true},
+		{http.MethodPost, "/api/v1/libraries/a%2Fb/refresh", true},
+		{http.MethodGet, "/api/v1/folder-roots/a%2Fb/folders", true},
+		{http.MethodGet, "/api/v1/metadata/posters/a%2Fb", true},
+		{http.MethodDelete, "/api/v1/devices/a%2Fb", true},
+		{http.MethodPost, "/api/v1/libraries/a%2Fb/items", false},
 	}
 
 	for _, route := range routes {

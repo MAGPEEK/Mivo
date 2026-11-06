@@ -250,12 +250,27 @@ func TestAuthProtectedRoutes(t *testing.T) {
 			headers: map[string]string{"Authorization": "bearer " + userToken}, wantStatus: http.StatusOK, wantViewer: userAccountID,
 		},
 		{
-			name: "basic scheme does not fall back to the cookie", method: http.MethodGet, target: itemsPath, cookie: userToken,
+			// A reverse proxy in front of a NAS may add its own Basic credentials.
+			name: "other scheme falls back to the cookie", method: http.MethodGet, target: itemsPath, cookie: userToken,
+			headers: map[string]string{"Authorization": "Basic dXNlcjpwdw=="}, wantStatus: http.StatusOK, wantViewer: userAccountID,
+		},
+		{
+			name: "other scheme without a cookie", method: http.MethodGet, target: itemsPath,
 			headers:    map[string]string{"Authorization": "Basic dXNlcjpwdw=="},
 			wantStatus: http.StatusUnauthorized, wantCode: restapi.CodeUnauthenticated,
 		},
 		{
 			name: "empty bearer", method: http.MethodGet, target: itemsPath, headers: map[string]string{"Authorization": "Bearer "},
+			wantStatus: http.StatusUnauthorized, wantCode: restapi.CodeUnauthenticated,
+		},
+		{
+			name: "malformed bearer does not fall back to the cookie", method: http.MethodGet, target: itemsPath, cookie: userToken,
+			headers:    map[string]string{"Authorization": "Bearer"},
+			wantStatus: http.StatusUnauthorized, wantCode: restapi.CodeUnauthenticated,
+		},
+		{
+			name: "blank bearer does not fall back to the cookie", method: http.MethodGet, target: itemsPath, cookie: userToken,
+			headers:    map[string]string{"Authorization": "Bearer    "},
 			wantStatus: http.StatusUnauthorized, wantCode: restapi.CodeUnauthenticated,
 		},
 		{
@@ -323,6 +338,23 @@ func TestAuthAdminRoutes(t *testing.T) {
 		{name: "own user record", method: http.MethodGet, target: "/api/v1/users/" + userAccountID, cookie: userToken, wantStatus: http.StatusForbidden},
 		{name: "change a profile", method: http.MethodPatch, target: "/api/v1/profiles/x", body: "{}", cookie: userToken, wantStatus: http.StatusOK, wantViewer: userAccountID},
 		{name: "delete a profile", method: http.MethodDelete, target: "/api/v1/profiles/x", cookie: userToken, wantStatus: http.StatusOK, wantViewer: userAccountID},
+		{name: "local admin changes a profile", method: http.MethodPatch, target: "/api/v1/profiles/x", body: "{}", cookie: adminToken, wantStatus: http.StatusOK, wantViewer: adminAccountID},
+		{
+			name: "remote admin changes a profile", method: http.MethodPatch, target: "/api/v1/profiles/x", body: "{}", bearer: adminToken,
+			remoteAddr: publicPeer, allowPublic: true, wantStatus: http.StatusForbidden, wantCode: restapi.CodeForbidden,
+		},
+		{
+			name: "remote admin deletes an encoded profile path", method: http.MethodDelete, target: "/api/v1/profiles/a%2Fb", bearer: adminToken,
+			remoteAddr: publicPeer, allowPublic: true, wantStatus: http.StatusForbidden, wantCode: restapi.CodeForbidden,
+		},
+		{
+			name: "remote owner changes a profile", method: http.MethodPatch, target: "/api/v1/profiles/x", body: "{}", bearer: userToken,
+			remoteAddr: publicPeer, allowPublic: true, wantStatus: http.StatusOK, wantViewer: userAccountID,
+		},
+		{
+			name: "remote owner deletes a profile", method: http.MethodDelete, target: "/api/v1/profiles/x", cookie: userToken,
+			remoteAddr: publicPeer, allowPublic: true, wantStatus: http.StatusOK, wantViewer: userAccountID,
+		},
 		{name: "library reads stay open", method: http.MethodGet, target: "/api/v1/libraries", cookie: userToken, wantStatus: http.StatusOK, wantViewer: userAccountID},
 	})
 }

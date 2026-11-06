@@ -181,15 +181,15 @@ func (guard authGuard) fail(writer http.ResponseWriter, request *http.Request, o
 	restapi.WriteProblem(writer, restapi.InternalProblem())
 }
 
-// requestCredential reads the bearer token or, without an Authorization header, the session
-// cookie. A malformed Authorization header counts as no credential rather than falling back to
-// the cookie, so a client cannot mix both.
+// requestCredential reads the bearer token or, without an Authorization: Bearer header, the
+// session cookie. Other schemes, such as the Basic credentials a NAS reverse proxy may add,
+// are not ours and fall back to the cookie; a Bearer header without a token counts as no
+// credential, so a client cannot mix both.
 func requestCredential(request *http.Request) (credential, bool) {
-	if header := request.Header.Get("Authorization"); header != "" {
-		scheme, token, found := strings.Cut(header, " ")
+	header := strings.TrimSpace(request.Header.Get("Authorization"))
+	if scheme, token, _ := strings.Cut(header, " "); strings.EqualFold(scheme, bearerScheme) {
 		token = strings.TrimSpace(token)
-
-		if !found || !strings.EqualFold(scheme, bearerScheme) || token == "" {
+		if token == "" {
 			return credential{}, false
 		}
 
