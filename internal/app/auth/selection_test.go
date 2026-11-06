@@ -396,8 +396,8 @@ func TestClearProfileShowsThePickerAgain(t *testing.T) {
 	result := signedIn(t, h, alicePassword)
 	ctx := viewerContext(t, h, result.Token)
 
-	if viewer, err := RequireProfile(ctx); err != nil || viewer.ProfileID != primary.ID {
-		t.Fatalf("RequireProfile = %+v, %v; want the primary profile", viewer, err)
+	if viewer, err := access.ProfileViewerFrom(ctx); err != nil || viewer.ProfileID != primary.ID {
+		t.Fatalf("ProfileViewerFrom = %+v, %v; want the primary profile", viewer, err)
 	}
 
 	if err := h.service.ClearProfile(ctx); err != nil {
@@ -406,9 +406,9 @@ func TestClearProfileShowsThePickerAgain(t *testing.T) {
 
 	cleared := viewerContext(t, h, result.Token)
 
-	_, err := RequireProfile(cleared)
-	if !errors.Is(err, ErrProfileRequired) || !errors.Is(err, domain.ErrForbidden) {
-		t.Fatalf("RequireProfile after clear: %v, want ErrProfileRequired", err)
+	_, err := access.ProfileViewerFrom(cleared)
+	if !errors.Is(err, access.ErrProfileRequired) {
+		t.Fatalf("ProfileViewerFrom after clear: %v, want access.ErrProfileRequired", err)
 	}
 
 	me, err := h.service.Me(cleared)
@@ -423,10 +423,6 @@ func TestSelectionUseCasesNeedASession(t *testing.T) {
 	h, _ := withAlice(t)
 	noViewer := context.Background()
 	noSession := access.WithViewer(context.Background(), viewerWithout("alice", ""))
-
-	if _, err := RequireProfile(noViewer); !errors.Is(err, domain.ErrUnauthenticated) {
-		t.Errorf("RequireProfile: %v", err)
-	}
 
 	for _, ctx := range []context.Context{noViewer, noSession} {
 		if _, err := h.service.Me(ctx); !errors.Is(err, domain.ErrUnauthenticated) {

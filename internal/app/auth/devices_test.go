@@ -127,8 +127,12 @@ func TestAdminPowersAreCheckedAgainstTheStore(t *testing.T) {
 		t.Fatalf("ListAllDevices by a disabled admin: %v, want domain.ErrForbidden", err)
 	}
 
-	if _, err := family.service.RevokeDevice(ctx, family.bob.Session.ID); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("RevokeDevice by a disabled admin: %v, want domain.ErrNotFound", err)
+	if _, err := family.service.RevokeDevice(ctx, family.bob.Session.ID); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("RevokeDevice by a disabled admin: %v, want domain.ErrForbidden", err)
+	}
+
+	if _, ok := family.store.session(family.bob.Session.ID); !ok {
+		t.Fatal("a disabled admin revoked Bob's session")
 	}
 
 	delete(family.store.credentials, "root")
@@ -155,6 +159,10 @@ func TestAdminManagedProfileHasNoAdminPowers(t *testing.T) {
 		t.Fatalf("ListAllDevices from a managed profile: %v, want domain.ErrForbidden", err)
 	}
 
+	if _, err := family.service.RevokeDevice(guest, family.bob.Session.ID); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("RevokeDevice from a managed profile: %v, want domain.ErrForbidden", err)
+	}
+
 	if err := family.service.ClearProfile(guest); err != nil {
 		t.Fatalf("ClearProfile: %v", err)
 	}
@@ -170,13 +178,16 @@ func TestRevokeIsScopedToTheOwnAccount(t *testing.T) {
 	family := withDevices(t)
 	ctx := viewerContext(t, family.harness, family.alice.Token)
 
-	for _, revoke := range []func(context.Context, string) (bool, error){
-		family.service.RevokeOwnDevice, family.service.RevokeDevice,
-	} {
-		for _, deviceID := range []string{family.bob.Session.ID, "unknown"} {
-			if _, err := revoke(ctx, deviceID); !errors.Is(err, domain.ErrNotFound) {
-				t.Fatalf("revoke %s: %v, want domain.ErrNotFound", deviceID, err)
-			}
+	for _, deviceID := range []string{family.bob.Session.ID, "unknown"} {
+		if _, err := family.service.RevokeOwnDevice(ctx, deviceID); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("RevokeOwnDevice(%s): %v, want domain.ErrNotFound", deviceID, err)
+		}
+	}
+
+	// The admin operation refuses a user outright, even for the user's own devices.
+	for _, deviceID := range []string{family.bob.Session.ID, family.aliceTV.Session.ID} {
+		if _, err := family.service.RevokeDevice(ctx, deviceID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("RevokeDevice(%s) by a user: %v, want domain.ErrForbidden", deviceID, err)
 		}
 	}
 
@@ -202,12 +213,19 @@ func TestRevokeTheCurrentDeviceSignsOut(t *testing.T) {
 
 	family := withDevices(t)
 
-	signedOut, err := family.service.RevokeDevice(viewerContext(t, family.harness, family.alice.Token), family.alice.Session.ID)
+	signedOut, err := family.service.RevokeOwnDevice(viewerContext(t, family.harness, family.alice.Token), family.alice.Session.ID)
 	if err != nil || !signedOut {
-		t.Fatalf("RevokeDevice(own) = %t, %v; want signed out", signedOut, err)
+		t.Fatalf("RevokeOwnDevice(current) = %t, %v; want signed out", signedOut, err)
 	}
 
 	expectUnauthenticated(t, family.harness, family.alice.Token)
+
+	signedOut, err = family.service.RevokeDevice(viewerContext(t, family.harness, family.root.Token), family.root.Session.ID)
+	if err != nil || !signedOut {
+		t.Fatalf("RevokeDevice(current) by admin = %t, %v; want signed out", signedOut, err)
+	}
+
+	expectUnauthenticated(t, family.harness, family.root.Token)
 }
 
 func TestAdminRevokesAnyDeviceOnlyThroughRevokeDevice(t *testing.T) {
@@ -230,6 +248,10 @@ func TestAdminRevokesAnyDeviceOnlyThroughRevokeDevice(t *testing.T) {
 	}
 
 	expectUnauthenticated(t, family.harness, family.bob.Token)
+
+	if _, err := family.service.RevokeDevice(ctx, "unknown"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("RevokeDevice(unknown) by admin: %v, want domain.ErrNotFound", err)
+	}
 }
 
 func TestDevicesReportStoreFailures(t *testing.T) {

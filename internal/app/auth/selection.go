@@ -43,22 +43,6 @@ type ProfileSelection struct {
 	Remember *bool
 }
 
-// RequireProfile returns the viewer of ctx when it has a selected profile. Without a viewer
-// it returns an error wrapping domain.ErrUnauthenticated, without a profile
-// ErrProfileRequired. Catalog, media and watch use cases call it first (M7-20).
-func RequireProfile(ctx context.Context) (access.Viewer, error) {
-	viewer, ok := appaccess.ViewerFrom(ctx)
-	if !ok || viewer.AccountID == "" {
-		return access.Viewer{}, fmt.Errorf("require profile: %w", domain.ErrUnauthenticated)
-	}
-
-	if viewer.ProfileID == "" {
-		return access.Viewer{}, ErrProfileRequired
-	}
-
-	return viewer, nil
-}
-
 // Me describes the session's account (from the viewer in ctx), its selected profile and the
 // picker list. It works without a selected profile.
 func (service *Service) Me(ctx context.Context) (Me, error) {

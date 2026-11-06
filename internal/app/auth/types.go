@@ -17,9 +17,6 @@ var (
 	ErrInvalidCredentials = fmt.Errorf("invalid credentials: %w", domain.ErrUnauthenticated)
 	// ErrSetupComplete reports a setup attempt after an account exists.
 	ErrSetupComplete = fmt.Errorf("setup already completed: %w", domain.ErrConflict)
-	// ErrProfileRequired reports a request that needs a selected profile from a session that
-	// has none (ADR 0032 §4); adapters/http maps it to 403 "profile_required".
-	ErrProfileRequired = fmt.Errorf("profile required: %w", domain.ErrForbidden)
 	// ErrPINInvalid reports a missing or wrong PIN; adapters/http maps it to 403 "pin_invalid".
 	ErrPINInvalid = fmt.Errorf("pin invalid: %w", domain.ErrForbidden)
 )

@@ -80,21 +80,16 @@ func (service *Service) RevokeOwnDevice(ctx context.Context, deviceID string) (s
 	return service.revoke(ctx, viewer, deviceID, false)
 }
 
-// RevokeDevice signs a device out: its own account's devices for every viewer, any device
-// for an admin viewer (checked against the store). Others wrap domain.ErrNotFound, so the
-// answer does not reveal other accounts' devices. signedOut is as in RevokeOwnDevice.
+// RevokeDevice signs any account's device out, the administration operation of ADR 0032 §9.
+// It needs admin powers (domain.ErrForbidden otherwise, checked against the store); an
+// unknown ID wraps domain.ErrNotFound. signedOut is as in RevokeOwnDevice.
 func (service *Service) RevokeDevice(ctx context.Context, deviceID string) (signedOut bool, err error) {
-	viewer, err := sessionViewer(ctx)
+	viewer, err := service.adminViewer(ctx)
 	if err != nil {
 		return false, fmt.Errorf("revoke device: %w", err)
 	}
 
-	admin, err := service.isAdmin(ctx, viewer)
-	if err != nil {
-		return false, fmt.Errorf("revoke device: %w", err)
-	}
-
-	return service.revoke(ctx, viewer, deviceID, admin)
+	return service.revoke(ctx, viewer, deviceID, true)
 }
 
 func (service *Service) revoke(ctx context.Context, viewer access.Viewer, deviceID string, anyAccount bool) (bool, error) {
