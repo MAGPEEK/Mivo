@@ -128,6 +128,26 @@ func TestAgeRatingEpisodeWithItsOwnRatingKeepsIt(t *testing.T) {
 	assertBuckets(t, fixture.inspection, episode, buckets{16, 16})
 }
 
+// The own rating describes the item itself, so it wins even when it is lower than the show's
+// (ADR 0032 section 7).
+func TestAgeRatingEpisodeWithALowerRatingThanItsShowKeepsIt(t *testing.T) {
+	t.Parallel()
+
+	fixture := newPlacementFixture(t)
+	show, season, episode := showChain(t, fixture, 1)
+
+	saveRating(t, fixture, show, "TV-MA")
+	saveRating(t, fixture, episode, "TV-Y")
+
+	assertBuckets(t, fixture.inspection, show, buckets{16, 16})
+	assertBuckets(t, fixture.inspection, season, buckets{noBucket, 16})
+	assertBuckets(t, fixture.inspection, episode, buckets{0, 0})
+
+	// Saving the show again must not overwrite the episode's own, lower bucket.
+	saveRating(t, fixture, show, "TV-MA")
+	assertBuckets(t, fixture.inspection, episode, buckets{0, 0})
+}
+
 func TestAgeRatingShowRatingChangePropagates(t *testing.T) {
 	t.Parallel()
 
@@ -176,7 +196,10 @@ func TestAgeRatingUnknownRatingStaysNull(t *testing.T) {
 		saveRating(t, fixture, movie, testCase.rating)
 
 		got := readAgeRating(t, fixture.inspection, movie)
-		if got.own != testCase.want || got.effective != testCase.want || got.source.String != testCase.rating {
+		// The source must be written (not NULL) even for an empty or unknown rating, or the
+		// row would stay stale and be recomputed by every backfill.
+		if got.own != testCase.want || got.effective != testCase.want ||
+			!got.source.Valid || got.source.String != testCase.rating {
 			t.Errorf("rating %q stored as %+v, want bucket %d with source %q", testCase.rating, got, testCase.want, testCase.rating)
 		}
 	}

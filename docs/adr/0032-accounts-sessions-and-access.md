@@ -121,6 +121,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - The bucket is stored per item (`age_rating`, migration `00014`) together with the effective
   bucket that children inherit from their show (an episode without its own rating uses the
   show's), so one indexed predicate filters every query.
+  A child's own rating always wins over the inherited one, also when it is **lower** than its
+  parent's (show TV-MA, episode TV-Y → the episode's effective bucket is 0): a rating describes
+  the item it is stored on, and the show keeps its own bucket.
 - The restriction (library set, max age, hide unrated) is applied in SQL for every listing,
   facet, letter, folder, row, search, children, summary and detail read, and checked before a
   playback session starts. A hidden item answers `404 not_found`, never `403`, so its existence
