@@ -893,6 +893,48 @@ func (e StreamAction) Valid() bool {
 	}
 }
 
+// Defines values for SubtitleDeliveryMode.
+const (
+	SubtitleDeliveryModeBurnIn  SubtitleDeliveryMode = "burn_in"
+	SubtitleDeliveryModeOff     SubtitleDeliveryMode = "off"
+	SubtitleDeliveryModeSidecar SubtitleDeliveryMode = "sidecar"
+)
+
+// Valid indicates whether the value is a known member of the SubtitleDeliveryMode enum.
+func (e SubtitleDeliveryMode) Valid() bool {
+	switch e {
+	case SubtitleDeliveryModeBurnIn:
+		return true
+	case SubtitleDeliveryModeOff:
+		return true
+	case SubtitleDeliveryModeSidecar:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubtitlePreferenceMode.
+const (
+	SubtitlePreferenceModeAlways SubtitlePreferenceMode = "always"
+	SubtitlePreferenceModeForced SubtitlePreferenceMode = "forced"
+	SubtitlePreferenceModeOff    SubtitlePreferenceMode = "off"
+)
+
+// Valid indicates whether the value is a known member of the SubtitlePreferenceMode enum.
+func (e SubtitlePreferenceMode) Valid() bool {
+	switch e {
+	case SubtitlePreferenceModeAlways:
+		return true
+	case SubtitlePreferenceModeForced:
+		return true
+	case SubtitlePreferenceModeOff:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ThumbnailState.
 const (
 	ThumbnailStateReady       ThumbnailState = "ready"
@@ -1149,10 +1191,40 @@ type ClientProfile struct {
 	// Hls Codecs the client plays inside HLS with fMP4 segments.
 	Hls HlsProfile `json:"hls"`
 
+	// MaxAudioChannels Highest number of audio channels the client plays; 6 or more keeps 5.1 when audio is re-encoded. Omitted means the server's default limit.
+	//
+	// Example: 6
+	MaxAudioChannels *int32 `json:"maxAudioChannels,omitempty"`
+
 	// Name Free text naming the client, for logs and the stream-info overlay.
 	//
 	// Example: chromium-desktop
 	Name string `json:"name"`
+
+	// PreferSdh Whether subtitles for the deaf and hard of hearing rank above plain ones; the other kind is never excluded. Omitted means false.
+	//
+	// Example: false
+	PreferSdh *bool `json:"preferSdh,omitempty"`
+
+	// PreferredAudioLanguages Audio languages the viewer wants, most wanted first, as ISO 639-1 or 639-2 tags ("de", "deu" and "ger" are the same language; only the primary subtag counts). Used when the request names no audioStreamIndex; omitted or empty prefers no language.
+	//
+	// Example: ["de","en"]
+	PreferredAudioLanguages *[]string `json:"preferredAudioLanguages,omitempty"`
+
+	// PreferredSubtitleLanguages Languages of full subtitles for subtitleMode "always", most wanted first; omitted or empty falls back to preferredAudioLanguages.
+	//
+	// Example: ["de"]
+	PreferredSubtitleLanguages *[]string `json:"preferredSubtitleLanguages,omitempty"`
+
+	// SubtitleFormats Subtitle formats the client renders itself from the sidecar route, today only "webvtt". A text track is delivered as a sidecar when "webvtt" is listed; everything else needs burn-in. Omitted means the client renders no subtitles.
+	//
+	// Example: ["webvtt"]
+	SubtitleFormats *[]MediaIdentifier `json:"subtitleFormats,omitempty"`
+
+	// SubtitleMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients must tolerate values added in later versions.
+	//
+	// Example: forced
+	SubtitleMode *SubtitlePreferenceMode `json:"subtitleMode,omitempty"`
 }
 
 // CodecLimit Extra limits of the client for one codec; a codec without an entry has none.
@@ -2338,6 +2410,16 @@ type MediaFile struct {
 	// Example: mkv
 	Container *string `json:"container,omitempty"`
 
+	// DefaultAudioStreamIndex Index of the audio stream (MediaStream.index) the server's default policy picks (ADR 0030 section 4: no commentary, then the default flag, then file order) when a request names no stream and no preferred language; clients preselect it. A PlaybackRequest whose profile lists preferredAudioLanguages may get another stream, which PlaybackSession.streams reports. Null or omitted when the file has no audio stream or the server does not report a default.
+	//
+	// Example: 1
+	DefaultAudioStreamIndex *int32 `json:"defaultAudioStreamIndex,omitempty"`
+
+	// DefaultSubtitleTrackID ID of the subtitle track (SubtitleTrack.id) the server's default policy shows (ADR 0030 section 3) when a request names none and the profile carries no subtitle preference: a forced track in the language of the default audio stream. Null or omitted when subtitles are off by default.
+	//
+	// Example: s:3
+	DefaultSubtitleTrackID *string `json:"defaultSubtitleTrackId,omitempty"`
+
 	// DurationSeconds Duration in seconds with millisecond precision; omitted when unknown.
 	//
 	// Example: 5423.042
@@ -2352,6 +2434,11 @@ type MediaFile struct {
 	//
 	// Example: Big.Buck.Bunny.mkv
 	FileName string `json:"fileName"`
+
+	// Height Height of the primary video stream in pixels; omitted for files without video.
+	//
+	// Example: 1080
+	Height *int32 `json:"height,omitempty"`
 
 	// ID ID of the file; PlaybackRequest.fileId refers to it.
 	//
@@ -2368,18 +2455,31 @@ type MediaFile struct {
 	// Example: 1
 	PartNumber *int32 `json:"partNumber,omitempty"`
 
+	// Resolution Resolution class of a video, decided by width or height so cropped and portrait video land in the expected class: "8k" (width ≥ 7000 or height ≥ 4000), "4k" (≥ 3200 or ≥ 1800), "1080p" (≥ 1600 or ≥ 900), "720p" (≥ 1100 or ≥ 650), else "sd". Clients must tolerate values added in later versions.
+	//
+	// Example: 1080p
+	Resolution *VideoResolution `json:"resolution,omitempty"`
+
 	// SizeBytes File size in bytes.
 	//
 	// Example: 276134947
 	SizeBytes int64 `json:"sizeBytes"`
 
-	// Streams Streams in container order; empty when probing failed.
+	// Streams Streams in container order; empty when probing failed. The streams of kind "audio" are the audio tracks a player offers (index, language, title, codec, channels, default); PlaybackRequest.audioStreamIndex selects one.
 	Streams []MediaStream `json:"streams"`
+
+	// SubtitleTracks Subtitle tracks a player offers, the streams inside the file in container order followed by the subtitle files found next to it. Omitted by a server that does not list subtitle tracks yet; empty when the file has none.
+	SubtitleTracks *[]SubtitleTrack `json:"subtitleTracks,omitempty"`
 
 	// VersionLabel Label of the version this file belongs to, from the file name (for example "4K" or "Director's Cut"); omitted for the only or unlabelled version.
 	//
 	// Example: Director's Cut
 	VersionLabel *string `json:"versionLabel,omitempty"`
+
+	// Width Width of the primary video stream in pixels, so a version picker need not search the streams; omitted for files without video.
+	//
+	// Example: 1920
+	Width *int32 `json:"width,omitempty"`
 }
 
 // MediaIdentifier Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
@@ -2419,7 +2519,7 @@ type MediaStream struct {
 	// Example: h264
 	Codec *string `json:"codec,omitempty"`
 
-	// Default Whether the stream carries the default disposition.
+	// Default Whether the stream carries the default disposition. For audio it is one input of the default pick, not the pick itself (MediaFile.defaultAudioStreamIndex).
 	//
 	// Example: true
 	Default bool `json:"default"`
@@ -2444,7 +2544,7 @@ type MediaStream struct {
 	// Example: 1080
 	Height *int32 `json:"height,omitempty"`
 
-	// Index Index of the stream in the container; PlaybackRequest.audioStreamIndex refers to it.
+	// Index Index of the stream in the container; PlaybackRequest.audioStreamIndex and the subtitle track id "s:<index>" refer to it.
 	//
 	// Example: 1
 	Index int32 `json:"index"`
@@ -2675,7 +2775,7 @@ type PlaybackMode string
 
 // PlaybackReason A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes.
 type PlaybackReason struct {
-	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes may be added within API v1.
+	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly), "subtitle_burn_in" (the selected subtitle is drawn into the video), "bitrate_cap" (maxBitrate lies below the source), "dsd_to_pcm" (DSD audio is always decoded to PCM), "hires_downsampled" (the audio exceeds the sample rate or bit depth the client plays) and "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in software). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server cannot do now; it stays off). New codes may be added within API v1.
 	//
 	// Example: audio_codec_not_supported
 	Code string `json:"code"`
@@ -2693,7 +2793,7 @@ type PlaybackReasonScope string
 
 // PlaybackRequest Asks the server to play one media file for a client.
 type PlaybackRequest struct {
-	// AudioStreamIndex Index of the audio stream to play (MediaStream.index); omitted selects the default audio stream.
+	// AudioStreamIndex Index of the audio stream to play (MediaStream.index); it wins over the language preference of the profile. Omitted lets the server pick by its default policy (ADR 0030 section 4). An index that names no audio stream answers 400 "invalid". Changing the audio track of a running playback creates a new session with replacesSessionId.
 	//
 	// Example: 1
 	AudioStreamIndex *int32 `json:"audioStreamIndex,omitempty"`
@@ -2702,6 +2802,11 @@ type PlaybackRequest struct {
 	//
 	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
 	FileID uuid.UUID `json:"fileId"`
+
+	// MaxBitrate Upper limit of the whole stream in bits per second (ADR 0030 section 6); omitted or 0 plays the original quality. A limit below the bit rate of the source forces a transcode with reason "bitrate_cap". The server only honours the number; picking it automatically is the client's job.
+	//
+	// Example: 8000000
+	MaxBitrate *int64 `json:"maxBitrate,omitempty"`
 
 	// Profile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
 	Profile ClientProfile `json:"profile"`
@@ -2715,6 +2820,11 @@ type PlaybackRequest struct {
 	//
 	// Example: 600
 	StartPositionSeconds *float64 `json:"startPositionSeconds,omitempty"`
+
+	// SubtitleTrackID ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle preference of the profile. The empty string switches subtitles off; omitted lets the server pick by its default policy (ADR 0030 section 3), which shows nothing unless the profile asks for subtitles or the file has a forced track in the audio language. An ID that names no track of the file answers 400 "invalid". PlaybackSession.subtitle reports the result. Only a change from or to a burned-in track needs a new session.
+	//
+	// Example: s:3
+	SubtitleTrackID *string `json:"subtitleTrackId,omitempty"`
 }
 
 // PlaybackSession A running or finished playback of one media file for one client, with the decision the server made and the URL to load.
@@ -2749,6 +2859,11 @@ type PlaybackSession struct {
 	// Example: remux
 	Mode PlaybackMode `json:"mode"`
 
+	// OutputBitRate Bit rate the client receives in bits per second: the target of a transcode, else the bit rate of the source; omitted when unknown.
+	//
+	// Example: 8000000
+	OutputBitRate *int64 `json:"outputBitRate,omitempty"`
+
 	// Reasons Why a cheaper mode was not possible; empty for direct play.
 	Reasons []PlaybackReason `json:"reasons"`
 
@@ -2777,8 +2892,11 @@ type PlaybackSession struct {
 	// Example: /api/v1/playback/sessions/5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a/hls/index.m3u8
 	StreamURL string `json:"streamUrl"`
 
-	// Streams One decision per selected source stream (video first, then audio).
+	// Streams One decision per selected source stream (video first, then audio). The audio entry's sourceIndex is the audio track that plays, requested or picked by the default policy. A session without the subtitle property shows no subtitle.
 	Streams []StreamDecision `json:"streams"`
+
+	// Subtitle What the session does with subtitles (ADR 0030 section 3).
+	Subtitle *SubtitleDecision `json:"subtitle,omitempty"`
 
 	// TargetContainer Container the client receives: the source container for direct play, "mp4" (fMP4 segments) for HLS.
 	//
@@ -3253,6 +3371,82 @@ type StreamDecision struct {
 	TargetWidth *int32 `json:"targetWidth,omitempty"`
 }
 
+// SubtitleDecision What the session does with subtitles (ADR 0030 section 3).
+type SubtitleDecision struct {
+	// Mode How the session shows its subtitle: "off" (none), "sidecar" (the client loads the track as WebVTT and renders it) or "burn_in" (the server draws it into the video, which forces a transcode). Clients must tolerate values added in later versions.
+	//
+	// Example: sidecar
+	Mode SubtitleDeliveryMode `json:"mode"`
+
+	// TrackID ID of the selected track (SubtitleTrack.id), requested or picked by the server's default policy; omitted when mode is "off".
+	//
+	// Example: s:3
+	TrackID *string `json:"trackId,omitempty"`
+}
+
+// SubtitleDeliveryMode How the session shows its subtitle: "off" (none), "sidecar" (the client loads the track as WebVTT and renders it) or "burn_in" (the server draws it into the video, which forces a transcode). Clients must tolerate values added in later versions.
+//
+// Example: sidecar
+type SubtitleDeliveryMode string
+
+// SubtitlePreferenceMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients must tolerate values added in later versions.
+//
+// Example: forced
+type SubtitlePreferenceMode string
+
+// SubtitleTrack A subtitle a player can show: a stream inside the media file or a subtitle file found next to it (ADR 0030 section 3).
+type SubtitleTrack struct {
+	// Default Whether the track carries the default disposition.
+	//
+	// Example: false
+	Default bool `json:"default"`
+
+	// External Whether the track is a subtitle file next to the media file.
+	//
+	// Example: false
+	External bool `json:"external"`
+
+	// Forced Whether the track only translates foreign-language parts.
+	//
+	// Example: false
+	Forced bool `json:"forced"`
+
+	// Format Codec or file format (ffprobe codec_name), for example "subrip", "ass", "webvtt", "mov_text", "hdmv_pgs_subtitle" or "dvd_subtitle".
+	//
+	// Example: subrip
+	Format string `json:"format"`
+
+	// ID Stable ID of the track within its file, never a list position: "s:<index>" with the MediaStream.index of an embedded stream, "x:<hash>" for an external file. PlaybackRequest.subtitleTrackId refers to it.
+	//
+	// Example: s:3
+	ID string `json:"id"`
+
+	// Language Language tag as stored in the file or parsed from the file name, usually ISO 639-2; omitted when unknown.
+	//
+	// Example: ger
+	Language *string `json:"language,omitempty"`
+
+	// Sdh Whether the track is made for the deaf and hard of hearing.
+	//
+	// Example: false
+	Sdh bool `json:"sdh"`
+
+	// TextBased Whether the track is text and can be delivered as WebVTT; false for image formats (PGS, VobSub, DVB), which only burn-in can show.
+	//
+	// Example: true
+	TextBased bool `json:"textBased"`
+
+	// Title Title of the track as stored in the file; omitted when it has none.
+	//
+	// Example: Deutsch (Forced)
+	Title *string `json:"title,omitempty"`
+
+	// URL URI reference of the WebVTT rendition (getSubtitleTrack); omitted when textBased is false. Resolve it per RFC 3986 section 5 against the URL of the request that returned it. Clients must treat it as opaque: never parse, build or modify it.
+	//
+	// Example: /api/v1/media-files/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f/subtitles/s:3.vtt
+	URL *string `json:"url,omitempty"`
+}
+
 // SystemInfo Describes the running server.
 type SystemInfo struct {
 	// APIVersion Major version of the HTTP API this server speaks. It changes only on breaking changes.
@@ -3435,6 +3629,9 @@ type DecadeFilter = []int32
 
 // DeviceID defines model for DeviceId.
 type DeviceID = uuid.UUID
+
+// FileID defines model for FileId.
+type FileID = uuid.UUID
 
 // GenreFilter defines model for GenreFilter.
 type GenreFilter = []string

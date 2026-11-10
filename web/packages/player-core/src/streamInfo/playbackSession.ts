@@ -24,6 +24,16 @@ export type MediaStreamKind = "video" | "audio" | "subtitle" | "other";
 /** Part of the file a reason or warning concerns. */
 export type PlaybackReasonScope = "container" | "video" | "audio" | "subtitle";
 
+/** How the session shows its subtitle: not at all, as WebVTT sidecar or drawn into the video. */
+export type SubtitleDeliveryMode = "off" | "sidecar" | "burn_in";
+
+/** What the session does with subtitles. */
+export interface SubtitleDecision {
+  mode: SubtitleDeliveryMode;
+  /** Stable id of the selected track (`s:<index>` or `x:<hash>`); absent when off. */
+  trackId?: string;
+}
+
 /** What the session does with one selected source stream. */
 export interface StreamDecision {
   kind: MediaStreamKind;
@@ -71,6 +81,10 @@ export interface PlaybackSession {
   targetContainer: string;
   /** Overall bit rate of the source file in bits per second; absent when unknown. */
   sourceBitRate?: number;
+  /** Bit rate the client receives in bits per second; absent when unknown. */
+  outputBitRate?: number;
+  /** The subtitle decision; a session without it shows no subtitle. */
+  subtitle?: SubtitleDecision;
   /** One decision per selected source stream, video first. */
   streams: StreamDecision[];
   /** Why a cheaper mode was not possible; empty for direct play. */

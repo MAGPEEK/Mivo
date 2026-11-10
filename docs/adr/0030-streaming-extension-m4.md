@@ -105,3 +105,28 @@ episode stills.
 - Windows has no throttling; documented as a dev-machine limitation.
 - Sidecar WebVTT keyed by file means cue timing is relative to the file; the player owns the
   offset, a small amount of logic in `player-core` (tested there).
+
+## Notes (M4-02a)
+
+How the contract (`api/openapi.yaml` 1.15.0) carries sections 3, 4 and 6:
+
+- **Everything new is optional**, in requests and in responses, so clients and servers of the
+  milestone-2 contract keep working. A session without `subtitle` shows none; a media file
+  without `subtitleTracks` comes from a server that does not list them yet.
+- **`subtitleTrackId` follows ADR 0023 Notes (M4-04a)**, not the first wording of the task:
+  omitted applies the default policy, the empty string switches subtitles off, any other value
+  must be a track id (`s:<index>`, `x:<hash>`); an unknown id answers 400 `invalid`.
+- **The client profile carries the track preference** (`preferredAudioLanguages`,
+  `preferredSubtitleLanguages`, `subtitleMode`, `preferSdh`) and the rendering limits
+  (`subtitleFormats`, `maxAudioChannels`). The REST adapter already passes the preference to the
+  decision engine; the limits wait for M4-04b and M4-04c.
+- **Audio tracks are the `audio` entries of `MediaFile.streams`** (with `default`); there is no
+  second list. `defaultAudioStreamIndex` and `defaultSubtitleTrackId` are the policy's pick
+  without a language preference, because an item request carries no client profile; the pick of
+  a session is reported by `PlaybackSession.streams` and `PlaybackSession.subtitle`.
+- **`SubtitleTrack.url` is opaque** like `streamUrl`: clients never build the route
+  `/media-files/{fileId}/subtitles/{trackId}.vtt` themselves.
+- `hwaccel_unavailable`, `dsd_to_pcm`, `hires_downsampled`, `bitrate_cap` and `subtitle_burn_in`
+  are reasons, `subtitle_burn_in_unavailable` is a warning; the code stays an open string.
+- A file is one version: `versionLabel`, `width`, `height`, `resolution` and `bitRate` on
+  `MediaFile` are what a version picker shows.

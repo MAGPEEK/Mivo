@@ -5,6 +5,7 @@ export type {
   HlsDelivery,
   HlsProfile,
   MediaIdentifier,
+  SubtitlePreferenceMode,
 } from "./profile/clientProfile";
 export type {
   AudioDecodingConfiguration,
@@ -75,6 +76,8 @@ export type {
   PlaybackSessionState,
   StreamAction,
   StreamDecision,
+  SubtitleDecision,
+  SubtitleDeliveryMode,
 } from "./streamInfo/playbackSession";
 export {
   clampPosition,

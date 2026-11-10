@@ -333,3 +333,15 @@ export type AgeRating = Schemas["AgeRating"];
 
 /** The libraries an account or profile may see. */
 export type LibraryAccess = Schemas["LibraryAccess"];
+
+/** A subtitle a player can show: an embedded stream (`s:<index>`) or an external file (`x:<hash>`). */
+export type SubtitleTrack = Schemas["SubtitleTrack"];
+
+/** What a session does with subtitles; a session without it shows none. */
+export type SubtitleDecision = Schemas["SubtitleDecision"];
+
+/** Off, sidecar (WebVTT) or burn-in. Later API versions may add values. */
+export type SubtitleDeliveryMode = Schemas["SubtitleDeliveryMode"];
+
+/** When subtitles switch on without a choice of the viewer. Later API versions may add values. */
+export type SubtitlePreferenceMode = Schemas["SubtitlePreferenceMode"];

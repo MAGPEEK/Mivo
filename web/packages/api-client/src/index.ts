@@ -126,3 +126,10 @@ export type {
   UserStatus,
   UserUpdate,
 } from "./schemas";
+// Playback tracks and subtitles (M4-02a).
+export type {
+  SubtitleDecision,
+  SubtitleDeliveryMode,
+  SubtitlePreferenceMode,
+  SubtitleTrack,
+} from "./schemas";

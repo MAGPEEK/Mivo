@@ -45,7 +45,8 @@ export const sessionKeysMatch: [
   SameKeys<Core.PlaybackSession, Api.PlaybackSession>,
   SameKeys<Core.StreamDecision, Api.StreamDecision>,
   SameKeys<Core.PlaybackReason, Api.PlaybackReason>,
-] = [true, true, true];
+  SameKeys<Core.SubtitleDecision, Api.SubtitleDecision>,
+] = [true, true, true, true];
 
 /** hls.js passes its `ErrorData` to the engine as player-core's `HlsErrorData`. */
 export const hlsErrorFitsCore: Assignable<ErrorData, Core.HlsErrorData> = true;

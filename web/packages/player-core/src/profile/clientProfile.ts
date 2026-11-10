@@ -35,6 +35,9 @@ export interface CodecLimit {
   profiles?: string[];
 }
 
+/** When a subtitle is switched on without a choice of the viewer; omitted means `forced`. */
+export type SubtitlePreferenceMode = "off" | "forced" | "always";
+
 /** Everything the server's decision engine needs to know about what a client plays. */
 export interface ClientProfile {
   /** Free text naming the client, for logs and the stream-info overlay (at most 64 characters). */
@@ -42,4 +45,15 @@ export interface ClientProfile {
   directPlay: DirectPlayProfile[];
   hls: HlsProfile;
   codecLimits?: CodecLimit[];
+  /** Audio languages the viewer wants (ISO 639-1/-2 tags), most wanted first; at most 8. */
+  preferredAudioLanguages?: string[];
+  /** Languages of full subtitles for mode `always`; falls back to the audio languages. */
+  preferredSubtitleLanguages?: string[];
+  subtitleMode?: SubtitlePreferenceMode;
+  /** Whether subtitles for the deaf and hard of hearing rank above plain ones. */
+  preferSdh?: boolean;
+  /** Subtitle formats the client renders itself, today only `webvtt`. */
+  subtitleFormats?: MediaIdentifier[];
+  /** Highest number of audio channels the client plays; omitted means the server default. */
+  maxAudioChannels?: number;
 }

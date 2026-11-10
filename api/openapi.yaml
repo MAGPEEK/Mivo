@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.14.0"
+  version: "1.15.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -67,8 +67,9 @@ tags:
       client profile and returns an opaque stream URL (ADR 0023, ADR 0024).
   - name: stream
     description: >-
-      Media delivery of a playback session. Clients never build these URLs; they use the
-      streamUrl of the session and the relative URIs inside HLS playlists.
+      Media delivery of a playback session and of subtitle tracks. Clients never build
+      these URLs; they use the streamUrl of the session, the relative URIs inside HLS
+      playlists and the url of a subtitle track.
   - name: images
     description: >-
       Artwork (posters, backdrops, thumbnails, logos, banners) rendered in a fixed set of
@@ -1757,7 +1758,10 @@ paths:
         and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After)
         and "unavailable" (503, for example the server is shutting down or the library
         folder is unreachable). Set replacesSessionId when seeking outside the produced
-        range: the old session stops before the limit is checked.
+        range or when changing the audio track, a burned-in subtitle or maxBitrate: the
+        old session stops before the limit is checked. audioStreamIndex, subtitleTrackId
+        and maxBitrate are optional (ADR 0030); without them the server picks the tracks
+        from the profile's language preference and plays the original quality.
       tags:
         - playback
       requestBody:
@@ -1975,6 +1979,60 @@ paths:
               $ref: "#/components/headers/RetryAfter"
         default:
           $ref: "#/components/responses/Problem"
+  /api/v1/media-files/{fileId}/subtitles/{trackId}.vtt:
+    parameters:
+      - $ref: "#/components/parameters/FileId"
+      - name: trackId
+        in: path
+        required: true
+        description: >-
+          ID of the subtitle track (SubtitleTrack.id): "s:<index>" for a stream inside the
+          file, "x:<hash>" for a subtitle file next to it.
+        schema:
+          type: string
+          pattern: "^(s:[0-9]{1,9}|x:[0-9a-f]{1,64})$"
+          maxLength: 66
+        example: "s:3"
+    get:
+      operationId: getSubtitleTrack
+      summary: Download a subtitle track as WebVTT
+      description: >-
+        Serves one text subtitle track of a media file converted to WebVTT (ADR 0030
+        section 3). The rendition is keyed by file and track, not by playback session, so
+        switching text subtitles never restarts the stream. Cue times are relative to the
+        start of the file: a player subtracts PlaybackSession.startPositionSeconds to get
+        the time of its media element. Styling of ASS/SSA tracks is dropped. The URL is
+        opaque and needs the signed-in session (ADR 0032): clients load SubtitleTrack.url
+        as it is and never build it. Problem codes: "not_found" (404, unknown file or
+        track, or a file deleted from disk), "unsupported" (422, an image format such as
+        PGS, VobSub or DVB that only burn-in can show, or a file whose path now leads
+        outside its library folder), "profile_required" (403) and "unavailable" (503, for
+        example the library folder is unreachable).
+      tags:
+        - stream
+      responses:
+        "200":
+          description: The subtitle track as WebVTT.
+          content:
+            text/vtt:
+              schema:
+                type: string
+                description: WebVTT document (UTF-8) with plain cues.
+        "404":
+          description: The file or the track does not exist ("not_found").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "422":
+          description: >-
+            The track is an image format that cannot be delivered as text ("unsupported").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     sessionCookie:
@@ -2050,6 +2108,15 @@ components:
         type: string
         format: uuid
       example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      description: ID of the media file (MediaFile.id).
+      schema:
+        type: string
+        format: uuid
+      example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
     SessionId:
       name: sessionId
       in: path
@@ -5308,6 +5375,22 @@ components:
           minimum: 0
           description: Overall bit rate in bits per second; omitted when unknown.
           example: 4073000
+        width:
+          type: integer
+          format: int32
+          minimum: 0
+          description: >-
+            Width of the primary video stream in pixels, so a version picker need not search
+            the streams; omitted for files without video.
+          example: 1920
+        height:
+          type: integer
+          format: int32
+          minimum: 0
+          description: Height of the primary video stream in pixels; omitted for files without video.
+          example: 1080
+        resolution:
+          $ref: "#/components/schemas/VideoResolution"
         versionLabel:
           type: string
           description: >-
@@ -5324,9 +5407,45 @@ components:
           example: 1
         streams:
           type: array
-          description: Streams in container order; empty when probing failed.
+          description: >-
+            Streams in container order; empty when probing failed. The streams of kind
+            "audio" are the audio tracks a player offers (index, language, title, codec,
+            channels, default); PlaybackRequest.audioStreamIndex selects one.
           items:
             $ref: "#/components/schemas/MediaStream"
+        subtitleTracks:
+          type: array
+          description: >-
+            Subtitle tracks a player offers, the streams inside the file in container order
+            followed by the subtitle files found next to it. Omitted by a server that does
+            not list subtitle tracks yet; empty when the file has none.
+          maxItems: 256
+          items:
+            $ref: "#/components/schemas/SubtitleTrack"
+        defaultAudioStreamIndex:
+          type: integer
+          format: int32
+          minimum: 0
+          nullable: true
+          description: >-
+            Index of the audio stream (MediaStream.index) the server's default policy picks
+            (ADR 0030 section 4: no commentary, then the default flag, then file order)
+            when a request names no stream and no preferred language; clients preselect it.
+            A PlaybackRequest whose profile lists preferredAudioLanguages may get another
+            stream, which PlaybackSession.streams reports. Null or omitted when the file
+            has no audio stream or the server does not report a default.
+          example: 1
+        defaultSubtitleTrackId:
+          type: string
+          nullable: true
+          pattern: "^(s:[0-9]{1,9}|x:[0-9a-f]{1,64})$"
+          maxLength: 66
+          description: >-
+            ID of the subtitle track (SubtitleTrack.id) the server's default policy shows
+            (ADR 0030 section 3) when a request names none and the profile carries no
+            subtitle preference: a forced track in the language of the default audio
+            stream. Null or omitted when subtitles are off by default.
+          example: "s:3"
     MediaStreamKind:
       type: string
       description: >-
@@ -5354,7 +5473,9 @@ components:
           type: integer
           format: int32
           minimum: 0
-          description: Index of the stream in the container; PlaybackRequest.audioStreamIndex refers to it.
+          description: >-
+            Index of the stream in the container; PlaybackRequest.audioStreamIndex and the
+            subtitle track id "s:<index>" refer to it.
           example: 1
         kind:
           $ref: "#/components/schemas/MediaStreamKind"
@@ -5423,7 +5544,9 @@ components:
           example: Director's commentary
         default:
           type: boolean
-          description: Whether the stream carries the default disposition.
+          description: >-
+            Whether the stream carries the default disposition. For audio it is one input
+            of the default pick, not the pick itself (MediaFile.defaultAudioStreamIndex).
           example: true
         forced:
           type: boolean
@@ -5563,6 +5686,59 @@ components:
           maxItems: 32
           items:
             $ref: "#/components/schemas/CodecLimit"
+        preferredAudioLanguages:
+          type: array
+          description: >-
+            Audio languages the viewer wants, most wanted first, as ISO 639-1 or 639-2 tags
+            ("de", "deu" and "ger" are the same language; only the primary subtag counts).
+            Used when the request names no audioStreamIndex; omitted or empty prefers no
+            language.
+          maxItems: 8
+          items:
+            type: string
+            description: Language tag, for example "de", "deu" or "pt-BR".
+            pattern: "^[A-Za-z]{2,3}([-_][A-Za-z0-9]+)*$"
+            maxLength: 16
+          example: [de, en]
+        preferredSubtitleLanguages:
+          type: array
+          description: >-
+            Languages of full subtitles for subtitleMode "always", most wanted first;
+            omitted or empty falls back to preferredAudioLanguages.
+          maxItems: 8
+          items:
+            type: string
+            description: Language tag, for example "de", "deu" or "pt-BR".
+            pattern: "^[A-Za-z]{2,3}([-_][A-Za-z0-9]+)*$"
+            maxLength: 16
+          example: [de]
+        subtitleMode:
+          $ref: "#/components/schemas/SubtitlePreferenceMode"
+        preferSdh:
+          type: boolean
+          description: >-
+            Whether subtitles for the deaf and hard of hearing rank above plain ones; the
+            other kind is never excluded. Omitted means false.
+          example: false
+        subtitleFormats:
+          type: array
+          description: >-
+            Subtitle formats the client renders itself from the sidecar route, today only
+            "webvtt". A text track is delivered as a sidecar when "webvtt" is listed;
+            everything else needs burn-in. Omitted means the client renders no subtitles.
+          maxItems: 8
+          items:
+            $ref: "#/components/schemas/MediaIdentifier"
+          example: [webvtt]
+        maxAudioChannels:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 32
+          description: >-
+            Highest number of audio channels the client plays; 6 or more keeps 5.1 when
+            audio is re-encoded. Omitted means the server's default limit.
+          example: 6
     ProgressReport:
       type: object
       description: >-
@@ -5672,9 +5848,35 @@ components:
           format: int32
           minimum: 0
           description: >-
-            Index of the audio stream to play (MediaStream.index); omitted selects the
-            default audio stream.
+            Index of the audio stream to play (MediaStream.index); it wins over the
+            language preference of the profile. Omitted lets the server pick by its default
+            policy (ADR 0030 section 4). An index that names no audio stream answers 400
+            "invalid". Changing the audio track of a running playback creates a new
+            session with replacesSessionId.
           example: 1
+        subtitleTrackId:
+          type: string
+          pattern: "^(|s:[0-9]{1,9}|x:[0-9a-f]{1,64})$"
+          maxLength: 66
+          description: >-
+            ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle
+            preference of the profile. The empty string switches subtitles off; omitted
+            lets the server pick by its default policy (ADR 0030 section 3), which shows
+            nothing unless the profile asks for subtitles or the file has a forced track
+            in the audio language. An ID that names no track of the file answers 400
+            "invalid". PlaybackSession.subtitle reports the result. Only a change from or
+            to a burned-in track needs a new session.
+          example: "s:3"
+        maxBitrate:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            Upper limit of the whole stream in bits per second (ADR 0030 section 6);
+            omitted or 0 plays the original quality. A limit below the bit rate of the
+            source forces a transcode with reason "bitrate_cap". The server only honours
+            the number; picking it automatically is the client's job.
+          example: 8000000
         replacesSessionId:
           type: string
           format: uuid
@@ -5682,6 +5884,115 @@ components:
             Session this one replaces, for example after a seek outside the produced range.
             It is stopped before the session limit is checked; an unknown ID is ignored.
           example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+    SubtitleTrack:
+      type: object
+      description: >-
+        A subtitle a player can show: a stream inside the media file or a subtitle file
+        found next to it (ADR 0030 section 3).
+      required:
+        - id
+        - format
+        - forced
+        - sdh
+        - default
+        - external
+        - textBased
+      properties:
+        id:
+          type: string
+          pattern: "^(s:[0-9]{1,9}|x:[0-9a-f]{1,64})$"
+          maxLength: 66
+          description: >-
+            Stable ID of the track within its file, never a list position: "s:<index>"
+            with the MediaStream.index of an embedded stream, "x:<hash>" for an external
+            file. PlaybackRequest.subtitleTrackId refers to it.
+          example: "s:3"
+        language:
+          type: string
+          description: >-
+            Language tag as stored in the file or parsed from the file name, usually ISO
+            639-2; omitted when unknown.
+          example: ger
+        title:
+          type: string
+          description: Title of the track as stored in the file; omitted when it has none.
+          example: Deutsch (Forced)
+        format:
+          type: string
+          description: >-
+            Codec or file format (ffprobe codec_name), for example "subrip", "ass",
+            "webvtt", "mov_text", "hdmv_pgs_subtitle" or "dvd_subtitle".
+          example: subrip
+        forced:
+          type: boolean
+          description: Whether the track only translates foreign-language parts.
+          example: false
+        sdh:
+          type: boolean
+          description: Whether the track is made for the deaf and hard of hearing.
+          example: false
+        default:
+          type: boolean
+          description: Whether the track carries the default disposition.
+          example: false
+        external:
+          type: boolean
+          description: Whether the track is a subtitle file next to the media file.
+          example: false
+        textBased:
+          type: boolean
+          description: >-
+            Whether the track is text and can be delivered as WebVTT; false for image
+            formats (PGS, VobSub, DVB), which only burn-in can show.
+          example: true
+        url:
+          type: string
+          format: uri-reference
+          description: >-
+            URI reference of the WebVTT rendition (getSubtitleTrack); omitted when
+            textBased is false. Resolve it per RFC 3986 section 5 against the URL of the
+            request that returned it. Clients must treat it as opaque: never parse, build or
+            modify it.
+          example: /api/v1/media-files/1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f/subtitles/s:3.vtt
+    SubtitlePreferenceMode:
+      type: string
+      description: >-
+        When a subtitle is switched on without a choice of the viewer: "off" (never),
+        "forced" (a forced track in the language of the selected audio; also the meaning
+        of an omitted value) or "always" (a full track in a preferred subtitle language).
+        Clients must tolerate values added in later versions.
+      enum:
+        - "off"
+        - forced
+        - always
+      example: forced
+    SubtitleDeliveryMode:
+      type: string
+      description: >-
+        How the session shows its subtitle: "off" (none), "sidecar" (the client loads the
+        track as WebVTT and renders it) or "burn_in" (the server draws it into the video,
+        which forces a transcode). Clients must tolerate values added in later versions.
+      enum:
+        - "off"
+        - sidecar
+        - burn_in
+      example: sidecar
+    SubtitleDecision:
+      type: object
+      description: What the session does with subtitles (ADR 0030 section 3).
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: "#/components/schemas/SubtitleDeliveryMode"
+        trackId:
+          type: string
+          pattern: "^(s:[0-9]{1,9}|x:[0-9a-f]{1,64})$"
+          maxLength: 66
+          description: >-
+            ID of the selected track (SubtitleTrack.id), requested or picked by the
+            server's default policy; omitted when mode is "off".
+          example: "s:3"
     PlaybackMode:
       type: string
       description: >-
@@ -5803,9 +6114,14 @@ components:
             "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1
             channels), "audio_track_not_first" (the selected audio track is not the first one,
             which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is
-            never played directly). Warnings:
-            "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled". New codes
-            may be added within API v1.
+            never played directly), "subtitle_burn_in" (the selected subtitle is drawn into
+            the video), "bitrate_cap" (maxBitrate lies below the source), "dsd_to_pcm" (DSD
+            audio is always decoded to PCM), "hires_downsampled" (the audio exceeds the
+            sample rate or bit depth the client plays) and "hwaccel_unavailable" (no usable
+            hardware encoder, the video is encoded in software). Warnings:
+            "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and
+            "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server
+            cannot do now; it stays off). New codes may be added within API v1.
           example: audio_codec_not_supported
         scope:
           $ref: "#/components/schemas/PlaybackReasonScope"
@@ -5891,9 +6207,22 @@ components:
           minimum: 0
           description: Overall bit rate of the source file in bits per second; omitted when unknown.
           example: 4073000
+        outputBitRate:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            Bit rate the client receives in bits per second: the target of a transcode,
+            else the bit rate of the source; omitted when unknown.
+          example: 8000000
+        subtitle:
+          $ref: "#/components/schemas/SubtitleDecision"
         streams:
           type: array
-          description: One decision per selected source stream (video first, then audio).
+          description: >-
+            One decision per selected source stream (video first, then audio). The audio
+            entry's sourceIndex is the audio track that plays, requested or picked by the
+            default policy. A session without the subtitle property shows no subtitle.
           items:
             $ref: "#/components/schemas/StreamDecision"
         reasons:

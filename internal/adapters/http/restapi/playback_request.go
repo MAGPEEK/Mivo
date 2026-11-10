@@ -124,6 +124,7 @@ func newClientProfile(profile apigen.ClientProfile) (playback.ClientProfile, err
 	}
 
 	converted.CodecLimits = limits
+	converted.Tracks = newTrackPreference(profile)
 
 	if err := converted.Validate(); err != nil {
 		return playback.ClientProfile{}, fmt.Errorf("client profile: %w", err)
@@ -160,4 +161,29 @@ func newCodecLimits(limits *[]apigen.CodecLimit) ([]playback.CodecLimit, error) 
 	}
 
 	return converted, nil
+}
+
+// newTrackPreference converts the optional language and subtitle preference of the profile
+// (ADR 0030 sections 3 and 4); the domain's Validate bounds the lists and checks the mode.
+// subtitleFormats and maxAudioChannels have no domain field yet (M4-04b, M4-04c).
+func newTrackPreference(profile apigen.ClientProfile) playback.TrackPreference {
+	preference := playback.TrackPreference{}
+
+	if profile.PreferredAudioLanguages != nil {
+		preference.AudioLanguages = *profile.PreferredAudioLanguages
+	}
+
+	if profile.PreferredSubtitleLanguages != nil {
+		preference.SubtitleLanguages = *profile.PreferredSubtitleLanguages
+	}
+
+	if profile.SubtitleMode != nil {
+		preference.SubtitleMode = playback.SubtitleMode(*profile.SubtitleMode)
+	}
+
+	if profile.PreferSdh != nil {
+		preference.PreferSDH = *profile.PreferSdh
+	}
+
+	return preference
 }

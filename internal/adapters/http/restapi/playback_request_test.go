@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -218,6 +219,84 @@ func TestCreatePlaybackSessionToleratesMissingProfileArraysOnly(t *testing.T) {
 			started := service.startRequests()
 			if len(started) != 1 || len(started[0].Profile.DirectPlay) != 0 || len(started[0].Profile.HLS.VideoCodecs) != 0 {
 				t.Errorf("Start requests = %+v, want one with empty lists", started)
+			}
+		})
+	}
+}
+
+// TestCreatePlaybackSessionPassesTheTrackPreference: the language and subtitle preference of
+// the profile reaches the decision engine, which picks the default tracks from it (M4-02a).
+func TestCreatePlaybackSessionPassesTheTrackPreference(t *testing.T) {
+	t.Parallel()
+
+	service := &fakePlaybackService{session: transcodeSession()}
+	handler, _ := newPlaybackHandler(t, service)
+
+	request := fullPlaybackRequest(t)
+	request.Profile.PreferredAudioLanguages = &[]string{"de", "eng"}
+	request.Profile.PreferredSubtitleLanguages = &[]string{"pt-BR"}
+	request.Profile.SubtitleMode = playbackPointer(apigen.SubtitlePreferenceModeAlways)
+	request.Profile.PreferSdh = playbackPointer(true)
+
+	got := postSession(t, handler, marshalPlaybackRequest(t, request))
+	if got.status != http.StatusCreated {
+		t.Fatalf("status = %d, want %d (body %s)", got.status, http.StatusCreated, got.body)
+	}
+
+	started := service.startRequests()
+	if len(started) != 1 {
+		t.Fatalf("Start calls = %d, want 1", len(started))
+	}
+
+	want := playback.TrackPreference{
+		AudioLanguages:    []string{"de", "eng"},
+		SubtitleLanguages: []string{"pt-BR"},
+		SubtitleMode:      playback.SubtitleModeAlways,
+		PreferSDH:         true,
+	}
+
+	if got := started[0].Profile.Tracks; !reflect.DeepEqual(got, want) {
+		t.Errorf("track preference = %+v, want %+v", got, want)
+	}
+}
+
+// TestCreatePlaybackSessionRejectsInvalidTrackPreferences: the decoder ignores maxItems,
+// patterns and enums, so the domain bounds answer 400 "invalid".
+func TestCreatePlaybackSessionRejectsInvalidTrackPreferences(t *testing.T) {
+	t.Parallel()
+
+	const tooManyLanguages = 9
+
+	tests := []struct {
+		name   string
+		change func(profile *apigen.ClientProfile)
+	}{
+		{name: "too many audio languages", change: func(profile *apigen.ClientProfile) {
+			languages := slices.Repeat([]string{"de"}, tooManyLanguages)
+			profile.PreferredAudioLanguages = &languages
+		}},
+		{name: "subtitle language is no tag", change: func(profile *apigen.ClientProfile) {
+			profile.PreferredSubtitleLanguages = &[]string{"german please"}
+		}},
+		{name: "unknown subtitle mode", change: func(profile *apigen.ClientProfile) {
+			profile.SubtitleMode = playbackPointer(apigen.SubtitlePreferenceMode("sometimes"))
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := &fakePlaybackService{session: transcodeSession()}
+			handler, _ := newPlaybackHandler(t, service)
+
+			request := fullPlaybackRequest(t)
+			test.change(&request.Profile)
+
+			assertProblem(t, postSession(t, handler, marshalPlaybackRequest(t, request)), http.StatusBadRequest, restapi.CodeInvalid)
+
+			if started := service.startRequests(); len(started) != 0 {
+				t.Errorf("Start was called for an invalid request: %+v", started)
 			}
 		})
 	}

@@ -21,6 +21,6 @@ describe("apiTypeChecks", () => {
       ...sessionKeysMatch,
       hlsErrorFitsCore,
       streamInfoColorIsToken,
-    ]).toEqual(Array.from({ length: 12 }, () => true));
+    ]).toEqual(Array.from({ length: 13 }, () => true));
   });
 });

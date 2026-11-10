@@ -538,7 +538,7 @@ func TestIDsAreUUIDs(t *testing.T) {
 	for name, schema := range spec.Components.Schemas {
 		for propertyName, property := range schema.Value.Properties {
 			isID := propertyName == "id" || strings.HasSuffix(propertyName, "Id")
-			if isID && property.Value.Format != "uuid" && !isProviderScopedID(name, propertyName) && !isOpaqueRowID(name, propertyName) {
+			if isID && property.Value.Format != "uuid" && !isProviderScopedID(name, propertyName) && !isOpaqueRowID(name, propertyName) && !isTrackID(name, propertyName) {
 				t.Errorf("%s.%s is not format uuid", name, propertyName)
 			}
 		}
