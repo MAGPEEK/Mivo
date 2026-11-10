@@ -8,6 +8,7 @@ import (
 	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/app/auth"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/account"
 	"github.com/magpeek/mivo/internal/platform/brand"
 )
 
@@ -29,6 +30,11 @@ const (
 	// CodeTooManyAttempts reports a refused attempt after too many failures (429 with
 	// Retry-After and retryAfterSeconds).
 	CodeTooManyAttempts = "too_many_attempts"
+	// CodePINInvalid reports a missing or wrong profile PIN (403).
+	CodePINInvalid = "pin_invalid"
+	// CodeProfileLocked reports a profile locked after too many wrong PINs (429 with
+	// Retry-After and retryAfterSeconds).
+	CodeProfileLocked = "profile_locked"
 )
 
 // DefaultRetryAfterSeconds is the Retry-After of a rate-limited request whose error does not
@@ -42,13 +48,26 @@ type retryAfterSecondsError interface {
 }
 
 // authProblem maps the account and session errors. The specific sentinels come before the
-// generic ones they wrap: ErrProfileRequired wraps ErrForbidden, ErrSetupRequired and
-// ErrInvalidCredentials wrap ErrUnauthenticated. No WWW-Authenticate header is ever sent,
-// so browsers show no basic-auth prompt.
+// generic ones they wrap: ErrProfileRequired and ErrPINInvalid wrap ErrForbidden,
+// ErrSetupRequired and ErrInvalidCredentials wrap ErrUnauthenticated, a *ProfileLockedError
+// unwraps to ErrRateLimited like the sign-in throttle. An *account.InvalidFieldError is
+// "invalid" with the field it names. No WWW-Authenticate header is ever sent, so browsers
+// show no basic-auth prompt.
 func authProblem(err error) (apigen.Problem, bool) {
+	var (
+		locked   *auth.ProfileLockedError
+		fieldErr *account.InvalidFieldError
+	)
+
 	switch {
 	case errors.Is(err, appaccess.ErrProfileRequired):
 		return NewProblem(http.StatusForbidden, CodeProfileRequired), true
+	case errors.Is(err, auth.ErrPINInvalid):
+		return NewProblem(http.StatusForbidden, CodePINInvalid), true
+	case errors.As(err, &locked):
+		return retryLaterProblem(CodeProfileLocked, err), true
+	case errors.As(err, &fieldErr):
+		return invalidFieldProblem(fieldErr), true
 	case errors.Is(err, auth.ErrSetupRequired):
 		return NewProblem(http.StatusUnauthorized, CodeSetupRequired), true
 	case errors.Is(err, auth.ErrInvalidCredentials):
@@ -56,15 +75,25 @@ func authProblem(err error) (apigen.Problem, bool) {
 	case errors.Is(err, domain.ErrUnauthenticated):
 		return NewProblem(http.StatusUnauthorized, CodeUnauthenticated), true
 	case errors.Is(err, domain.ErrRateLimited):
-		return tooManyAttemptsProblem(err), true
+		return retryLaterProblem(CodeTooManyAttempts, err), true
 	default:
 		return apigen.Problem{}, false
 	}
 }
 
-// tooManyAttemptsProblem is 429 with the wait the error names, else DefaultRetryAfterSeconds.
-func tooManyAttemptsProblem(err error) apigen.Problem {
-	problem := NewProblem(http.StatusTooManyRequests, CodeTooManyAttempts)
+// invalidFieldProblem is 400 "invalid" naming the request property that broke a rule. The
+// field names of domain/account match the API properties.
+func invalidFieldProblem(err *account.InvalidFieldError) apigen.Problem {
+	problem := NewProblem(http.StatusBadRequest, CodeInvalid)
+	field := err.Field
+	problem.Field = &field
+
+	return problem
+}
+
+// retryLaterProblem is 429 with the wait the error names, else DefaultRetryAfterSeconds.
+func retryLaterProblem(code string, err error) apigen.Problem {
+	problem := NewProblem(http.StatusTooManyRequests, code)
 	seconds := DefaultRetryAfterSeconds
 
 	var retryAfter retryAfterSecondsError

@@ -95,11 +95,13 @@ func (guard authGuard) serveOpenWrite(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	next.ServeHTTP(writer, request)
+	// The handlers need the classified peer for the sign-in throttle and the device record.
+	next.ServeHTTP(writer, request.WithContext(restapi.WithPeer(request.Context(), guard.peer(request))))
 }
 
-// serveProtected resolves the credential and passes the request on with its viewer. The
-// same-origin rule runs before the session lookup, so a forged write costs no lookup.
+// serveProtected resolves the credential and passes the request on with its viewer and its
+// classified peer (the password change throttles per address). The same-origin rule runs
+// before the session lookup, so a forged write costs no lookup.
 func (guard authGuard) serveProtected(writer http.ResponseWriter, request *http.Request, next http.Handler, needsProfile bool) {
 	presented, ok := requestCredential(request)
 	if !ok {
@@ -116,7 +118,9 @@ func (guard authGuard) serveProtected(writer http.ResponseWriter, request *http.
 		}
 	}
 
-	resolution, err := guard.authentication.Sessions.Resolve(request.Context(), presented.token, guard.peer(request))
+	peer := guard.peer(request)
+
+	resolution, err := guard.authentication.Sessions.Resolve(request.Context(), presented.token, peer)
 	if errors.Is(err, domain.ErrUnauthenticated) {
 		guard.refuseUnauthenticated(writer, request, "session not resolved")
 
@@ -135,7 +139,9 @@ func (guard authGuard) serveProtected(writer http.ResponseWriter, request *http.
 		return
 	}
 
-	next.ServeHTTP(writer, request.WithContext(appaccess.WithViewer(request.Context(), resolution.Viewer)))
+	ctx := restapi.WithPeer(appaccess.WithViewer(request.Context(), resolution.Viewer), peer)
+
+	next.ServeHTTP(writer, request.WithContext(ctx))
 }
 
 // refuseUnauthenticated answers 401 setup_required while no account exists, else 401

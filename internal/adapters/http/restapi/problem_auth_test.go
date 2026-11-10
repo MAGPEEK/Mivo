@@ -12,6 +12,7 @@ import (
 	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/app/auth"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/account"
 	"github.com/magpeek/mivo/internal/platform/brand"
 )
 
@@ -30,6 +31,12 @@ func TestProblemForAuthErrors(t *testing.T) {
 		{name: "invalid credentials", err: auth.ErrInvalidCredentials, wantStatus: 401, wantCode: "invalid_credentials"},
 		{name: "profile required", err: fmt.Errorf("list items: %w", appaccess.ErrProfileRequired), wantStatus: 403, wantCode: "profile_required"},
 		{name: "plain forbidden stays forbidden", err: domain.ErrForbidden, wantStatus: 403, wantCode: "forbidden"},
+		{name: "wrong pin", err: fmt.Errorf("select profile: %w", auth.ErrPINInvalid), wantStatus: 403, wantCode: "pin_invalid"},
+		{
+			name: "profile locked", err: fmt.Errorf("select profile: %w", &auth.ProfileLockedError{Wait: 4 * time.Minute}),
+			wantStatus: 429, wantCode: "profile_locked", wantSeconds: 240,
+		},
+		{name: "invalid field", err: fmt.Errorf("setup: %w", &account.InvalidFieldError{Field: account.FieldName}), wantStatus: 400, wantCode: "invalid"},
 		{
 			name: "throttled sign-in", err: fmt.Errorf("sign in: %w", &auth.ThrottledError{Wait: 1500 * time.Millisecond}),
 			wantStatus: 429, wantCode: "too_many_attempts", wantSeconds: 2,

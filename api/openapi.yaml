@@ -154,10 +154,13 @@ paths:
         local peers, same-origin and with application/json (the ADR 0028 local-peer and
         same-origin rule, ADR 0032 section 6), also when server.lan_only is off; any other
         caller gets 403 "forbidden", so a fresh server reachable from the internet cannot
-        be taken over. Once any account exists it answers 409 "conflict". Problem codes:
-        "invalid" (400, with "field" "name" or "password": a name of 1 to 40 characters and
-        a password of 8 to 128 bytes), "forbidden" (403) and "conflict" (409). There are
-        no default credentials.
+        be taken over. Once any account exists it answers 409 "conflict". The answers come
+        in a fixed order: 403 "forbidden" for a remote or cross-origin caller first, then
+        409 "conflict" once an account exists, and only then is the body read and validated
+        (400), so a caller that probes with an empty body learns whether setup is still
+        open. Problem codes: "invalid" (400, with "field" "name" or "password": a name of
+        1 to 40 characters and a password of 8 to 128 bytes), "forbidden" (403) and
+        "conflict" (409). There are no default credentials.
       tags:
         - auth
       security: []

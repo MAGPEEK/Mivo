@@ -39,6 +39,7 @@ type API struct {
 	metadata  MetadataServices
 	logger    *slog.Logger
 	mounts    []Mount
+	auth      AuthService
 }
 
 // Compile-time check that API serves every operation of the contract.
@@ -66,6 +67,7 @@ func NewAPI(options Options) (*API, error) {
 		metadata:  options.Metadata,
 		logger:    options.Logger,
 		mounts:    options.Mounts,
+		auth:      options.Auth,
 	}, nil
 }
 
@@ -87,7 +89,7 @@ func NewHandler(options Options) (http.Handler, error) {
 // pattern is malformed or conflicts with another route is reported as an error wrapping
 // domain.ErrInvalid.
 func (api *API) Handler() (http.Handler, error) {
-	strict := apigen.NewStrictHandlerWithOptions(api, nil, api.strictOptions())
+	strict := apigen.NewStrictHandlerWithOptions(api, api.strictMiddlewares(), api.strictOptions())
 
 	mux := http.NewServeMux()
 	apigen.HandlerWithOptions(strict, api.routerOptions(mux))

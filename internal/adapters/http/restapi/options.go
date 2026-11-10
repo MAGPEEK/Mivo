@@ -45,6 +45,9 @@ type Options struct {
 	// cannot express, such as the stream delivery (ADR 0024). They share the API's body
 	// limit and its 404 and 405 problem answers.
 	Mounts []Mount
+	// Auth serves setup, sign-in, the own account, profile selection and the own devices
+	// (ADR 0032). It is optional: without it those endpoints answer 501 "not_implemented".
+	Auth AuthService
 }
 
 // Mount is one extra route of the API mux.
