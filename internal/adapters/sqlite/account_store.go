@@ -132,7 +132,7 @@ func (store *AccountStore) insertAccount(ctx context.Context, queries *sqlcgen.Q
 		CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
-		return accountWriteError("insert account", err)
+		return accountRowWriteError("insert account", err)
 	}
 
 	if err := writeUserLibraries(ctx, queries, created.ID, record.Account.Libraries); err != nil {
@@ -210,7 +210,7 @@ func (store *AccountStore) writeAccountRow(ctx context.Context, queries *sqlcgen
 		AllLibraries: boolToInt(next.Libraries.IsAll()), UpdatedAt: now, ID: next.Account.ID,
 	})
 	if err != nil {
-		return accountWriteError("update account row", err)
+		return accountRowWriteError("update account row", err)
 	}
 
 	maxAge, hideUnrated := limitColumns(next.PrimaryLimit)
@@ -315,4 +315,15 @@ func accountWriteError(action string, err error) error {
 	}
 
 	return fmt.Errorf("%s: %w", action, err)
+}
+
+// accountRowWriteError maps a write to the users table: its only unique index is the name key,
+// so a unique violation is account.ErrNameTaken (the API's "name_taken"); everything else is
+// mapped as accountWriteError does.
+func accountRowWriteError(action string, err error) error {
+	if isUniqueViolation(err) {
+		return fmt.Errorf("%s: %w", action, account.ErrNameTaken)
+	}
+
+	return accountWriteError(action, err)
 }

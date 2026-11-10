@@ -48,6 +48,9 @@ type Options struct {
 	// Auth serves setup, sign-in, the own account, profile selection and the own devices
 	// (ADR 0032). It is optional: without it those endpoints answer 501 "not_implemented".
 	Auth AuthService
+	// Users serves the user administration endpoints (ADR 0032). Every service in it is
+	// optional; see UserServices.
+	Users UserServices
 }
 
 // Mount is one extra route of the API mux.

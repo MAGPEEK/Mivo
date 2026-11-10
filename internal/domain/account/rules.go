@@ -28,7 +28,7 @@ type Actor struct {
 
 // CheckAdminChange refuses to delete, disable or demote the last enabled admin, so the server
 // can always be administered (ADR 0032 §1). enabledAdmins is the current number of enabled
-// admin accounts including target. The error wraps domain.ErrConflict, or domain.ErrInvalid
+// admin accounts including target. The error wraps ErrLastAdmin, or domain.ErrInvalid
 // for an unknown change.
 func CheckAdminChange(target Account, change AdminChange, enabledAdmins int) error {
 	switch change {
@@ -40,7 +40,7 @@ func CheckAdminChange(target Account, change AdminChange, enabledAdmins int) err
 	// A count below one contradicts an enabled admin target; refusing keeps the invariant
 	// even when the caller's count is stale.
 	if target.IsEnabledAdmin() && enabledAdmins <= 1 {
-		return fmt.Errorf("account %s is the last enabled admin: %w", target.ID, domain.ErrConflict)
+		return fmt.Errorf("account %s is the last enabled admin: %w", target.ID, ErrLastAdmin)
 	}
 
 	return nil
@@ -60,11 +60,11 @@ func CountEnabledAdmins(accounts []Account) int {
 }
 
 // CheckManagedProfileLimit refuses a new managed profile when the account already has
-// existingManaged of them. The error wraps domain.ErrConflict.
+// existingManaged of them. The error wraps ErrProfileLimit.
 func CheckManagedProfileLimit(existingManaged int) error {
 	if existingManaged >= MaxManagedProfiles {
 		return fmt.Errorf("account has %d managed profiles, at most %d allowed: %w",
-			existingManaged, MaxManagedProfiles, domain.ErrConflict)
+			existingManaged, MaxManagedProfiles, ErrProfileLimit)
 	}
 
 	return nil

@@ -96,7 +96,7 @@ func TestCreateProfileRefusals(t *testing.T) {
 	}{
 		"other account":   {ctx: ownerContext(), accountID: otherID, input: users.CreateProfileInput{Name: "Kid"}, want: domain.ErrForbidden},
 		"from managed":    {ctx: ownerManagedContext(), accountID: ownerID, input: users.CreateProfileInput{Name: "Kid"}, want: domain.ErrForbidden},
-		"library outside": {ctx: adminContext(), accountID: ownerID, input: users.CreateProfileInput{Name: "Kid", Libraries: access.OnlyLibraries(libraryMusic)}, want: domain.ErrInvalid},
+		"library outside": {ctx: adminContext(), accountID: ownerID, input: users.CreateProfileInput{Name: "Kid", Libraries: access.OnlyLibraries(libraryMusic)}, want: users.ErrLibraryAccess},
 		"invalid name":    {ctx: ownerContext(), accountID: ownerID, input: users.CreateProfileInput{Name: ""}, want: domain.ErrInvalid},
 		"invalid pin":     {ctx: ownerContext(), accountID: ownerID, input: users.CreateProfileInput{Name: "Kid", PIN: "12a4"}, want: domain.ErrInvalid},
 		"invalid colour":  {ctx: ownerContext(), accountID: ownerID, input: users.CreateProfileInput{Name: "Kid", AvatarColor: "plaid"}, want: domain.ErrInvalid},

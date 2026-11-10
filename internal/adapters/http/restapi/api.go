@@ -40,6 +40,7 @@ type API struct {
 	logger    *slog.Logger
 	mounts    []Mount
 	auth      AuthService
+	users     UserServices
 }
 
 // Compile-time check that API serves every operation of the contract.
@@ -68,6 +69,7 @@ func NewAPI(options Options) (*API, error) {
 		logger:    options.Logger,
 		mounts:    options.Mounts,
 		auth:      options.Auth,
+		users:     options.Users,
 	}, nil
 }
 

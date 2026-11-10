@@ -17,6 +17,8 @@ import (
 type AccountSummary struct {
 	AccountRecord
 
+	// CreatedAt is when the account was created.
+	CreatedAt time.Time
 	// ProfileCount counts the primary and the managed profiles.
 	ProfileCount int
 	// LastActiveAt is the newest session activity; the zero time means never.
@@ -198,6 +200,7 @@ func summariesFromRows(rows []sqlcgen.ListUserSummariesRow, grants []sqlcgen.Use
 				},
 				Libraries: libraryAccess(row.AllLibraries, libraryIDs[row.ID]), PrimaryLimit: limit,
 			},
+			CreatedAt:    time.UnixMilli(row.CreatedAt).UTC(),
 			ProfileCount: int(row.ProfileCount),
 		}
 

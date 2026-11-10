@@ -18,10 +18,10 @@ func TestCheckAdminChange(t *testing.T) {
 		enabledAdmins int
 		want          error
 	}{
-		{name: "delete last admin", target: adminAccount(), change: account.AdminChangeDelete, enabledAdmins: 1, want: domain.ErrConflict},
-		{name: "disable last admin", target: adminAccount(), change: account.AdminChangeDisable, enabledAdmins: 1, want: domain.ErrConflict},
-		{name: "demote last admin", target: adminAccount(), change: account.AdminChangeDemote, enabledAdmins: 1, want: domain.ErrConflict},
-		{name: "inconsistent zero count still protects", target: adminAccount(), change: account.AdminChangeDelete, enabledAdmins: 0, want: domain.ErrConflict},
+		{name: "delete last admin", target: adminAccount(), change: account.AdminChangeDelete, enabledAdmins: 1, want: account.ErrLastAdmin},
+		{name: "disable last admin", target: adminAccount(), change: account.AdminChangeDisable, enabledAdmins: 1, want: account.ErrLastAdmin},
+		{name: "demote last admin", target: adminAccount(), change: account.AdminChangeDemote, enabledAdmins: 1, want: account.ErrLastAdmin},
+		{name: "inconsistent zero count still protects", target: adminAccount(), change: account.AdminChangeDelete, enabledAdmins: 0, want: account.ErrLastAdmin},
 		{name: "delete one of two admins", target: adminAccount(), change: account.AdminChangeDelete, enabledAdmins: 2},
 		{name: "demote one of two admins", target: adminAccount(), change: account.AdminChangeDemote, enabledAdmins: 2},
 		{name: "delete disabled admin", target: disabled(adminAccount()), change: account.AdminChangeDelete, enabledAdmins: 1},
@@ -75,8 +75,8 @@ func TestCheckManagedProfileLimit(t *testing.T) {
 	}{
 		{existing: 0},
 		{existing: account.MaxManagedProfiles - 1},
-		{existing: account.MaxManagedProfiles, want: domain.ErrConflict},
-		{existing: account.MaxManagedProfiles + 1, want: domain.ErrConflict},
+		{existing: account.MaxManagedProfiles, want: account.ErrProfileLimit},
+		{existing: account.MaxManagedProfiles + 1, want: account.ErrProfileLimit},
 	}
 
 	for _, test := range tests {

@@ -326,7 +326,7 @@ func checkLibrarySubset(accountLibraries, profileLibraries access.LibraryAccess)
 
 	for _, libraryID := range profileLibraries.IDs() {
 		if !accountLibraries.Allows(libraryID) {
-			return fmt.Errorf("library %s is outside the account's access: %w", libraryID, domain.ErrInvalid)
+			return fmt.Errorf("library %s is outside the account's access: %w", libraryID, ErrLibraryAccess)
 		}
 	}
 

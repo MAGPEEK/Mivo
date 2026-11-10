@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
 )
@@ -246,7 +245,7 @@ func checkDemotionLibraries(current, next account.Account, patch AccountPatch) e
 		return nil
 	}
 
-	return fmt.Errorf("demote account %s: library access must be chosen: %w", current.ID, domain.ErrInvalid)
+	return fmt.Errorf("demote account %s: library access must be chosen: %w", current.ID, ErrLibraryAccess)
 }
 
 // DeleteAccount removes an account unless it is the last enabled admin.

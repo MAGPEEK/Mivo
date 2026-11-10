@@ -20,6 +20,8 @@ type AccountRecord struct {
 type AccountSummary struct {
 	AccountRecord
 
+	// CreatedAt is when the account was created.
+	CreatedAt time.Time
 	// ProfileCount counts the primary and the managed profiles.
 	ProfileCount int
 	// LastActiveAt is the newest session activity; the zero time means never.

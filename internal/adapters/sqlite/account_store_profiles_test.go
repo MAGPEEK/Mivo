@@ -259,6 +259,7 @@ func TestAccountListHasProfileCountAndLastActivity(t *testing.T) {
 	record := newAccount("anna", account.RoleAdmin)
 	record.Account.Libraries = access.OnlyLibraries(libraryID)
 	record.Account.PrimaryLimit = mustMaxAge(t, access.AgeBucket(18), false)
+	annaCreatedAt := fixture.clock.Now().UTC().Truncate(time.Millisecond)
 
 	if err := fixture.store.CreateAccount(ctx, record); err != nil {
 		t.Fatalf("CreateAccount error = %v", err)
@@ -279,6 +280,10 @@ func TestAccountListHasProfileCountAndLastActivity(t *testing.T) {
 	}
 
 	anna, ben := summaries[0], summaries[1]
+	if !anna.CreatedAt.Equal(annaCreatedAt) {
+		t.Errorf("anna created at %v, want %v", anna.CreatedAt, annaCreatedAt)
+	}
+
 	if anna.ProfileCount != 1 || !anna.LastActiveAt.IsZero() || anna.PrimaryLimit != record.Account.PrimaryLimit ||
 		!slices.Equal(anna.Libraries.IDs(), []string{libraryID}) {
 		t.Errorf("anna summary = %+v, want 1 profile, no activity, one library, max age 18", anna)

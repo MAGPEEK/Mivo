@@ -149,7 +149,7 @@ func ProblemForError(err error) apigen.Problem {
 
 // specificProblems are the mappers ProblemForError asks before the generic sentinels.
 func specificProblems() []func(error) (apigen.Problem, bool) {
-	return []func(error) (apigen.Problem, bool){queryProblem, libraryProblem, settingsProblem, authProblem}
+	return []func(error) (apigen.Problem, bool){queryProblem, libraryProblem, settingsProblem, authProblem, userProblem}
 }
 
 // headerRetryAfter tells the client when a retry may succeed (RFC 9110 §10.2.3).
