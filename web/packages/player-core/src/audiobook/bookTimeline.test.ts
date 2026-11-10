@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { bookTimeline, filePositionAt, type BookChapter, type BookPart } from "./bookTimeline";
+import {
+  bookPartStart,
+  bookTimeline,
+  filePositionAt,
+  type BookChapter,
+  type BookPart,
+} from "./bookTimeline";
 
 // The single-file M4B of the corpus: three chapters of 2 s in one file of 6 s.
 const m4b: BookPart = { id: "m4b", durationSeconds: 6 };
@@ -108,6 +114,21 @@ describe("bookTimeline", () => {
 
   it("is empty for a book without parts or chapters", () => {
     expect(bookTimeline([], [])).toEqual({ chapters: [], totalSeconds: 0 });
+  });
+});
+
+describe("bookPartStart", () => {
+  it("starts every part where the parts played before it end", () => {
+    const parts = [dawn, keeper, storm];
+
+    expect(bookPartStart(parts, partChapters, "storm")).toBe(0);
+    expect(bookPartStart(parts, partChapters, "keeper")).toBe(3.5);
+    expect(bookPartStart(parts, partChapters, "dawn")).toBe(6.5);
+  });
+
+  it("is 0 for a single-file book and undefined for a file that is not a part", () => {
+    expect(bookPartStart([m4b], m4bChapters, "m4b")).toBe(0);
+    expect(bookPartStart([m4b], m4bChapters, "other")).toBeUndefined();
   });
 });
 

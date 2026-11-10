@@ -187,6 +187,16 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   /** The current snapshot; the same object until something changes. */
   readonly getSnapshot = (): PlaybackSnapshot => this.snapshot;
 
+  /**
+   * The displayed position right now: read from the element while a stream is attached, so a
+   * listener of a media event does not depend on the engine having handled that event first.
+   * Without an attached stream (a restart, a hidden page) it is the last position shown.
+   */
+  currentPosition(): number {
+    this.updatePosition();
+    return this.snapshot.position;
+  }
+
   /** Starts playing `request.fileId`, closing whatever played before. */
   open(request: PlaybackOpenRequest<Media>): void {
     this.close();

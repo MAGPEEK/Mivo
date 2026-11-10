@@ -140,7 +140,18 @@ export {
   type StreamKindKey,
   type WarningKey,
 } from "./streamInfo/translationKeys";
+export { progressKinds, reportsProgress } from "./progress/progressKinds";
 export {
+  createProgressReporter,
+  progressIntervalMilliseconds,
+  progressThrottleMilliseconds,
+  type ProgressClock,
+  type ProgressReporter,
+  type ProgressReporterOptions,
+  type ProgressTrigger,
+} from "./progress/progressReporter";
+export {
+  bookPartStart,
   bookTimeline,
   filePositionAt,
   type BookChapter,

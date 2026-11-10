@@ -1,6 +1,11 @@
 // An in-memory server for the playback endpoints, on top of the shared fake API server.
 
-import type { ItemDetail, PlaybackRequest, PlaybackSession } from "@mivo/api-client";
+import type {
+  ItemDetail,
+  PlaybackRequest,
+  PlaybackSession,
+  ProgressReport,
+} from "@mivo/api-client";
 
 import {
   createFakeServer,
@@ -28,6 +33,8 @@ export interface PlaybackServerOptions {
   readonly createSession?: CreateSessionResponder;
   /** Answers `GET` of a session; defaults to the session as created. */
   readonly getSession?: (sessionId: string) => Response | Promise<Response>;
+  /** Answers a progress report (`PUT …/progress`); defaults to 204. */
+  readonly reportProgress?: () => Response | Promise<Response>;
 }
 
 /** The fake server with what it received. */
@@ -40,6 +47,10 @@ export interface PlaybackServer extends FakeServer {
   readonly stopRequests: readonly Request[];
   /** IDs of every `GET` of a session, oldest first. */
   readonly lookedUpSessions: readonly string[];
+  /** Bodies of every progress report of the item, oldest first. */
+  readonly progressReports: readonly ProgressReport[];
+  /** The progress requests themselves, e.g. to check `keepalive`. */
+  readonly progressRequests: readonly Request[];
 }
 
 /**
@@ -78,6 +89,8 @@ export function createPlaybackServer(options: PlaybackServerOptions = {}): Playb
   const stoppedSessions: string[] = [];
   const stopRequests: Request[] = [];
   const lookedUpSessions: string[] = [];
+  const progressReports: ProgressReport[] = [];
+  const progressRequests: Request[] = [];
   const sessions = new Map<string, PlaybackSession>();
   const createSession: CreateSessionResponder =
     options.createSession ??
@@ -112,6 +125,15 @@ export function createPlaybackServer(options: PlaybackServerOptions = {}): Playb
       },
     },
     {
+      method: "PUT",
+      path: `/api/v1/items/${item.id}/progress`,
+      respond: async ({ request }) => {
+        progressRequests.push(request);
+        progressReports.push((await request.clone().json()) as ProgressReport);
+        return options.reportProgress?.() ?? new Response(null, { status: noContentStatus });
+      },
+    },
+    {
       method: "DELETE",
       path: "/api/v1/playback/sessions/:sessionId",
       respond: ({ request, params }) => {
@@ -121,5 +143,13 @@ export function createPlaybackServer(options: PlaybackServerOptions = {}): Playb
       },
     },
   ]);
-  return { ...server, sessionRequests, stoppedSessions, stopRequests, lookedUpSessions };
+  return {
+    ...server,
+    sessionRequests,
+    stoppedSessions,
+    stopRequests,
+    lookedUpSessions,
+    progressReports,
+    progressRequests,
+  };
 }

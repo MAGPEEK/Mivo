@@ -159,6 +159,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   or stale position no longer keeps a show out of both.
 - Clients report progress with `PUT /api/v1/items/{id}/progress` every 10 s while playing and
   on pause, stop and page hide (`fetch` with `keepalive`).
+  Amendment (M7-35): also when a seek ends and when the item ends; never more than once per
+  2 s, unchanged positions are skipped, a failed report is not queued (the next one carries the
+  position). Shared implementation: `createProgressReporter` in `web/packages/player-core`.
 
 ### 9 Administration after accounts (refines ADR 0028)
 - Every management and administration request (libraries write, scan, folder browser,

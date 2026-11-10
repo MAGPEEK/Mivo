@@ -74,6 +74,35 @@ function partOrder(parts: readonly BookPart[], chapters: readonly BookChapter[])
   return order;
 }
 
+/** Where every part starts on the book's timeline, and the length of the whole book. */
+function layOutParts(
+  parts: readonly BookPart[],
+  chapters: readonly BookChapter[],
+): { readonly partStarts: Map<string, number>; readonly totalSeconds: number } {
+  const lengths = partLengths(parts, chapters);
+  const partStarts = new Map<string, number>();
+  let totalSeconds = 0;
+  for (const partId of partOrder(parts, chapters)) {
+    partStarts.set(partId, totalSeconds);
+    totalSeconds += lengths.get(partId) ?? 0;
+  }
+  return { partStarts, totalSeconds };
+}
+
+/**
+ * Where the part file `fileId` starts on the book's timeline in seconds: the length of the
+ * parts played before it, 0 for the first part. A player adds it to the position in the file
+ * to report the position in the book (API `ProgressReport`). `undefined` for a file that is
+ * not a part of the book.
+ */
+export function bookPartStart(
+  parts: readonly BookPart[],
+  chapters: readonly BookChapter[],
+  fileId: string,
+): number | undefined {
+  return layOutParts(parts, chapters).partStarts.get(fileId);
+}
+
 /**
  * Places the chapters of a book on one timeline. The server sends chapter offsets relative to
  * their part file (API `ItemChapter`); a book of several parts starts each part where the
@@ -85,13 +114,7 @@ export function bookTimeline(
   parts: readonly BookPart[],
   chapters: readonly BookChapter[],
 ): BookTimeline {
-  const lengths = partLengths(parts, chapters);
-  const partStarts = new Map<string, number>();
-  let totalSeconds = 0;
-  for (const partId of partOrder(parts, chapters)) {
-    partStarts.set(partId, totalSeconds);
-    totalSeconds += lengths.get(partId) ?? 0;
-  }
+  const { partStarts, totalSeconds } = layOutParts(parts, chapters);
   return {
     chapters: chapters.map((chapter) => {
       const fileStartSeconds = chapter.startMs / millisecondsPerSecond;

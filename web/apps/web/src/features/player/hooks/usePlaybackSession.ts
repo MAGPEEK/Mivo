@@ -11,6 +11,8 @@ import type { HlsFactory } from "../lib/hlsPlayer";
 import { genericPlaybackError } from "../lib/playbackErrors";
 import { PlaybackEngine, type PlaybackSnapshot } from "../lib/playbackEngine";
 import { resolvePlaybackStart, type PlaybackStart } from "../lib/playbackStart";
+import { progressTarget } from "../lib/progressTarget";
+import { useProgressReporting } from "./useProgressReporting";
 
 /** What the player opens: the route parameters of `/items/$itemId/play`. */
 export interface PlaybackTarget {
@@ -40,9 +42,11 @@ export interface PlaybackSessionView extends PlaybackSnapshot {
   readonly setAutoplay: (autoplay: boolean) => void;
 }
 
-function usePlaybackEngine(services: PlaybackServices): PlaybackEngine<HTMLVideoElement> {
+function usePlaybackEngine(
+  createHls: HlsFactory<HTMLVideoElement>,
+  startTimer: StartTimer,
+): PlaybackEngine<HTMLVideoElement> {
   const client = useApiClient();
-  const { createHls = createHlsJsPlayer, startTimer = browserStartTimer } = services;
   return useMemo(
     () =>
       new PlaybackEngine<HTMLVideoElement>({
@@ -81,6 +85,11 @@ function usePageLifecycle(engine: PlaybackEngine<HTMLVideoElement>): void {
 interface PlaybackPreconditions {
   readonly profile: ClientProfile | undefined;
   readonly start: PlaybackStart | undefined;
+  /**
+   * Seconds to add to the file position for progress reports; `undefined` when the item
+   * does not report its position (`progressTarget`).
+   */
+  readonly progressOffsetSeconds: number | undefined;
   /** The profile or the item could not be loaded, or the item has no file. */
   readonly failed: boolean;
   /** Loads what failed again. */
@@ -98,9 +107,14 @@ function usePlaybackPreconditions(
     itemQuery.data === undefined
       ? undefined
       : resolvePlaybackStart(itemQuery.data, target.fileId, target.startAt);
+  const progress =
+    itemQuery.data === undefined || start === undefined
+      ? undefined
+      : progressTarget(itemQuery.data, start.fileId);
   return {
     profile: profileQuery.data,
     start,
+    progressOffsetSeconds: progress?.offsetSeconds,
     failed:
       profileQuery.isError || itemQuery.isError || (itemQuery.isSuccess && start === undefined),
     reload: () => {
@@ -112,25 +126,18 @@ function usePlaybackPreconditions(
   };
 }
 
-/**
- * Plays `target` in the `<video>` element passed to `attachVideo` (task M2-27): detects the client
- * profile once per page load, creates a playback session for the item's file and attaches its
- * stream (file, hls.js or native HLS). Unmounting or hiding the page stops the session.
- */
-export function usePlaybackSession(
-  target: PlaybackTarget,
-  services: PlaybackServices = {},
-): PlaybackSessionView {
-  const engine = usePlaybackEngine(services);
-  const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
-  const { profile, start, failed, reload } = usePlaybackPreconditions(
-    target,
-    services.detectProfile ?? detectBrowserProfile,
-  );
-  const [media, setMedia] = useState<HTMLVideoElement | null>(null);
-  const fileId = start?.fileId;
-  const startPositionSeconds = start?.startPositionSeconds ?? 0;
+/** What the engine opens once all of it is known. */
+interface PlaybackOpening {
+  readonly media: HTMLVideoElement | null;
+  readonly profile: ClientProfile | undefined;
+  readonly start: PlaybackStart | undefined;
+}
 
+/** Opens the file in the engine once element, profile and file are known; closes it again. */
+function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: PlaybackOpening): void {
+  const { media, profile } = opening;
+  const fileId = opening.start?.fileId;
+  const startPositionSeconds = opening.start?.startPositionSeconds ?? 0;
   useEffect(() => {
     if (media === null || profile === undefined || fileId === undefined) {
       return;
@@ -140,6 +147,36 @@ export function usePlaybackSession(
       engine.close();
     };
   }, [engine, media, profile, fileId, startPositionSeconds]);
+}
+
+/**
+ * Plays `target` in the `<video>` element passed to `attachVideo` (task M2-27): detects the client
+ * profile once per page load, creates a playback session for the item's file and attaches its
+ * stream (file, hls.js or native HLS). Unmounting or hiding the page stops the session. While
+ * a movie, an episode or an audiobook plays, the server learns the position (task M7-35).
+ */
+export function usePlaybackSession(
+  target: PlaybackTarget,
+  services: PlaybackServices = {},
+): PlaybackSessionView {
+  const { createHls = createHlsJsPlayer, startTimer = browserStartTimer } = services;
+  const engine = usePlaybackEngine(createHls, startTimer);
+  const snapshot = useSyncExternalStore(engine.subscribe, engine.getSnapshot);
+  const { profile, start, progressOffsetSeconds, failed, reload } = usePlaybackPreconditions(
+    target,
+    services.detectProfile ?? detectBrowserProfile,
+  );
+  const [media, setMedia] = useState<HTMLVideoElement | null>(null);
+
+  // Before the effect that opens the engine, so that its last report precedes the close.
+  useProgressReporting({
+    itemId: target.itemId,
+    source: engine,
+    media,
+    offsetSeconds: progressOffsetSeconds,
+    startTimer,
+  });
+  useOpenPlayback(engine, { media, profile, start });
   usePageLifecycle(engine);
 
   const controls = {
