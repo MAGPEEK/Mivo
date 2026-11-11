@@ -3,11 +3,30 @@ import { describe, expect, it } from "vitest";
 import type { TimelineSession } from "../timeline/timeline";
 import {
   activeCues,
+  maxCueTextLength,
   maxSubtitleCues,
+  maxWebVttLength,
   parseWebVtt,
   subtitleFileTime,
   type SubtitleCue,
 } from "./webVtt";
+
+const byteOrderMark = String.fromCodePoint(0xfeff);
+const nbsp = String.fromCodePoint(0xa0);
+const eAcute = String.fromCodePoint(0xe9);
+const leftToRightMark = String.fromCodePoint(0x200e);
+const rightToLeftMark = String.fromCodePoint(0x200f);
+const wideCharacter = String.fromCodePoint(0x1f600);
+const windowsFile = [
+  `${byteOrderMark}WEBVTT`,
+  "",
+  "00:01.000 --> 00:02.000",
+  "Hello",
+  "",
+  "00:03.000 --> 00:04.000",
+  "Bye",
+  "",
+].join("\r\n");
 
 function vtt(...blocks: string[]): string {
   return ["WEBVTT", ...blocks].join("\n\n");
@@ -52,16 +71,22 @@ describe("parseWebVtt", () => {
       text: vtt(
         "00:01.000 --> 00:02.000\nA &amp; B &lt;b&gt; &quot;x&quot;&nbsp;&#233;&#xE9;&#XE9; &bogus; &#0; &#x110000;",
       ),
-      expected: [{ start: 1, end: 2, text: 'A & B <b> "x" ééé &bogus; &#0; &#x110000;' }],
+      expected: [
+        {
+          start: 1,
+          end: 2,
+          text: `A & B <b> "x"${nbsp}${eAcute.repeat(3)} &bogus; &#0; &#x110000;`,
+        },
+      ],
     },
     {
       name: "direction marks are kept",
       text: vtt("00:01.000 --> 00:02.000\n&lrm;a&rlm;"),
-      expected: [{ start: 1, end: 2, text: "‎a‏" }],
+      expected: [{ start: 1, end: 2, text: `${leftToRightMark}a${rightToLeftMark}` }],
     },
     {
       name: "a byte order mark and Windows line ends",
-      text: "﻿WEBVTT\r\n\r\n00:01.000 --> 00:02.000\r\nHello\r\n\r\n00:03.000 --> 00:04.000\r\nBye\r\n",
+      text: windowsFile,
       expected: [
         { start: 1, end: 2, text: "Hello" },
         { start: 3, end: 4, text: "Bye" },
@@ -112,6 +137,18 @@ describe("parseWebVtt", () => {
     },
   ])("$name", ({ text, expected }) => {
     expect(parseWebVtt(text)).toEqual(expected);
+  });
+
+  it("cuts a cue text at the length limit without splitting a character", () => {
+    const long = wideCharacter.repeat(maxCueTextLength + 10);
+    const [cue] = parseWebVtt(vtt(`00:01.000 --> 00:02.000\n${long}`));
+    expect(cue?.text).toBe(wideCharacter.repeat(maxCueTextLength));
+  });
+
+  it("reads no cue beyond the input length limit", () => {
+    const padding = `NOTE ${"x".repeat(maxWebVttLength)}`;
+    const text = vtt("00:01.000 --> 00:02.000\nFirst", padding, "00:03.000 --> 00:04.000\nBeyond");
+    expect(parseWebVtt(text)).toEqual([{ start: 1, end: 2, text: "First" }]);
   });
 
   it("stops at the cue limit", () => {

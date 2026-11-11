@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { imageSubtitle, subtitle } from "../tracks/test/tracks";
+import { audio, imageSubtitle, subtitle } from "../tracks/test/tracks";
 import type { TrackSession } from "../tracks/trackModel";
 import type { TrackSelection } from "./sessionRequest";
 import {
   planAudioSwitch,
   planQualitySwitch,
   planSubtitleSwitch,
+  reconcileSelection,
   shownSubtitleTrackId,
   type SwitchPlan,
   type SwitchState,
@@ -16,6 +17,7 @@ const german = subtitle("s:3");
 const english = subtitle("s:4");
 const image = imageSubtitle("s:5");
 const tracks = [german, english, image];
+const audioTracks = [audio(1), audio(2)];
 
 function state(
   selection: TrackSelection = {},
@@ -59,8 +61,10 @@ describe("planAudioSwitch", () => {
         selection: { audioStreamIndex: 1, subtitleTrackId: "s:3", maxBitRate: 4_000_000 },
       },
     },
+    { name: "the video stream is no audio track", state: state(), index: 0, expected: none },
+    { name: "an index the file does not have", state: state(), index: 7, expected: none },
   ])("$name", ({ state: current, index, expected }) => {
-    expect(planAudioSwitch(current, index)).toEqual(expected);
+    expect(planAudioSwitch(current, audioTracks, index)).toEqual(expected);
   });
 });
 
@@ -90,6 +94,54 @@ describe("planQualitySwitch", () => {
   });
 });
 
+describe("reconcileSelection", () => {
+  it.each<{ name: string; state: SwitchState; expected: TrackSelection }>([
+    { name: "nothing chosen", state: state(), expected: {} },
+    {
+      name: "a text track stays chosen whatever the session says",
+      state: state({ subtitleTrackId: "s:3" }, { mode: "off" }),
+      expected: { subtitleTrackId: "s:3" },
+    },
+    {
+      name: "a burned-in track the session shows stays chosen",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "burn_in", trackId: "s:5" }),
+      expected: { subtitleTrackId: "s:5" },
+    },
+    {
+      name: "a burn-in the server could not do becomes off",
+      state: state({ audioStreamIndex: 2, subtitleTrackId: "s:5" }, { mode: "off" }),
+      expected: { audioStreamIndex: 2, subtitleTrackId: "" },
+    },
+    {
+      name: "a burn-in track without a subtitle decision becomes off",
+      state: state({ subtitleTrackId: "s:5" }),
+      expected: { subtitleTrackId: "" },
+    },
+    {
+      name: "a burn-in track while another one is burned in becomes off",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "burn_in", trackId: "s:6" }),
+      expected: { subtitleTrackId: "" },
+    },
+    {
+      name: "off stays off",
+      state: state({ subtitleTrackId: "" }),
+      expected: { subtitleTrackId: "" },
+    },
+    {
+      name: "a track the file does not list is left alone",
+      state: state({ subtitleTrackId: "s:9" }),
+      expected: { subtitleTrackId: "s:9" },
+    },
+  ])("$name", ({ state: current, expected }) => {
+    expect(reconcileSelection(current.selection, current.session, tracks)).toEqual(expected);
+  });
+
+  it("returns the same selection when nothing changes", () => {
+    const current = state({ subtitleTrackId: "s:3" });
+    expect(reconcileSelection(current.selection, current.session, tracks)).toBe(current.selection);
+  });
+});
+
 describe("shownSubtitleTrackId", () => {
   it.each<{ name: string; state: SwitchState; expected: string }>([
     { name: "nothing chosen, no decision", state: state(), expected: "" },
@@ -110,8 +162,13 @@ describe("shownSubtitleTrackId", () => {
       state: state({ subtitleTrackId: "" }, { mode: "sidecar", trackId: "s:3" }),
       expected: "",
     },
+    {
+      name: "a degraded burn-in shows as off in the menu",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "off" }),
+      expected: "",
+    },
   ])("$name", ({ state: current, expected }) => {
-    expect(shownSubtitleTrackId(current)).toBe(expected);
+    expect(shownSubtitleTrackId(current, tracks)).toBe(expected);
   });
 });
 
@@ -170,6 +227,24 @@ describe("planSubtitleSwitch", () => {
       state: state({}, { mode: "burn_in", trackId: "s:5" }),
       trackId: "s:5",
       expected: none,
+    },
+    {
+      name: "re-selecting a degraded burn-in asks the server again",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "off" }),
+      trackId: "s:5",
+      expected: { kind: "restart", selection: { subtitleTrackId: "s:5" } },
+    },
+    {
+      name: "off after a degraded burn-in changes nothing",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "off" }),
+      trackId: "",
+      expected: none,
+    },
+    {
+      name: "a text track after a degraded burn-in is swapped without a restart",
+      state: state({ subtitleTrackId: "s:5" }, { mode: "off" }),
+      trackId: "s:3",
+      expected: { kind: "sidecar", track: german, selection: { subtitleTrackId: "s:3" } },
     },
   ])("$name", ({ state: current, trackId, expected }) => {
     expect(planSubtitleSwitch(current, tracks, trackId)).toEqual(expected);

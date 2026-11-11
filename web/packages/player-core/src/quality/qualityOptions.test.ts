@@ -13,7 +13,9 @@ function summary(sourceBitRate: number | undefined, height: number | undefined) 
 describe("qualityLadder", () => {
   it("is the ladder of ADR 0030, best first", () => {
     expect(qualityLadder.map((step) => step.maxBitRate / 1_000_000)).toEqual([20, 12, 8, 4, 2, 1]);
-    expect(new Set(qualityLadder.map((step) => step.height))).toEqual(new Set([1080, 720, 480]));
+    expect(new Set(qualityLadder.map((step) => step.height))).toEqual(
+      new Set([2160, 1080, 720, 480]),
+    );
   });
 });
 
@@ -30,7 +32,7 @@ describe("qualityOptions", () => {
       height: 2160,
       expected: [
         [0, 2160],
-        [20, 1080],
+        [20, 2160],
         [12, 1080],
         [8, 1080],
         [4, 720],
@@ -98,7 +100,7 @@ describe("qualityOptions", () => {
       height: 0,
       expected: [
         [0, undefined],
-        [20, 1080],
+        [20, 2160],
         [12, 1080],
         [8, 1080],
         [4, 720],

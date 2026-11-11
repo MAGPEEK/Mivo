@@ -8,9 +8,27 @@ import { mediaClockOffset, type TimelineSession } from "../timeline/timeline";
 export interface SubtitleCue {
   readonly start: number;
   readonly end: number;
-  /** Plain text without markup; lines are separated by `\n`. */
+  /**
+   * Plain text, never HTML: markup is removed and entities are decoded, so the text may hold
+   * `<` and `&` again. Render it as a text node only – never through `innerHTML` or
+   * `dangerouslySetInnerHTML`. Lines are separated by `\n`; at most
+   * {@link maxCueTextLength} characters.
+   */
   readonly text: string;
 }
+
+/**
+ * Longest WebVTT input that is parsed, in UTF-16 code units (about 4 MB of Latin text, many
+ * times a feature film's subtitles). Anything after it is not read, so a huge or hostile
+ * file cannot stall the player.
+ */
+export const maxWebVttLength = 4_000_000;
+
+/**
+ * Longest text of one cue, in characters; the rest is cut off. A real cue is two or three
+ * short lines, and an unbounded one would cover the picture.
+ */
+export const maxCueTextLength = 1000;
 
 /**
  * Most cues one track may hold. A feature film has a few thousand; the bound keeps a broken
@@ -18,7 +36,7 @@ export interface SubtitleCue {
  */
 export const maxSubtitleCues = 20_000;
 
-const byteOrderMark = "﻿";
+const byteOrderMark = String.fromCodePoint(0xfeff);
 const timingArrow = "-->";
 const secondsPerMinute = 60;
 const secondsPerHour = 3600;
@@ -39,9 +57,9 @@ const namedEntities: ReadonlyMap<string, string> = new Map([
   ["lt", "<"],
   ["gt", ">"],
   ["quot", '"'],
-  ["nbsp", " "],
-  ["lrm", "‎"],
-  ["rlm", "‏"],
+  ["nbsp", String.fromCodePoint(0xa0)],
+  ["lrm", String.fromCodePoint(0x200e)],
+  ["rlm", String.fromCodePoint(0x200f)],
 ]);
 
 const highestCodePoint = 0x10ffff;
@@ -73,10 +91,15 @@ function decodeEntity(entity: string, name: string): string {
 
 /** Drops markup first, so an escaped `&lt;b&gt;` stays visible text. */
 function plainText(lines: readonly string[]): string {
-  return lines
+  const text = lines
     .map((line) => line.replace(tagPattern, "").replace(entityPattern, decodeEntity).trim())
     .filter((line) => line !== "")
     .join("\n");
+  if (text.length <= maxCueTextLength) {
+    return text;
+  }
+  // Cut by code points, so no surrogate pair is split.
+  return Array.from(text).slice(0, maxCueTextLength).join("");
 }
 
 /** Reads `start --> end` (cue settings after it are ignored); `undefined` for any other line. */
@@ -122,10 +145,15 @@ function blocksOf(text: string): string[][] {
  * Parses a WebVTT file into cues ordered by start time. Cue identifiers, settings (line,
  * position, align), markup, notes, styles and regions are ignored; the text is plain. Blocks
  * that are no valid cue are skipped, so a damaged file shows what can be read. At most
- * {@link maxSubtitleCues} cues are returned.
+ * {@link maxSubtitleCues} cues are returned, only the first {@link maxWebVttLength} characters
+ * are read (a cue cut by that limit may lose its last lines), and a cue text is cut at
+ * {@link maxCueTextLength} characters.
  */
 export function parseWebVtt(text: string): SubtitleCue[] {
-  const content = text.startsWith(byteOrderMark) ? text.slice(byteOrderMark.length) : text;
+  const readable = text.slice(0, maxWebVttLength);
+  const content = readable.startsWith(byteOrderMark)
+    ? readable.slice(byteOrderMark.length)
+    : readable;
   const cues: SubtitleCue[] = [];
   for (const block of blocksOf(content)) {
     const cue = parseBlock(block);

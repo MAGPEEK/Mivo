@@ -15,11 +15,13 @@ export interface QualityStep {
 }
 
 /**
- * The ladder of ADR 0030 §6, best first: 20, 12, 8, 4, 2 and 1 Mbit/s with 1080p, 720p and
- * 480p heights. The heights only label a step; the server decides the size it encodes.
+ * The ladder of ADR 0030 §6, best first: 20, 12, 8, 4, 2 and 1 Mbit/s with heights 2160,
+ * 1080, 1080, 720, 480 and 480. The table mirrors the server's ladder
+ * (internal/domain/playback/ladder.go) and must change together with it. The heights only
+ * label a step; the server decides the size it encodes.
  */
 export const qualityLadder: readonly QualityStep[] = [
-  { maxBitRate: 20 * bitsPerMegabit, height: 1080 },
+  { maxBitRate: 20 * bitsPerMegabit, height: 2160 },
   { maxBitRate: 12 * bitsPerMegabit, height: 1080 },
   { maxBitRate: 8 * bitsPerMegabit, height: 1080 },
   { maxBitRate: 4 * bitsPerMegabit, height: 720 },

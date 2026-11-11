@@ -6,6 +6,7 @@ import { originalQualityBitRate, subtitlesOffTrackId, type TrackSelection } from
 import {
   sessionAudioIndex,
   sessionSubtitle,
+  type AudioTrack,
   type SubtitleTrack,
   type TrackSession,
 } from "../tracks/trackModel";
@@ -43,10 +44,19 @@ export interface SwitchState {
 
 const noSwitch: NoSwitch = { kind: "none" };
 
-/** Switches the audio track; a change always replaces the session (ADR 0024). */
-export function planAudioSwitch(state: SwitchState, audioStreamIndex: number): SwitchPlan {
+/**
+ * Switches the audio track to the stream with `audioStreamIndex`; a change always replaces the
+ * session (ADR 0024). An index that names no audio track of the file changes nothing, because
+ * the server would answer it with 400.
+ */
+export function planAudioSwitch(
+  state: SwitchState,
+  tracks: readonly AudioTrack[],
+  audioStreamIndex: number,
+): SwitchPlan {
   const current = state.selection.audioStreamIndex ?? sessionAudioIndex(state.session);
-  if (audioStreamIndex === current) {
+  const isTrack = tracks.some((track) => track.index === audioStreamIndex);
+  if (audioStreamIndex === current || !isTrack) {
     return noSwitch;
   }
   return { kind: "restart", selection: { ...state.selection, audioStreamIndex } };
@@ -64,9 +74,38 @@ export function planQualitySwitch(state: SwitchState, maxBitRate: number): Switc
   return { kind: "restart", selection: { ...state.selection, maxBitRate } };
 }
 
-/** Id of the subtitle shown now: the viewer's choice, else what the session's policy picked. */
-export function shownSubtitleTrackId(state: SwitchState): string {
-  const chosen = state.selection.subtitleTrackId;
+/**
+ * The selection as the session carries it out. A subtitle that needs burn-in is only shown
+ * when the session burns it in; when the server could not (it starts such a session with
+ * subtitles off and the warning `subtitle_burn_in_unavailable`, because requests during
+ * playback allow that), the choice becomes "off". Without this the menu would mark a subtitle
+ * nobody sees, and choosing it again would do nothing. Text tracks are rendered by the client
+ * whatever the session says, so they stay chosen. The player keeps the result as its
+ * selection after every session start, so later restarts do not ask for the burn-in again.
+ * Returns the same object when nothing changes.
+ */
+export function reconcileSelection(
+  selection: TrackSelection,
+  session: TrackSession,
+  tracks: readonly SubtitleTrack[],
+): TrackSelection {
+  const chosen = tracks.find((track) => track.id === selection.subtitleTrackId);
+  if (chosen === undefined || chosen.sidecar) {
+    return selection;
+  }
+  const { mode, trackId } = sessionSubtitle(session);
+  if (mode === "burn_in" && trackId === chosen.id) {
+    return selection;
+  }
+  return { ...selection, subtitleTrackId: subtitlesOffTrackId };
+}
+
+/**
+ * Id of the subtitle shown now: the viewer's choice as far as the session carries it out
+ * ({@link reconcileSelection}), else what the session's policy picked.
+ */
+export function shownSubtitleTrackId(state: SwitchState, tracks: readonly SubtitleTrack[]): string {
+  const chosen = reconcileSelection(state.selection, state.session, tracks).subtitleTrackId;
   if (chosen !== undefined) {
     return chosen;
   }
@@ -78,7 +117,8 @@ export function shownSubtitleTrackId(state: SwitchState): string {
  * Switches the subtitle to the track with `trackId`, or off with {@link subtitlesOffTrackId}.
  * Only a change from or to a burned-in subtitle restarts the stream; between text tracks and
  * to "off" the client swaps what it renders. An id that names no track of the file changes
- * nothing.
+ * nothing. A burn-in the server could not do counts as off, so choosing that track again asks
+ * the server once more.
  */
 export function planSubtitleSwitch(
   state: SwitchState,
@@ -87,7 +127,7 @@ export function planSubtitleSwitch(
 ): SwitchPlan {
   const track = tracks.find((candidate) => candidate.id === trackId);
   if (
-    trackId === shownSubtitleTrackId(state) ||
+    trackId === shownSubtitleTrackId(state, tracks) ||
     (track === undefined && trackId !== subtitlesOffTrackId)
   ) {
     return noSwitch;

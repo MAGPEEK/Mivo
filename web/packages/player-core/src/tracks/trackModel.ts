@@ -61,8 +61,11 @@ export interface SubtitleTrack extends TrackSourceSubtitle {
 
 const audioKind = "audio";
 
-// Title words that mark commentary and audio description; the API carries no disposition for
-// them, and the server falls back to the same words (internal/domain/playback/tracks.go).
+// Title words that mark commentary and audio description. Detection here is by title only:
+// the API carries no disposition for them. The server also reads the `comment` and
+// `visual_impaired` dispositions and uses the same words as its fallback
+// (internal/domain/playback/tracks.go), so for a track flagged without a telling title its
+// pick can differ from this preselection; what a session reports is the truth.
 const commentaryTitleWords: readonly string[] = [
   "comment",
   "kommentar",

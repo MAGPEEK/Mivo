@@ -221,6 +221,7 @@ export {
   planAudioSwitch,
   planQualitySwitch,
   planSubtitleSwitch,
+  reconcileSelection,
   shownSubtitleTrackId,
   type NoSwitch,
   type RestartSwitch,
@@ -230,7 +231,9 @@ export {
 } from "./session/trackSwitch";
 export {
   activeCues,
+  maxCueTextLength,
   maxSubtitleCues,
+  maxWebVttLength,
   parseWebVtt,
   subtitleFileTime,
   type SubtitleCue,
