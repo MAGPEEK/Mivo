@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { avatarBackgroundClass, avatarInitial } from "../lib/avatar";
+import { avatarBackgroundClass, avatarInitial } from "./avatarColor";
 
 /** Props of {@link Avatar}. */
 export interface AvatarProps {

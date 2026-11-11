@@ -1,12 +1,13 @@
 import type { Me, ProfileSummary } from "@mivo/api-client";
+import { Link } from "@tanstack/react-router";
 import { Fragment, useId, useRef, type KeyboardEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useMenu } from "../../../shared/ui";
+import { Avatar, useMenu } from "../../../shared/ui";
 import { ChangePasswordDialog, useSessionSnapshot } from "../../auth";
+import { ownAccountPath } from "../../users";
 import { useProfileMenu, type ProfileMenuEntry } from "../hooks/useProfileMenu";
 import { suggestsOwnPin } from "../lib/profileModel";
-import { Avatar } from "./Avatar";
 
 const popupClass =
   "absolute top-full right-0 z-40 mt-2 w-72 rounded-lg border border-divider bg-surface p-1.5 shadow-overlay";
@@ -15,7 +16,34 @@ const failureClass =
 const itemClass =
   "flex w-full items-center rounded-sm px-2.5 py-2 text-left text-sm text-text hover:bg-divider";
 
-function ProfileHeader({ me, profile }: { readonly me: Me; readonly profile: ProfileSummary }) {
+interface ProfileHeaderProps {
+  readonly me: Me;
+  readonly profile: ProfileSummary;
+  /** Closes the menu; the PIN hint link calls it without returning the focus to the avatar. */
+  readonly onClose: (returnFocus: boolean) => void;
+}
+
+// The hint of ADR 0032 §4 with a link straight into the editor of the own profile.
+function PinHint({ profile, onClose }: Omit<ProfileHeaderProps, "me">) {
+  const { t } = useTranslation("profiles");
+  return (
+    <p className="mt-2 text-xs text-text-muted">
+      {t("menu.pinHint")}{" "}
+      <Link
+        to={ownAccountPath}
+        search={{ profile: profile.id }}
+        onClick={() => {
+          onClose(false);
+        }}
+        className="text-accent underline hover:text-accent-hover"
+      >
+        {t("menu.pinHintLink")}
+      </Link>
+    </p>
+  );
+}
+
+function ProfileHeader({ me, profile, onClose }: ProfileHeaderProps) {
   const { t } = useTranslation("profiles");
   return (
     <div className="border-b border-divider px-2 pt-2 pb-2.5">
@@ -33,7 +61,7 @@ function ProfileHeader({ me, profile }: { readonly me: Me; readonly profile: Pro
           </p>
         </div>
       </div>
-      {suggestsOwnPin(me) && <p className="mt-2 text-xs text-text-muted">{t("menu.pinHint")}</p>}
+      {suggestsOwnPin(me) && <PinHint profile={profile} onClose={onClose} />}
     </div>
   );
 }
@@ -128,7 +156,7 @@ function ProfileMenuView({ me, profile }: ProfileMenuViewProps) {
       </button>
       {menu.open && (
         <div ref={popupRef} className={popupClass}>
-          <ProfileHeader me={me} profile={profile} />
+          <ProfileHeader me={me} profile={profile} onClose={menu.close} />
           <MenuItems
             id={menuId}
             entries={state.entries}

@@ -33,6 +33,8 @@ export function useSelectProfile(): ProfileSelection {
   const navigate = useNavigate();
   const mutation = useMutation({
     mutationFn: ({ choice }: SelectionRequest) => selectProfile(client, choice),
+    // The variables hold the PIN: with `gcTime: 0` they leave the mutation cache at once.
+    gcTime: 0,
     onSuccess: async (me, { next }) => {
       if (next !== undefined) {
         // The guard reads `next` from the URL, so a different target goes there first.

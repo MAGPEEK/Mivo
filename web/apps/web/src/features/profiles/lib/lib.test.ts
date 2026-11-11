@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 
 import { fakeMe } from "../../../test/fakeApi";
 import { annaProfile, lenaProfile, maxProfile } from "../test/fakeProfilesServer";
-import { avatarBackgroundClass, avatarInitial } from "./avatar";
+import { avatarBackgroundClass, avatarInitial } from "../../../shared/ui";
+import { maxManagedProfiles } from "../../users";
 import { applyPadKey, isCompletePin, movePadFocus, padKeyForKeyboard, padKeys } from "./pinPad";
 import {
   canAddProfile,
   canChangePassword,
-  maxManagedProfiles,
   needsPin,
   primaryProfile,
   rememberByDefault,

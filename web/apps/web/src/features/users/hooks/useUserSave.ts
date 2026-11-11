@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useApiClient } from "../../../shared/api";
-import { createUser, resetUserPassword, updateUser, usersQueryKey } from "../api/usersApi";
+import { createUser, refreshAccounts, resetUserPassword, updateUser } from "../api/usersApi";
 import {
   draftProblems,
   maxNameLength,
@@ -91,7 +91,9 @@ export function useUserSave(
       }
       return undefined;
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+    // The variables hold the password: with `gcTime: 0` they leave the mutation cache at once.
+    gcTime: 0,
+    onSettled: () => refreshAccounts(queryClient),
     onSuccess: onSaved,
   });
   const server = mutation.error === null ? null : userProblem(mutation.error);

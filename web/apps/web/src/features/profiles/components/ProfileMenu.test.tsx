@@ -36,7 +36,13 @@ describe("profile menu", () => {
     expect(popup.textContent).toContain("Admin");
     expect(popup.textContent).toContain("Primary profile");
     expect(popup.textContent).toContain("Set a PIN on your profile");
-    expect(itemNames(menu)).toEqual(["Switch profile", "Change password…", "Devices", "Sign out"]);
+    expect(itemNames(menu)).toEqual([
+      "Switch profile",
+      "Manage profiles",
+      "Change password…",
+      "Devices",
+      "Sign out",
+    ]);
     expect(document.activeElement).toBe(within(menu).getAllByRole("menuitem")[0]);
     expect(await blockingAxeViolations(document.body)).toEqual([]);
   });
@@ -91,6 +97,30 @@ describe("profile menu", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/settings/devices");
     });
+  });
+
+  it("opens the own account page from 'Manage profiles'", async () => {
+    const { menu, router } = await openMenu();
+
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Manage profiles" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/settings/account");
+    });
+  });
+
+  it("links the PIN hint to the editor of the own profile", async () => {
+    const { menu, router } = await openMenu();
+    const popup = menu.parentElement ?? menu;
+
+    const link = within(popup).getByRole("link", { name: "Set a PIN" });
+    expect(link.getAttribute("href")).toBe("/settings/account?profile=" + annaProfile.id);
+    fireEvent.click(link);
+
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ profile: annaProfile.id });
+    });
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("signs out", async () => {

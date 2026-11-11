@@ -13,6 +13,10 @@ export interface UsersTableProps {
   readonly now: Date;
   readonly onEdit: (user: User) => void;
   readonly onDelete: (user: User) => void;
+  /** Opens "Create managed profile" for the account. */
+  readonly onAddProfile: (user: User) => void;
+  readonly onEditProfile: (owner: User, profile: Profile) => void;
+  readonly onDeleteProfile: (profile: Profile) => void;
 }
 
 const cellClass = "px-3 py-2 align-top";
@@ -33,13 +37,55 @@ function StatusPill({ user, texts }: { readonly user: User; readonly texts: User
   );
 }
 
-interface AccountRowProps extends Omit<UsersTableProps, "entries"> {
+type AccountActions = "now" | "onEdit" | "onDelete" | "onAddProfile";
+
+interface AccountRowProps extends Pick<UsersTableProps, AccountActions> {
   readonly user: User;
   readonly texts: UserTexts;
 }
 
-function AccountRow({ user, texts, now, onEdit, onDelete }: AccountRowProps) {
+type AccountButtonsProps = Omit<AccountRowProps, "texts" | "now">;
+
+// Edit and Delete for the account, "Add profile" for a managed profile of it (US-10).
+function AccountButtons({ user, onEdit, onDelete, onAddProfile }: AccountButtonsProps) {
   const { t } = useTranslation(usersNamespace);
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        aria-label={t("users.actions.editLabel", { name: user.name })}
+        onClick={() => {
+          onEdit(user);
+        }}
+        className={smallButtonClass}
+      >
+        {t("users.actions.edit")}
+      </button>
+      <button
+        type="button"
+        aria-label={t("users.actions.deleteLabel", { name: user.name })}
+        onClick={() => {
+          onDelete(user);
+        }}
+        className={smallButtonClass}
+      >
+        {t("users.actions.delete")}
+      </button>
+      <button
+        type="button"
+        aria-label={t("profiles.addLabel", { name: user.name })}
+        onClick={() => {
+          onAddProfile(user);
+        }}
+        className={smallButtonClass}
+      >
+        {t("profiles.add")}
+      </button>
+    </div>
+  );
+}
+
+function AccountRow({ user, texts, now, ...actions }: AccountRowProps) {
   return (
     <tr className="border-t border-divider">
       <th scope="row" className={`${cellClass} text-left font-semibold`}>
@@ -54,41 +100,61 @@ function AccountRow({ user, texts, now, onEdit, onDelete }: AccountRowProps) {
       </td>
       <td className={`${cellClass} tabular-nums`}>{user.profileCount}</td>
       <td className={`${cellClass} whitespace-nowrap`}>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            aria-label={t("users.actions.editLabel", { name: user.name })}
-            onClick={() => {
-              onEdit(user);
-            }}
-            className={smallButtonClass}
-          >
-            {t("users.actions.edit")}
-          </button>
-          <button
-            type="button"
-            aria-label={t("users.actions.deleteLabel", { name: user.name })}
-            onClick={() => {
-              onDelete(user);
-            }}
-            className={smallButtonClass}
-          >
-            {t("users.actions.delete")}
-          </button>
-        </div>
+        <AccountButtons user={user} {...actions} />
       </td>
     </tr>
   );
 }
 
-interface ProfileRowProps {
+interface ProfileRowProps extends Pick<UsersTableProps, "onEditProfile" | "onDeleteProfile"> {
   readonly profile: Profile;
   readonly owner: User;
   readonly texts: UserTexts;
 }
 
-// A managed profile under its account (US-20); M7-33 adds its editor.
-function ProfileRow({ profile, owner, texts }: ProfileRowProps) {
+function ProfileActions({ profile, owner, onEditProfile, onDeleteProfile }: ProfileRowProps) {
+  const { t } = useTranslation(usersNamespace);
+  return (
+    <div className="flex gap-2">
+      <button
+        type="button"
+        aria-label={t("profiles.actions.editLabel", { name: profile.name })}
+        onClick={() => {
+          onEditProfile(owner, profile);
+        }}
+        className={smallButtonClass}
+      >
+        {t("users.actions.edit")}
+      </button>
+      <button
+        type="button"
+        aria-label={t("profiles.actions.deleteLabel", { name: profile.name })}
+        onClick={() => {
+          onDeleteProfile(profile);
+        }}
+        className={smallButtonClass}
+      >
+        {t("users.actions.delete")}
+      </button>
+    </div>
+  );
+}
+
+// The managed profiles of an account could not be loaded: say so instead of showing none.
+function ProfilesFailedRow({ owner, columns }: { readonly owner: User; readonly columns: number }) {
+  const { t } = useTranslation(usersNamespace);
+  return (
+    <tr className="text-text-muted">
+      <td colSpan={columns} className={`${cellClass} pl-8`}>
+        {t("profiles.loadFailedFor", { name: owner.name })}
+      </td>
+    </tr>
+  );
+}
+
+// A managed profile under its account (US-20) with its editor and delete (US-10).
+function ProfileRow(props: ProfileRowProps) {
+  const { profile, owner, texts } = props;
   const { t } = useTranslation(usersNamespace);
   return (
     <tr className="text-text-muted">
@@ -108,13 +174,16 @@ function ProfileRow({ profile, owner, texts }: ProfileRowProps) {
       <td className={cellClass} />
       <td className={cellClass} />
       <td className={cellClass} />
-      <td className={cellClass} />
+      <td className={`${cellClass} whitespace-nowrap`}>
+        <ProfileActions {...props} />
+      </td>
     </tr>
   );
 }
 
 /** The accounts with their managed profiles nested below each (US-20). */
-export function UsersTable({ entries, ...rowProps }: UsersTableProps) {
+export function UsersTable(props: UsersTableProps) {
+  const { entries, onEditProfile, onDeleteProfile, ...rowProps } = props;
   const { t } = useTranslation(usersNamespace);
   const texts = useUserTexts();
   const columns = [
@@ -141,10 +210,20 @@ export function UsersTable({ entries, ...rowProps }: UsersTableProps) {
           </tr>
         </thead>
         <tbody>
-          {entries.map(({ user, managedProfiles }) => [
+          {entries.map(({ user, managedProfiles, profilesFailed }) => [
             <AccountRow key={user.id} user={user} texts={texts} {...rowProps} />,
+            profilesFailed && (
+              <ProfilesFailedRow key={`${user.id}-failed`} owner={user} columns={columns.length} />
+            ),
             ...managedProfiles.map((profile) => (
-              <ProfileRow key={profile.id} profile={profile} owner={user} texts={texts} />
+              <ProfileRow
+                key={profile.id}
+                profile={profile}
+                owner={user}
+                texts={texts}
+                onEditProfile={onEditProfile}
+                onDeleteProfile={onDeleteProfile}
+              />
             )),
           ])}
         </tbody>

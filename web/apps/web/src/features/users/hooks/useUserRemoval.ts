@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useApiClient } from "../../../shared/api";
-import { deleteUser, usersQueryKey } from "../api/usersApi";
+import { deleteUser, refreshAccounts } from "../api/usersApi";
 import { userProblem } from "../lib/userProblems";
 import { usersNamespace } from "../locales";
 
@@ -31,9 +31,10 @@ export function useUserRemoval(onRemoved: () => void): UserRemoval {
   const [target, setTarget] = useState<User | null>(null);
   const mutation = useMutation<unknown, unknown, string>({
     mutationFn: (userId) => deleteUser(client, userId),
-    onSuccess: async () => {
+    // Also after a failure: a "not found" means the list on screen is out of date.
+    onSettled: () => refreshAccounts(queryClient),
+    onSuccess: () => {
       setTarget(null);
-      await queryClient.invalidateQueries({ queryKey: usersQueryKey });
       onRemoved();
     },
   });

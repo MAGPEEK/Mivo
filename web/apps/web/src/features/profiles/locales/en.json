@@ -5,7 +5,6 @@
     "admin": "Admin",
     "pinRequired": "PIN required",
     "add": "Add profile",
-    "choosing": "Opening the profile…",
     "failed": "That did not work. Please try again.",
     "network": "The server cannot be reached. Check the connection and try again."
   },
@@ -35,6 +34,8 @@
     "devices": "Devices",
     "signOut": "Sign out",
     "signOutPending": "Signing out…",
-    "failed": "That did not work. Please try again."
+    "failed": "That did not work. Please try again.",
+    "manageProfiles": "Manage profiles",
+    "pinHintLink": "Set a PIN"
   }
 }

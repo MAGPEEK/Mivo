@@ -10,6 +10,8 @@ export interface UserEntry {
   readonly user: User;
   /** Managed profiles by name; empty while they load or when the account has none. */
   readonly managedProfiles: readonly Profile[];
+  /** True when the account has managed profiles but they could not be loaded. */
+  readonly profilesFailed: boolean;
 }
 
 /**
@@ -46,15 +48,14 @@ export function useUserList(): UserListState {
       ? { status: "forbidden" }
       : { status: "error", retry: () => void users.refetch() };
   }
-  const managedByUser = new Map(
-    withManaged.map((user, index) => [
-      user.id,
-      (profiles[index]?.data ?? []).filter((profile) => !profile.isPrimary),
-    ]),
-  );
-  const entries = users.data.map((user) => ({
-    user,
-    managedProfiles: managedByUser.get(user.id) ?? [],
-  }));
+  const queryByUser = new Map(withManaged.map((user, index) => [user.id, profiles[index]]));
+  const entries = users.data.map((user) => {
+    const query = queryByUser.get(user.id);
+    return {
+      user,
+      managedProfiles: (query?.data ?? []).filter((profile) => !profile.isPrimary),
+      profilesFailed: query?.isError === true,
+    };
+  });
   return { status: "ready", entries };
 }

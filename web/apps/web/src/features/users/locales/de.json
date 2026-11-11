@@ -88,7 +88,10 @@
         "selected": "Ausgewählte Bibliotheken",
         "selectionLabel": "Bibliotheken, die dieser Benutzer sieht",
         "adminHint": "Administratoren sehen immer alle Bibliotheken.",
-        "noLibraries": "Es gibt noch keine Bibliotheken."
+        "noLibraries": "Es gibt noch keine Bibliotheken.",
+        "loading": "Bibliotheken werden geladen …",
+        "loadFailed": "Die Bibliotheken konnten nicht geladen werden. Speichern ist erst danach möglich.",
+        "retry": "Erneut versuchen"
       },
       "limit": {
         "legend": "Inhaltsgrenze",
@@ -127,6 +130,91 @@
     "announce": {
       "saved": "{{name}} gespeichert.",
       "removed": "Konto gelöscht."
+    }
+  },
+  "profiles": {
+    "add": "Profil hinzufügen",
+    "addLabel": "Profil zu {{name}} hinzufügen",
+    "loadFailedFor": "Die Profile von {{name}} konnten nicht geladen werden.",
+    "page": {
+      "heading": "Deine Profile",
+      "description": "Jede Person, die mit diesem Konto schaut, bekommt ein Profil mit eigenem Wiedergabestatus, PIN und Inhaltsgrenze.",
+      "listLabel": "Profile von {{name}}",
+      "loading": "Profile werden geladen",
+      "loadFailed": "Die Profile konnten nicht geladen werden.",
+      "unavailable": {
+        "title": "Profile sind noch nicht verfügbar",
+        "hint": "Dieser {{productName}}-Server verwaltet noch keine Konten. Aktualisiere den Server, um hier Profile anzulegen."
+      },
+      "primaryRequired": "Nur das Hauptprofil kann die Profile dieses Kontos verwalten. Wechsle im Profilmenü dorthin.",
+      "primary": "Hauptprofil",
+      "managed": "Verwaltetes Profil",
+      "libraries": "Bibliotheken: {{access}}"
+    },
+    "dialog": {
+      "createTitle": "Verwaltetes Profil anlegen",
+      "createTitleFor": "Verwaltetes Profil für {{name}} anlegen",
+      "editTitle": "Profil {{name}} bearbeiten",
+      "primaryHint": "Das ist das Hauptprofil. Name, Bibliotheken und Inhaltsgrenze gehören zum Konto.",
+      "color": {
+        "legend": "Avatarfarbe",
+        "coral": "Koralle",
+        "amber": "Bernstein",
+        "green": "Grün",
+        "teal": "Türkis",
+        "blue": "Blau",
+        "violet": "Violett",
+        "pink": "Rosa",
+        "slate": "Schiefer"
+      },
+      "pin": {
+        "legend": "PIN",
+        "label": "PIN (optional, {{length}} Ziffern)",
+        "newLabel": "Neue PIN ({{length}} Ziffern)",
+        "hint": "Wird bei jeder Auswahl des Profils abgefragt.",
+        "isSet": "Dieses Profil hat eine PIN.",
+        "set": "PIN ändern",
+        "remove": "PIN entfernen",
+        "keep": "Aktuelle PIN behalten",
+        "willRemove": "Die PIN wird beim Speichern entfernt."
+      },
+      "access": {
+        "all": "Alle Bibliotheken des Kontos",
+        "selectionLabel": "Bibliotheken, die dieses Profil sehen darf",
+        "notAllowed": "für dieses Konto nicht freigegeben",
+        "notAllowedHint": "Ein Profil sieht höchstens die Bibliotheken seines Kontos. Ändere das Konto, um mehr anzubieten."
+      },
+      "limitHint": "Die Inhaltsgrenze des Kontos gilt zusätzlich; die strengere gewinnt."
+    },
+    "validation": {
+      "pinInvalid": "Gib genau {{length}} Ziffern ein.",
+      "pinRequired": "Gib die neue PIN ein oder behalte die aktuelle."
+    },
+    "problems": {
+      "nameTaken": "Ein anderes Profil dieses Kontos heißt bereits so.",
+      "nameInvalid": "Der Server akzeptiert diesen Namen nicht.",
+      "pinInvalid": "Der Server akzeptiert diese PIN nicht.",
+      "accessInvalid": "Wähle Bibliotheken, die das Konto sehen darf.",
+      "limitInvalid": "Der Server akzeptiert diese Inhaltsgrenze nicht.",
+      "profileLimit": "Dieses Konto hat bereits {{max}} verwaltete Profile. Lösche eines, um ein weiteres anzulegen.",
+      "primaryProfile": "Das Hauptprofil lässt sich nicht einzeln löschen. Lösche stattdessen das Konto.",
+      "forbidden": "Nur das Hauptprofil des Kontos oder ein Administrator im lokalen Netz kann Profile verwalten.",
+      "notImplemented": "Dieser Server kann noch keine Profile verwalten.",
+      "notFound": "Das Profil existiert nicht mehr.",
+      "failed": "Das hat nicht geklappt. Versuche es erneut."
+    },
+    "remove": {
+      "title": "Profil löschen?",
+      "description": "Löscht das Profil {{name}} mit seinem Wiedergabestatus. Mediendateien bleiben unberührt.",
+      "confirm": "Profil löschen"
+    },
+    "announce": {
+      "saved": "Profil {{name}} gespeichert.",
+      "removed": "Profil gelöscht."
+    },
+    "actions": {
+      "editLabel": "Profil {{name}} bearbeiten",
+      "deleteLabel": "Profil {{name}} löschen"
     }
   }
 }

@@ -74,17 +74,24 @@ function passwordProblem(password: string, required: boolean): DraftProblems["pa
   return bytes > maxPasswordBytes ? "tooLong" : undefined;
 }
 
+/** Checks an account or profile name as the server does: trimmed, NFC, 1 to 40 characters. */
+export function nameProblem(typed: string): DraftProblems["name"] {
+  const name = typed.trim().normalize("NFC");
+  if (name === "") {
+    return "required";
+  }
+  return Array.from(name).length > maxNameLength ? "tooLong" : undefined;
+}
+
 /**
  * Checks what the server would refuse anyway, so the common mistakes get an answer without a
  * round trip. `creating` makes the initial password required.
  */
 export function draftProblems(draft: UserDraft, creating: boolean): DraftProblems {
-  const name = draft.name.trim().normalize("NFC");
   const problems: DraftProblems = {};
-  if (name === "") {
-    problems.name = "required";
-  } else if (Array.from(name).length > maxNameLength) {
-    problems.name = "tooLong";
+  const name = nameProblem(draft.name);
+  if (name !== undefined) {
+    problems.name = name;
   }
   const password = passwordProblem(draft.password, creating);
   if (password !== undefined) {

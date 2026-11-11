@@ -1,4 +1,13 @@
-import type { Library, Me, Profile, User, UserCreate, UserUpdate } from "@mivo/api-client";
+import type {
+  Library,
+  Me,
+  Profile,
+  ProfileCreate,
+  ProfileUpdate,
+  User,
+  UserCreate,
+  UserUpdate,
+} from "@mivo/api-client";
 
 import {
   createFakeServer,
@@ -58,7 +67,8 @@ export const max: Profile = {
   libraryAccess: { all: false, libraryIds: [movies.id, shows.id] },
 };
 
-const annaPrimary: Profile = {
+/** The primary profile of Anna, the signed-in admin. */
+export const annaPrimary: Profile = {
   id: "6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c",
   userId: anna.id,
   name: "Anna",
@@ -67,6 +77,18 @@ const annaPrimary: Profile = {
   isPrimary: true,
   contentLimit: anna.contentLimit,
   libraryAccess: anna.libraryAccess,
+};
+
+/** The primary profile of Jonas; it carries his account access and limit. */
+export const jonasPrimary: Profile = {
+  id: "5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b",
+  userId: jonas.id,
+  name: "Jonas",
+  avatarColor: "green",
+  hasPin: false,
+  isPrimary: true,
+  contentLimit: jonas.contentLimit,
+  libraryAccess: jonas.libraryAccess,
 };
 
 /** A signed-in viewer without admin powers. */
@@ -88,11 +110,17 @@ export interface FakeUsersOptions {
   readonly update?: () => Response;
   readonly remove?: () => Response;
   readonly list?: () => Response;
+  /** Answer of `GET /libraries`; called per request, so a test can fail it once. */
+  readonly libraries?: () => Response;
+  readonly createProfile?: () => Response;
+  readonly updateProfile?: () => Response;
+  readonly removeProfile?: () => Response;
 }
 
 /** A fake server with mutable accounts, plus what it received. */
 export interface FakeUsersServer extends FakeServer {
   readonly users: User[];
+  readonly profiles: Profile[];
   readonly bodies: { readonly method: string; readonly path: string; readonly body: unknown }[];
 }
 
@@ -122,13 +150,86 @@ function changed(users: User[], userId: string, body: UserUpdate): Response {
   return jsonResponse(next);
 }
 
-function userRoutes(server: Pick<FakeUsersServer, "users" | "bodies">, options: FakeUsersOptions) {
-  const { users, bodies } = server;
-  const record = async (request: Request, path: string): Promise<unknown> => {
-    const body: unknown = request.method === "DELETE" ? undefined : await request.clone().json();
-    bodies.push({ method: request.method, path, body });
-    return body;
+type FakeUsersState = Pick<FakeUsersServer, "users" | "profiles" | "bodies">;
+
+async function record(state: FakeUsersState, request: Request, path: string): Promise<unknown> {
+  const body: unknown = request.method === "DELETE" ? undefined : await request.clone().json();
+  state.bodies.push({ method: request.method, path, body });
+  return body;
+}
+
+function createdProfile(state: FakeUsersState, userId: string, body: ProfileCreate): Response {
+  const profile: Profile = {
+    id: "4d3c2b1a-0f9e-4d8c-8b7a-6f5e4d3c2b1a",
+    userId,
+    name: body.name,
+    avatarColor: body.avatarColor ?? "coral",
+    hasPin: body.pin !== undefined,
+    isPrimary: false,
+    contentLimit: body.contentLimit ?? { preset: "adults", maxAge: null, hideUnrated: false },
+    libraryAccess: body.libraryAccess ?? { all: true },
   };
+  state.profiles.push(profile);
+  return jsonResponse(profile, createdStatus);
+}
+
+function changedProfile(state: FakeUsersState, profileId: string, body: ProfileUpdate): Response {
+  const index = state.profiles.findIndex((profile) => profile.id === profileId);
+  const current = state.profiles[index];
+  if (current === undefined) {
+    return problemResponse(404, "not_found");
+  }
+  const { pin, ...rest } = body;
+  const hasPin = pin === undefined ? current.hasPin : pin !== null;
+  const next: Profile = { ...current, ...rest, hasPin };
+  state.profiles[index] = next;
+  return jsonResponse(next);
+}
+
+function profileRoutes(state: FakeUsersState, options: FakeUsersOptions): FakeRoute[] {
+  return [
+    {
+      method: "GET",
+      path: "/api/v1/users/:userId/profiles",
+      respond: ({ params }) =>
+        jsonResponse({
+          profiles: state.profiles.filter((profile) => profile.userId === params["userId"]),
+        }),
+    },
+    {
+      method: "POST",
+      path: "/api/v1/users/:userId/profiles",
+      respond: async ({ request, url, params }) => {
+        const body = (await record(state, request, url.pathname)) as ProfileCreate;
+        return options.createProfile?.() ?? createdProfile(state, params["userId"] ?? "", body);
+      },
+    },
+    {
+      method: "PATCH",
+      path: "/api/v1/profiles/:profileId",
+      respond: async ({ request, url, params }) => {
+        const body = (await record(state, request, url.pathname)) as ProfileUpdate;
+        return options.updateProfile?.() ?? changedProfile(state, params["profileId"] ?? "", body);
+      },
+    },
+    {
+      method: "DELETE",
+      path: "/api/v1/profiles/:profileId",
+      respond: async ({ request, url, params }) => {
+        await record(state, request, url.pathname);
+        if (options.removeProfile !== undefined) {
+          return options.removeProfile();
+        }
+        const index = state.profiles.findIndex((profile) => profile.id === params["profileId"]);
+        state.profiles.splice(index, 1);
+        return new Response(null, { status: noContentStatus });
+      },
+    },
+  ];
+}
+
+function userRoutes(state: FakeUsersState, options: FakeUsersOptions) {
+  const { users } = state;
   const routes: FakeRoute[] = [
     {
       method: "GET",
@@ -136,22 +237,16 @@ function userRoutes(server: Pick<FakeUsersServer, "users" | "bodies">, options: 
       respond: () => options.list?.() ?? jsonResponse({ users }),
     },
     {
-      method: "GET",
-      path: "/api/v1/users/:userId/profiles",
-      respond: ({ params }) =>
-        jsonResponse({ profiles: params["userId"] === anna.id ? [annaPrimary, max] : [] }),
-    },
-    {
       method: "POST",
       path: "/api/v1/users",
       respond: async ({ request, url }) =>
-        created(users, (await record(request, url.pathname)) as UserCreate),
+        created(users, (await record(state, request, url.pathname)) as UserCreate),
     },
     {
       method: "PATCH",
       path: "/api/v1/users/:userId",
       respond: async ({ request, url, params }) => {
-        const body = (await record(request, url.pathname)) as UserUpdate;
+        const body = (await record(state, request, url.pathname)) as UserUpdate;
         return options.update?.() ?? changed(users, params["userId"] ?? "", body);
       },
     },
@@ -159,7 +254,7 @@ function userRoutes(server: Pick<FakeUsersServer, "users" | "bodies">, options: 
       method: "PUT",
       path: "/api/v1/users/:userId/password",
       respond: async ({ request, url }) => {
-        await record(request, url.pathname);
+        await record(state, request, url.pathname);
         return new Response(null, { status: noContentStatus });
       },
     },
@@ -167,7 +262,7 @@ function userRoutes(server: Pick<FakeUsersServer, "users" | "bodies">, options: 
       method: "DELETE",
       path: "/api/v1/users/:userId",
       respond: async ({ request, url, params }) => {
-        await record(request, url.pathname);
+        await record(state, request, url.pathname);
         if (options.remove !== undefined) {
           return options.remove();
         }
@@ -181,7 +276,7 @@ function userRoutes(server: Pick<FakeUsersServer, "users" | "bodies">, options: 
     {
       method: "GET",
       path: "/api/v1/libraries",
-      respond: () => jsonResponse({ libraries: [movies, shows] }),
+      respond: () => options.libraries?.() ?? jsonResponse({ libraries: [movies, shows] }),
     },
   ];
   return routes;
@@ -192,7 +287,15 @@ export function createFakeUsersServer(
   options: FakeUsersOptions = {},
   extraRoutes: readonly FakeRoute[] = [],
 ): FakeUsersServer {
-  const state = { users: [anna, jonas], bodies: [] };
-  const server = createFakeServer([...extraRoutes, ...userRoutes(state, options)]);
+  const state: FakeUsersState = {
+    users: [anna, jonas],
+    profiles: [annaPrimary, max, jonasPrimary],
+    bodies: [],
+  };
+  const server = createFakeServer([
+    ...extraRoutes,
+    ...profileRoutes(state, options),
+    ...userRoutes(state, options),
+  ]);
   return { ...server, ...state };
 }

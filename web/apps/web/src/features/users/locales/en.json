@@ -88,7 +88,10 @@
         "selected": "Selected libraries",
         "selectionLabel": "Libraries this user may see",
         "adminHint": "Administrators always see all libraries.",
-        "noLibraries": "There are no libraries yet."
+        "noLibraries": "There are no libraries yet.",
+        "loading": "Loading libraries…",
+        "loadFailed": "The libraries could not be loaded. Saving is possible once they are.",
+        "retry": "Try again"
       },
       "limit": {
         "legend": "Content limit",
@@ -127,6 +130,91 @@
     "announce": {
       "saved": "{{name}} saved.",
       "removed": "Account deleted."
+    }
+  },
+  "profiles": {
+    "add": "Add profile",
+    "addLabel": "Add a profile to {{name}}",
+    "loadFailedFor": "The profiles of {{name}} could not be loaded.",
+    "page": {
+      "heading": "Your profiles",
+      "description": "Everyone who watches with this account gets a profile with its own watch state, PIN and content limit.",
+      "listLabel": "Profiles of {{name}}",
+      "loading": "Loading profiles",
+      "loadFailed": "The profiles could not be loaded.",
+      "unavailable": {
+        "title": "Profiles are not available yet",
+        "hint": "This {{productName}} server does not manage accounts yet. Update the server to add profiles here."
+      },
+      "primaryRequired": "Only the primary profile can manage the profiles of this account. Switch to it in the profile menu.",
+      "primary": "Primary profile",
+      "managed": "Managed profile",
+      "libraries": "Libraries: {{access}}"
+    },
+    "dialog": {
+      "createTitle": "Create managed profile",
+      "createTitleFor": "Create managed profile for {{name}}",
+      "editTitle": "Edit profile {{name}}",
+      "primaryHint": "This is the primary profile. Its name, libraries and content limit belong to the account.",
+      "color": {
+        "legend": "Avatar colour",
+        "coral": "Coral",
+        "amber": "Amber",
+        "green": "Green",
+        "teal": "Teal",
+        "blue": "Blue",
+        "violet": "Violet",
+        "pink": "Pink",
+        "slate": "Slate"
+      },
+      "pin": {
+        "legend": "PIN",
+        "label": "PIN (optional, {{length}} digits)",
+        "newLabel": "New PIN ({{length}} digits)",
+        "hint": "Asked for whenever the profile is chosen.",
+        "isSet": "This profile has a PIN.",
+        "set": "Change PIN",
+        "remove": "Remove PIN",
+        "keep": "Keep the current PIN",
+        "willRemove": "The PIN is removed when you save."
+      },
+      "access": {
+        "all": "All libraries of the account",
+        "selectionLabel": "Libraries this profile may see",
+        "notAllowed": "not available to this account",
+        "notAllowedHint": "A profile sees at most the libraries of its account. Change the account to offer more."
+      },
+      "limitHint": "The content limit of the account applies as well; the stricter one wins."
+    },
+    "validation": {
+      "pinInvalid": "Enter exactly {{length}} digits.",
+      "pinRequired": "Enter the new PIN, or keep the current one."
+    },
+    "problems": {
+      "nameTaken": "Another profile of this account already has this name.",
+      "nameInvalid": "The server does not accept this name.",
+      "pinInvalid": "The server does not accept this PIN.",
+      "accessInvalid": "Choose libraries the account may see.",
+      "limitInvalid": "The server does not accept this content limit.",
+      "profileLimit": "This account already has {{max}} managed profiles. Delete one to add another.",
+      "primaryProfile": "The primary profile cannot be deleted on its own. Delete the account instead.",
+      "forbidden": "Only the primary profile of the account or an administrator on the local network can manage profiles.",
+      "notImplemented": "This server cannot manage profiles yet.",
+      "notFound": "The profile no longer exists.",
+      "failed": "That did not work. Try again."
+    },
+    "remove": {
+      "title": "Delete profile?",
+      "description": "Deletes the profile {{name}} with its watch state. Media files are not touched.",
+      "confirm": "Delete profile"
+    },
+    "announce": {
+      "saved": "Profile {{name}} saved.",
+      "removed": "Profile deleted."
+    },
+    "actions": {
+      "editLabel": "Edit profile {{name}}",
+      "deleteLabel": "Delete profile {{name}}"
     }
   }
 }

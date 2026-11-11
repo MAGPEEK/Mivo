@@ -1,8 +1,7 @@
 import type { ProfileSummary } from "@mivo/api-client";
 import { useTranslation } from "react-i18next";
 
-import { LockIcon } from "../../../shared/ui";
-import { Avatar } from "./Avatar";
+import { Avatar, LockIcon } from "../../../shared/ui";
 
 const tileClass =
   "flex w-32 flex-col items-center gap-2 rounded-lg p-2 text-text hover:bg-surface aria-disabled:cursor-wait";

@@ -12,7 +12,7 @@ import { AddProfileTile, ProfileTile } from "./ProfileTile";
 export interface ProfilePickerPageProps {
   /**
    * Path of the managed-profile editor. Without it the picker shows no "Add profile" tile;
-   * the editor (M7-33) passes its route here.
+   * the app router passes the own account page with "Create managed profile" open.
    */
   readonly addProfilePath?: string | undefined;
 }

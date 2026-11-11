@@ -1,4 +1,4 @@
-import type { User } from "@mivo/api-client";
+import type { Profile, User } from "@mivo/api-client";
 import { productName } from "@mivo/ui-tokens";
 import { useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,20 +15,27 @@ import { SettingsBreadcrumb, SettingsNav } from "../../settings";
 import { useUserList, type UserListState } from "../hooks/useUserList";
 import { useUserRemoval, type UserRemoval } from "../hooks/useUserRemoval";
 import { usersNamespace } from "../locales";
+import { ProfileDialog } from "../profiles/components/ProfileDialog";
+import { RemoveProfileDialog } from "../profiles/components/RemoveProfileDialog";
+import { useProfileRemoval } from "../profiles/hooks/useProfileRemoval";
 import { UserDialog } from "./UserDialog";
-import { UsersTable } from "./UsersTable";
+import { UsersTable, type UsersTableProps } from "./UsersTable";
 
-/** Which dialog is open: none, "Add user", or the editor of one account. */
+/**
+ * Which dialog is open: none, "Add user", the editor of one account, or the editor of a
+ * profile of `user` ("Create managed profile" without `profile`).
+ */
 type DialogTarget =
-  null | { readonly mode: "create" } | { readonly mode: "edit"; readonly user: User };
+  | null
+  | { readonly mode: "create" }
+  | { readonly mode: "edit"; readonly user: User }
+  | { readonly mode: "profile"; readonly user: User; readonly profile?: Profile };
 
-interface UsersContentProps {
+type UsersContentProps = Omit<UsersTableProps, "entries" | "now"> & {
   readonly list: UserListState;
-  readonly onEdit: (user: User) => void;
-  readonly onDelete: (user: User) => void;
-}
+};
 
-function UsersContent({ list, onEdit, onDelete }: UsersContentProps) {
+function UsersContent({ list, ...actions }: UsersContentProps) {
   const { t } = useTranslation(usersNamespace);
   const [now] = useState(() => new Date());
   switch (list.status) {
@@ -58,7 +65,7 @@ function UsersContent({ list, onEdit, onDelete }: UsersContentProps) {
         </div>
       );
     case "ready":
-      return <UsersTable entries={list.entries} now={now} onEdit={onEdit} onDelete={onDelete} />;
+      return <UsersTable entries={list.entries} now={now} {...actions} />;
   }
 }
 
@@ -110,33 +117,76 @@ function PageHeader({ headingRef, onAdd }: PageHeaderProps) {
   );
 }
 
+interface OpenDialogProps {
+  readonly dialog: DialogTarget;
+  readonly onClose: () => void;
+  readonly onSaved: (announcement: string) => void;
+}
+
+// The account or profile editor that is open; remounted per target, so each starts fresh.
+function OpenDialog({ dialog, onClose, onSaved }: OpenDialogProps) {
+  const { t } = useTranslation(usersNamespace);
+  if (dialog === null) {
+    return null;
+  }
+  if (dialog.mode === "profile") {
+    return (
+      <ProfileDialog
+        key={dialog.profile?.id ?? `new-${dialog.user.id}`}
+        owner={dialog.user}
+        profile={dialog.profile}
+        namesOwner
+        onClose={onClose}
+        onSaved={(name) => {
+          onSaved(t("profiles.announce.saved", { name }));
+        }}
+      />
+    );
+  }
+  return (
+    <UserDialog
+      key={dialog.mode === "edit" ? dialog.user.id : "create"}
+      user={dialog.mode === "edit" ? dialog.user : undefined}
+      onClose={onClose}
+      onSaved={(name) => {
+        onSaved(t("users.announce.saved", { name }));
+      }}
+    />
+  );
+}
+
+// Deleting an account or a profile: the deleted row takes the focused button with it, so
+// `onRemoved` gets the text to announce and moves the focus to a stable landmark.
+function useRemovals(onRemoved: (announcement: string) => void) {
+  const { t } = useTranslation(usersNamespace);
+  const account = useUserRemoval(() => {
+    onRemoved(t("users.announce.removed"));
+  });
+  const profile = useProfileRemoval(() => {
+    onRemoved(t("profiles.announce.removed"));
+  });
+  return { account, profile };
+}
+
 /** Admin › Users: every account with its managed profiles, and the dialogs to manage them. */
 export function UsersPage() {
-  const { t } = useTranslation(usersNamespace);
   const list = useUserList();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [dialog, setDialog] = useState<DialogTarget>(null);
   const [announcement, setAnnouncement] = useState("");
-  // The deleted row takes the focused button with it; the heading is the stable landmark left.
-  const removal = useUserRemoval(() => {
-    setAnnouncement(t("users.announce.removed"));
+  const removals = useRemovals((text) => {
+    setAnnouncement(text);
     headingRef.current?.focus();
   });
   const close = () => {
     setDialog(null);
   };
+  const addUser = () => {
+    setDialog({ mode: "create" });
+  };
   return (
     <>
-      <PageHeader
-        headingRef={headingRef}
-        onAdd={
-          list.status === "ready"
-            ? () => {
-                setDialog({ mode: "create" });
-              }
-            : undefined
-        }
-      />
+      <PageHeader headingRef={headingRef} onAdd={list.status === "ready" ? addUser : undefined} />
       <p role="status" className="sr-only">
         {announcement}
       </p>
@@ -145,20 +195,25 @@ export function UsersPage() {
         onEdit={(user) => {
           setDialog({ mode: "edit", user });
         }}
-        onDelete={removal.ask}
+        onDelete={removals.account.ask}
+        onAddProfile={(user) => {
+          setDialog({ mode: "profile", user });
+        }}
+        onEditProfile={(user, profile) => {
+          setDialog({ mode: "profile", user, profile });
+        }}
+        onDeleteProfile={removals.profile.ask}
       />
-      {dialog !== null && (
-        <UserDialog
-          key={dialog.mode === "edit" ? dialog.user.id : "create"}
-          user={dialog.mode === "edit" ? dialog.user : undefined}
-          onClose={close}
-          onSaved={(name) => {
-            setAnnouncement(t("users.announce.saved", { name }));
-            close();
-          }}
-        />
-      )}
-      <RemoveDialog removal={removal} />
+      <OpenDialog
+        dialog={dialog}
+        onClose={close}
+        onSaved={(text) => {
+          setAnnouncement(text);
+          close();
+        }}
+      />
+      <RemoveDialog removal={removals.account} />
+      <RemoveProfileDialog removal={removals.profile} />
     </>
   );
 }

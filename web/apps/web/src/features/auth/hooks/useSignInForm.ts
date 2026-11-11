@@ -53,6 +53,8 @@ function useSignInMutation(onFailure: (error: Error) => void) {
   return useMutation({
     mutationFn: (credentials: { readonly name: string; readonly password: string }) =>
       signIn(client, credentials),
+    // The variables hold the password: with `gcTime: 0` they leave the mutation cache at once.
+    gcTime: 0,
     onSuccess: (session) => {
       storeSession(queryClient, session);
     },

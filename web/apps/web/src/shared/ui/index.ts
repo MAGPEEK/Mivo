@@ -1,3 +1,5 @@
+export { Avatar, type AvatarProps } from "./Avatar";
+export { avatarBackgroundClass, avatarInitial } from "./avatarColor";
 export { Badge, type BadgeProps } from "./Badge";
 export { BottomNav, type BottomNavProps } from "./BottomNav";
 export {

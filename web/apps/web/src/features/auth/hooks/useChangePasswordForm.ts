@@ -1,3 +1,4 @@
+import type { ApiClient } from "@mivo/api-client";
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState, type RefObject, type SubmitEvent } from "react";
 
@@ -33,6 +34,14 @@ export interface ChangePasswordForm {
   readonly submit: (event: SubmitEvent<HTMLFormElement>) => void;
 }
 
+// The variables hold both passwords: with `gcTime: 0` they leave the mutation cache at once.
+function changeOptions(client: ApiClient) {
+  return {
+    mutationFn: (request: PasswordChangeRequest) => changePassword(client, request),
+    gcTime: 0,
+  };
+}
+
 /**
  * Changes the account's own password. A wrong current password answers `403
  * invalid_credentials`: it marks the field and never signs out (the session stays, ADR 0032).
@@ -45,7 +54,7 @@ export function useChangePasswordForm(): ChangePasswordForm {
   const currentRef = useRef<HTMLInputElement>(null);
   const passwords = useNewPasswordFields();
   const mutation = useMutation({
-    mutationFn: (request: PasswordChangeRequest) => changePassword(client, request),
+    ...changeOptions(client),
     onError: (error) => {
       if (matches(error, answers.wrongCurrentPassword)) {
         setCurrentProblem("wrong");

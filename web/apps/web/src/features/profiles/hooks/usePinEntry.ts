@@ -41,6 +41,8 @@ export interface PinEntry {
 export function usePinEntry({ onComplete, busy }: PinEntryOptions): PinEntry {
   // A ref as well as state: two keys in one frame must both see the newest buffer.
   const bufferRef = useRef("");
+  // `busy` arrives with the next render; a key pressed before that must not submit again.
+  const checkingRef = useRef(false);
   const [length, setLength] = useState(0);
   const [failure, setFailure] = useState<SelectionFailure>();
   const [wrongCount, setWrongCount] = useState(0);
@@ -51,6 +53,7 @@ export function usePinEntry({ onComplete, busy }: PinEntryOptions): PinEntry {
     setLength(buffer.length);
   }, []);
   const reject = (rejected: SelectionFailure): void => {
+    checkingRef.current = false;
     setBuffer("");
     setFailure(rejected);
     if (rejected.kind === "wrongPin") {
@@ -60,7 +63,7 @@ export function usePinEntry({ onComplete, busy }: PinEntryOptions): PinEntry {
     }
   };
   const press = (key: PadKey): void => {
-    if (blocked) {
+    if (blocked || checkingRef.current) {
       return;
     }
     const before = bufferRef.current;
@@ -70,10 +73,12 @@ export function usePinEntry({ onComplete, busy }: PinEntryOptions): PinEntry {
     lockout.reset();
     const completed = key === "submit" || (typeof key === "number" && after !== before);
     if (completed && isCompletePin(after)) {
+      checkingRef.current = true;
       onComplete(after, reject);
     }
   };
   const reset = (): void => {
+    checkingRef.current = false;
     setBuffer("");
     setFailure(undefined);
     lockout.reset();

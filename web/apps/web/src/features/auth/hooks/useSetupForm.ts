@@ -38,6 +38,8 @@ function useSetupMutation(handlers: SetupRefusalHandlers) {
   const navigate = useNavigate();
   return useMutation({
     mutationFn: (credentials: Credentials) => completeSetup(client, credentials),
+    // The variables hold the password: with `gcTime: 0` they leave the mutation cache at once.
+    gcTime: 0,
     onSuccess: (session) => {
       storeSession(queryClient, session);
     },

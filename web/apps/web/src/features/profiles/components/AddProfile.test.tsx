@@ -24,7 +24,7 @@ import { ProfilePickerPage } from "./ProfilePickerPage";
 
 const editorPath = "/editor";
 
-// The app router passes no editor path until M7-33 adds the editor, so this test builds a
+// The picker itself only needs some editor path, so this test builds a
 // small router of its own: the session gate, the picker with the path and a stand-in editor.
 function renderPicker(server: FakeProfilesServer) {
   const rootRoute = createRootRoute({

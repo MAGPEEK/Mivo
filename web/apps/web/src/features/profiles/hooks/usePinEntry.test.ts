@@ -35,7 +35,7 @@ describe("usePinEntry", () => {
     expect(onComplete).toHaveBeenCalledExactlyOnceWith("1234", expect.any(Function));
   });
 
-  it("deletes digits and submits a whole PIN on OK again", () => {
+  it("deletes digits and submits a whole PIN once until its check answered", () => {
     const { result, onComplete } = renderPinEntry();
 
     act(() => {
@@ -53,7 +53,16 @@ describe("usePinEntry", () => {
       result.current.press(9);
       result.current.press("submit");
     });
-    expect(onComplete.mock.calls.map(([pin]) => pin)).toEqual(["5678", "5678"]);
+    // A key between the 4th digit and the next render must not send the PIN a second time.
+    expect(onComplete.mock.calls.map(([pin]) => pin)).toEqual(["5678"]);
+
+    act(() => {
+      result.current.reject({ kind: "wrongPin" });
+      for (const digit of [1, 2, 3, 4]) {
+        result.current.press(digit);
+      }
+    });
+    expect(onComplete.mock.calls.map(([pin]) => pin)).toEqual(["5678", "1234"]);
   });
 
   it("clears the digits and counts a wrong PIN", () => {

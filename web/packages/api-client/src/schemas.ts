@@ -313,6 +313,12 @@ export type PasswordReset = Schemas["PasswordReset"];
 /** A profile with its settings as the account owner and the administration manage it. */
 export type Profile = Schemas["Profile"];
 
+/** Body of `POST /api/v1/users/{userId}/profiles`: a new managed profile. */
+export type ProfileCreate = Schemas["ProfileCreate"];
+
+/** Body of `PATCH /api/v1/profiles/{profileId}`; omitted properties stay, a null pin removes the PIN. */
+export type ProfileUpdate = Schemas["ProfileUpdate"];
+
 /** Body of `GET /api/v1/users/{userId}/profiles`. */
 export type ProfileList = Schemas["ProfileList"];
 

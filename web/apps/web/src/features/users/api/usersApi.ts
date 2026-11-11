@@ -8,10 +8,23 @@ import {
   type UserCreate,
   type UserUpdate,
 } from "@mivo/api-client";
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
+
+import { refreshAccount } from "../../auth";
 
 /** Prefix of every user administration cache key. */
 export const usersQueryKey = ["users"] as const;
+
+/**
+ * Loads everything that shows accounts or profiles again after one changed: the user
+ * administration and the signed-in account, whose own name or profiles may be the change.
+ */
+export async function refreshAccounts(queryClient: QueryClient): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: usersQueryKey }),
+    refreshAccount(queryClient),
+  ]);
+}
 
 const maxNetworkRetries = 1;
 

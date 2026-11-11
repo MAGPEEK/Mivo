@@ -146,6 +146,8 @@ function AccessFields({ dialog }: { readonly dialog: UserDialogState }) {
       <LibraryAccessField
         access={dialog.draft.access}
         libraries={dialog.libraries}
+        status={dialog.librariesStatus}
+        onRetry={dialog.retryLibraries}
         locked={dialog.draft.role === "admin"}
         error={dialog.errors.libraryAccess}
         onAllChange={dialog.setAllLibraries}
@@ -193,7 +195,7 @@ export function UserDialog({ user, onClose, onSaved }: UserDialogProps) {
             <button
               type="submit"
               form={formId}
-              aria-disabled={dialog.pending}
+              aria-disabled={!dialog.canSave}
               className={primaryButtonClass}
             >
               {dialog.pending ? t("users.dialog.saving") : t("users.dialog.save")}

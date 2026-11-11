@@ -5,12 +5,13 @@ import { useTranslation } from "react-i18next";
 
 import { useSignOut } from "../../auth";
 import { ownDevicesPath } from "../../devices";
-import { canChangePassword } from "../lib/profileModel";
+import { ownAccountPath } from "../../users";
+import { canChangePassword, canManageProfiles } from "../lib/profileModel";
 import { useSwitchProfile } from "./useSwitchProfile";
 
 /** One action of the profile menu. */
 export interface ProfileMenuEntry {
-  readonly id: "switch" | "changePassword" | "devices" | "signOut";
+  readonly id: "switch" | "manageProfiles" | "changePassword" | "devices" | "signOut";
   readonly label: string;
   readonly onSelect: () => void;
 }
@@ -25,8 +26,9 @@ export interface ProfileMenuState {
 }
 
 /**
- * The entries of the profile menu: "Switch profile", "Change password…" for the primary profile
- * (the account password belongs to it), "Devices" (the account's own sessions) and "Sign out".
+ * The entries of the profile menu: "Switch profile", for the primary profile "Manage profiles"
+ * (the own account page) and "Change password…" (the account password belongs to it),
+ * "Devices" (the account's own sessions) and "Sign out".
  */
 export function useProfileMenu(me: Me, profile: ProfileSummary): ProfileMenuState {
   const { t } = useTranslation("profiles");
@@ -37,6 +39,15 @@ export function useProfileMenu(me: Me, profile: ProfileSummary): ProfileMenuStat
   const entries: ProfileMenuEntry[] = [
     { id: "switch", label: t("menu.switch"), onSelect: switching.switchProfile },
   ];
+  if (canManageProfiles(profile)) {
+    entries.push({
+      id: "manageProfiles",
+      label: t("menu.manageProfiles"),
+      onSelect: () => {
+        void navigate({ to: ownAccountPath });
+      },
+    });
+  }
   if (canChangePassword(profile)) {
     entries.push({
       id: "changePassword",

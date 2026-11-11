@@ -2,13 +2,18 @@ import type { Library } from "@mivo/api-client";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { LibraryLoadStatus } from "../hooks/useLibraryList";
 import type { LibraryAccessDraft } from "../lib/libraryAccess";
 import { usersNamespace } from "../locales";
+import { LibraryLoadNotice } from "./LibraryLoadNotice";
 
 /** Props of {@link LibraryAccessField}. */
 export interface LibraryAccessFieldProps {
   readonly access: LibraryAccessDraft;
   readonly libraries: readonly Library[];
+  /** Load state of `libraries`; until `ready` a notice replaces the checkboxes. */
+  readonly status: LibraryLoadStatus;
+  readonly onRetry: () => void;
   /** True for an admin account: it always has every library, so the choice is fixed. */
   readonly locked: boolean;
   readonly error?: string | undefined;
@@ -20,27 +25,32 @@ const checkClass = "flex items-center gap-2 text-sm text-text";
 
 function LibraryChecks(props: LibraryAccessFieldProps & { readonly disabled: boolean }) {
   const { t } = useTranslation(usersNamespace);
+  if (props.status !== "ready") {
+    return <LibraryLoadNotice status={props.status} onRetry={props.onRetry} />;
+  }
   if (props.libraries.length === 0) {
     return <p className="text-sm text-text-muted">{t("users.dialog.access.noLibraries")}</p>;
   }
   return (
-    <ul aria-label={t("users.dialog.access.selectionLabel")} className="flex flex-col gap-1">
-      {props.libraries.map((library) => (
-        <li key={library.id}>
-          <label className={checkClass}>
-            <input
-              type="checkbox"
-              disabled={props.disabled}
-              checked={props.access.libraryIds.includes(library.id)}
-              onChange={(event) => {
-                props.onLibraryChange(library.id, event.target.checked);
-              }}
-            />
-            {library.name}
-          </label>
-        </li>
-      ))}
-    </ul>
+    <div role="group" aria-label={t("users.dialog.access.selectionLabel")}>
+      <ul className="flex flex-col gap-1">
+        {props.libraries.map((library) => (
+          <li key={library.id}>
+            <label className={checkClass}>
+              <input
+                type="checkbox"
+                disabled={props.disabled}
+                checked={props.access.libraryIds.includes(library.id)}
+                onChange={(event) => {
+                  props.onLibraryChange(library.id, event.target.checked);
+                }}
+              />
+              {library.name}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

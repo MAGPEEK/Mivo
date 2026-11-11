@@ -48,7 +48,13 @@ import {
   MetadataSettingsPage,
   validateSettingsSearch,
 } from "../features/settings";
-import { UsersPage } from "../features/users";
+import {
+  OwnProfilesPage,
+  UsersPage,
+  addProfileHref,
+  ownAccountPath,
+  validateAccountSearch,
+} from "../features/users";
 import { NotFoundPage } from "./NotFoundPage";
 import { AppLayout } from "./layout/AppLayout";
 import { FullScreenLayout } from "./layout/FullScreenLayout";
@@ -136,6 +142,23 @@ function AdminUsersRoute() {
   return createElement(admin ? UsersPage : NotFoundPage);
 }
 
+// The own account page (M7-33): which profile editor is open lives in the URL.
+function OwnAccountRoute() {
+  const search = useSearch({ from: "/shell/settings/account" });
+  const navigate = useNavigate({ from: ownAccountPath });
+  return createElement(OwnProfilesPage, {
+    search,
+    onSearchChange: (next) => {
+      void navigate({ search: next });
+    },
+  });
+}
+
+// "Add profile" in the picker selects the primary profile and then opens the profile editor.
+function ProfilePickerRoute() {
+  return createElement(ProfilePickerPage, { addProfilePath: addProfileHref });
+}
+
 // Every page sits below the session gate: it decides whether the page may show (ADR 0032).
 function GatedRoot() {
   return createElement(SessionGate, { children: createElement(Outlet) });
@@ -161,18 +184,17 @@ function authPages<Parent extends AnyRoute>(parent: Parent) {
       path: remoteSetupPath,
       component: RemoteSetupPage,
     }),
-    // M7-33 passes its editor path to the picker for "Add profile".
     createRoute({
       getParentRoute: () => parent,
       path: profilesPath,
       validateSearch: validateAuthSearch,
-      component: ProfilePickerPage,
+      component: ProfilePickerRoute,
     }),
   ] as const;
 }
 
-// Settings pages without search params; split off to keep the route tree function short.
-function settingsPages<Parent extends AnyRoute>(parent: Parent) {
+// Admin pages without search params; split off to keep the route tree function short.
+function adminPages<Parent extends AnyRoute>(parent: Parent) {
   return [
     createRoute({
       getParentRoute: () => parent,
@@ -192,9 +214,15 @@ function settingsPages<Parent extends AnyRoute>(parent: Parent) {
   ] as const;
 }
 
-// The own device list and Admin › Devices (M7-34).
-function devicePages<Parent extends AnyRoute>(parent: Parent) {
+// The own account page, the own device list and Admin › Devices (M7-33, M7-34).
+function accountPages<Parent extends AnyRoute>(parent: Parent) {
   return [
+    createRoute({
+      getParentRoute: () => parent,
+      path: ownAccountPath,
+      validateSearch: validateAccountSearch,
+      component: OwnAccountRoute,
+    }),
     createRoute({ getParentRoute: () => parent, path: ownDevicesPath, component: OwnDevicesPage }),
     createRoute({
       getParentRoute: () => parent,
@@ -233,14 +261,14 @@ function createRouteTree() {
       validateSearch: validateSettingsSearch,
       component: SettingsRoute,
     }),
-    ...settingsPages(shellRoute),
+    ...adminPages(shellRoute),
     createRoute({
       getParentRoute: () => shellRoute,
       path: "/items/$itemId",
       validateSearch: validateItemSearch,
       component: ItemRoute,
     }),
-    ...devicePages(shellRoute),
+    ...accountPages(shellRoute),
   ] as const;
   const playerRoute = createRoute({
     getParentRoute: () => fullScreenRoute,

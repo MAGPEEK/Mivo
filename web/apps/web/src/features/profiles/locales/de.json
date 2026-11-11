@@ -5,7 +5,6 @@
     "admin": "Admin",
     "pinRequired": "PIN erforderlich",
     "add": "Profil hinzufügen",
-    "choosing": "Profil wird geöffnet…",
     "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal.",
     "network": "Der Server ist nicht erreichbar. Prüfe die Verbindung und versuche es noch einmal."
   },
@@ -35,6 +34,8 @@
     "devices": "Geräte",
     "signOut": "Abmelden",
     "signOutPending": "Abmeldung läuft…",
-    "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal."
+    "failed": "Das hat nicht geklappt. Bitte versuche es noch einmal.",
+    "manageProfiles": "Profile verwalten",
+    "pinHintLink": "PIN festlegen"
   }
 }

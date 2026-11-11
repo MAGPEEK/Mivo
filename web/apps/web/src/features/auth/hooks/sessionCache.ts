@@ -34,6 +34,17 @@ export function storeProfileChange(queryClient: QueryClient, me: Me): void {
   queryClient.removeQueries({ predicate: (query) => !isAuthQuery(query.queryKey) });
 }
 
+/**
+ * Loads the account again after its name or its profiles changed, so the profile menu and the
+ * picker show the change. Without a stored account (signed out, or a server without accounts)
+ * nothing happens: refetching a failed check would put the session gate back into `loading`.
+ */
+export async function refreshAccount(queryClient: QueryClient): Promise<void> {
+  if (queryClient.getQueryData(meQueryKey) !== undefined) {
+    await queryClient.invalidateQueries({ queryKey: meQueryKey });
+  }
+}
+
 /** The name of the account signed in last, for prefilling the sign-in form. */
 export function cachedAccountName(queryClient: QueryClient): string | undefined {
   return queryClient.getQueryData<Me>(meQueryKey)?.account.name;

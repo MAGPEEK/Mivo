@@ -1,7 +1,6 @@
 import type { Me, ProfileSummary } from "@mivo/api-client";
 
-/** Managed profiles an account may have at most (api/openapi.yaml, "profile_limit"). */
-export const maxManagedProfiles = 10;
+import { maxManagedProfiles } from "../../users";
 
 /** Whether choosing `profile` asks for its PIN first. */
 export function needsPin(profile: ProfileSummary): boolean {
@@ -37,6 +36,11 @@ export function canAddProfile(me: Me): boolean {
 export function suggestsOwnPin(me: Me): boolean {
   const current = me.currentProfile;
   return current !== null && current.isPrimary && !current.hasPin && managedCount(me) > 0;
+}
+
+/** Whether the profile may manage the account's profiles: only the primary profile (ADR 0032 §1). */
+export function canManageProfiles(profile: ProfileSummary): boolean {
+  return profile.isPrimary;
 }
 
 /** Whether the profile may change the account password: only the primary profile owns it. */
