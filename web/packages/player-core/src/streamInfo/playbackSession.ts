@@ -52,6 +52,8 @@ export interface StreamDecision {
   targetChannels?: number;
   /** FFmpeg encoder of a transcoded stream, e.g. `libx264`; absent when copied. */
   encoder?: string;
+  /** Whether `encoder` is a hardware encoder; absent when copied or not reported (software). */
+  hardware?: boolean;
 }
 
 /** A machine-readable reason or warning code with the part of the file it concerns. */
@@ -83,6 +85,11 @@ export interface PlaybackSession {
   sourceBitRate?: number;
   /** Bit rate the client receives in bits per second; absent when unknown. */
   outputBitRate?: number;
+  /**
+   * How fast FFmpeg produces the stream compared with playback (1.0 is real time); absent for
+   * direct play and until FFmpeg reports its first progress.
+   */
+  transcodeSpeed?: number;
   /** The subtitle decision; a session without it shows no subtitle. */
   subtitle?: SubtitleDecision;
   /** One decision per selected source stream, video first. */

@@ -166,10 +166,10 @@ paths:
         Starts a new test run in the background (ADR 0030 section 5: one second of a
         generated source per encoder, 10 seconds timeout each) and returns at once with the
         status as it is now. Poll getTranscoderStatus until lastTestedAt changes. While a
-        run is active no second one starts and the call answers 409 "conflict". Management operation (ADR 0028): it needs the primary profile of an admin account
+        run is active no second one starts and the call answers 409 "conflict".
+        Management operation (ADR 0028): it needs the primary profile of an admin account
         selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local
-        peers.
-        Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule
+        peers. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule
         (ADR 0032 section 3), else 403 "forbidden". A server that is shutting down answers
         503 "unavailable".
       tags:
@@ -1822,7 +1822,8 @@ paths:
         what the server does for each (ADR 0030 section 7). Stopped, ended and reaped
         sessions are not listed; nothing is persisted. An entry names its item by the
         catalog title and never carries a file name or path. Stop a session with
-        stopPlaybackSession. Management operation (ADR 0028): it needs the primary profile of an admin account
+        stopPlaybackSession.
+        Management operation (ADR 0028): it needs the primary profile of an admin account
         selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local
         peers.
       tags:
@@ -2103,8 +2104,9 @@ paths:
         start of the file: a player subtracts PlaybackSession.startPositionSeconds to get
         the time of its media element. Styling of ASS/SSA tracks is dropped. The URL is
         opaque and needs the signed-in session (ADR 0032): clients load SubtitleTrack.url
-        as it is and never build it. Problem codes: "not_found" (404, unknown file or
-        track, or a file deleted from disk), "unsupported" (422, an image format such as
+        as it is and never build it. Problem codes: "not_found" (404, unknown file or one
+        the selected profile may not see, unknown track, or a file deleted from disk),
+        "unsupported" (422, an image format such as
         PGS, VobSub or DVB that only burn-in can show, or a file whose path now leads
         outside its library folder), "profile_required" (403) and "unavailable" (503, for
         example the library folder is unreachable).
@@ -2145,8 +2147,9 @@ paths:
         The tile for a position is number floor(position / intervalSeconds), counted from
         0; it lies on sheet floor(number / (columns * rows)) at column number mod columns
         of row floor(number / columns) mod rows. Trickplay is generated on demand, so an
-        unknown file, a file without video and a file whose trickplay does not exist yet
-        all answer 404 "not_found"; request it with requestTrickplay. Missing trickplay is
+        unknown file or one the selected profile may not see, a file without video and a
+        file whose trickplay does not exist yet all answer 404 "not_found"; request it
+        with requestTrickplay. Missing trickplay is
         never an error for a player: it shows no preview. Like the subtitle route it needs
         the signed-in session with a selected profile and is no management operation.
       tags:
@@ -2172,11 +2175,13 @@ paths:
       description: >-
         Queues the generation of the file's trickplay as a background job at low priority
         and returns at once (ADR 0030 section 8). Idempotent: a file whose trickplay exists
-        or is queued already also answers 202. The server runs one job at a time and only
-        while no transcode runs, so the result may take long or never arrive; clients poll
-        getTrickplayManifest sparingly and play without a preview until it answers 200. An
-        unknown file answers 404 "not_found", a file that cannot have trickplay (no video,
-        not probed) 422 "unsupported", a server that is shutting down 503 "unavailable".
+        or is queued already also answers 202. A full queue still answers 202 and drops
+        the request. The server runs one job at a time and only while no transcode runs,
+        so the result may take long or never arrive; clients poll getTrickplayManifest
+        sparingly and play without a preview until it answers 200. An unknown file or one
+        the selected profile may not see answers 404 "not_found", a file that cannot have
+        trickplay (no video, not probed) 422 "unsupported", a server that is shutting down
+        503 "unavailable".
         Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin
         rule (ADR 0032 section 3), else 403 "forbidden". It is no management operation.
       tags:
@@ -2215,8 +2220,9 @@ paths:
         sheet may be filled only in part. The URL is opaque and needs the signed-in session
         (ADR 0032; the same-origin session cookie covers image elements): clients load the
         entries of TrickplayManifest.sheetUrls as they are and never build them. Problem
-        codes: "not_found" (404, unknown file or sheet, or trickplay that does not exist
-        yet), "profile_required" (403) and "unavailable" (503).
+        codes: "not_found" (404, unknown file or one the selected profile may not see,
+        unknown sheet, or trickplay that does not exist yet), "profile_required" (403) and
+        "unavailable" (503).
       tags:
         - stream
       responses:
@@ -6368,8 +6374,9 @@ components:
             never played directly), "subtitle_burn_in" (the selected subtitle is drawn into
             the video), "bitrate_cap" (maxBitRate lies below the source), "dsd_to_pcm" (DSD
             audio is always decoded to PCM), "hires_downsampled" (the audio exceeds
-            ClientProfile.maxAudioSampleRate or ClientProfile.maxAudioBitDepth) and "hwaccel_unavailable" (no usable
-            hardware encoder, the video is encoded in software). Warnings:
+            ClientProfile.maxAudioSampleRate or ClientProfile.maxAudioBitDepth) and
+            "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in
+            software). Warnings:
             "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and
             "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server
             cannot do now; it stays off). New codes may be added within API v1.

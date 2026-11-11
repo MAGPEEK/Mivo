@@ -111,9 +111,30 @@ func TestTrickplayIsNoManagementOperation(t *testing.T) {
 		t.Error("requestTrickplay does not answer 202 without a body")
 	}
 
-	for _, text := range []string{"Idempotent", "same-origin", `404 "not_found"`} {
+	for _, text := range []string{"Idempotent", "same-origin", `404 "not_found"`, "A full queue still answers 202"} {
 		if !strings.Contains(request.Description, text) {
 			t.Errorf("requestTrickplay does not mention %s", text)
+		}
+	}
+}
+
+// TestMediaFileRoutesHideInvisibleFiles: a file the selected profile may not see (library
+// access, content limit) answers like an unknown one, so the routes keyed by file ID reveal
+// nothing about it.
+func TestMediaFileRoutesHideInvisibleFiles(t *testing.T) {
+	spec := loadSpec(t)
+
+	const phrase = "unknown file or one the selected profile may not see"
+
+	for _, key := range []specOperationKey{
+		{http.MethodGet, trickplayPath},
+		{http.MethodPost, trickplayPath},
+		{http.MethodGet, trickplaySheetPath},
+		{http.MethodGet, subtitleTrackPath},
+	} {
+		operation := getOperation(t, spec, key.method, key.path)
+		if !strings.Contains(joinLines(operation.Description), phrase) {
+			t.Errorf("%s %s does not say: %s", key.method, key.path, phrase)
 		}
 	}
 }

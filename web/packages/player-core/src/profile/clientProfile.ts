@@ -26,10 +26,10 @@ export interface HlsProfile {
   audioCodecs: MediaIdentifier[];
 }
 
-/** Extra limits of the client for one codec; a codec without an entry has none. */
+/** Extra limits of the client for one video codec; a codec without an entry has none. */
 export interface CodecLimit {
   codec: MediaIdentifier;
-  /** Highest bit depth the client decodes for this codec; omitted when unlimited. */
+  /** Highest video bit depth the client decodes for this codec; omitted when unlimited. */
   maxBitDepth?: number;
   /** Codec profiles the client decodes, as ffprobe names them; omitted when every profile plays. */
   profiles?: string[];
@@ -56,4 +56,8 @@ export interface ClientProfile {
   subtitleFormats?: MediaIdentifier[];
   /** Highest number of audio channels the client plays; omitted means the server default. */
   maxAudioChannels?: number;
+  /** Highest audio sample rate the client plays, in Hz; omitted means the server default. */
+  maxAudioSampleRate?: number;
+  /** Highest number of bits per audio sample the client plays; omitted means the server default. */
+  maxAudioBitDepth?: number;
 }

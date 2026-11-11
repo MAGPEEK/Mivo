@@ -7,14 +7,16 @@ Files/areas: `web/packages/player-core/src/**` (framework-free, + tests)
 All player logic for ADR 0030 lives in `player-core` and is unit-tested without a browser (CLAUDE.md: no business logic in components).
 
 ## Acceptance criteria
-- [ ] Client profile gets `preferredAudioLanguages`, `preferredSubtitleLanguages`, `subtitleMode`, `subtitleFormats: ["webvtt"]`, `maxAudioChannels` (from
-      `navigator`/MediaCapabilities probing), bounded; session requests carry `audioStreamIndex`, `subtitleTrackId`, `maxBitRate`.
+- [ ] Client profile gets `preferredAudioLanguages`, `preferredSubtitleLanguages`, `subtitleMode`, `subtitleFormats: ["webvtt"]`, `maxAudioChannels`,
+      `maxAudioSampleRate`, `maxAudioBitDepth` (from `navigator`/MediaCapabilities probing), bounded; session requests carry `audioStreamIndex`,
+      `subtitleTrackId`, `maxBitRate`; an in-playback switch to a subtitle sends `allowDegradeSubtitles: true` so playback never stops over it.
 - [ ] `parseWebVtt(text)` returns cues (start, end, plain text, line/position ignored); `activeCues(cues, fileTime)`; the engine maps `fileTime = actualStart + currentTime`;
       a track switch for text subtitles never restarts the stream.
 - [ ] Switching audio or a burn-in subtitle or quality restarts through `replacesSessionId` at the current position (existing restart helper).
 - [ ] `qualityOptions(sourceBitRate, height)` returns Original + ladder steps below the source; `AutoQuality` picks a step from measured segment throughput
       (EMA, 0.8 safety factor, 30 s hold-down before stepping up).
-- [ ] `trickplayTile(manifest, seconds)` returns sheet, column, row; out-of-range clamps.
+- [ ] `trickplayTile(manifest, seconds)` returns sheet, column, row; out-of-range clamps. The sheet URL is only ever `sheetUrls[sheet]`, with
+      `sheet` clamped to the length of `sheetUrls`; it is never built. Manifest polling after a 404 is capped (count and interval, named constants).
 - [ ] Subtitle format labels move here (BACKLOG row from M2-23).
 - [ ] Tests: Vitest table tests for every function; coverage thresholds.
 - [ ] Gates: `pnpm -C web lint`, `pnpm -C web test`.
