@@ -12,6 +12,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 	"time"
 
@@ -108,6 +109,10 @@ type Server struct {
 	// LANOnly refuses requests from public IP addresses until accounts exist (OD-10,
 	// milestone 7); the health endpoint stays reachable. On by default.
 	LANOnly bool
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For and X-Forwarded-Proto
+	// headers are believed (ADR 0032 §3). Masked, unique, never of length 0 and never
+	// IPv4-mapped; empty by default, which trusts nobody.
+	TrustedProxies []netip.Prefix
 }
 
 // Log holds the logging settings.
@@ -157,10 +162,6 @@ func Load(options Options) (Config, error) {
 	}
 
 	if err := applyEnvironment(&cfg, options.Environment, configDir); err != nil {
-		return Config{}, err
-	}
-
-	if err := environmentBrowseRoots(&cfg, options.Environment, configDir); err != nil {
 		return Config{}, err
 	}
 

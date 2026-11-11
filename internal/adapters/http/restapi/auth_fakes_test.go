@@ -2,7 +2,6 @@ package restapi_test
 
 import (
 	"context"
-	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -11,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/app/auth"
@@ -203,7 +203,7 @@ type authRequest struct {
 	target    string
 	body      string
 	userAgent string
-	// tls marks the request as received over TLS.
+	// tls marks the request as resolved to https (TLS socket or trusted proxy).
 	tls bool
 	// signedOut leaves the viewer out, as for the open sign-in and setup routes.
 	signedOut bool
@@ -231,6 +231,9 @@ func serveAuth(t *testing.T, service restapi.AuthService, request authRequest) (
 		ctx = restapi.WithPeer(ctx, *request.peer)
 	}
 
+	// The HTTP server resolves the scheme; here the test plays its part.
+	ctx = clientorigin.With(ctx, clientorigin.Origin{Secure: request.tls})
+
 	var sent *http.Request
 	if body == nil {
 		sent = httptest.NewRequestWithContext(ctx, request.method, request.target, nil)
@@ -240,10 +243,6 @@ func serveAuth(t *testing.T, service restapi.AuthService, request authRequest) (
 	}
 
 	sent.Header.Set("User-Agent", request.userAgent)
-
-	if request.tls {
-		sent.TLS = &tls.ConnectionState{}
-	}
 
 	return serveRequest(t, handler, sent), logs
 }

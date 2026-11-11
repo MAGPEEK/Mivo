@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/adapters/http/healthprobe"
 	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
@@ -18,15 +19,16 @@ const sharedAddressSpaceBits = 10
 // the setting, so an owner who meets it knows what to change.
 const lanOnlyRefusalDetail = "Requests from outside the local network are refused (server.lan_only)."
 
-// lanGuard refuses requests whose socket peer is not in the local network with a 403
-// forbidden problem, until accounts exist (OD-10, milestone 7). The health check stays
-// reachable for container health checks and monitoring.
+// lanGuard refuses requests whose client is not in the local network with a 403 forbidden
+// problem (OD-10). The health check stays reachable for container health checks and
+// monitoring.
 //
-// Only RemoteAddr counts, which net/http takes from the socket. X-Forwarded-For, X-Real-IP
-// and Forwarded are written by the client unless a trusted proxy replaced them, and the
-// trusted-proxy setting arrives with milestone 7b; honouring them now would let anyone on
-// the internet claim a LAN address. A reverse proxy or tunnel that connects from the LAN or
-// the host itself therefore lets every client through, which is the documented trade-off.
+// The client is the resolved origin of the request (originResolver, ADR 0032 §3): the
+// socket peer, or the client a reverse proxy listed in server.trusted_proxies named in
+// X-Forwarded-For. From every other peer the forwarding headers are ignored, because the
+// client writes them and anyone on the internet could claim a LAN address. A reverse proxy
+// or tunnel that connects from the LAN or the host itself and is not listed therefore lets
+// every client through, which is the documented trade-off.
 type lanGuard struct {
 	logger *slog.Logger
 	onLink *onLinkPrefixes
@@ -48,20 +50,23 @@ func (guard lanGuard) wrap(next http.Handler) http.Handler {
 		}
 
 		guard.logger.DebugContext(request.Context(), "request from a public address refused",
-			logtext.RequestAttributes(request, slog.String("remote_address", logtext.Truncate(request.RemoteAddr)))...)
+			logtext.RequestAttributes(request, originAttributes(request)...)...)
 		restapi.WriteProblem(writer, lanOnlyProblem())
 	})
 }
 
-// admitsPeer reports whether the socket peer is in a fixed LAN range or, for global IPv6
-// peers, inside an on-link prefix of a host interface: dual-stack home networks give LAN
-// clients only global and link-local IPv6 addresses, and browsers prefer the global one.
+// admitsPeer reports whether the resolved client is in a fixed LAN range or, for global IPv6
+// clients, inside an on-link prefix of a host interface: dual-stack home networks give LAN
+// clients only global and link-local IPv6 addresses, and browsers prefer the global one. A
+// request without a usable address, or one a trusted proxy sent without naming its client,
+// is never admitted.
 func (guard lanGuard) admitsPeer(request *http.Request) bool {
-	address, ok := peerAddress(request.RemoteAddr)
-	if !ok {
+	origin := clientorigin.From(request.Context())
+	if !origin.Address.IsValid() || origin.ForcedRemote {
 		return false
 	}
 
+	address := origin.Address
 	if isLANAddress(address) {
 		return true
 	}
@@ -85,18 +90,6 @@ func isHealthCheck(request *http.Request) bool {
 	isRead := request.Method == http.MethodGet || request.Method == http.MethodHead
 
 	return isRead && request.URL.EscapedPath() == healthprobe.HealthPath
-}
-
-// peerAddress parses remoteAddr, an "ip:port" from the socket. IPv4-mapped IPv6 addresses
-// (::ffff:a.b.c.d), which dual-stack listeners report for IPv4 clients, become their IPv4
-// address. A malformed address reports false.
-func peerAddress(remoteAddr string) (netip.Addr, bool) {
-	addressAndPort, err := netip.ParseAddrPort(remoteAddr)
-	if err != nil {
-		return netip.Addr{}, false
-	}
-
-	return addressAndPort.Addr().Unmap(), true
 }
 
 // isLANAddress reports a loopback, RFC 1918, RFC 6598 (carrier-grade NAT, Tailscale),

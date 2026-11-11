@@ -82,13 +82,27 @@ func applyFile(cfg *Config, configDir string) ([]configuredLibrary, error) {
 		}
 	}
 
-	if roots, ok := content.scalarLists[keyBrowseRoots]; ok {
-		if err := applyBrowseRoots(cfg, roots, configDir); err != nil {
-			return nil, fmt.Errorf("%s: key %s: %w", file, keyBrowseRoots, err)
-		}
+	if err := applyFileScalarLists(cfg, content, configDir); err != nil {
+		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 
 	return fileLibraries(content.lists[keyLibraries], file, configDir)
+}
+
+// applyFileScalarLists applies the lists of plain values the file sets.
+func applyFileScalarLists(cfg *Config, content fileContent, configDir string) error {
+	for _, entry := range scalarListSettings() {
+		raws, ok := content.scalarLists[entry.key]
+		if !ok {
+			continue
+		}
+
+		if err := entry.apply(cfg, raws, configDir); err != nil {
+			return fmt.Errorf("key %s: %w", entry.key, err)
+		}
+	}
+
+	return nil
 }
 
 // parseFile reads the single YAML document of config.yaml. It walks the node tree instead
@@ -141,9 +155,11 @@ type fileWalker struct {
 	sections map[string]bool
 	leaves   map[string]bool
 	// lists maps the key of a list setting to the field names its entries accept.
-	lists   map[string][]string
-	seen    map[string]bool
-	content fileContent
+	lists map[string][]string
+	// scalarLists are the keys of the lists of plain values.
+	scalarLists map[string]bool
+	seen        map[string]bool
+	content     fileContent
 }
 
 // newFileWalker derives the accepted sections ("server"), leaves ("server.port") and lists
@@ -151,17 +167,22 @@ type fileWalker struct {
 // environment accepts.
 func newFileWalker() *fileWalker {
 	walker := &fileWalker{
-		sections: map[string]bool{},
-		leaves:   map[string]bool{},
-		lists:    map[string][]string{keyLibraries: libraryFieldNames()},
-		seen:     map[string]bool{},
+		sections:    map[string]bool{},
+		leaves:      map[string]bool{},
+		lists:       map[string][]string{keyLibraries: libraryFieldNames()},
+		scalarLists: map[string]bool{},
+		seen:        map[string]bool{},
 		content: fileContent{
 			values: map[string]fileValue{}, lists: map[string][]fileItem{}, scalarLists: map[string][]string{},
 		},
 	}
 
-	for _, section := range parentSections(keyBrowseRoots) {
-		walker.sections[section] = true
+	for _, entry := range scalarListSettings() {
+		walker.scalarLists[entry.key] = true
+
+		for _, section := range parentSections(entry.key) {
+			walker.sections[section] = true
+		}
 	}
 
 	for _, entry := range settings() {
@@ -227,7 +248,7 @@ func (walker *fileWalker) walkEntry(keyNode, valueNode *yaml.Node, section strin
 		return walker.addValue(key, keyNode.Line, valueNode)
 	case walker.lists[key] != nil:
 		return walker.walkList(key, keyNode.Line, valueNode)
-	case key == keyBrowseRoots:
+	case walker.scalarLists[key]:
 		return walker.walkScalarList(key, keyNode.Line, valueNode)
 	default:
 		return fmt.Errorf("line %d: %w %q", keyNode.Line, ErrUnknownKey, key)

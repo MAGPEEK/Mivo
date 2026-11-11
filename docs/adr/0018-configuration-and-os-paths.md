@@ -149,8 +149,25 @@ Key added for the LAN-only guard (OD-10 A accepted):
   last known prefixes stay trusted for at most 4 consecutive failed refreshes (about two
   minutes) and are then dropped, so the guard fails closed. A failure streak logs one warning
   when it starts and one when the stale prefixes are dropped.
-- **Only the socket peer counts**: `X-Forwarded-For`, `X-Real-IP` and `Forwarded` are
-  ignored until a trusted-proxy setting exists (milestone 7b).
+- **Only the socket peer counts** unless it is a trusted reverse proxy (next table):
+  `X-Forwarded-For` and `X-Forwarded-Proto` from any other peer, and `X-Real-IP`,
+  `Forwarded` and `X-Forwarded-Host` from every peer, are ignored.
+
+Key added for trusted reverse proxies (ADR 0032 §3, task M7-40):
+
+| YAML key | Environment | Default | Validation |
+|---|---|---|---|
+| `server.trusted_proxies` (list of CIDR prefixes or single addresses, IPv4 and IPv6) | `<PREFIX>_SERVER_TRUSTED_PROXIES` (comma-separated, spaces around entries ignored; replaces the YAML list as a whole; empty value = no proxy). Not an OS path list like `browse.roots`: its `:` separator outside Windows would cut IPv6 addresses apart | empty = trust nobody | every entry parses as an address or prefix (no port, no zone, no host name); a prefix of length 0 (`0.0.0.0/0`, `::/0`) and a duplicate are refused; entries are stored masked and IPv4-mapped IPv6 entries as IPv4, duplicates are compared after that. Errors wrap `ErrInvalid` and name `server.trusted_proxies[<index>]` and the entry |
+
+- **What it does**: when the socket peer is inside the list, the client address is taken from
+  `X-Forwarded-For` (right-most entry outside the list, else the left-most) and the scheme
+  from the last `X-Forwarded-Proto` value. A listed proxy that sends no usable
+  `X-Forwarded-For` (missing, `unknown`, more than 32 entries, an entry that does not parse
+  before the client is found) counts as remote and keeps its own address. The resolved
+  address and scheme decide `server.lan_only`, the local-network rule of setup and
+  administration, the sign-in throttle address, the device's address class, the `Secure`
+  cookie attribute and the same-origin scheme. Refusal logs carry `remote_address` (the
+  resolved client) and `proxy_address`.
 - **Trade-offs and known limits** (details for Docker users in `packaging/docker/README.md`):
   - Host-side clients of a Docker bridge network come from the private bridge gateway, so
     NAS setups keep working. The default bridge has no IPv6: Docker's proxy accepts IPv6 on

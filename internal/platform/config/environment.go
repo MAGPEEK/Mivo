@@ -22,5 +22,15 @@ func applyEnvironment(cfg *Config, env paths.Environment, configDir string) erro
 		}
 	}
 
-	return nil
+	return applyEnvironmentLists(cfg, env, configDir)
+}
+
+// applyEnvironmentLists applies the list settings, each of which replaces the list of the
+// config file as a whole.
+func applyEnvironmentLists(cfg *Config, env paths.Environment, configDir string) error {
+	if err := environmentBrowseRoots(cfg, env, configDir); err != nil {
+		return err
+	}
+
+	return environmentTrustedProxies(cfg, env)
 }

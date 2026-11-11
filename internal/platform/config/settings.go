@@ -63,6 +63,22 @@ func settings() []setting {
 	return slices.Concat(coreSettings(), transcodeSettings(), metadataSettings())
 }
 
+// scalarListSetting maps the key path of a list of plain values to its parser, which stores
+// the list as a whole.
+type scalarListSetting struct {
+	key   string
+	apply func(cfg *Config, raws []string, baseDir string) error
+}
+
+// scalarListSettings returns the list keys config.yaml accepts next to the scalar ones. Each
+// has its own environment format (see applyEnvironmentLists).
+func scalarListSettings() []scalarListSetting {
+	return []scalarListSetting{
+		{key: keyBrowseRoots, apply: applyBrowseRoots},
+		{key: keyServerTrustedProxies, apply: applyTrustedProxies},
+	}
+}
+
 func coreSettings() []setting {
 	return []setting{
 		{key: keyServerHost, apply: applyHost},

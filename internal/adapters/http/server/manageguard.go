@@ -70,18 +70,21 @@ const (
 // folders, the online metadata operations, the user and device administration and the
 // first-run setup (see managementArea). It refuses a request with 403 forbidden when
 //
-//   - the socket peer is not in the local network, also when server.lan_only is off: that
+//   - the client is not in the local network, also when server.lan_only is off: that
 //     setting opens the media endpoints to the internet, never the administration;
 //   - the request breaks the same-origin rule (crossOriginRefusal);
 //   - authentication is on and the viewer is no admin (every area but the setup).
 //
-// Only RemoteAddr counts for the peer, as in lanGuard; X-Forwarded-* headers are ignored.
+// The client is the resolved origin, as in lanGuard: the socket peer, or the client named by
+// a reverse proxy listed in server.trusted_proxies; forwarding headers of any other peer are
+// ignored, and a listed proxy that names no client counts as remote (ADR 0032 §3).
 // The profiles of the caller's own account (/users/{ownId}/profiles) are not guarded, and
 // /profiles/{id} only refuses admins outside the local network (see profileRefusal): the use
 // case checks that the caller owns them (CanManageProfile).
 //
 // Residual risks (ADR 0032 §9): a reverse proxy or tunnel that connects from the LAN or the
-// host itself makes every client look local, so the admin sign-in is the remaining check;
+// host itself and is not listed in server.trusted_proxies makes every client look local, so
+// the admin sign-in is the remaining check;
 // DNS rebinding can make a hostile page address the server under its own name, in which case
 // Origin and Host match, but it cannot reach admin endpoints without the SameSite=Lax session
 // cookie. The Host header is no defence (BACKLOG m3-19k keeps the Host allow-list open).
@@ -107,8 +110,8 @@ func (guard manageGuard) wrap(next http.Handler) http.Handler {
 
 		if reason := guard.refusal(request, area); reason != "" {
 			guard.logger.DebugContext(request.Context(), "management request refused",
-				logtext.RequestAttributes(request, slog.String("reason", reason),
-					slog.String("remote_address", logtext.Truncate(request.RemoteAddr)))...)
+				logtext.RequestAttributes(request,
+					append([]any{slog.String("reason", reason)}, originAttributes(request)...)...)...)
 			restapi.WriteProblem(writer, manageRefusalProblem(area))
 
 			return

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/adapters/http/logtext"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	appaccess "github.com/magpeek/mivo/internal/app/access"
@@ -162,17 +163,17 @@ func (guard authGuard) refuseUnauthenticated(writer http.ResponseWriter, request
 	guard.refuse(writer, request, reason, restapi.ProblemForError(refusal))
 }
 
-// peer classifies the socket peer like the LAN guard; Address is always set when RemoteAddr
-// parses, so the sign-in throttle and the device record never see an empty address.
+// peer classifies the resolved client like the LAN guard. Address is set whenever the socket
+// address parses, so the sign-in throttle and the device record never see an empty address;
+// behind a trusted proxy that names no client it is the proxy's address and the class is
+// remote.
 func (guard authGuard) peer(request *http.Request) auth.Peer {
-	address, _ := peerAddress(request.RemoteAddr)
 	class := auth.AddressRemote
-
 	if guard.lan.admitsPeer(request) {
 		class = auth.AddressLAN
 	}
 
-	return auth.Peer{Address: address, Class: class}
+	return auth.Peer{Address: clientorigin.From(request.Context()).Address, Class: class}
 }
 
 func (guard authGuard) refuse(writer http.ResponseWriter, request *http.Request, reason string, problem apigen.Problem) {

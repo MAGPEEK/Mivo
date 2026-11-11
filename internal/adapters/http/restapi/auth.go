@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/app/auth"
 )
 
@@ -80,7 +81,9 @@ func authOperationIDs() []string {
 type clientRequest struct {
 	// userAgent is only turned into a short device label; it is never stored or logged.
 	userAgent string
-	// secure is true on a TLS connection; the session cookie is then marked Secure.
+	// secure is true for an https request as the HTTP server resolved it (a TLS connection,
+	// or X-Forwarded-Proto of a trusted reverse proxy, ADR 0032 §3); the session cookie is
+	// then marked Secure.
 	secure bool
 }
 
@@ -132,7 +135,8 @@ func (api *API) serveAuthOperations(next apigen.StrictHandlerFunc, operationID s
 			return nil, nil //nolint:nilnil // see above
 		}
 
-		client := clientRequest{userAgent: request.UserAgent(), secure: request.TLS != nil}
+		// ctx is the request context the generated strict handler passes on.
+		client := clientRequest{userAgent: request.UserAgent(), secure: clientorigin.From(ctx).Secure}
 
 		return next(context.WithValue(ctx, clientRequestKey{}, client), writer, request, body)
 	}

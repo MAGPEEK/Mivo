@@ -50,11 +50,18 @@ type chainSettings struct {
 	// authentication is Options.Authentication; its zero value leaves the session
 	// middleware off.
 	authentication Authentication
+	// origins resolves the client address and scheme from Options.TrustedProxies.
+	origins originResolver
 }
 
 // newChainSettings validates the parts of options only the middleware understands.
 func newChainSettings(options Options) (chainSettings, error) {
 	quiet, err := newQuietRoutes(options.QuietPatterns)
+	if err != nil {
+		return chainSettings{}, err
+	}
+
+	origins, err := newOriginResolver(options.TrustedProxies)
 	if err != nil {
 		return chainSettings{}, err
 	}
@@ -67,7 +74,7 @@ func newChainSettings(options Options) (chainSettings, error) {
 	return chainSettings{
 		logger: options.Logger, quiet: quiet, bodyReadTimeout: BodyReadTimeout,
 		allowPublicClients: options.AllowPublicClients, interfacePrefixes: interfacePrefixes, now: time.Now,
-		authentication: options.Authentication,
+		authentication: options.Authentication, origins: origins,
 	}, nil
 }
 
@@ -75,7 +82,9 @@ func newChainSettings(options Options) (chainSettings, error) {
 // anything logs, the body read deadline is set before any handler can answer (or leave the
 // body unread), security headers are set even on panics, the access log sees the status the
 // recover middleware writes. The guards are innermost, so a refusal carries the request ID
-// and security headers and appears in the access log like any other answer. The management
+// and security headers and appears in the access log like any other answer. Right outside
+// the guards the origin resolver stores the client address and scheme all of them and the
+// handlers decide by (ADR 0032 §3 "Trusted reverse proxies"). The management
 // guard stays on when the LAN guard is off: server.lan_only never opens the administration.
 // The guards run in the order LAN guard, authentication, management guard, setup gate
 // (ADR 0032): the management guard needs the viewer the authentication stores, and the
@@ -99,6 +108,7 @@ func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 		handler = lan.wrap(handler)
 	}
 
+	handler = settings.origins.wrap(handler)
 	handler = recoverPanics(handler, settings.logger)
 	handler = logAccess(handler, settings.logger, settings.quiet)
 	handler = setSecurityHeaders(handler)

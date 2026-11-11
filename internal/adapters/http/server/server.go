@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"path"
 	"strings"
 	"time"
@@ -61,7 +62,8 @@ type Options struct {
 	// escaped path and wildcards. A malformed or conflicting pattern is invalid.
 	QuietPatterns []string
 	// AllowPublicClients turns the LAN-only guard off (config server.lan_only=false). By
-	// default every request whose socket peer is not a loopback, private, RFC 6598 or
+	// default every request whose client (the socket peer, or the client a proxy of
+	// TrustedProxies names) is not a loopback, private, RFC 6598 or
 	// link-local address, nor an IPv6 address inside an on-link prefix of a host interface,
 	// gets a 403 forbidden problem, except GET and HEAD of the health endpoint (OD-10). The
 	// option is phrased as an opt-out so that the zero value, and a composition root that
@@ -79,6 +81,13 @@ type Options struct {
 	// bearer token, cookie writes must keep the same-origin rule, and the management guard
 	// also demands an admin viewer. The zero value leaves it off (until task M7-25 wires it).
 	Authentication Authentication
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For and X-Forwarded-Proto
+	// headers are believed (config server.trusted_proxies, ADR 0032 §3): when the socket
+	// peer is inside one of the prefixes, the client address and the scheme come from those
+	// headers, and a request without a usable X-Forwarded-For counts as remote. The zero
+	// value trusts nobody: only the socket counts. A prefix of length 0, an invalid or an
+	// IPv4-mapped prefix is invalid.
+	TrustedProxies []netip.Prefix
 }
 
 // Server is an HTTP server built by New. Run it once.

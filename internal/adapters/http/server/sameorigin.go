@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 )
 
 // Request headers and values of the ADR 0028 same-origin rule.
@@ -68,8 +70,9 @@ func isJSON(request *http.Request) bool {
 
 // originMatches reports true without an Origin header (same-origin GET requests and
 // non-browser clients send none); otherwise scheme, host and port of the origin must equal
-// those the request arrived with. The server speaks plain http itself, so the scheme is
-// https only on a TLS connection.
+// those the request arrived with. The scheme is the resolved one (originResolver): https on
+// a TLS connection or when a trusted reverse proxy says so in X-Forwarded-Proto. The host
+// is always the Host header, never X-Forwarded-Host, so the proxy must pass Host on.
 func originMatches(request *http.Request) bool {
 	origin := request.Header.Get(headerOrigin)
 	if origin == "" {
@@ -83,7 +86,7 @@ func originMatches(request *http.Request) bool {
 	}
 
 	scheme := schemeHTTP
-	if request.TLS != nil {
+	if clientorigin.From(request.Context()).Secure {
 		scheme = schemeHTTPS
 	}
 
