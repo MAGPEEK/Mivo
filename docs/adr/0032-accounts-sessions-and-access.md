@@ -1,6 +1,7 @@
 # 0032 Accounts, sessions, profiles and access control (milestone 7)
 
-- Status: Accepted (orchestrator by owner delegation, 2026-11-06; proposed by the architect the same day – the owner may still object)
+- Status: Accepted (orchestrator by owner delegation, 2026-11-06; proposed by the architect the same day – the owner may still object).
+  Amended 2026-11-11: trusted reverse proxies (§3, §5, §9) and the ancestor visibility rule (§7)
 - Date: 2026-11-06
 - Refines: 0006 (local-only accounts), 0024 (streaming sessions)
 - Supersedes: 0028 §4 "Security before accounts" and §7 "Accepted residual risks until M7" in
@@ -69,6 +70,38 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   the ADR 0028 same-origin rule (`Origin` matches or is absent, `Sec-Fetch-Site` is not
   `cross-site`) and send `application/json` when it has a body. Bearer requests are exempt
   (no ambient credential).
+- **Trusted reverse proxies.** Amendment (orchestrator by owner delegation, 2026-11-11, after
+  the M7-21 review; task M7-40). Behind a TLS-terminating reverse proxy the socket shows only
+  the proxy: the cookie would lack `Secure`, the same-origin rule would compare against
+  `http`, and every client would carry the proxy's address and class. Therefore:
+  - New setting `server.trusted_proxies`: a list of CIDR prefixes or single addresses (IPv4
+    and IPv6), **default empty = trust nobody**. A prefix of length 0 (`0.0.0.0/0`, `::/0`) is
+    refused at start-up. With the empty list nothing changes: only the socket counts and
+    forwarding headers are ignored, as before (ADR 0028).
+  - Forwarding headers are honoured **only when the direct socket peer is inside the list**.
+    From any other peer they are ignored, whatever they say.
+  - **Client address**: all `X-Forwarded-For` values of the request in order, read from the
+    right; entries inside the list are skipped, the first entry outside it (the right-most
+    untrusted hop) is the client. When every entry is trusted, the left-most one is the
+    client. Entries may carry a port or IPv6 brackets; IPv4-mapped IPv6 addresses are
+    unmapped before any comparison.
+  - **Fail closed**: a request from a trusted proxy without `X-Forwarded-For`, or with an
+    entry that does not parse before the client is found, counts as `remote` and keeps the
+    proxy's address. A proxy that forgets the header therefore locks setup and administration
+    instead of opening them. Consequence: a browser on the proxy host itself that talks to
+    the server directly counts as remote while that host is in the list.
+  - **Scheme**: from a trusted peer the last `X-Forwarded-Proto` value decides; `https`
+    (any case) means secure, anything else or no header means `http`. From an untrusted peer
+    the scheme is `https` only on a TLS socket.
+  - The resolved client address and scheme are computed once per request and are the only
+    source for: the LAN guard, the local-peer rule of §6 and §9, the peer address of the
+    sign-in throttle (§5), the device's last address class, the `Secure` cookie attribute
+    (set and clear) and the scheme of the same-origin rule.
+  - The host of the same-origin rule stays the `Host` header, so the proxy must pass the
+    original `Host` on. `X-Forwarded-Host`, `Forwarded` (RFC 7239) and `X-Real-IP` are never
+    honoured.
+  - The proxy must overwrite or append `X-Forwarded-For` and set `X-Forwarded-Proto` itself;
+    the guides say so (M7-39).
 
 ### 4 Profile selection, PIN lockout, remember
 - A session carries the selected profile or none. After sign-in the server selects the primary
@@ -87,6 +120,9 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - Per account name: after 5 failures, sign-in is refused for 1 minute, doubling per further
   failure up to 15 minutes. Per peer address: 20 failures per 15 minutes. Refusals answer `429`
   with `Retry-After`; in memory, like the PIN counter.
+  Amendment (2026-11-11): the peer address is the resolved client address of §3 "Trusted
+  reverse proxies". Without `server.trusted_proxies` all clients of a reverse proxy share
+  one bucket (the proxy's address).
 
 ### 6 First-run setup
 - While no account exists the server is in **setup state**: `GET /api/v1/setup` says
@@ -121,9 +157,21 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - The bucket is stored per item (`age_rating`, migration `00014`) together with the effective
   bucket that children inherit from their show (an episode without its own rating uses the
   show's), so one indexed predicate filters every query.
-  A child's own rating always wins over the inherited one, also when it is **lower** than its
-  parent's (show TV-MA, episode TV-Y → the episode's effective bucket is 0): a rating describes
-  the item it is stored on, and the show keeps its own bucket.
+  A child's own rating always wins over the inherited one for its **own bucket**, also when it
+  is lower than its parent's (show TV-MA, episode TV-Y → the episode's effective bucket is 0).
+- **Ancestor visibility.** Amendment (orchestrator, 2026-11-11, after the M7-12 review; owner
+  informed; tasks M7-13, M7-14). It replaces the rule made explicit with M7-11, under which
+  such a lower-rated child stayed visible to a viewer who could not see its parent (fail
+  open). Now: an item is visible to a restricted viewer only if the item **and every
+  ancestor** pass the content limit, each judged by its own effective bucket (max age and
+  hide-unrated). A child's lower rating never opens a path through a hidden parent: the
+  TV-Y episode of a TV-MA show is hidden from a "Children" profile, and with `hideUnrated`
+  a rated episode of an unrated show is hidden too. In the other direction nothing changes:
+  a child rated higher than its parent is hidden on its own while the parent stays visible.
+  Nothing of a hidden ancestor may leak: not its title or artwork reference in a
+  descendant's summary, not its directory name in the folder view, and not through counts
+  (`childCount`, `leafCount`, unwatched counts), size sorting or the episode rows, which
+  consider visible members only.
 - The restriction (library set, max age, hide unrated) is applied in SQL for every listing,
   facet, letter, folder, row, search, children, summary and detail read, and checked before a
   playback session starts. A hidden item answers `404 not_found`, never `403`, so its existence
@@ -171,11 +219,20 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
 - ADR 0028 §7's residual risks shrink to: a reverse proxy in the LAN makes every client look
   local (admin still needs to sign in); DNS rebinding cannot reach admin endpoints without the
   `SameSite=Lax` session cookie.
+- Amendment (2026-11-11, with §3 "Trusted reverse proxies"): the reverse-proxy risk remains
+  only while `server.trusted_proxies` is empty. Then every client of the proxy looks local,
+  so first-run setup (§6) is reachable through the proxy and the cookie lacks `Secure`.
+  Rule for the guides: **do not expose a fresh server through a reverse proxy before setup
+  is complete**, and list the proxy in `server.trusted_proxies`. With the proxy listed,
+  setup and administration through it are served to clients whose resolved address is
+  local and refused for all others; nothing is trusted by default.
 
 ### 10 Migrations
 - `00011` accounts, profiles, library access, sessions/devices; `00012` metadata settings and
   local records (M6-14); `00013` watch state; `00014` age ratings. They merge in numeric order
   (goose refuses missing (out-of-order) versions on existing databases).
+- Amendment (2026-11-11): `00015` unique profile names per account (M7-41, enforces the
+  `409 name_taken` of §1 in the database).
 
 ## Consequences
 

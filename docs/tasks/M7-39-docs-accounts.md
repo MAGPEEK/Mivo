@@ -11,6 +11,11 @@ Synology and Windows, and what changes on upgrade from an alpha.
 - [ ] Docker and Synology guides: first-run setup from the local network, `docker exec … admin
       reset-password`, SSH variant for DSM, data directory to back up (manual backup until
       AD-29).
+- [ ] Reverse proxy section in the Docker and Synology guides (ADR 0032 §3/§9, M7-40): the
+      warning "do not expose a fresh server through a reverse proxy before setup is
+      complete"; `server.trusted_proxies` with one example each for nginx, Caddy and the DSM
+      reverse proxy; the proxy must pass `Host`, set `X-Forwarded-Proto` and overwrite or
+      append `X-Forwarded-For`; what a missing header looks like (everyone is "remote").
 - [ ] Upgrade note: catalog kept, setup wizard appears once, existing bookmarks need sign-in.
 - [ ] `ux-spec.md`: US-25 milestone M7 (moved from M7b), deferred US/AD ids marked "after 0.1.0"
       per the overview; plan status line for milestone 7.

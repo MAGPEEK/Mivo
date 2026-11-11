@@ -49,7 +49,7 @@ this order.
 | M7-22 | HTTP: user administration handlers | mivo-backend | M7-02, M7-17, M7-20 |
 | M7-23 | HTTP: watch handlers, viewer state, row kinds | mivo-backend | M7-03, M7-19, M7-20 |
 | M7-24 | Secret hygiene: redaction words and database file modes | mivo-backend | none |
-| M7-25 | Wiring in `cmd/mivo` | mivo-backend | M7-07, M7-09, M7-10, M7-21, M7-22, M7-23, M7-27, M7-28 |
+| M7-25 | Wiring in `cmd/mivo` | mivo-backend | M7-07, M7-09, M7-10, M7-21, M7-22, M7-23, M7-27, M7-28, M7-40, M7-41 |
 | M7-26 | CLI: `admin reset-password` | mivo-backend | M7-25 |
 | M7-27 | Scripts: playback smoke signs in | mivo-media | M7-01 |
 | M7-28 | E2E harness: first-run setup and signed-in state | mivo-frontend | M7-01 |
@@ -64,6 +64,13 @@ this order.
 | M7-37 | Web: Continue watching and Up next rows (HO-03, HO-04, LB-01) | mivo-frontend | M7-36 |
 | M7-38 | E2E: setup, sign-in, PIN, content limit, resume | mivo-frontend | M7-25, M7-31, M7-33, M7-34, M7-37 |
 | M7-39 | Docs: first run, recovery, upgrade notes, spec updates | mivo-backend | M7-25, M7-26 |
+| M7-40 | Trusted reverse proxies (`server.trusted_proxies`) | mivo-backend | M7-20, M7-21 |
+| M7-41 | Unique profile names per account (migration 00015) | mivo-backend | M7-22 |
+
+Added 2026-11-11 (orchestrator decisions, ADR 0032 amendments): M7-40 after the M7-21 review
+(reverse proxy), M7-41 after the M7-22 review, and the ancestor visibility rule in M7-13 and
+M7-14 after the M7-12 review (an item is visible only if it and every ancestor pass the
+content limit).
 
 Web tasks use the generated client with a stub server (MSW-style, as in M5/M6), so they start
 right after their contract task, before the backend handlers exist.
@@ -78,6 +85,8 @@ right after their contract task, before the backend handlers exist.
 6. M7-14, M7-37.
 7. M7-19.
 8. M7-23.
+8a. **Before M7-25, in parallel with waves 5–8:** M7-40 (startable now) and M7-41 (after
+    M7-22). They share no files with each other or with M7-13/M7-14/M7-19.
 9. M7-25 (integration; turns sign-in on), then M7-26, M7-38, M7-39 in parallel.
 
 Critical path: M7-05 → M7-11 → M7-12 → M7-13 → M7-14 → M7-19 → M7-23 → M7-25 → M7-38.
@@ -97,6 +106,13 @@ Critical path: M7-05 → M7-11 → M7-12 → M7-13 → M7-14 → M7-19 → M7-23
 - HTTP: M7-20 owns `adapters/http/server` and the problem mapping. M7-21, M7-22 and M7-23
   each own their `restapi/<area>*.go` files but all add one field to `restapi/api.go` and
   `restapi/options.go`: develop in parallel, merge one at a time.
+- M7-40 edits `platform/config`, `adapters/http/server` (guards, same-origin, one `Options`
+  field) and only the `secure` flag in `restapi/auth.go`. It must not run at the same time as
+  another task in `adapters/http/server`, and it stays out of `restapi/api.go`,
+  `restapi/options.go` (M7-22/M7-23) and `cmd/mivo`; M7-25 passes the setting to the server.
+- M7-41 owns migration `00015`, the profile statements in `queries/accounts.sql` and
+  `account_store*.go`; `sqlcgen` is regenerated after the merge. If M7-13 chooses the stored
+  visibility columns it takes migration `00016` and merges after M7-41 (number order).
 - `cmd/mivo` is touched only by M7-25 and then M7-26.
 - Web: features are disjoint (`features/auth`, `features/profiles`, `features/users`,
   `features/devices`, `packages/player-core` + `features/player`, `features/item` +
