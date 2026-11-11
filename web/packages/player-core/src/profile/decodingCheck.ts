@@ -45,11 +45,23 @@ export function createDecodingCheck(probes: ClientProbes): DecodingCheck {
     let answer = answers.get(key);
     if (answer === undefined) {
       const configuration = decodingConfiguration(type, contentType, kind);
-      answer = withTimeout(askDecodingInfo(mediaCapabilities, configuration), startTimer);
+      answer = timedDecodingInfo(mediaCapabilities, configuration, startTimer);
       answers.set(key, answer);
     }
     return answer;
   };
+}
+
+/**
+ * One `decodingInfo` answer, bounded by {@link decodingInfoTimeoutMilliseconds}: a rejection, a
+ * throw and a late answer all count as unsupported.
+ */
+export function timedDecodingInfo(
+  probe: MediaCapabilitiesProbe,
+  configuration: DecodingConfiguration,
+  startTimer: StartTimer,
+): Promise<boolean> {
+  return withTimeout(askDecodingInfo(probe, configuration), startTimer);
 }
 
 /** decodingInfo rejects types it does not know (ADR 0023): that is an answer, not a failure. */

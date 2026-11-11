@@ -163,3 +163,102 @@ export {
   type FilePosition,
   type TimelineChapter,
 } from "./audiobook/bookTimeline";
+export { subtitleFormatLabel } from "./labels/formatLabels";
+export {
+  audioLimitBounds,
+  detectAudioLimits,
+  probedChannelCounts,
+  probedSampleRates,
+  type AudioLimitHints,
+  type AudioLimits,
+} from "./profile/audioLimits";
+export {
+  renderedSubtitleFormats,
+  withPlaybackPreferences,
+  type PlaybackPreferences,
+} from "./profile/playbackPreferences";
+export {
+  isLanguageTag,
+  languageRank,
+  maxLanguageTagLength,
+  maxPreferredLanguages,
+  normalizeLanguage,
+  preferredLanguageList,
+  sameLanguage,
+} from "./tracks/language";
+export {
+  audioTracks,
+  sessionAudioIndex,
+  sessionSidecarTrack,
+  sessionSubtitle,
+  subtitleTracks,
+  type AudioTrack,
+  type SubtitleTrack,
+  type TrackSession,
+  type TrackSource,
+  type TrackSourceStream,
+  type TrackSourceSubtitle,
+} from "./tracks/trackModel";
+export {
+  defaultAudioTrack,
+  defaultSubtitleTrack,
+  trackPreferenceOf,
+  type TrackPreference,
+} from "./tracks/defaultTracks";
+export {
+  buildRestartRequest,
+  buildSessionRequest,
+  isSubtitleTrackId,
+  originalQualityBitRate,
+  subtitlesOffTrackId,
+  type PlaybackRequestBody,
+  type RestartableSession,
+  type RestartRequestOptions,
+  type SessionRequestOptions,
+  type TrackSelection,
+} from "./session/sessionRequest";
+export {
+  planAudioSwitch,
+  planQualitySwitch,
+  planSubtitleSwitch,
+  shownSubtitleTrackId,
+  type NoSwitch,
+  type RestartSwitch,
+  type SidecarSwitch,
+  type SwitchPlan,
+  type SwitchState,
+} from "./session/trackSwitch";
+export {
+  activeCues,
+  maxSubtitleCues,
+  parseWebVtt,
+  subtitleFileTime,
+  type SubtitleCue,
+} from "./subtitles/webVtt";
+export {
+  qualityLadder,
+  qualityOptions,
+  type LimitedQuality,
+  type OriginalQuality,
+  type QualityOption,
+  type QualityStep,
+} from "./quality/qualityOptions";
+export {
+  createAutoQuality,
+  minimumSampleBytes,
+  stepUpHoldDownMilliseconds,
+  throughputSafetyFactor,
+  throughputSmoothingFactor,
+  type AutoQuality,
+  type AutoQualityOptions,
+  type ThroughputSample,
+} from "./quality/autoQuality";
+export {
+  trickplayPollDelay,
+  trickplayPollIntervalMilliseconds,
+  trickplayPollMaxAttempts,
+  trickplayPollMaxIntervalMilliseconds,
+  trickplayTile,
+  type TrickplayLayout,
+  type TrickplayTile,
+} from "./trickplay/trickplay";

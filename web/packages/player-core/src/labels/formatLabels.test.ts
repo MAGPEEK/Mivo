@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 
-import { codecLabel, containerLabel } from "./formatLabels";
+import { codecLabel, containerLabel, subtitleFormatLabel } from "./formatLabels";
+
+describe("subtitleFormatLabel", () => {
+  it.each([
+    ["subrip", "SRT"],
+    ["webvtt", "WebVTT"],
+    ["mov_text", "TX3G"],
+    ["hdmv_pgs_subtitle", "PGS"],
+    ["dvd_subtitle", "VobSub"],
+    ["dvb_subtitle", "DVB"],
+    ["ass", "ASS"],
+    ["constructor", "CONSTRUCTOR"],
+  ])("labels %s as %s", (format, expected) => {
+    expect(subtitleFormatLabel(format)).toBe(expected);
+  });
+});
 
 describe("containerLabel", () => {
   it.each([

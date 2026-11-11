@@ -28,6 +28,10 @@ export interface VideoDecodingConfiguration {
 /** Audio part of a decoding query, a subset of the DOM's `AudioConfiguration`. */
 export interface AudioDecodingConfiguration {
   readonly contentType: string;
+  /** Number of channels as a decimal string, as the DOM spells it (`"6"` for 5.1). */
+  readonly channels?: string;
+  /** Sample rate in Hz. */
+  readonly samplerate?: number;
 }
 
 /** A decoding query, a subset of the DOM's `MediaDecodingConfiguration`. */

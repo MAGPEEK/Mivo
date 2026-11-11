@@ -29,6 +29,16 @@ const codecLabels: ReadonlyMap<string, string> = new Map([
   ["wmav2", "WMA"],
 ]);
 
+// Subtitle formats by their common names; ffprobe names them after the codec.
+const subtitleFormatLabels: ReadonlyMap<string, string> = new Map([
+  ["subrip", "SRT"],
+  ["webvtt", "WebVTT"],
+  ["mov_text", "TX3G"],
+  ["hdmv_pgs_subtitle", "PGS"],
+  ["dvd_subtitle", "VobSub"],
+  ["dvb_subtitle", "DVB"],
+]);
+
 // ffprobe names every PCM sample format separately (pcm_s16le, pcm_s24be, pcm_f32le, ...).
 const pcmCodecPrefix = "pcm_";
 const pcmLabel = "PCM";
@@ -44,4 +54,9 @@ export function codecLabel(codec: string): string {
     return pcmLabel;
   }
   return codecLabels.get(codec) ?? codec.toUpperCase();
+}
+
+/** Label of a subtitle format, e.g. `subrip` → `SRT`, `hdmv_pgs_subtitle` → `PGS`, `ass` → `ASS`. */
+export function subtitleFormatLabel(format: string): string {
+  return subtitleFormatLabels.get(format) ?? codecLabel(format);
 }
