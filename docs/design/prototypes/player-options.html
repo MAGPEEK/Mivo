@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype: Playback options panel</title>
+<style>
+:root{
+  --bg:#0e1014;--surface:#181b21;--raised:#22262e;--divider:#2c313a;--text:#e8eaed;--muted:#9aa0a6;
+  --accent:#ff6b57;--accent-hover:#ff8572;--on-accent:#3a0e07;--dp:#3dd68c;--ds:#4c9aff;--tc:#f5b544;--err:#ff9c8f;
+  --r-sm:6px;--r-md:8px;--r-lg:10px;--shadow:0 16px 48px rgb(0 0 0/.55);
+  --font:"Inter Variable",Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--font)}
+a{color:inherit}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.muted{color:var(--muted)}
+/* legend */
+.legend{background:#1d1410;border-bottom:1px solid #4a2a22;padding:12px 16px;font-size:13px}
+.legend summary{cursor:pointer;font-weight:600}
+.legend ul,.legend ol{margin:6px 0;padding-left:20px}
+.legend code{background:var(--raised);padding:0 4px;border-radius:4px}
+/* prototype chrome */
+.topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--divider);flex-wrap:wrap}
+.logo{font-weight:800;color:var(--accent);font-size:18px}
+.topbar .grow{flex:1;min-width:120px}
+.chip-btn{background:transparent;border:1px solid var(--divider);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--muted)}
+.chip-btn[aria-pressed=true]{background:var(--raised);color:var(--text);border-color:var(--accent)}
+.statebar{display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap;padding:6px 16px;background:var(--surface);font-size:12px;border-bottom:1px solid var(--divider)}
+.statebar label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.statebar input{accent-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--divider);background:var(--raised);border-radius:var(--r-md);padding:8px 14px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.linkbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:4px 8px;text-align:left}
+.badge{display:inline-block;font-size:11px;font-weight:700;border:1px solid var(--muted);border-radius:4px;padding:0 5px;color:var(--text);vertical-align:1px}
+/* player */
+.player{position:relative;height:calc(100vh - 96px);min-height:600px;background:#000;overflow:hidden}
+.video{position:absolute;inset:0;background:radial-gradient(ellipse at 30% 40%,#3b2a5a,#0b0b14 70%);display:grid;place-items:center;color:rgb(255 255 255/.15);font-size:48px;font-weight:800}
+.subline{position:absolute;left:16px;right:16px;bottom:150px;text-align:center;pointer-events:none;z-index:1}
+.subline span{background:rgb(0 0 0/.6);padding:2px 10px;border-radius:4px;font-size:calc(var(--subsize,22px)*var(--subscale,1));line-height:1.35;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.subline.burned span{background:none;font-size:calc(24px*var(--subscale,1));font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000,1px 1px 2px #000}
+.p-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 16px;background:linear-gradient(rgb(0 0 0/.6),transparent);z-index:2}
+.p-bottom{position:absolute;left:0;right:0;bottom:0;padding:0 16px 12px;background:linear-gradient(transparent,rgb(0 0 0/.85) 40%);z-index:6}
+.seek{position:relative;height:28px;display:flex;align-items:center}
+.seek .rail{position:relative;height:5px;width:100%;background:rgb(255 255 255/.2);border-radius:3px}
+.seek .buffered{position:absolute;left:0;top:0;bottom:0;width:38%;background:rgb(255 255 255/.25);border-radius:3px}
+.seek .played{position:absolute;left:0;top:0;bottom:0;width:12%;background:var(--accent);border-radius:3px}
+.seek .knob{position:absolute;left:12%;top:50%;width:14px;height:14px;border-radius:50%;background:var(--accent);transform:translate(-50%,-50%)}
+.p-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.p-left{min-width:0}
+.p-left b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-center,.p-right{display:flex;gap:4px;align-items:center}
+.p-right{justify-content:flex-end}
+.pbtn{background:none;border:0;border-radius:var(--r-sm);padding:6px 8px;cursor:pointer;font-size:16px;line-height:1;min-width:34px;min-height:34px}
+.pbtn:hover{background:rgb(255 255 255/.12)}
+.pbtn[aria-expanded=true]{color:var(--accent)}
+.pbtn.big{font-size:24px}
+.pbtn[disabled]{opacity:.4;cursor:not-allowed}
+.mode{border:1px solid currentColor;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;background:rgb(0 0 0/.4);cursor:pointer;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.mode::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.mode.dp{color:var(--dp)}.mode.ds{color:var(--ds)}.mode.tc{color:var(--tc)}
+span.mode{cursor:default}
+.vol{width:80px;accent-color:var(--accent)}
+/* switching spinner (PL-11) */
+.switching{position:absolute;inset:0;z-index:4;display:grid;place-items:center;background:rgb(0 0 0/.55);text-align:center;padding:16px}
+.switching .box{display:grid;justify-items:center;gap:10px;font-size:16px;font-weight:600}
+.switching small{font-weight:400;color:#c9ced3;font-size:13px}
+.spin{flex:none;width:16px;height:16px;border-radius:50%;border:2px solid rgb(255 255 255/.25);border-top-color:var(--accent);animation:spin .8s linear infinite}
+.spin.lg{width:40px;height:40px;border-width:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* toasts */
+.toasts{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:9;display:grid;gap:8px;width:min(560px,calc(100% - 24px))}
+.toast{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--divider);border-left:4px solid var(--ds);border-radius:var(--r-md);box-shadow:var(--shadow);padding:10px 12px}
+.toast.warn{border-left-color:var(--tc)}
+.toast span{flex:1}
+/* scrim + panel (9.2) */
+.scrim{position:absolute;inset:0;z-index:5;background:rgb(0 0 0/.25)}
+.panel{position:absolute;left:16px;right:16px;bottom:104px;max-height:calc(100% - 170px);overflow:auto;z-index:7;background:rgb(24 27 33/.98);border:1px solid var(--divider);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:14px 16px;animation:up .18s ease-out}
+@keyframes up{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.panel-head h2{margin:0;font-size:16px}
+.grabber{display:none}
+.tabs{display:none}
+.opt-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.opt-grid h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px;padding:0 8px}
+.mi{width:100%;display:flex;gap:10px;align-items:flex-start;text-align:left;background:none;border:0;border-radius:var(--r-sm);padding:7px 8px;cursor:pointer}
+.mi:hover,.mi:focus-visible{background:var(--raised)}
+.mi[aria-checked=true]{background:rgb(255 107 87/.10)}
+.mi[aria-disabled=true]{cursor:progress;opacity:.6}
+.mi .mark{flex:none;width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);margin-top:2px;display:grid;place-items:center}
+.mi[aria-checked=true] .mark{border-color:var(--accent)}
+.mi[aria-checked=true] .mark::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.mi-body{flex:1;min-width:0}
+.mi-title{font-weight:600}
+.mi small{display:block;color:var(--muted);font-size:12px}
+.mi small.warn{color:var(--tc)}
+.mi small.err{color:var(--err)}
+.hint{font-size:12px;color:var(--muted);margin:6px 8px 0}
+.sizes{display:flex;gap:4px;flex-wrap:wrap;padding:0 8px}
+.sizes button{background:var(--raised);border:1px solid var(--divider);border-radius:999px;padding:5px 12px;cursor:pointer}
+.sizes button[aria-checked=true]{border-color:var(--accent);color:var(--accent);font-weight:600}
+.sizes button[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.m5{margin:16px 8px 0;padding-top:12px;border-top:1px solid var(--divider)}
+.m5 label{display:flex;gap:8px;align-items:center;margin-top:8px}
+.m5 select{background:var(--surface);border:1px solid var(--divider);border-radius:var(--r-sm);padding:5px 8px}
+.m5 input{accent-color:var(--accent)}
+.panel-foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--divider);font-size:13px}
+.panel-foot .line{flex:1;min-width:180px}
+/* stream-info overlay (PL-41/42) */
+.overlay{position:absolute;top:56px;left:16px;z-index:8;width:min(480px,calc(100% - 32px));max-height:calc(100% - 180px);overflow:auto;background:rgb(14 16 20/.94);border:1px solid var(--divider);border-radius:var(--r-lg);padding:14px;font-size:13px}
+.overlay-head{display:flex;justify-content:space-between;align-items:center}
+.overlay dl{display:grid;grid-template-columns:110px 1fr;gap:4px 10px;margin:8px 0 0}
+.overlay dt{color:var(--muted)}
+.overlay dd{margin:0;font-family:var(--mono);font-size:12px}
+.why{border-left:3px solid var(--tc);padding:4px 10px;margin:6px 0;background:rgb(245 181 68/.08)}
+.why b{color:var(--tc)}
+.why.info{border-color:var(--ds);background:rgb(76 154 255/.08)}
+.why.info b{color:var(--ds)}
+.why.ok{border-color:var(--dp);background:rgb(61 214 140/.08)}
+.why.ok b{color:var(--dp)}
+.why i{display:block;font-style:normal;color:var(--muted)}
+/* responsive preview */
+.preview-frame{position:fixed;inset:0;z-index:100;background:rgb(0 0 0/.8);display:grid;place-items:center}
+.preview-frame iframe{border:1px solid var(--divider);background:var(--bg);height:calc(100vh - 80px);max-width:100%}
+body.embedded .legend,body.embedded .previewctl{display:none}
+body.embedded .player{height:calc(100vh - 110px);min-height:480px}
+/* tablet */
+@media (max-width:1100px){
+  .opt-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .hide-tablet{display:none}
+}
+/* phone: bottom sheet with one section at a time */
+@media (max-width:700px){
+  .player{--subscale:.7}
+  .hide-phone{display:none}
+  .p-bar{grid-template-columns:1fr auto}
+  .p-center{grid-column:1/-1;grid-row:2;justify-content:center}
+  .subline{bottom:170px}
+  .panel{left:0;right:0;bottom:0;max-height:82%;border-radius:16px 16px 0 0;border-width:1px 0 0;padding:8px 12px 16px}
+  .grabber{display:block;width:40px;height:4px;border-radius:2px;background:var(--divider);margin:0 auto 8px}
+  .tabs{display:flex;gap:4px;overflow-x:auto;margin-bottom:10px;border-bottom:1px solid var(--divider)}
+  .tabs button{flex:1;background:none;border:0;border-bottom:3px solid transparent;padding:10px 8px;min-height:44px;cursor:pointer;color:var(--muted);white-space:nowrap}
+  .tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+  .opt-grid{display:block}
+  .opt-grid h3{display:none}
+  .opt-grid #sec-more h3{display:block}
+  .mi{min-height:44px;padding:9px 8px}
+  .sizes button{min-height:44px;padding:5px 16px}
+  .overlay{left:8px;right:8px;width:auto}
+}
+@media (prefers-reduced-motion:reduce){.panel{animation:none}.spin{animation-duration:2.4s}}
+</style>
+</head>
+<body>
+
+<details class="legend" open>
+  <summary>Legend – prototype "Playback options panel" (draft, M4-16b)</summary>
+  <ul>
+    <li><b>ux-spec ids:</b> PL-10 (quality: Original / Automatic / ladder steps below the source, ADR 0030 §6), PL-11 (audio tracks, restart with spinner), PL-12 (subtitles: Off, text tracks, forced/SDH/external badges, image track with burn-in hint), PL-13 (subtitle size only), PL-40 (mode badge changes live), PL-41/PL-42 (stream-info overlay with reasons, warnings and hints). PL-04 (bar) and PL-14/PL-15 (auto play, speed) are shown as approved in <code>detail.html</code>. <b>Target milestone: M4.</b></li>
+    <li><b>Not shown:</b> "Search online…" (PL-20, M6), "Upload…" (PL-21, M7), position/background of PL-13 ("More"), styled ASS (M4-19, post-0.1.0), TV side panel.</li>
+    <li><b>How to try it:</b> the gear button in the player bar opens the panel (focus lands on the current audio track; <kbd>Esc</kbd>, ✕ or a click on the video closes it and focus returns to the gear). In a list <kbd>↑</kbd>/<kbd>↓</kbd> move, <kbd>Enter</kbd>/<kbd>Space</kbd> choose, <kbd>Tab</kbd> goes to the next section. <kbd>I</kbd> or the mode badge opens the stream info. The bar "Simulate" switches the sample file and the server state.</li>
+    <li><b>States:</b> <i>Several tracks</i> (MKV, 5 audio, 5 subtitles – default state is Transcode because of E-AC3; pick an AAC track to see Direct Stream), <i>One audio track</i> (MP4, Direct Play, ladder shows only steps below the source), <i>No subtitles</i> (also an audio track without a language tag). <i>Server cannot burn in</i> + the PGS track = switch refused (<code>subtitle_burn_in_unavailable</code>). <i>Slow switch</i> keeps the loading state for 4 s.</li>
+    <li><b>Responsive:</b> Preview 1440 / 1024 / 390. Phone: bottom sheet with one section per tab.</li>
+    <li><b>Sample data</b> is invented and follows the 1.16.0 contract (<code>MediaStream</code>, <code>SubtitleTrack</code>, <code>PlaybackSession</code>, <code>StreamDecision</code>, <code>PlaybackReason</code>). The server decision is simulated in the page. Resolutions per ladder step (20/12/8 → 1080p, 4 → 720p, 2/1 → 480p) are an assumption from ADR 0030 §6.</li>
+    <li><b>Open questions for the owner</b> (default in brackets – used if you do not object):
+      <ol>
+        <li>Q1 – Section order: as in the ux-spec (Quality, Audio, Subtitles, Size); keyboard focus and the phone sheet start on <i>Audio</i> because language switching is the main use. Or move Audio to the first column? [as drawn]</li>
+        <li>Q2 – The panel stays open after a choice so the new mode is visible; Esc, ✕ or a click on the video closes it. Or close it after every choice? [stays open]</li>
+        <li>Q3 – Rows say beforehand what a choice costs ("converted to AAC", "burned in – video is converted"). [yes]</li>
+        <li>Q4 – Burn-in refused: subtitles are Off afterwards (ADR 0030 §3), with a message and a note on the row. Alternative: fall back to the text subtitle that was shown before. [Off]</li>
+        <li>Q5 – "Original" stays checked as long as no bitrate limit is chosen, even when only the audio is converted (ux-spec PL-10 says: checked for Direct Play/Direct Stream only). The mode line below explains the difference. [as drawn]</li>
+        <li>Q6 – Fixed steps sit behind "Show all steps" (ux-spec); a chosen step stays visible. Or always list them? [behind "Show all steps"]</li>
+        <li>Q7 – Phone: tabs inside the bottom sheet, or a drill-down list (Audio › list › back)? [tabs]</li>
+        <li>Q8 – Audio rows lead with the language name, codec/channels/title below, tracks in file order. Or group by language? [as drawn]</li>
+        <li>Q9 – ASS subtitles are shown as plain text with the note "without styling" until M4-19. [yes]</li>
+      </ol>
+    </li>
+  </ul>
+</details>
+
+<header class="topbar">
+  <span class="logo" id="brand"></span>
+  <span class="grow muted" data-i18n="nav.title">Prototyp: Wiedergabeoptionen</span>
+  <span class="previewctl" style="display:flex;gap:4px;align-items:center"><span class="muted" style="font-size:12px" data-i18n="nav.preview">Vorschau:</span>
+    <button class="chip-btn" data-preview="1440">1440</button><button class="chip-btn" data-preview="1024">1024</button><button class="chip-btn" data-preview="390">390</button></span>
+  <button class="chip-btn" id="langToggle" aria-label="Sprache / language"><b>DE</b> · EN</button>
+</header>
+
+<div class="statebar" role="group" aria-label="Prototype controls">
+  <span class="muted" data-i18n="sim.label">Simulieren:</span>
+  <button class="chip-btn" data-scn="a" aria-pressed="true" data-i18n="sim.a">Mehrere Spuren</button>
+  <button class="chip-btn" data-scn="b" aria-pressed="false" data-i18n="sim.b">Eine Tonspur</button>
+  <button class="chip-btn" data-scn="c" aria-pressed="false" data-i18n="sim.c">Keine Untertitel</button>
+  <label><input type="checkbox" id="simRefuse"><span data-i18n="sim.refuse">Server kann nicht einbrennen (schwaches NAS)</span></label>
+  <label><input type="checkbox" id="simSlow"><span data-i18n="sim.slow">Langsamer Wechsel (4 s)</span></label>
+</div>
+
+<main>
+<div class="player" id="player">
+  <div class="video" aria-hidden="true">▶︎ VIDEO</div>
+  <div class="subline" id="subline" aria-hidden="true" hidden><span id="cue"></span></div>
+
+  <div class="p-top">
+    <button class="pbtn" data-i18n-label="bar.minimise" aria-label="Minimieren">▾</button>
+    <button class="pbtn" data-i18n-label="bar.fullscreen" aria-label="Vollbild">⛶</button>
+  </div>
+
+  <!-- PL-11: restart at the current position -->
+  <div class="switching" id="switching" hidden>
+    <div class="box"><span class="spin lg" aria-hidden="true"></span><span id="swText"></span><small data-i18n="sw.pos">Die Wiedergabe geht an derselben Stelle weiter.</small></div>
+  </div>
+
+  <div class="toasts">
+    <div class="toast" id="toast" role="status" hidden><span></span></div>
+    <div class="toast warn" id="alert" role="alert" hidden><span></span><button class="pbtn" id="alertClose" data-i18n-label="a.close" aria-label="Schließen">✕</button></div>
+  </div>
+  <div class="sr" id="live" role="status"></div>
+
+  <!-- PL-41 / PL-42 -->
+  <div class="overlay" id="streamInfo" hidden role="dialog" aria-labelledby="ovTitle">
+    <div class="overlay-head"><span><span class="sr" id="ovTitle" data-i18n="ov.title">Stream-Info</span><span class="mode" id="ovMode"></span></span><button class="pbtn" id="ovClose" data-i18n-label="a.close" aria-label="Schließen">✕</button></div>
+    <div id="ovWhy"></div>
+    <dl id="ovDl"></dl>
+  </div>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- 9.2 playback options panel -->
+  <div class="panel" id="optPanel" hidden role="dialog" aria-modal="true" aria-labelledby="optTitle">
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="panel-head"><h2 id="optTitle" data-i18n="p.options">Wiedergabeoptionen</h2><button class="pbtn" id="optClose" data-i18n-label="a.close" aria-label="Schließen">✕</button></div>
+    <div class="tabs" id="tabs" role="tablist" aria-labelledby="optTitle" hidden>
+      <button role="tab" id="tab-quality" data-tab="quality" aria-controls="sec-quality" data-i18n="p.quality">Qualität</button>
+      <button role="tab" id="tab-audio" data-tab="audio" aria-controls="sec-audio" data-i18n="p.audio">Audio</button>
+      <button role="tab" id="tab-subs" data-tab="subs" aria-controls="sec-subs" data-i18n="p.subs">Untertitel</button>
+      <button role="tab" id="tab-more" data-tab="more" aria-controls="sec-more" data-i18n="p.more">Mehr</button>
+    </div>
+    <div class="opt-grid">
+      <!-- PL-10 -->
+      <div id="sec-quality" data-sec="quality">
+        <h3 id="h-quality" data-i18n="p.quality">Qualität</h3>
+        <div role="menu" id="m-q" aria-labelledby="h-quality"></div>
+        <button class="linkbtn" id="showAll" aria-expanded="false" aria-controls="m-q"></button>
+        <p class="hint" id="qHint"></p>
+      </div>
+      <!-- PL-11 -->
+      <div id="sec-audio" data-sec="audio">
+        <h3 id="h-audio" data-i18n="p.audio">Audio</h3>
+        <div role="menu" id="m-audio" aria-labelledby="h-audio"></div>
+        <p class="hint" id="audioHint"></p>
+      </div>
+      <!-- PL-12 -->
+      <div id="sec-subs" data-sec="subs">
+        <h3 id="h-subs" data-i18n="p.subs">Untertitel</h3>
+        <div role="menu" id="m-sub" aria-labelledby="h-subs"></div>
+        <p class="hint" id="subsHint"></p>
+      </div>
+      <!-- PL-13 (+ PL-14/15 as approved in detail.html) -->
+      <div id="sec-more" data-sec="more">
+        <h3 id="h-size" data-i18n="p.size">Untertitelgröße</h3>
+        <div class="sizes" id="sizes" role="radiogroup" aria-labelledby="h-size" aria-describedby="sizeHint">
+          <button type="button" role="radio" data-size="small" data-i18n="size.small">Klein</button>
+          <button type="button" role="radio" data-size="normal" data-i18n="size.normal">Normal</button>
+          <button type="button" role="radio" data-size="large" data-i18n="size.large">Groß</button>
+          <button type="button" role="radio" data-size="huge" data-i18n="size.huge">Sehr groß</button>
+        </div>
+        <p class="hint" id="sizeHint"></p>
+        <div class="m5">
+          <label><span data-i18n="p.speed">Geschwindigkeit</span>
+            <select id="speed"><option>0.5×</option><option>0.75×</option><option selected>1.0×</option><option>1.25×</option><option>1.5×</option><option>2.0×</option></select></label>
+          <label><input type="checkbox" checked><span data-i18n="p.autoplay">Nächste automatisch abspielen</span></label>
+        </div>
+      </div>
+    </div>
+    <!-- current mode + pointer to the overlay -->
+    <div class="panel-foot">
+      <span class="mode" id="footMode"></span>
+      <span class="line" id="footLine"></span>
+      <button class="btn" id="footInfo" style="padding:5px 12px"><span data-i18n="p.info">Stream-Info</span> <kbd class="muted">I</kbd></button>
+    </div>
+  </div>
+
+  <div class="p-bottom">
+    <div class="seek" role="slider" tabindex="0" aria-valuemin="0" aria-valuemax="5940" aria-valuenow="724" aria-valuetext="0:12:04" data-i18n-label="bar.seek" aria-label="Position">
+      <div class="rail"><div class="buffered"></div><div class="played"></div><div class="knob"></div></div>
+    </div>
+    <div class="p-bar">
+      <div class="p-left"><b id="pTitle"></b><span class="muted"><span id="pYear"></span> · 0:12:04 / 1:39:00</span></div>
+      <div class="p-center">
+        <button class="pbtn hide-phone" disabled data-i18n-label="bar.prev" aria-label="Vorheriges">⏮</button>
+        <button class="pbtn" data-i18n-label="bar.back" aria-label="10 Sekunden zurück">↺</button>
+        <button class="pbtn big" id="playBtn" data-i18n-label="bar.pause" aria-label="Pause">❚❚</button>
+        <button class="pbtn" data-i18n-label="bar.fwd" aria-label="30 Sekunden vor">↻</button>
+        <button class="pbtn hide-phone" disabled data-i18n-label="bar.next" aria-label="Nächstes">⏭</button>
+        <button class="pbtn hide-phone" data-i18n-label="bar.stop" aria-label="Stopp">■</button>
+      </div>
+      <div class="p-right">
+        <button class="mode" id="modeBtn" aria-expanded="false" aria-controls="streamInfo"></button>
+        <button class="pbtn hide-tablet" data-i18n-label="bar.more" aria-label="Mehr">⋮</button>
+        <button class="pbtn" id="gear" aria-haspopup="dialog" aria-expanded="false" aria-controls="optPanel" data-i18n-label="p.options" aria-label="Wiedergabeoptionen">⚙</button>
+        <button class="pbtn hide-phone" data-i18n-label="bar.queue" aria-label="Warteschlange">☰</button>
+        <button class="pbtn hide-phone" data-i18n-label="bar.mute" aria-label="Stumm">🔊</button>
+        <input class="vol hide-tablet" type="range" min="0" max="100" value="80" data-i18n-label="bar.volume" aria-label="Lautstärke">
+      </div>
+    </div>
+  </div>
+</div>
+</main>
+
+<div class="preview-frame" id="previewFrame" hidden><div style="text-align:right;width:100%;padding:0 12px"><button class="btn" id="previewClose" data-i18n="nav.close">Vorschau schließen</button></div><iframe id="previewIframe" title="Responsive preview"></iframe></div>
+
+<script>
+"use strict";
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+/* The product name lives in one constant (real app: web/packages/ui-tokens/src/brand.ts). */
+const BRAND="Mivo";
+
+/* ---------- sample data (invented; shapes follow api/openapi.yaml 1.16.0) ---------- */
+/* ADR 0030 §6 ladder; heights per step are an assumption (see legend). */
+const LADDER=[{mbit:20,height:1080},{mbit:12,height:1080},{mbit:8,height:1080},{mbit:4,height:720},{mbit:2,height:480},{mbit:1,height:480}];
+const SIZES={small:16,normal:22,large:30,huge:40};
+const FILES={
+  a:{title:"The Lighthouse Keeper",year:"2023",container:"mkv",bitRate:14200000,
+     video:{index:0,codec:"h264",width:1920,height:1080},
+     audio:[
+       {index:1,codec:"eac3",channels:6,language:"ger",title:"Deutsch 5.1",default:true},
+       {index:2,codec:"aac",channels:2,language:"ger"},
+       {index:3,codec:"eac3",channels:6,language:"eng",title:"English 5.1"},
+       {index:4,codec:"aac",channels:2,language:"eng",title:"Director's commentary"},
+       {index:5,codec:"ac3",channels:6,language:"fra"}],
+     subs:[
+       {id:"s:6",language:"ger",title:"Deutsch (Forced)",format:"subrip",forced:true,sdh:false,external:false,textBased:true},
+       {id:"s:7",language:"ger",format:"subrip",forced:false,sdh:false,external:false,textBased:true},
+       {id:"s:8",language:"eng",format:"subrip",forced:false,sdh:true,external:false,textBased:true},
+       {id:"s:9",language:"eng",format:"hdmv_pgs_subtitle",forced:false,sdh:false,external:false,textBased:false},
+       {id:"x:9f2c41",language:"fra",format:"ass",forced:false,sdh:false,external:true,textBased:true}],
+     defAudio:1,defSub:"s:6"},
+  b:{title:"Harbour Lights",year:"2019",container:"mp4",bitRate:3600000,
+     video:{index:0,codec:"h264",width:1280,height:720},
+     audio:[{index:1,codec:"aac",channels:2,language:"eng",default:true}],
+     subs:[{id:"x:41b07d",language:"ger",format:"subrip",forced:false,sdh:false,external:true,textBased:true}],
+     defAudio:1,defSub:"off"},
+  c:{title:"Tidewater · S1 · E3 · Low Tide",year:"2021",container:"mkv",bitRate:9800000,
+     video:{index:0,codec:"h264",width:1920,height:1080},
+     audio:[
+       {index:1,codec:"truehd",channels:8,language:"eng",default:true},
+       {index:2,codec:"aac",channels:2}],
+     subs:[],defAudio:1,defSub:"off"}
+};
+const CODEC={h264:"H.264",hevc:"HEVC",aac:"AAC",ac3:"AC3",eac3:"E-AC3",truehd:"TrueHD",dts:"DTS",subrip:"SRT",ass:"ASS",webvtt:"WebVTT",hdmv_pgs_subtitle:"PGS",dvd_subtitle:"VobSub"};
+const CHANNELS={1:"1.0",2:"2.0",6:"5.1",8:"7.1"};
+const CUES={ger:"Hörst du das? Es kommt wieder.",eng:"Do you hear that? It's coming back.",fra:"Tu entends ça ? Ça revient.",sdh:"[wind howling] Do you hear that?",forced:"[Bretonisch] Das Licht darf nie ausgehen."};
+
+/* ---------- texts ---------- */
+const DE={
+"nav.title":"Prototyp: Wiedergabeoptionen","nav.preview":"Vorschau:","nav.close":"Vorschau schließen",
+"sim.label":"Simulieren:","sim.a":"Mehrere Spuren","sim.b":"Eine Tonspur","sim.c":"Keine Untertitel",
+"sim.refuse":"Server kann nicht einbrennen (schwaches NAS)","sim.slow":"Langsamer Wechsel (4 s)",
+"a.close":"Schließen","ov.title":"Stream-Info",
+"bar.minimise":"Minimieren","bar.fullscreen":"Vollbild","bar.seek":"Position","bar.prev":"Vorheriges","bar.back":"10 Sekunden zurück",
+"bar.pause":"Pause","bar.play":"Wiedergabe","bar.fwd":"30 Sekunden vor","bar.next":"Nächstes","bar.stop":"Stopp","bar.more":"Mehr",
+"bar.queue":"Warteschlange","bar.mute":"Stumm","bar.volume":"Lautstärke","bar.mode":"Stream-Info, Modus: {mode}",
+"p.options":"Wiedergabeoptionen","p.quality":"Qualität","p.audio":"Audio","p.subs":"Untertitel","p.more":"Mehr","p.size":"Untertitelgröße",
+"p.speed":"Geschwindigkeit","p.autoplay":"Nächste automatisch abspielen","p.info":"Stream-Info",
+"q.original":"Original","q.auto":"Automatisch","q.autoNow":"derzeit Original (Heimnetz)","q.showAll":"Alle Stufen anzeigen","q.showLess":"Weniger anzeigen",
+"q.hint":"Stufen unter der Quelle wandeln das Video um. Gilt für dieses Gerät.","q.hintNone":"Die Quelle liegt unter der kleinsten Stufe. Gilt für dieses Gerät.",
+"audio.restart":"Beim Wechsel startet der Stream kurz neu.","audio.single":"Diese Datei hat nur eine Tonspur.",
+"row.audioTc":"wird nach AAC umgewandelt","row.burn":"wird eingebrannt – Video wird umgewandelt","row.refused":"Gerade nicht möglich: Der Server kann nicht einbrennen.",
+"sub.off":"Aus","sub.none":"Diese Datei hat keine Untertitel.","sub.hint":"Text-Untertitel wechseln sofort.","sub.plain":"ohne Formatierung",
+"b.forced":"Erzwungen","b.sdh":"SDH","b.external":"Extern",
+"size.small":"Klein","size.normal":"Normal","size.large":"Groß","size.huge":"Sehr groß",
+"size.device":"Gilt für dieses Gerät.","size.off":"Kein Untertitel aktiv.","size.burn":"Eingebrannte Untertitel lassen sich nicht anpassen.",
+"lang.ger":"Deutsch","lang.eng":"Englisch","lang.fra":"Französisch","lang.und":"Unbekannte Sprache",
+"sw.audio":"Tonspur wird gewechselt …","sw.sub":"Untertitel werden gewechselt – der Stream startet neu …","sw.q":"Qualität wird gewechselt …","sw.pos":"Die Wiedergabe geht an derselben Stelle weiter.",
+"toast.cap":"Qualität auf {n} Mbit/s begrenzt – das Video wird umgewandelt.","toast.burn":"Der Untertitel wird eingebrannt – das Video wird umgewandelt.",
+"toast.refused":"Dieser Untertitel muss ins Video eingebrannt werden. Das kann der Server gerade nicht (Transcoding-Limit erreicht oder Transcoding ausgeschaltet). Untertitel bleiben aus.",
+"live.done":"Tonspur: {audio}. Untertitel: {sub}. Qualität: {q}. Modus: {mode}.",
+"line.dp":"Die Datei wird unverändert abgespielt.","line.ds":"Video und Ton werden unverändert neu verpackt.",
+"line.audio":"Ton wird umgewandelt ({from} → {to})","line.burn":"Video wird umgewandelt (Untertitel eingebrannt)","line.cap":"Video wird umgewandelt (Qualität {n} Mbit/s)",
+"r.ok":"Direct Play","r.ok.why":"Der Browser spielt die Datei so ab, wie sie ist.",
+"r.container_not_supported":"Container","r.container_not_supported.why":"Der Browser spielt {container} nicht direkt ab. Video und Ton werden unverändert neu verpackt.",
+"r.audio_track_not_first":"Tonspur","r.audio_track_not_first.why":"Browser spielen aus der Originaldatei nur die erste Tonspur ab.",
+"r.audio_codec_not_supported":"Ton","r.audio_codec_not_supported.why":"Der Browser spielt {codec} nicht ab. Der Ton wird nach AAC umgewandelt.","r.audio_codec_not_supported.hint":"Wähle eine AAC-Tonspur, um das Umwandeln zu vermeiden.",
+"r.subtitle_burn_in":"Untertitel","r.subtitle_burn_in.why":"{fmt} ist ein Bildformat und wird ins Video eingebrannt. Dafür wird das Video umgewandelt.","r.subtitle_burn_in.hint":"Wähle einen Text-Untertitel oder schalte Untertitel aus, um das Einbrennen zu vermeiden.",
+"r.bitrate_cap":"Qualität","r.bitrate_cap.why":"Die gewählte Stufe ({n} Mbit/s) liegt unter der Quelle ({src} Mbit/s).","r.bitrate_cap.hint":"Wähle „Original“, um das Umwandeln zu vermeiden.",
+"r.video_downscaled":"Hinweis","r.video_downscaled.why":"Das Video wird auf {h}p verkleinert.",
+"r.subtitle_burn_in_unavailable":"Untertitel aus","r.subtitle_burn_in_unavailable.why":"Der Server kann den gewählten Untertitel gerade nicht einbrennen. Er bleibt aus.","r.subtitle_burn_in_unavailable.hint":"Wähle einen Text-Untertitel oder versuche es später erneut.",
+"ov.video":"Video","ov.audio":"Audio","ov.subs":"Untertitel","ov.container":"Container","ov.bitrate":"Bitrate","ov.speed":"Tempo",
+"ov.copy":"kopiert","ov.sw":"Software","ov.sidecar":"im Player gerendert (WebVTT)","ov.burn":"eingebrannt","ov.file":"Datei","ov.realtime":"× Echtzeit","ov.source":"Quelle","ov.output":"Ausgabe"
+};
+const EN={
+"nav.title":"Prototype: playback options","nav.preview":"Preview:","nav.close":"Close preview",
+"sim.label":"Simulate:","sim.a":"Several tracks","sim.b":"One audio track","sim.c":"No subtitles",
+"sim.refuse":"Server cannot burn in (weak NAS)","sim.slow":"Slow switch (4 s)",
+"a.close":"Close","ov.title":"Stream info",
+"bar.minimise":"Minimise","bar.fullscreen":"Fullscreen","bar.seek":"Position","bar.prev":"Previous","bar.back":"Back 10 seconds",
+"bar.pause":"Pause","bar.play":"Play","bar.fwd":"Forward 30 seconds","bar.next":"Next","bar.stop":"Stop","bar.more":"More",
+"bar.queue":"Queue","bar.mute":"Mute","bar.volume":"Volume","bar.mode":"Stream info, mode: {mode}",
+"p.options":"Playback options","p.quality":"Quality","p.audio":"Audio","p.subs":"Subtitles","p.more":"More","p.size":"Subtitle size",
+"p.speed":"Speed","p.autoplay":"Play next automatically","p.info":"Stream info",
+"q.original":"Original","q.auto":"Automatic","q.autoNow":"currently Original (home network)","q.showAll":"Show all steps","q.showLess":"Show fewer",
+"q.hint":"Steps below the source convert the video. Applies to this device.","q.hintNone":"The source is below the smallest step. Applies to this device.",
+"audio.restart":"Switching restarts the stream briefly.","audio.single":"This file has only one audio track.",
+"row.audioTc":"is converted to AAC","row.burn":"is burned in – the video is converted","row.refused":"Not possible right now: the server cannot burn in.",
+"sub.off":"Off","sub.none":"This file has no subtitles.","sub.hint":"Text subtitles switch instantly.","sub.plain":"without styling",
+"b.forced":"Forced","b.sdh":"SDH","b.external":"External",
+"size.small":"Small","size.normal":"Normal","size.large":"Large","size.huge":"Huge",
+"size.device":"Applies to this device.","size.off":"No subtitle active.","size.burn":"Burned-in subtitles cannot be adjusted.",
+"lang.ger":"German","lang.eng":"English","lang.fra":"French","lang.und":"Unknown language",
+"sw.audio":"Switching audio track …","sw.sub":"Switching subtitles – the stream restarts …","sw.q":"Switching quality …","sw.pos":"Playback continues at the same position.",
+"toast.cap":"Quality limited to {n} Mbit/s – the video is converted.","toast.burn":"The subtitle is burned in – the video is converted.",
+"toast.refused":"This subtitle has to be burned into the video. The server cannot do that right now (transcoding limit reached or transcoding switched off). Subtitles stay off.",
+"live.done":"Audio track: {audio}. Subtitles: {sub}. Quality: {q}. Mode: {mode}.",
+"line.dp":"The file plays unchanged.","line.ds":"Video and audio are repackaged unchanged.",
+"line.audio":"Audio is converted ({from} → {to})","line.burn":"Video is converted (subtitle burned in)","line.cap":"Video is converted (quality {n} Mbit/s)",
+"r.ok":"Direct Play","r.ok.why":"The browser plays the file as it is.",
+"r.container_not_supported":"Container","r.container_not_supported.why":"The browser does not play {container} directly. Video and audio are repackaged unchanged.",
+"r.audio_track_not_first":"Audio track","r.audio_track_not_first.why":"Browsers play only the first audio track from the original file.",
+"r.audio_codec_not_supported":"Audio","r.audio_codec_not_supported.why":"The browser does not play {codec}. The audio is converted to AAC.","r.audio_codec_not_supported.hint":"Choose an AAC track to avoid converting.",
+"r.subtitle_burn_in":"Subtitles","r.subtitle_burn_in.why":"{fmt} is an image format and is burned into the video. This converts the video.","r.subtitle_burn_in.hint":"Choose a text subtitle or switch subtitles off to avoid burning in.",
+"r.bitrate_cap":"Quality","r.bitrate_cap.why":"The chosen step ({n} Mbit/s) is below the source ({src} Mbit/s).","r.bitrate_cap.hint":"Choose \"Original\" to avoid converting.",
+"r.video_downscaled":"Note","r.video_downscaled.why":"The video is scaled down to {h}p.",
+"r.subtitle_burn_in_unavailable":"Subtitles off","r.subtitle_burn_in_unavailable.why":"The server cannot burn in the chosen subtitle right now. It stays off.","r.subtitle_burn_in_unavailable.hint":"Choose a text subtitle or try again later.",
+"ov.video":"Video","ov.audio":"Audio","ov.subs":"Subtitles","ov.container":"Container","ov.bitrate":"Bit rate","ov.speed":"Speed",
+"ov.copy":"copied","ov.sw":"software","ov.sidecar":"rendered in the player (WebVTT)","ov.burn":"burned in","ov.file":"file","ov.realtime":"× real time","ov.source":"source","ov.output":"output"
+};
+const MODE={direct_play:{cls:"dp",name:"Direct Play"},remux:{cls:"ds",name:"Direct Stream"},transcode:{cls:"tc",name:"Transcode"}};
+
+/* ---------- state ---------- */
+const S={scn:"a",audio:1,sub:"s:6",q:"orig",size:"normal",showAll:false,busy:null,refused:null,refuse:false,slow:false,tab:"audio"};
+let lang="de";
+const t=(k,p)=>{ let s=(lang==="en"?EN:DE)[k]??DE[k]??k; if(p) for(const n in p) s=s.split("{"+n+"}").join(p[n]); return s; };
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const file=()=>FILES[S.scn];
+const track=id=>file().subs.find(s=>s.id===id)||null;
+const audioTrack=()=>file().audio.find(a=>a.index===S.audio);
+const langName=code=>t("lang."+(code||"und"));
+const codec=c=>CODEC[c]||c.toUpperCase();
+const mbit=bits=>(bits/1e6).toLocaleString(lang,{maximumFractionDigits:1});
+const audioLabel=a=>langName(a.language)+", "+codec(a.codec)+" "+(CHANNELS[a.channels]||a.channels);
+const steps=()=>LADDER.filter(l=>l.mbit*1e6<file().bitRate);
+
+/* Simulated server decision (PlaybackSession: mode, streams, reasons, warnings). */
+function decide(){
+  const f=file(), a=audioTrack(), st=track(S.sub), step=LADDER.find(l=>String(l.mbit)===S.q)||null;
+  const cap=!!step, burn=!!st&&!st.textBased, audioTc=a.codec!=="aac", videoTc=cap||burn;
+  const reasons=[], warnings=[];
+  if(f.container!=="mp4") reasons.push({code:"container_not_supported",p:{container:f.container.toUpperCase()}});
+  else if(a.index!==f.audio[0].index) reasons.push({code:"audio_track_not_first",p:{}});
+  if(audioTc) reasons.push({code:"audio_codec_not_supported",p:{codec:codec(a.codec)},hint:f.audio.some(x=>x.codec==="aac")});
+  if(burn) reasons.push({code:"subtitle_burn_in",p:{fmt:codec(st.format)},hint:true});
+  if(cap) reasons.push({code:"bitrate_cap",p:{n:step.mbit,src:mbit(f.bitRate)},hint:true});
+  const height=cap?Math.min(step.height,f.video.height):f.video.height;
+  if(height<f.video.height) warnings.push({code:"video_downscaled",p:{h:height}});
+  if(S.refused&&S.sub==="off") warnings.push({code:"subtitle_burn_in_unavailable",p:{},hint:true});
+  const mode=(videoTc||audioTc)?"transcode":(reasons.length?"remux":"direct_play");
+  return {mode,reasons,warnings,cap,burn,audioTc,videoTc,height,step,a,st,f,outBitRate:cap?step.mbit*1e6:f.bitRate};
+}
+
+/* ---------- rendering ---------- */
+function mi(group,key,o){
+  const busy=S.busy&&S.busy.group===group&&S.busy.key===String(key);
+  return '<button type="button" role="menuitemradio" class="mi" aria-checked="'+(!!o.checked)+'" data-group="'+group+'" data-key="'+esc(key)+'" tabindex="'+(o.tab?0:-1)+'"'+(S.busy?' aria-disabled="true"':"")+">"
+    +'<span class="mark" aria-hidden="true"></span><span class="mi-body"><span class="mi-title">'+esc(o.title)+(o.badges||[]).map(b=>' <span class="badge">'+esc(b)+"</span>").join("")+"</span>"
+    +(o.sub?"<small>"+esc(o.sub)+"</small>":"")+(o.warn?'<small class="warn">'+esc(o.warn)+"</small>":"")+(o.err?'<small class="err">'+esc(o.err)+"</small>":"")+"</span>"
+    +(busy?'<span class="spin" aria-hidden="true"></span>':"")+"</button>";
+}
+function renderQuality(){
+  const f=file(), all=steps(), shown=S.showAll?all:all.filter(l=>String(l.mbit)===S.q);
+  const rows=[
+    mi("q","orig",{checked:S.q==="orig",tab:S.q==="orig",title:t("q.original"),sub:f.video.height+"p · "+mbit(f.bitRate)+" Mbit/s"}),
+    mi("q","auto",{checked:S.q==="auto",tab:S.q==="auto",title:t("q.auto"),sub:t("q.autoNow")})
+  ].concat(shown.map(l=>mi("q",String(l.mbit),{checked:String(l.mbit)===S.q,tab:String(l.mbit)===S.q,title:l.mbit+" Mbit/s",sub:Math.min(l.height,f.video.height)+"p"})));
+  $("#m-q").innerHTML=rows.join("");
+  const b=$("#showAll"); b.hidden=all.length===0; b.textContent=t(S.showAll?"q.showLess":"q.showAll"); b.setAttribute("aria-expanded",S.showAll);
+  $("#qHint").textContent=t(all.length?"q.hint":"q.hintNone");
+}
+function renderAudio(){
+  const f=file();
+  $("#m-audio").innerHTML=f.audio.map(a=>mi("audio",a.index,{checked:a.index===S.audio,tab:a.index===S.audio,title:langName(a.language),
+    sub:[codec(a.codec)+" "+(CHANNELS[a.channels]||a.channels),a.title].filter(Boolean).join(" · "),warn:a.codec!=="aac"?t("row.audioTc"):""})).join("");
+  $("#audioHint").textContent=t(f.audio.length===1?"audio.single":"audio.restart");
+}
+function renderSubs(){
+  const f=file();
+  const rows=[mi("sub","off",{checked:S.sub==="off",tab:S.sub==="off",title:t("sub.off")})].concat(f.subs.map(s=>mi("sub",s.id,{
+    checked:s.id===S.sub,tab:s.id===S.sub,title:langName(s.language),
+    badges:[s.forced&&t("b.forced"),s.sdh&&t("b.sdh"),s.external&&t("b.external")].filter(Boolean),
+    sub:codec(s.format)+(s.format==="ass"?" · "+t("sub.plain"):""),
+    warn:s.textBased?"":t("row.burn"),err:S.refused===s.id?t("row.refused"):""})));
+  $("#m-sub").innerHTML=rows.join("");
+  $("#subsHint").textContent=t(f.subs.length?"sub.hint":"sub.none");
+}
+function renderSize(){
+  const st=track(S.sub), active=!!st&&st.textBased;
+  $$("#sizes [role=radio]").forEach(b=>{ const on=b.dataset.size===S.size; b.setAttribute("aria-checked",on); b.tabIndex=on?0:-1; b.setAttribute("aria-disabled",!active); });
+  $("#sizeHint").textContent=t(!st?"size.off":(st.textBased?"size.device":"size.burn"));
+  $("#player").style.setProperty("--subsize",SIZES[S.size]+"px");
+}
+function renderVideo(){
+  const f=file(), st=track(S.sub), sl=$("#subline");
+  $("#pTitle").textContent=f.title; $("#pYear").textContent=f.year;
+  sl.hidden=!st;
+  if(st){ sl.className="subline"+(st.textBased?"":" burned"); $("#cue").textContent=st.forced?CUES.forced:(st.sdh?CUES.sdh:(CUES[st.language]||CUES.eng)); }
+}
+function modeLine(d){
+  if(d.mode==="direct_play") return t("line.dp");
+  if(d.mode==="remux") return t("line.ds");
+  const parts=[];
+  if(d.audioTc) parts.push(t("line.audio",{from:codec(d.a.codec),to:"AAC"}));
+  if(d.burn) parts.push(t("line.burn"));
+  if(d.cap) parts.push(t("line.cap",{n:d.step.mbit}));
+  return parts.join(" · ");
+}
+function whyBox(r,cls){
+  const hint=r.hint?t("r."+r.code+".hint"):"";
+  return '<div class="why '+cls+'"><b>'+esc(t("r."+r.code))+":</b> "+esc(t("r."+r.code+".why",r.p))+(hint?"<i>"+esc(hint)+"</i>":"")+"</div>";
+}
+function renderMode(){
+  const d=decide(), m=MODE[d.mode], f=d.f;
+  [["#modeBtn","mode "],["#footMode","mode "],["#ovMode","mode "]].forEach(([s,c])=>{ const el=$(s); el.className=c+m.cls; el.textContent=m.name; });
+  $("#modeBtn").setAttribute("aria-label",t("bar.mode",{mode:m.name}));
+  $("#footLine").textContent=S.busy?t("sw."+S.busy.group):modeLine(d);
+  let why=d.reasons.map(r=>whyBox(r,r.code==="container_not_supported"||r.code==="audio_track_not_first"?"info":"")).join("")+d.warnings.map(r=>whyBox(r,"")).join("");
+  if(d.mode==="direct_play"&&!d.warnings.length) why=whyBox({code:"ok",p:{}},"ok");
+  $("#ovWhy").innerHTML=why;
+  const res=f.video.height+"p", outCh=d.a.channels>2?"5.1":"2.0";
+  const video=codec(f.video.codec)+" "+res+" → "+(d.videoTc?"H.264 "+d.height+"p (libx264, "+t("ov.sw")+")":t("ov.copy"));
+  const audio=codec(d.a.codec)+" "+(CHANNELS[d.a.channels]||d.a.channels)+" → "+(d.audioTc?"AAC "+outCh:t("ov.copy"));
+  const subs=!d.st?t("sub.off"):langName(d.st.language)+" · "+codec(d.st.format)+" → "+t(d.st.textBased?"ov.sidecar":"ov.burn");
+  const cont=f.container+" → "+(d.mode==="direct_play"?f.container+" ("+t("ov.file")+")":"mp4 (HLS)");
+  const rate=t("ov.source")+" "+mbit(f.bitRate)+" Mbit/s → "+t("ov.output")+" "+mbit(d.outBitRate)+" Mbit/s";
+  const rows=[["ov.video",video],["ov.audio",audio],["ov.subs",subs],["ov.container",cont],["ov.bitrate",rate]];
+  if(d.videoTc) rows.push(["ov.speed",(S.refuse?"1.1":"2.3")+" "+t("ov.realtime")]);
+  $("#ovDl").innerHTML=rows.map(([k,v])=>"<dt>"+esc(t(k))+"</dt><dd>"+esc(v)+"</dd>").join("");
+}
+function render(){
+  const ae=document.activeElement, fk=ae&&ae.dataset&&ae.dataset.group?[ae.dataset.group,ae.dataset.key]:null;
+  renderQuality(); renderAudio(); renderSubs(); renderSize(); renderVideo(); renderMode();
+  $$("[data-scn]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.scn===S.scn));
+  if(fk){ const el=$('#optPanel [data-group="'+fk[0]+'"][data-key="'+fk[1]+'"]'); if(el) el.focus(); }
+}
+
+/* ---------- messages ---------- */
+function toast(msg,isAlert){
+  const el=$(isAlert?"#alert":"#toast"); $("span",el).textContent=msg; el.hidden=false;
+  clearTimeout(el.timer); el.timer=setTimeout(()=>{el.hidden=true;},isAlert?12000:4500);
+}
+function announce(){
+  const d=decide(), q=S.q==="orig"?t("q.original"):(S.q==="auto"?t("q.auto"):S.q+" Mbit/s");
+  $("#live").textContent=t("live.done",{audio:audioLabel(d.a),sub:d.st?langName(d.st.language)+" "+codec(d.st.format):t("sub.off"),q:q,mode:MODE[d.mode].name});
+}
+
+/* ---------- choices ---------- */
+/* A restart replaces the session (replacesSessionId) at the current position: PL-11. */
+function restart(group,key,apply,after){
+  S.busy={group:group,key:String(key)}; S.refused=null; render();
+  $("#swText").textContent=t("sw."+group); $("#switching").hidden=false; $("#optPanel").setAttribute("aria-busy","true");
+  $("#live").textContent=t("sw."+group);
+  setTimeout(()=>{
+    apply(); S.busy=null; $("#switching").hidden=true; $("#optPanel").removeAttribute("aria-busy");
+    render(); announce(); if(after) after();
+  },S.slow?4000:1200);
+}
+function choose(group,key){
+  if(S.busy) return;
+  if(group==="audio"){
+    const index=Number(key); if(index===S.audio) return;
+    restart("audio",key,()=>{S.audio=index;});
+  }else if(group==="sub"){
+    if(key===S.sub) return;
+    const cur=track(S.sub), next=track(key), burnNow=!!cur&&!cur.textBased, burnNext=!!next&&!next.textBased;
+    if(!burnNow&&!burnNext){ S.sub=key; S.refused=null; render(); announce(); return; } /* sidecar: no restart */
+    if(burnNext&&S.refuse) restart("sub",key,()=>{S.sub="off";S.refused=key;},()=>toast(t("toast.refused"),true));
+    else restart("sub",key,()=>{S.sub=key;},burnNext?()=>toast(t("toast.burn")):null);
+  }else if(group==="q"){
+    if(key===S.q) return;
+    const wasStep=S.q!=="orig"&&S.q!=="auto", isStep=key!=="orig"&&key!=="auto";
+    if(!wasStep&&!isStep){ S.q=key; render(); announce(); return; } /* both mean "no limit" at home */
+    restart("q",key,()=>{S.q=key;},isStep?()=>toast(t("toast.cap",{n:key})):null);
+  }
+}
+function setScenario(k){
+  if(S.busy) return;
+  const f=FILES[k]; S.scn=k; S.audio=f.defAudio; S.sub=f.defSub; S.q="orig"; S.refused=null; S.showAll=false;
+  $("#alert").hidden=true; $("#toast").hidden=true; render();
+}
+
+/* ---------- panel: dialog with focus trap, focus return (M4-16b) ---------- */
+const panel=$("#optPanel"), gear=$("#gear"), mq=window.matchMedia("(max-width:700px)");
+function layout(){
+  const phone=mq.matches;
+  $("#tabs").hidden=!phone;
+  $$("[data-sec]",panel).forEach(sec=>{
+    const name=sec.dataset.sec;
+    if(phone){ sec.setAttribute("role","tabpanel"); sec.setAttribute("aria-labelledby","tab-"+name); sec.hidden=name!==S.tab; }
+    else{ sec.removeAttribute("role"); sec.removeAttribute("aria-labelledby"); sec.hidden=false; }
+  });
+  $$("[role=tab]",panel).forEach(b=>{ const on=b.dataset.tab===S.tab; b.setAttribute("aria-selected",on); b.tabIndex=on?0:-1; });
+}
+function openPanel(){
+  S.tab="audio"; panel.hidden=false; $("#scrim").hidden=false; gear.setAttribute("aria-expanded","true"); layout(); render();
+  const first=$('#m-audio [aria-checked="true"]')||$("#optClose"); first.focus();
+}
+function closePanel(){
+  if(panel.hidden) return;
+  panel.hidden=true; $("#scrim").hidden=true; gear.setAttribute("aria-expanded","false"); gear.focus();
+}
+const focusables=()=>$$("button,select,input",panel).filter(e=>e.tabIndex>=0&&!e.disabled&&e.offsetParent!==null);
+gear.addEventListener("click",()=>{ if(panel.hidden) openPanel(); else closePanel(); });
+$("#optClose").addEventListener("click",closePanel);
+$("#scrim").addEventListener("click",closePanel);
+mq.addEventListener("change",layout);
+panel.addEventListener("click",e=>{
+  const item=e.target.closest("[role=menuitemradio]");
+  if(item){ if(item.getAttribute("aria-disabled")!=="true") choose(item.dataset.group,item.dataset.key); return; }
+  const tab=e.target.closest("[role=tab]"); if(tab){ S.tab=tab.dataset.tab; layout(); return; }
+  const size=e.target.closest("#sizes [role=radio]");
+  if(size&&size.getAttribute("aria-disabled")!=="true"){ S.size=size.dataset.size; renderSize(); size.focus(); }
+});
+function moveFocus(list,current,key){
+  const i=list.indexOf(current); let n=i;
+  if(key==="ArrowDown"||key==="ArrowRight") n=(i+1)%list.length;
+  else if(key==="ArrowUp"||key==="ArrowLeft") n=(i-1+list.length)%list.length;
+  else if(key==="Home") n=0; else if(key==="End") n=list.length-1; else return null;
+  return list[n];
+}
+panel.addEventListener("keydown",e=>{
+  const el=e.target;
+  if(e.key==="Tab"){
+    const list=focusables(); if(!list.length) return;
+    const first=list[0], last=list[list.length-1];
+    if(e.shiftKey&&el===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey&&el===last){ e.preventDefault(); first.focus(); }
+    return;
+  }
+  if(el.getAttribute("role")==="menuitemradio"){
+    if(e.key==="ArrowLeft"||e.key==="ArrowRight") return;
+    const to=moveFocus($$("[role=menuitemradio]",el.closest("[role=menu]")),el,e.key);
+    if(to){ e.preventDefault(); to.focus(); }
+  }else if(el.getAttribute("role")==="tab"){
+    const to=moveFocus($$("[role=tab]",panel),el,e.key);
+    if(to){ e.preventDefault(); S.tab=to.dataset.tab; layout(); to.focus(); }
+  }else if(el.getAttribute("role")==="radio"){
+    const to=moveFocus($$("#sizes [role=radio]"),el,e.key);
+    if(to){ e.preventDefault(); if(to.getAttribute("aria-disabled")!=="true"){ S.size=to.dataset.size; renderSize(); } to.focus(); }
+  }
+});
+$("#showAll").addEventListener("click",()=>{ S.showAll=!S.showAll; renderQuality(); });
+
+/* ---------- stream-info overlay ---------- */
+const overlay=$("#streamInfo"), modeBtn=$("#modeBtn");
+function setOverlay(open,moveFocusIn){
+  overlay.hidden=!open; modeBtn.setAttribute("aria-expanded",open);
+  if(open&&moveFocusIn) $("#ovClose").focus();
+  if(!open&&overlay.dataset.from==="badge") modeBtn.focus();
+  overlay.dataset.from=open&&moveFocusIn?"badge":"";
+}
+modeBtn.addEventListener("click",()=>setOverlay(overlay.hidden,true));
+$("#ovClose").addEventListener("click",()=>setOverlay(false));
+$("#footInfo").addEventListener("click",()=>setOverlay(overlay.hidden,false)); /* focus stays in the panel */
+$("#alertClose").addEventListener("click",()=>{ $("#alert").hidden=true; });
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){
+    if(!$("#previewFrame").hidden) return;
+    if(!panel.hidden){ e.preventDefault(); closePanel(); }
+    else if(!overlay.hidden){ e.preventDefault(); setOverlay(false); }
+  }else if((e.key==="i"||e.key==="I")&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&!/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)){
+    setOverlay(overlay.hidden,panel.hidden);
+  }
+});
+
+/* ---------- prototype chrome ---------- */
+$$("[data-scn]").forEach(b=>b.addEventListener("click",()=>setScenario(b.dataset.scn)));
+$("#simRefuse").addEventListener("change",e=>{ S.refuse=e.target.checked; renderMode(); });
+$("#simSlow").addEventListener("change",e=>{ S.slow=e.target.checked; });
+$("#playBtn").addEventListener("click",e=>{
+  const b=e.currentTarget, playing=b.textContent==="❚❚";
+  b.textContent=playing?"▶":"❚❚"; b.dataset.i18nLabel=playing?"bar.play":"bar.pause"; b.setAttribute("aria-label",t(b.dataset.i18nLabel));
+});
+function applyLang(){
+  document.documentElement.lang=lang;
+  $$("[data-i18n]").forEach(el=>{ el.textContent=t(el.dataset.i18n); });
+  $$("[data-i18n-label]").forEach(el=>{ el.setAttribute("aria-label",t(el.dataset.i18nLabel)); });
+  $("#langToggle").innerHTML=lang==="de"?"<b>DE</b> · EN":"DE · <b>EN</b>";
+  render();
+}
+$("#langToggle").addEventListener("click",()=>{ lang=lang==="de"?"en":"de"; applyLang(); });
+/* responsive preview: the same file in a frame of the target width */
+$$("[data-preview]").forEach(b=>b.addEventListener("click",()=>{
+  const f=$("#previewIframe"); f.style.width=b.dataset.preview+"px";
+  f.src=location.href.split("#")[0]+"#"+S.scn+","+lang;
+  $("#previewFrame").hidden=false; $("#previewClose").focus();
+}));
+$("#previewClose").addEventListener("click",()=>{ $("#previewFrame").hidden=true; $("#previewIframe").removeAttribute("src"); });
+
+/* ---------- start ---------- */
+$("#brand").textContent=BRAND; document.title=BRAND+" – Prototype: Playback options panel";
+if(window.self!==window.top) document.body.classList.add("embedded");
+(function init(){
+  const parts=location.hash.slice(1).split(",");
+  if(parts[1]==="en"||parts[1]==="de") lang=parts[1];
+  layout(); applyLang();
+  if(FILES[parts[0]]) setScenario(parts[0]);
+})();
+</script>
+</body>
+</html>

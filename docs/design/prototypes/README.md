@@ -13,6 +13,7 @@ questions). German UI texts by default, en/de toggle in the top bar.
 | [settings.html](settings.html) | Settings for this device (`/settings/app`): Appearance, Library layout, Playback (M4 placeholders), Search, Diagnostics (expert), About; every control labelled with storage and milestone; keyboard help sheet opened with "?" | AD-01…03, SH-14, HO-01, PL-09, SR-02, LB-20 (M5-03) | approved (owner) |
 | [media.html](media.html) | Music (artists/albums grids, artist page, album page with disc/track numbers, persistent player bar with queue, repeat/shuffle, phone variant above bottom nav), photos (month/day timeline, albums/folders, lightbox with zoom, swipe/arrows, EXIF panel, slideshow, Esc), audiobooks (grid, book page with resume point, chapters, speed 0.5-2.0x, sleep timer placeholder, bar in book mode), one-playback-at-a-time demo with video mini player | SH-11, SH-17, HO-02, LB-40, SR-02, PL-15, PL-38; proposed new ids MU-01…12, PH-01…09, AB-01…07 (M5-02) | approved (owner) |
 | [auth.html](auth.html) | Sign in (show-password toggle, generic error, throttling countdown, "Forgot your password?"), first-run setup step 1 "Create admin account" leading to "No libraries yet", setup from a remote peer ("Only from the local network"), profile menu with "Change password" dialog, "Signed out" and "Session expired" states; viewport switch 1440 / 1024 / 390 (M7-29, ADR 0032) | AU-01…06 (new, ux-spec 10.4), SH-07, HO-09; picker and PIN pad unchanged in admin.html (US-01…03) | approved (by delegation) |
+| [player-options.html](player-options.html) | Player with the playback options panel (dialog over the lower part of the video, bottom sheet with tabs on phones): quality (Original, Automatic, ladder steps below the source), audio tracks (language first), subtitles (Off, text tracks, forced/SDH/external badges, image track with burn-in hint), subtitle size, mode line with link to the stream-info overlay; states: switching (spinner, restart at the same position), burn-in refused (`subtitle_burn_in_unavailable`), no subtitles, single audio track; sample files and server state switchable; viewport switch 1440 / 1024 / 390 (M4-16b, ADR 0030) | PL-10…13, PL-40…42 (PL-04, PL-14, PL-15 as in detail.html) | approved (orchestrator by delegation 2026-11-11, defaults as drawn) |
 
 Statuses: **in progress** (being built), **draft** (ready for owner review), **approved**.
 
@@ -64,6 +65,24 @@ The edit dialog (ED-*) stays in the file as an M6 preview behind that toggle; it
 5. Change password as a dialog from the profile menu (also reachable from Account, 11.3).
 6. Session expired: sign-in page with notice and return to the previous page, not a dialog.
 7. No password strength meter, only the 8–128 length rule.
+
+## player-options.html (M4-16b) – open questions, defaults as drawn
+
+Approved 2026-11-11 by the orchestrator (owner delegated design approvals): all nine defaults below apply as drawn. The owner may still change any of them before M4-16b merges.
+
+1. Section order as in the ux-spec (Quality, Audio, Subtitles, Size); focus and the phone sheet start on Audio.
+2. The panel stays open after a choice; Esc, the close button or a click on the video closes it.
+3. Rows say beforehand what a choice costs ("converted to AAC", "burned in – video is converted").
+4. Burn-in refused: subtitles are Off afterwards (ADR 0030 §3), message plus a note on the row (alternative: back to the previous text track).
+5. "Original" stays checked while no bitrate limit is chosen, even when only audio is converted (differs from the PL-10 wording).
+6. Ladder steps behind "Show all steps"; a chosen step stays visible.
+7. Phone: tabs inside the bottom sheet (alternative: drill-down list).
+8. Audio rows lead with the language name; tracks in file order (alternative: grouped by language).
+9. ASS subtitles as plain text with the note "without styling" until M4-19.
+
+Notes for `mivo-frontend`: the lists use menu-radio semantics (arrows move focus, Enter/Space chooses) because a
+plain radio group would restart the stream on every arrow key; only the subtitle size is a real radio group.
+Heights per ladder step (20/12/8 → 1080p, 4 → 720p, 2/1 → 480p) are an assumption from ADR 0030 §6.
 
 admin.html follow-up (M7-29): content limit preset "Teens" is FSK 12; FSK 16 only via "Custom" (ADR 0032 §7).
 
