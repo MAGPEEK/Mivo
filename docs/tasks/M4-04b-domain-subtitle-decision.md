@@ -8,14 +8,23 @@ The decision engine chooses per subtitle track between "off", "sidecar" (client 
 "burn-in", and tells why, replacing the M2 warning `subtitles_not_supported` (ADR 0030 §3).
 
 ## Acceptance criteria
-- [x] Profile declares `subtitleFormats` the client renders (default `["webvtt"]` for text); a text
-      track the client renders is `sidecar` and does not change the video decision (direct play stays direct play).
-- [x] Image formats and unrendered text formats produce `burn_in`: video is transcoded, reason
-      `subtitle_burn_in` with the track format; the mode becomes `transcode`.
-- [x] Burn-in refused (track off, warning `subtitle_burn_in_unavailable`) when the server cannot
-      transcode or the profile sets `allowTranscode=false`.
+- [x] Profile declares `subtitleFormats` the client renders (omitted or empty = the client renders
+      none, contract 1.16.0; the web client sends `["webvtt"]` from M4-16a); a text track the client
+      renders is `sidecar` and does not change the video decision (direct play stays direct play).
+- [x] Image formats and unrendered text formats produce `burn_in` only for an explicitly requested
+      track: video is transcoded, reason `subtitle_burn_in`; the mode becomes `transcode`. The track
+      format is carried in `Plan.Subtitle.Format` (a `Reason` has only code and scope).
+- [x] Burn-in impossible (server cannot transcode, or no H.264/HLS target for the client): with
+      `allowDegradeSubtitles` the track is off with warning `subtitle_burn_in_unavailable`, without it
+      the decision fails (client limits before server limits). There is no `allowTranscode` field in
+      the contract.
 - [x] `subtitles_not_supported` is no longer emitted for files with subtitles; old tests updated in the matrix.
-- [x] Tests: extend `matrix_test.go` with the six reference profiles × {no sub, SRT, ASS, PGS}; coverage ≥ 90 %.
+- [x] Tests: extend `matrix_test.go` with the reference profiles that exist (Chromium and Firefox
+      desktop) × {no sub, SRT, ASS, PGS} × MP4/MKV × capabilities × HLS delivery; further reference
+      profiles (webOS) extend the matrix when they are added; coverage ≥ 90 %.
+
+Criteria amended by the orchestrator on 2026-11-11 to match contract 1.16.0 and ADR 0030 Notes
+(M4-04b); the original wording predated the M4-02a/b contract decisions.
 - [x] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes
