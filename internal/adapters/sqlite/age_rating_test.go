@@ -340,13 +340,20 @@ func TestAgeRatingBackfillFailsWithACancelledContext(t *testing.T) {
 func rollBackAgeRatings(t *testing.T, inspection *sql.DB) {
 	t.Helper()
 
+	rollBackTo(t, inspection, ageRatingsSchemaVersion-1)
+}
+
+// rollBackTo migrates the database down to the given schema version.
+func rollBackTo(t *testing.T, inspection *sql.DB, version int64) {
+	t.Helper()
+
 	provider, err := goose.NewProvider(goose.DialectSQLite3, inspection, os.DirFS("migrations"),
 		goose.WithDisableGlobalRegistry(true))
 	if err != nil {
 		t.Fatalf("NewProvider error = %v", err)
 	}
 
-	if _, err := provider.DownTo(t.Context(), ageRatingsSchemaVersion-1); err != nil {
-		t.Fatalf("DownTo(%d) error = %v", ageRatingsSchemaVersion-1, err)
+	if _, err := provider.DownTo(t.Context(), version); err != nil {
+		t.Fatalf("DownTo(%d) error = %v", version, err)
 	}
 }

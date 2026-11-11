@@ -11,6 +11,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
@@ -27,7 +28,8 @@ type LibrarySource interface {
 
 // ItemRequest asks for the first items of a row of top-level items. Query.Filter.Kind is the
 // listed kind (empty for a library without one), Query.Filter.Genres narrows a genre row and
-// Query.Filter.OfflineRootIDs are the folders that cannot be reached now.
+// Query.Filter.OfflineRootIDs are the folders that cannot be reached now. Query.Restriction is
+// what the viewer may see; its zero value allows nothing.
 type ItemRequest struct {
 	LibraryID string
 	Query     library.ListingQuery
@@ -36,12 +38,13 @@ type ItemRequest struct {
 
 // EpisodeRequest asks for the episodes of a shows library. Limit counts shows for
 // ListEpisodeGroups and episodes for ListRecentEpisodes; Window is the RecentEpisodeWindow of
-// ListEpisodeGroups.
+// ListEpisodeGroups. Restriction is what the viewer may see; its zero value allows nothing.
 type EpisodeRequest struct {
 	LibraryID      string
 	OfflineRootIDs []string
 	Limit          int
 	Window         time.Duration
+	Restriction    access.Restriction
 }
 
 // EpisodeRef names an episode with its season and show.
@@ -70,8 +73,9 @@ type RowReader interface {
 // SummaryReader reads the summaries of items as listings carry them. Implemented by
 // adapters/sqlite (CatalogReader.ItemSummaries).
 type SummaryReader interface {
-	// ItemSummaries returns the summaries of the given items; unknown IDs are left out.
-	ItemSummaries(ctx context.Context, itemIDs []string) ([]applibrary.ItemSummary, error)
+	// ItemSummaries returns the summaries of the given items; unknown IDs and items the
+	// restriction hides are left out. The zero restriction allows none.
+	ItemSummaries(ctx context.Context, itemIDs []string, restriction access.Restriction) ([]applibrary.ItemSummary, error)
 }
 
 // Catalog is the part of the library use cases the rows need. Implemented by

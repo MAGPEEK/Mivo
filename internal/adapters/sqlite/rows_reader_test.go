@@ -8,6 +8,7 @@ import (
 
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
@@ -24,8 +25,11 @@ const (
 	eightDaysInMs = int64(8 * 24 * time.Hour / time.Millisecond)
 )
 
+// rowItemIDs returns the IDs of the row as an unrestricted viewer reads it.
 func (fixture catalogFixture) rowItemIDs(t *testing.T, request approws.ItemRequest) []string {
 	t.Helper()
+
+	request.Query.Restriction = access.Unrestricted()
 
 	summaries, err := fixture.reader.ListRowItems(t.Context(), request)
 	if err != nil {
@@ -42,8 +46,9 @@ func (fixture catalogFixture) rowItemIDs(t *testing.T, request approws.ItemReque
 
 func movieRowQuery(sort library.ItemSort, descending bool) library.ListingQuery {
 	return library.ListingQuery{
-		Filter: library.ListingFilter{Kind: library.ItemKindMovie},
-		Order:  library.ListingOrder{Sort: sort, Descending: descending},
+		Filter:      library.ListingFilter{Kind: library.ItemKindMovie},
+		Order:       library.ListingOrder{Sort: sort, Descending: descending},
+		Restriction: access.Unrestricted(),
 	}
 }
 
@@ -216,7 +221,7 @@ func TestListRowItemsUnknownLibrary(t *testing.T) {
 		t.Errorf("error = %v, want ErrNotFound", err)
 	}
 
-	_, err = fixture.reader.ListEpisodeGroups(t.Context(), approws.EpisodeRequest{LibraryID: "unknown", Limit: 1})
+	_, err = fixture.reader.ListEpisodeGroups(t.Context(), approws.EpisodeRequest{LibraryID: "unknown", Limit: 1, Restriction: access.Unrestricted()})
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("episode groups error = %v, want ErrNotFound", err)
 	}
@@ -253,7 +258,8 @@ func TestListEpisodeGroups(t *testing.T) {
 	seedRecentEpisodes(t, fixture)
 
 	got, err := fixture.reader.ListEpisodeGroups(t.Context(), approws.EpisodeRequest{
-		LibraryID: showsLibraryID, Limit: 10, Window: rows.RecentEpisodeWindow,
+		Restriction: access.Unrestricted(),
+		LibraryID:   showsLibraryID, Limit: 10, Window: rows.RecentEpisodeWindow,
 	})
 	if err != nil {
 		t.Fatalf("ListEpisodeGroups: %v", err)
@@ -272,7 +278,8 @@ func TestListEpisodeGroups(t *testing.T) {
 	}
 
 	limited, err := fixture.reader.ListEpisodeGroups(t.Context(), approws.EpisodeRequest{
-		LibraryID: showsLibraryID, Limit: 1, Window: 10 * rows.RecentEpisodeWindow,
+		Restriction: access.Unrestricted(),
+		LibraryID:   showsLibraryID, Limit: 1, Window: 10 * rows.RecentEpisodeWindow,
 	})
 	if err != nil {
 		t.Fatalf("ListEpisodeGroups(limit 1): %v", err)
@@ -295,7 +302,8 @@ func TestListRecentEpisodes(t *testing.T) {
 	seedRecentEpisodes(t, fixture)
 
 	got, err := fixture.reader.ListRecentEpisodes(t.Context(), approws.EpisodeRequest{
-		LibraryID: showsLibraryID, OfflineRootIDs: []string{"another-folder"}, Limit: 10,
+		Restriction: access.Unrestricted(),
+		LibraryID:   showsLibraryID, OfflineRootIDs: []string{"another-folder"}, Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListRecentEpisodes: %v", err)
@@ -312,7 +320,8 @@ func TestListRecentEpisodes(t *testing.T) {
 	}
 
 	offline, err := fixture.reader.ListRecentEpisodes(t.Context(), approws.EpisodeRequest{
-		LibraryID: showsLibraryID, OfflineRootIDs: []string{showsLibraryID}, Limit: 10,
+		Restriction: access.Unrestricted(),
+		LibraryID:   showsLibraryID, OfflineRootIDs: []string{showsLibraryID}, Limit: 10,
 	})
 	if err != nil || len(offline) != 0 {
 		t.Errorf("recent episodes in an offline folder = %+v, %v; want none", offline, err)

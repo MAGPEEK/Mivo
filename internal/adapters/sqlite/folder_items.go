@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
@@ -161,8 +162,11 @@ func (catalog *CatalogReader) ListFolderDirectories(
 }
 
 // ItemSummaries returns the summaries of the given items in the given order, as the listings
-// build them; unknown IDs are left out.
-func (catalog *CatalogReader) ItemSummaries(ctx context.Context, itemIDs []string) ([]applibrary.ItemSummary, error) {
+// build them. Unknown IDs and items the restriction hides are left out, and the counts of a
+// summary cover only the children and episodes the restriction allows.
+func (catalog *CatalogReader) ItemSummaries(
+	ctx context.Context, itemIDs []string, restriction access.Restriction,
+) ([]applibrary.ItemSummary, error) {
 	keys := make([]listingKey, 0, len(itemIDs))
 	for _, id := range itemIDs {
 		keys = append(keys, listingKey{id: id})
@@ -170,8 +174,8 @@ func (catalog *CatalogReader) ItemSummaries(ctx context.Context, itemIDs []strin
 
 	var summaries []applibrary.ItemSummary
 
-	err := inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
-		listed, err := listedItemsInOrder(ctx, queries, keys)
+	err := inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, queries *sqlcgen.Queries) error {
+		listed, err := listedItemsInOrder(ctx, listingSession{transaction: transaction, queries: queries}, keys, restriction)
 		if err != nil {
 			return err
 		}

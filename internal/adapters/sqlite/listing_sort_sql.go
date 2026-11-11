@@ -72,8 +72,9 @@ func (scope listingScope) fileSortValueSQL(key library.ItemSort) sortValue {
 	}
 }
 
-// memberSizeSQL sums the files of the members of a container item, correlated with the
-// listed item, so each lookup searches items_children.
+// memberSizeSQL sums the files of the members of a container item the viewer may see,
+// correlated with the listed item, so each lookup searches items_children. A hidden episode
+// must not move its show in the size order (ADR 0032 section 7).
 func (scope listingScope) memberSizeSQL() string {
 	kind := "'" + scope.members.memberKind.String() + "'"
 
@@ -81,12 +82,12 @@ func (scope listingScope) memberSizeSQL() string {
 		return "(SELECT SUM(files.size_bytes) FROM items AS middles" +
 			" JOIN items AS members ON members.parent_id = middles.id" +
 			" JOIN media_files AS files ON files.item_id = members.id" +
-			" WHERE middles.parent_id = items.id AND members.kind = " + kind + ")"
+			" WHERE middles.parent_id = items.id AND members.kind = " + kind + scope.visibleMemberSQL() + ")"
 	}
 
 	return "(SELECT SUM(files.size_bytes) FROM items AS members" +
 		" JOIN media_files AS files ON files.item_id = members.id" +
-		" WHERE members.parent_id = items.id AND members.kind = " + kind + ")"
+		" WHERE members.parent_id = items.id AND members.kind = " + kind + scope.visibleMemberSQL() + ")"
 }
 
 // Constants of the shuffle hash: a multiplicative hash of the row ID plus the seed, then the

@@ -154,28 +154,35 @@ func newListingScope(builder *sqlBuilder, target listingTarget) listingScope {
 // for it; this keeps a statement built without that check closed too.
 //
 // A page in title order must keep its scan of the sort index (items_top_level, items_albums),
-// which ends after one page. With a plain age condition SQLite prefers
-// items_effective_age_rating, reads every visible item and sorts them for each page; the
+// which ends after one page. With a plain age condition SQLite prefers items_visibility, reads every visible item and sorts them for each page; the
 // unary plus takes the condition out of the index choice. Counts, letters and facets read
 // every visible item anyway and leave the choice to SQLite.
 func visibleSQL(builder *sqlBuilder, target listingTarget) string {
+	alias := "items"
+	if target.readsInTitleOrder {
+		alias = "+" + alias
+	}
+
+	return visibleInLibrarySQL(builder, target, alias)
+}
+
+// visibleInLibrarySQL returns the viewer's restriction on the rows of the alias, which all lie
+// in the target's library, to append to a condition: nothing matches in a library the viewer
+// may not see, otherwise the content limit decides.
+func visibleInLibrarySQL(builder *sqlBuilder, target listingTarget, alias string) string {
 	if !libraryAllowed(target.restriction, target.libraryID) {
 		return andSQL(neverMatches)
 	}
 
-	column := "items" + effectiveAgeColumn
-	if target.readsInTitleOrder {
-		column = "+" + column
-	}
-
-	return andSQL(ageConditionSQL(builder, target.restriction, column))
+	return andSQL(ageConditionSQL(builder, target.restriction, alias))
 }
 
 // visibleMemberSQL returns the content limit on the deciding members, to append to their
-// condition: an episode above the limit must not decide the filters and facets of its show.
+// condition: an episode above the limit must not decide the filters, facets, availability or
+// size of its show.
 // It binds its parameter when called, so only a statement that reads the members carries it.
 func (scope listingScope) visibleMemberSQL() string {
-	return andSQL(ageConditionSQL(scope.builder, scope.restriction, "members"+effectiveAgeColumn))
+	return andSQL(ageConditionSQL(scope.builder, scope.restriction, "members"))
 }
 
 // membersSQL selects (top_id, item_id) of the deciding items of the listed items.

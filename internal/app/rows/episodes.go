@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -19,6 +20,7 @@ const (
 func (service *Service) episodeCards(ctx context.Context, source target) ([]Item, error) {
 	groups, err := service.rows.ListEpisodeGroups(ctx, EpisodeRequest{
 		LibraryID: source.library.ID, OfflineRootIDs: source.offline, Limit: source.limit, Window: rows.RecentEpisodeWindow,
+		Restriction: access.Unrestricted(), // TODO(M7-14): the viewer's restriction.
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read episode groups: %w", err)
@@ -105,7 +107,8 @@ func (service *Service) summariesByID(ctx context.Context, ids []string) (map[st
 		return byID, nil
 	}
 
-	summaries, err := service.summaries.ItemSummaries(ctx, unique)
+	// TODO(M7-14): the viewer's restriction.
+	summaries, err := service.summaries.ItemSummaries(ctx, unique, access.Unrestricted())
 	if err != nil {
 		return nil, fmt.Errorf("read item summaries: %w", err)
 	}

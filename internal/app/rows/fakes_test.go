@@ -12,6 +12,7 @@ import (
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
@@ -175,7 +176,7 @@ func (catalog *fakeCatalog) ListRecentEpisodes(_ context.Context, request approw
 	return refs, nil
 }
 
-func (catalog *fakeCatalog) ItemSummaries(_ context.Context, ids []string) ([]applibrary.ItemSummary, error) {
+func (catalog *fakeCatalog) ItemSummaries(_ context.Context, ids []string, _ access.Restriction) ([]applibrary.ItemSummary, error) {
 	var summaries []applibrary.ItemSummary
 
 	for _, id := range ids {

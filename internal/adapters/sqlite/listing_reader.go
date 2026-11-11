@@ -9,6 +9,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -139,7 +140,7 @@ func readListingPage(ctx context.Context, session listingSession, request listin
 		return applibrary.ItemPage{}, err
 	}
 
-	listed, err := listedItemsInOrder(ctx, session.queries, keys)
+	listed, err := listedItemsInOrder(ctx, session, keys, target.restriction)
 	if err != nil {
 		return applibrary.ItemPage{}, err
 	}
@@ -168,9 +169,10 @@ func readListingPage(ctx context.Context, session listingSession, request listin
 	return page, nil
 }
 
-// listedItemsInOrder reads the items of the keys with their counts, in the order of the keys.
-func listedItemsInOrder(ctx context.Context, queries *sqlcgen.Queries, keys []listingKey) ([]listedItem, error) {
-	if len(keys) == 0 {
+// listedItemsInOrder reads the items of the keys that the restriction allows, with their
+// counts of visible children and episodes, in the order of the keys.
+func listedItemsInOrder(ctx context.Context, session listingSession, keys []listingKey, restriction access.Restriction) ([]listedItem, error) {
+	if len(keys) == 0 || restriction.DeniesAll() {
 		return nil, nil
 	}
 
@@ -179,7 +181,7 @@ func listedItemsInOrder(ctx context.Context, queries *sqlcgen.Queries, keys []li
 		itemIDs = append(itemIDs, key.id)
 	}
 
-	rows, err := queries.ListItemsWithCounts(ctx, itemIDs)
+	rows, err := session.queries.ListItemsWithCounts(ctx, itemIDs)
 	if err != nil {
 		return nil, fmt.Errorf("read listed items: %w", err)
 	}
@@ -187,6 +189,10 @@ func listedItemsInOrder(ctx context.Context, queries *sqlcgen.Queries, keys []li
 	byID := make(map[string]listedItem, len(rows))
 	for _, row := range rows {
 		byID[row.Item.ID] = listedItem{item: row.Item, childCount: row.ChildCount, leafCount: row.LeafCount}
+	}
+
+	if byID, err = restrictListedItems(ctx, session.transaction, byID, restriction); err != nil {
+		return nil, err
 	}
 
 	listed := make([]listedItem, 0, len(keys))

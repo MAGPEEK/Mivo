@@ -55,7 +55,7 @@ func (reader *memoryFolderItems) ListFolderItems(_ context.Context, rootID, dire
 	return reader.items[rootID+"/"+directory], reader.err
 }
 
-func (reader *memoryFolderItems) ItemSummaries(_ context.Context, itemIDs []string) ([]applibrary.ItemSummary, error) {
+func (reader *memoryFolderItems) ItemSummaries(_ context.Context, itemIDs []string, _ access.Restriction) ([]applibrary.ItemSummary, error) {
 	var summaries []applibrary.ItemSummary
 
 	for _, id := range itemIDs {

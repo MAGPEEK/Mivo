@@ -8,7 +8,6 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	approws "github.com/magpeek/mivo/internal/app/rows"
-	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -19,15 +18,15 @@ var (
 )
 
 // ListRowItems returns the first items of a row of top-level items (see
-// approws.RowReader.ListRowItems), each with its summary as listings carry it. An unknown
-// library wraps domain.ErrNotFound.
+// approws.RowReader.ListRowItems), each with its summary as listings carry it. Only items
+// request.Query.Restriction allows are returned. An unknown library and one the viewer may not
+// see wrap domain.ErrNotFound.
 func (catalog *CatalogReader) ListRowItems(ctx context.Context, request approws.ItemRequest) ([]applibrary.ItemSummary, error) {
 	var summaries []applibrary.ItemSummary
 
 	err := inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, queries *sqlcgen.Queries) error {
 		target, err := completeTarget(ctx, transaction, listingTarget{
-			libraryID: request.LibraryID, kind: request.Query.Filter.Kind,
-			restriction: access.Unrestricted(), // TODO(M7-13): the viewer's restriction.
+			libraryID: request.LibraryID, kind: request.Query.Filter.Kind, restriction: request.Query.Restriction,
 		})
 		if err != nil {
 			return err
@@ -40,7 +39,7 @@ func (catalog *CatalogReader) ListRowItems(ctx context.Context, request approws.
 			return err
 		}
 
-		listed, err := listedItemsInOrder(ctx, queries, keys)
+		listed, err := listedItemsInOrder(ctx, listingSession{transaction: transaction, queries: queries}, keys, target.restriction)
 		if err != nil {
 			return err
 		}
@@ -140,8 +139,7 @@ func (catalog *CatalogReader) inEpisodeQuery(ctx context.Context, request approw
 	read func(scan func(...any) error) error,
 ) error {
 	return inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, _ *sqlcgen.Queries) error {
-		// TODO(M7-13): the viewer's restriction.
-		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: request.LibraryID, restriction: access.Unrestricted()})
+		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: request.LibraryID, restriction: request.Restriction})
 		if err != nil {
 			return err
 		}

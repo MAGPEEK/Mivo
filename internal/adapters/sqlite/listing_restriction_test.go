@@ -340,7 +340,8 @@ func TestListingRestrictionContentRatingFacetListsOnlyVisibleRatings(t *testing.
 }
 
 // A show is listed by its own bucket; its episodes above the limit do not decide its
-// technical filters and facets, and the folder view lists episodes by their effective bucket.
+// technical filters and facets, and the folder view lists only the episodes whose whole
+// chain passes the limit.
 func TestListingRestrictionOfShowsAndTheirEpisodes(t *testing.T) {
 	t.Parallel()
 
@@ -380,8 +381,9 @@ func TestListingRestrictionOfShowsAndTheirEpisodes(t *testing.T) {
 	}
 
 	// The second kids episode has its own TV-MA rating; the TV-G episode of the unrated show
-	// keeps its own bucket although its show is hidden (ADR 0032 section 7).
-	wantEpisodes := []string{restrictedEpisodeID(kidsShow, 1), restrictedEpisodeID(unratedShow, 1)}
+	// is hidden with its show: a child's lower rating opens no path through a hidden parent
+	// (ADR 0032 section 7, ancestor visibility).
+	wantEpisodes := []string{restrictedEpisodeID(kidsShow, 1)}
 	if got := fixture.folderItemIDs(t, showsLibraryID, children, "Kids Show/Season 1", "Mature Show/Season 1", "Unrated Show/Season 1"); !slices.Equal(got, wantEpisodes) {
 		t.Errorf("children's episodes in folders = %v, want %v", got, wantEpisodes)
 	}
@@ -405,7 +407,7 @@ func TestListingRestrictionHidesFoldersWithOnlyHiddenItems(t *testing.T) {
 		{name: "teens", rootID: moviesLibraryID, restriction: teens, want: []string{"Kids", "Teens"}},
 		{name: "nested directory", rootID: moviesLibraryID, directory: "Adult", restriction: adults, want: []string{"Deep"}},
 		{name: "nested directory hidden", rootID: moviesLibraryID, directory: "Adult", restriction: teens},
-		{name: "shows", rootID: showsLibraryID, restriction: childrenRestriction(t), want: []string{"Kids Show", "Unrated Show"}},
+		{name: "shows", rootID: showsLibraryID, restriction: childrenRestriction(t), want: []string{"Kids Show"}},
 		{name: "season", rootID: showsLibraryID, directory: "Mature Show", restriction: adults, want: []string{"Season 1"}},
 		{name: "other library", rootID: moviesLibraryID, restriction: restrictionOf(access.OnlyLibraries(showsLibraryID), access.NoLimit())},
 		{name: "zero restriction", rootID: moviesLibraryID},

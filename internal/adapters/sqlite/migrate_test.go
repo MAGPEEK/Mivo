@@ -12,7 +12,7 @@ import (
 )
 
 // latestSchemaVersion is the version of the newest file in migrations/.
-const latestSchemaVersion = 15
+const latestSchemaVersion = 16
 
 // migrationFiles is the number of files in migrations/; the numbering has no gaps, so it
 // equals latestSchemaVersion.

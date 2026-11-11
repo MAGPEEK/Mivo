@@ -10,42 +10,64 @@ import (
 	"database/sql"
 )
 
-const listOutdatedEffectiveAgeRatings = `-- name: ListOutdatedEffectiveAgeRatings :many
+const listOutdatedAgeRatings = `-- name: ListOutdatedAgeRatings :many
 WITH RECURSIVE subtree AS (
-    SELECT item.id AS id, coalesce(item.age_rating, parent.effective_age_rating) AS effective,
-           item.effective_age_rating AS previous
+    SELECT item.id AS id,
+           coalesce(item.age_rating, parent.effective_age_rating) AS effective,
+           CASE WHEN item.age_rating IS NULL OR parent.visibility_age_rating > item.age_rating
+                THEN parent.visibility_age_rating ELSE item.age_rating END AS visibility,
+           coalesce(parent.visibility_unrated, item.age_rating IS NULL) AS unrated,
+           item.effective_age_rating AS previous_effective,
+           item.visibility_age_rating AS previous_visibility,
+           item.visibility_unrated AS previous_unrated
     FROM items AS item
     LEFT JOIN items AS parent ON parent.id = item.parent_id
     WHERE item.id = ?
     UNION ALL
-    SELECT child.id, coalesce(child.age_rating, subtree.effective), child.effective_age_rating
+    SELECT child.id,
+           coalesce(child.age_rating, subtree.effective),
+           CASE WHEN child.age_rating IS NULL OR subtree.visibility > child.age_rating
+                THEN subtree.visibility ELSE child.age_rating END,
+           subtree.unrated,
+           child.effective_age_rating, child.visibility_age_rating, child.visibility_unrated
     FROM items AS child
     JOIN subtree ON child.parent_id = subtree.id
 )
-SELECT subtree.id, subtree.effective
+SELECT subtree.id, subtree.effective, subtree.visibility, subtree.unrated
 FROM subtree
-WHERE subtree.previous IS NOT subtree.effective
+WHERE subtree.previous_effective IS NOT subtree.effective
+   OR subtree.previous_visibility IS NOT subtree.visibility
+   OR subtree.previous_unrated IS NOT subtree.unrated
 `
 
-type ListOutdatedEffectiveAgeRatingsRow struct {
-	ID        string
-	Effective sql.NullInt64
+type ListOutdatedAgeRatingsRow struct {
+	ID         string
+	Effective  sql.NullInt64
+	Visibility interface{}
+	Unrated    int64
 }
 
-// ListOutdatedEffectiveAgeRatings computes the effective bucket of an item and its whole
-// subtree (the own bucket, else the parent's effective one) and returns the rows whose stored
-// value differs. sqlc cannot resolve a CTE in an UPDATE, so the adapter writes them with
-// SetEffectiveAgeRating.
-func (q *Queries) ListOutdatedEffectiveAgeRatings(ctx context.Context, id string) ([]ListOutdatedEffectiveAgeRatingsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listOutdatedEffectiveAgeRatings, id)
+// ListOutdatedAgeRatings computes, for an item and its whole subtree, the effective bucket
+// (the own bucket, else the parent's effective one) and the ancestor visibility of migration
+// 00016: the highest own bucket of the chain (NULL when neither the item nor an ancestor is
+// rated) and whether the chain is unrated (the top ancestor has no own rating). It
+// returns the rows whose stored values differ. sqlc cannot resolve a CTE in an UPDATE, so the
+// adapter writes them with SetEffectiveAgeRating.
+func (q *Queries) ListOutdatedAgeRatings(ctx context.Context, id string) ([]ListOutdatedAgeRatingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOutdatedAgeRatings, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListOutdatedEffectiveAgeRatingsRow{}
+	items := []ListOutdatedAgeRatingsRow{}
 	for rows.Next() {
-		var i ListOutdatedEffectiveAgeRatingsRow
-		if err := rows.Scan(&i.ID, &i.Effective); err != nil {
+		var i ListOutdatedAgeRatingsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Effective,
+			&i.Visibility,
+			&i.Unrated,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -99,17 +121,26 @@ func (q *Queries) ListStaleAgeRatings(ctx context.Context, limit int64) ([]ListS
 
 const setEffectiveAgeRating = `-- name: SetEffectiveAgeRating :exec
 UPDATE items
-SET effective_age_rating = ?
+SET effective_age_rating  = ?,
+    visibility_age_rating = ?,
+    visibility_unrated    = ?
 WHERE id = ?
 `
 
 type SetEffectiveAgeRatingParams struct {
-	EffectiveAgeRating sql.NullInt64
-	ID                 string
+	EffectiveAgeRating  sql.NullInt64
+	VisibilityAgeRating sql.NullInt64
+	VisibilityUnrated   int64
+	ID                  string
 }
 
 func (q *Queries) SetEffectiveAgeRating(ctx context.Context, arg SetEffectiveAgeRatingParams) error {
-	_, err := q.db.ExecContext(ctx, setEffectiveAgeRating, arg.EffectiveAgeRating, arg.ID)
+	_, err := q.db.ExecContext(ctx, setEffectiveAgeRating,
+		arg.EffectiveAgeRating,
+		arg.VisibilityAgeRating,
+		arg.VisibilityUnrated,
+		arg.ID,
+	)
 	return err
 }
 

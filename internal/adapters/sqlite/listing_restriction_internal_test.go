@@ -3,8 +3,10 @@ package sqlite
 import (
 	"strings"
 	"testing"
+	"time"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -31,19 +33,19 @@ func TestListingRestrictionConditionSQL(t *testing.T) {
 	}{
 		{name: "unrestricted adds no text", restriction: access.Unrestricted()},
 		{name: "zero value never matches", want: neverMatches},
-		{name: "no library never matches", restriction: restrictedTo(t, access.OnlyLibraries(), access.Age6, true), want: neverMatches + " AND i.effective_age_rating <= :p1", wantArgs: 1},
+		{name: "no library never matches", restriction: restrictedTo(t, access.OnlyLibraries(), access.Age6, true), want: neverMatches + " AND i.visibility_age_rating <= :p1 AND i.visibility_unrated = 0", wantArgs: 1},
 		{
 			name: "libraries and hidden unrated", restriction: restrictedTo(t, access.OnlyLibraries("b", "a"), access.Age6, true),
-			want: "i.library_id IN (:p1, :p2) AND i.effective_age_rating <= :p3", wantArgs: 3,
+			want: "i.library_id IN (:p1, :p2) AND i.visibility_age_rating <= :p3 AND i.visibility_unrated = 0", wantArgs: 3,
 		},
 		{
 			name: "unrated shown", restriction: restrictedTo(t, access.AllLibraries(), access.Age12, false),
-			want: "(i.effective_age_rating IS NULL OR i.effective_age_rating <= :p1)", wantArgs: 1,
+			want: "(i.visibility_age_rating IS NULL OR i.visibility_age_rating <= :p1)", wantArgs: 1,
 		},
 		{
 			name:        "only unrated hidden",
 			restriction: access.Viewer{Libraries: access.AllLibraries(), Limit: access.NoLimit().HidingUnrated(true)}.Restriction(),
-			want:        "i.effective_age_rating IS NOT NULL",
+			want:        "i.visibility_unrated = 0",
 		},
 	}
 	for _, test := range tests {
@@ -54,8 +56,11 @@ func TestListingRestrictionConditionSQL(t *testing.T) {
 	}
 }
 
-// restrictedStatements returns every statement the listing builds for the restriction, by
-// name.
+// restrictedStatements returns every statement the listing, the folder view and the rows
+// build for the restriction, by name.
+// rowStatementLimit is the row length of the row statements in restrictedStatements.
+const rowStatementLimit = 10
+
 func restrictedStatements(restriction access.Restriction) map[string]queryText {
 	target := listingTarget{libraryID: "library", kind: library.ItemKindShow, restriction: restriction}
 	filter := library.ListingFilter{Kind: library.ItemKindShow}
@@ -93,6 +98,22 @@ func restrictedStatements(restriction access.Restriction) map[string]queryText {
 	text, args = folderDirectoriesQuery(scope)
 	add("folder directories", text, args)
 
+	bySize := library.ListingQuery{Filter: filter, Order: library.ListingOrder{Sort: library.SortByFileSize}}
+
+	text, args = rowItemsQuery(target, approws.ItemRequest{LibraryID: target.libraryID, Query: bySize, Limit: rowStatementLimit})
+	add("row items", text, args)
+
+	episodes := approws.EpisodeRequest{LibraryID: target.libraryID, Limit: rowStatementLimit, Window: time.Hour}
+
+	text, args = episodeGroupsQuery(target, episodes)
+	add("episode groups", text, args)
+
+	text, args = recentEpisodesQuery(target, episodes)
+	add("recent episodes", text, args)
+
+	text, args = visibleCountsQuery(restriction, []string{"item"})
+	add("visible counts", text, args)
+
 	return statements
 }
 
@@ -110,7 +131,7 @@ func TestListingRestrictedQueriesUseTheCatalogIndexes(t *testing.T) {
 	restriction := restrictedTo(t, access.OnlyLibraries("library", "other"), access.Age6, true)
 
 	for name, statement := range restrictedStatements(restriction) {
-		if !strings.Contains(statement.text, "effective_age_rating <= ") {
+		if !strings.Contains(statement.text, "visibility_age_rating <= ") {
 			t.Errorf("%s: statement does not filter by the age bucket: %s", name, statement.text)
 		}
 
@@ -123,17 +144,19 @@ func TestListingRestrictedQueriesUseTheCatalogIndexes(t *testing.T) {
 	}
 }
 
-// assertIndexedPlan checks that the plan searches items through an index and scans neither
-// items nor media_files as a whole.
+// assertIndexedPlan checks that the plan searches items (the episode rows read them as
+// "episodes") through an index and scans neither items nor media_files as a whole.
 func assertIndexedPlan(t *testing.T, name string, steps map[int]planStep) {
 	t.Helper()
 
 	searchesItems := false
 
 	for _, step := range steps {
-		searchesItems = searchesItems || strings.HasPrefix(step.detail, "SEARCH items USING ")
+		searchesItems = searchesItems || strings.HasPrefix(step.detail, "SEARCH items USING ") ||
+			strings.HasPrefix(step.detail, "SEARCH episodes USING ")
 
-		if strings.HasPrefix(step.detail, "SCAN items") || strings.HasPrefix(step.detail, "SCAN media_files") {
+		if strings.HasPrefix(step.detail, "SCAN items") || strings.HasPrefix(step.detail, "SCAN episodes") ||
+			strings.HasPrefix(step.detail, "SCAN media_files") {
 			t.Errorf("%s: plan step %q scans a whole table; plan: %+v", name, step.detail, steps)
 		}
 	}
@@ -149,7 +172,8 @@ func TestListingUnrestrictedStatementsCarryNoRestriction(t *testing.T) {
 	t.Parallel()
 
 	for name, statement := range restrictedStatements(access.Unrestricted()) {
-		if strings.Contains(statement.text, "effective_age_rating") || strings.Contains(statement.text, neverMatches) ||
+		if strings.Contains(statement.text, "_age_rating") || strings.Contains(statement.text, "visibility_") ||
+			strings.Contains(statement.text, neverMatches) ||
 			strings.Contains(statement.text, "items.library_id IN") {
 			t.Errorf("%s: unrestricted statement carries a restriction: %s", name, statement.text)
 		}

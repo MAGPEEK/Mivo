@@ -172,6 +172,12 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   descendant's summary, not its directory name in the folder view, and not through counts
   (`childCount`, `leafCount`, unwatched counts), size sorting or the episode rows, which
   consider visible members only.
+  Implementation (M7-13a, migration `00016`): each item stores the visibility of its whole
+  chain – `visibility_age_rating`, the highest own bucket of the item and its ancestors (NULL
+  when none is rated), and `visibility_unrated`, set when the top ancestor has no own rating.
+  The one predicate is "bucket is NULL or ≤ max age, and (not hide-unrated or the flag is 0)";
+  both values are maintained wherever `effective_age_rating` is propagated, and a changed
+  `parent_id` marks the row stale for the backfill.
 - The restriction (library set, max age, hide unrated) is applied in SQL for every listing,
   facet, letter, folder, row, search, children, summary and detail read, and checked before a
   playback session starts. A hidden item answers `404 not_found`, never `403`, so its existence

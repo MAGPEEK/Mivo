@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
@@ -103,7 +104,10 @@ func (service *Service) recentEpisodes(ctx context.Context, source target) ([]Ro
 	query := listedQuery(source, library.SortByDateAdded)
 	row := newRow(source, rows.KindRecentEpisodes, rows.TitleRecentEpisodes, query)
 
-	refs, err := service.rows.ListRecentEpisodes(ctx, EpisodeRequest{LibraryID: source.library.ID, OfflineRootIDs: source.offline, Limit: source.limit})
+	refs, err := service.rows.ListRecentEpisodes(ctx, EpisodeRequest{
+		LibraryID: source.library.ID, OfflineRootIDs: source.offline, Limit: source.limit,
+		Restriction: access.Unrestricted(), // TODO(M7-14): the viewer's restriction.
+	})
 	if err != nil {
 		return nil, fmt.Errorf("recent episodes: %w", err)
 	}

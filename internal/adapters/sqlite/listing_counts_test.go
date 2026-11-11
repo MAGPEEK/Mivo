@@ -217,7 +217,7 @@ func TestItemSummariesKeepTheOrderAndSkipUnknownIDs(t *testing.T) {
 
 	fixture := newListingFixture(t)
 
-	summaries, err := fixture.reader.ItemSummaries(t.Context(), []string{movieBravo, unknownID, movieAlpha})
+	summaries, err := fixture.reader.ItemSummaries(t.Context(), []string{movieBravo, unknownID, movieAlpha}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ItemSummaries error = %v", err)
 	}

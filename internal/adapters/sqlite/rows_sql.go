@@ -23,8 +23,8 @@ func (scope listingScope) availableFileSQL(offlineRootIDs []string) string {
 }
 
 // availableSQL is the condition that a top-level item (alias "items") is available: its own
-// primary file, or for a container the primary file of one of its members (a show is
-// available while one of its episodes is).
+// primary file, or for a container the primary file of one of its members the viewer may see
+// (a show is available while one of its visible episodes is).
 func (scope listingScope) availableSQL(offlineRootIDs []string) string {
 	available := scope.availableFileSQL(offlineRootIDs)
 	kind := "'" + scope.members.memberKind.String() + "'"
@@ -39,10 +39,10 @@ func (scope listingScope) availableSQL(offlineRootIDs []string) string {
 		// test: members.kind already names the leaf, and only that kind sits two levels down.
 		return "EXISTS (SELECT 1 FROM items AS middles JOIN items AS members ON members.parent_id = middles.id" +
 			" JOIN media_files AS files ON files.id = " + scope.primaryFileSQL("members.id") +
-			" WHERE middles.parent_id = items.id AND members.kind = " + kind + " AND " + available + ")"
+			" WHERE middles.parent_id = items.id AND members.kind = " + kind + scope.visibleMemberSQL() + " AND " + available + ")"
 	case memberChild:
 		return "EXISTS (SELECT 1 FROM items AS members JOIN media_files AS files ON files.id = " + scope.primaryFileSQL("members.id") +
-			" WHERE members.parent_id = items.id AND members.kind = " + kind + " AND " + available + ")"
+			" WHERE members.parent_id = items.id AND members.kind = " + kind + scope.visibleMemberSQL() + " AND " + available + ")"
 	default:
 		return "EXISTS (SELECT 1 FROM media_files AS files WHERE files.id = " + scope.primaryFileSQL("items.id") + " AND " + available + ")"
 	}
@@ -57,7 +57,7 @@ func (scope listingScope) availablePhotoSQL(available string) string {
 		" UNION ALL SELECT children.id FROM items AS children JOIN descendants ON children.parent_id = descendants.id)" +
 		" SELECT 1 FROM descendants JOIN items AS members ON members.id = descendants.id" +
 		" JOIN media_files AS files ON files.id = " + scope.primaryFileSQL("members.id") +
-		" WHERE members.kind = '" + library.ItemKindPhoto.String() + "' AND " + available + ")"
+		" WHERE members.kind = '" + library.ItemKindPhoto.String() + "'" + scope.visibleMemberSQL() + " AND " + available + ")"
 }
 
 // rowItemsQuery returns the SQL of the IDs of a row of top-level items: available, with a
@@ -103,14 +103,17 @@ func episodeScope(builder *sqlBuilder, target listingTarget) listingScope {
 	return listingScope{builder: builder, multiFolder: target.multiFolder}
 }
 
-// libraryEpisodesSQL selects the available episodes of the library with their season and
-// show; it binds the library first.
-func libraryEpisodesSQL(scope listingScope, libraryID string, offlineRootIDs []string) string {
+// libraryEpisodesSQL selects the available episodes of the target's library that the viewer
+// may see, with their season and show; it binds the library first. An episode's stored
+// visibility covers its season and show (ADR 0032 section 7), so no episode of a hidden show
+// reaches a row, and with it neither the show's ID.
+func libraryEpisodesSQL(scope listingScope, target listingTarget, offlineRootIDs []string) string {
 	return "SELECT episodes.id AS id, episodes.created_at AS created_at, episodes.release_date AS release_date," +
 		" seasons.id AS season_id, seasons.parent_id AS show_id" +
 		" FROM items AS episodes JOIN items AS seasons ON seasons.id = episodes.parent_id" +
-		" WHERE episodes.library_id = " + scope.builder.arg(libraryID) + " AND episodes.kind = '" + library.ItemKindEpisode.String() + "'" +
-		" AND seasons.kind = '" + library.ItemKindSeason.String() + "' AND " + scope.availableEpisodeSQL(offlineRootIDs)
+		" WHERE episodes.library_id = " + scope.builder.arg(target.libraryID) + " AND episodes.kind = '" + library.ItemKindEpisode.String() + "'" +
+		" AND seasons.kind = '" + library.ItemKindSeason.String() + "'" + visibleInLibrarySQL(scope.builder, target, "episodes") +
+		" AND " + scope.availableEpisodeSQL(offlineRootIDs)
 }
 
 // episodeGroupsQuery returns the SQL of the recently added episodes of the shows with the
@@ -120,7 +123,7 @@ func episodeGroupsQuery(target listingTarget, request approws.EpisodeRequest) (s
 	builder := &sqlBuilder{}
 	scope := episodeScope(builder, target)
 
-	builder.write("WITH available AS (", libraryEpisodesSQL(scope, request.LibraryID, request.OfflineRootIDs), "),\n",
+	builder.write("WITH available AS (", libraryEpisodesSQL(scope, target, request.OfflineRootIDs), "),\n",
 		"newest AS (SELECT show_id, MAX(created_at) AS newest FROM available GROUP BY show_id",
 		" ORDER BY newest DESC, show_id LIMIT ", builder.arg(request.Limit), ")\n",
 		"SELECT newest.show_id, available.season_id, COUNT(*), MAX(available.created_at)",
@@ -137,7 +140,7 @@ func recentEpisodesQuery(target listingTarget, request approws.EpisodeRequest) (
 	builder := &sqlBuilder{}
 	scope := episodeScope(builder, target)
 
-	builder.write("SELECT id, season_id, show_id FROM (", libraryEpisodesSQL(scope, request.LibraryID, request.OfflineRootIDs), ")",
+	builder.write("SELECT id, season_id, show_id FROM (", libraryEpisodesSQL(scope, target, request.OfflineRootIDs), ")",
 		" WHERE release_date <> '' ORDER BY release_date DESC, created_at DESC, id DESC LIMIT ", builder.arg(request.Limit))
 
 	return builder.text.String(), builder.args

@@ -26,7 +26,7 @@ func (q *Queries) DeleteMusicProviderID(ctx context.Context, arg DeleteMusicProv
 }
 
 const listAlbumTracks = `-- name: ListAlbumTracks :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        CAST(ifnull((SELECT media_files.relative_path FROM media_files
                     WHERE media_files.item_id = items.id
                     ORDER BY media_files.part_number, media_files.relative_path
@@ -78,6 +78,8 @@ func (q *Queries) ListAlbumTracks(ctx context.Context, parentID sql.NullString) 
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.PrimaryPath,
 		); err != nil {
 			return nil, err
@@ -94,7 +96,7 @@ func (q *Queries) ListAlbumTracks(ctx context.Context, parentID sql.NullString) 
 }
 
 const listArtistAlbums = `-- name: ListArtistAlbums :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS tracks
         WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
 FROM items
@@ -159,6 +161,8 @@ func (q *Queries) ListArtistAlbums(ctx context.Context, arg ListArtistAlbumsPara
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.ChildCount,
 		); err != nil {
 			return nil, err
@@ -175,7 +179,7 @@ func (q *Queries) ListArtistAlbums(ctx context.Context, arg ListArtistAlbumsPara
 }
 
 const listLibraryAlbums = `-- name: ListLibraryAlbums :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS tracks
         WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
 FROM items
@@ -240,6 +244,8 @@ func (q *Queries) ListLibraryAlbums(ctx context.Context, arg ListLibraryAlbumsPa
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.ChildCount,
 		); err != nil {
 			return nil, err

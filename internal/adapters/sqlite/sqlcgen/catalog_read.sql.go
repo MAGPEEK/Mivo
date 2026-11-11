@@ -134,7 +134,7 @@ func (q *Queries) ListArtworkTags(ctx context.Context) ([]ListArtworkTagsRow, er
 }
 
 const listChildrenAscending = `-- name: ListChildrenAscending :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        CAST(CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
@@ -225,6 +225,8 @@ func (q *Queries) ListChildrenAscending(ctx context.Context, arg ListChildrenAsc
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.OrderGroup,
 			&i.OrderNumber,
 			&i.ChildCount,
@@ -244,7 +246,7 @@ func (q *Queries) ListChildrenAscending(ctx context.Context, arg ListChildrenAsc
 }
 
 const listChildrenDescending = `-- name: ListChildrenDescending :many
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        CAST(CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
@@ -327,6 +329,8 @@ func (q *Queries) ListChildrenDescending(ctx context.Context, arg ListChildrenDe
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.OrderGroup,
 			&i.OrderNumber,
 			&i.ChildCount,
@@ -346,7 +350,7 @@ func (q *Queries) ListChildrenDescending(ctx context.Context, arg ListChildrenDe
 }
 
 const listExtras = `-- name: ListExtras :many
-SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at, age_rating, effective_age_rating, age_rating_source
+SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at, age_rating, effective_age_rating, age_rating_source, visibility_age_rating, visibility_unrated
 FROM items
 WHERE parent_id = ?1 AND kind = 'extra'
 ORDER BY CASE extra_type
@@ -404,6 +408,8 @@ func (q *Queries) ListExtras(ctx context.Context, arg ListExtrasParams) ([]Item,
 			&i.AgeRating,
 			&i.EffectiveAgeRating,
 			&i.AgeRatingSource,
+			&i.VisibilityAgeRating,
+			&i.VisibilityUnrated,
 		); err != nil {
 			return nil, err
 		}
@@ -536,7 +542,7 @@ func (q *Queries) ListItemTags(ctx context.Context, itemID string) ([]ListItemTa
 
 const listItemsWithCounts = `-- name: ListItemsWithCounts :many
 
-SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source,
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS children
         WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
@@ -606,6 +612,8 @@ func (q *Queries) ListItemsWithCounts(ctx context.Context, itemIds []string) ([]
 			&i.Item.AgeRating,
 			&i.Item.EffectiveAgeRating,
 			&i.Item.AgeRatingSource,
+			&i.Item.VisibilityAgeRating,
+			&i.Item.VisibilityUnrated,
 			&i.ChildCount,
 			&i.LeafCount,
 		); err != nil {

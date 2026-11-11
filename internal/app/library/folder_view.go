@@ -202,7 +202,8 @@ func (service *Service) withSummaries(ctx context.Context, entries []FolderViewE
 		return entries, nil
 	}
 
-	summaries, err := service.folderItems.ItemSummaries(ctx, itemIDs)
+	// TODO(M7-14): the viewer's restriction.
+	summaries, err := service.folderItems.ItemSummaries(ctx, itemIDs, access.Unrestricted())
 	if err != nil {
 		return nil, fmt.Errorf("read item summaries: %w", err)
 	}

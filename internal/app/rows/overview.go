@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	appscan "github.com/magpeek/mivo/internal/app/scan"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
@@ -118,6 +119,7 @@ func listedQuery(source target, sort library.ItemSort) library.ListingQuery {
 // topLevelItems reads the items of a top-level row for the query, leaving out offline items.
 func (service *Service) topLevelItems(ctx context.Context, source target, query library.ListingQuery) ([]Item, error) {
 	query.Filter.OfflineRootIDs = source.offline
+	query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
 
 	summaries, err := service.rows.ListRowItems(ctx, ItemRequest{LibraryID: source.library.ID, Query: query, Limit: source.limit})
 	if err != nil {

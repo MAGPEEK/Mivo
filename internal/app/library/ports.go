@@ -92,8 +92,8 @@ type FolderItemReader interface {
 	// restriction allows are returned; its zero value allows none.
 	ListFolderItems(ctx context.Context, rootID, directory string, restriction access.Restriction) ([]FolderItem, error)
 	// ItemSummaries returns the summaries of the given items as listings carry them; unknown
-	// IDs are left out.
-	ItemSummaries(ctx context.Context, itemIDs []string) ([]ItemSummary, error)
+	// IDs and items the restriction hides are left out. The zero restriction allows none.
+	ItemSummaries(ctx context.Context, itemIDs []string, restriction access.Restriction) ([]ItemSummary, error)
 }
 
 // DirectoryLister lists directories inside a library folder. Implemented by

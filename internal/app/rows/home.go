@@ -9,6 +9,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
@@ -124,6 +125,7 @@ func (service *Service) heroCandidates(ctx context.Context, libraries []target) 
 
 		query := listedQuery(source, library.SortByDateAdded)
 		query.Filter.OfflineRootIDs = source.offline
+		query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
 
 		summaries, err := service.rows.ListRowItems(ctx, ItemRequest{LibraryID: source.library.ID, Query: query, Limit: heroCandidatesPerLibrary})
 		if err != nil {
