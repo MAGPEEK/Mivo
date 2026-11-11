@@ -72,7 +72,7 @@ that encoder `degraded` for the rest of the process lifetime. On the DS925+ the 
 with its decoder in the tested combination (hardware decode is part of the test, not assumed).
 HDR sources are not tone-mapped in 0.1.0 (ADR 0023 warning `hdr_not_tone_mapped` stays).
 
-**6. Bandwidth tiers.** The request carries `maxBitrate` (bit/s, 0 = original). A fixed ladder
+**6. Bandwidth tiers.** The request carries `maxBitRate` (bit/s, 0 = original). A fixed ladder
 (20, 12, 8, 4, 2, 1 Mbit/s with 1080p/720p/480p heights) lives in the domain; a choice below
 the source forces a transcode capped with `-maxrate`/`-bufsize`. "Automatic" is a client
 decision in player-core from measured segment throughput; the server only honours the
@@ -130,3 +130,38 @@ How the contract (`api/openapi.yaml` 1.15.0) carries sections 3, 4 and 6:
   are reasons, `subtitle_burn_in_unavailable` is a warning; the code stays an open string.
 - A file is one version: `versionLabel`, `width`, `height`, `resolution` and `bitRate` on
   `MediaFile` are what a version picker shows.
+
+## Notes (M4-02b)
+
+Corrections to the M4-02a contract, made in `api/openapi.yaml` 1.16.0 before any release
+carried 1.15.0, and how the contract carries sections 5, 7 and 8:
+
+- **`maxBitrate` is renamed `maxBitRate`**, like `bitRate`, `sourceBitRate` and
+  `outputBitRate`. Go identifiers in `domain` and `app` may keep their own spelling; the wire
+  name is `maxBitRate`.
+- **The default subtitle policy never burns in.** Burn-in happens only for a track the request
+  names in `subtitleTrackId`. A client that sends neither `subtitleMode` nor `subtitleFormats`
+  (the milestone-2 contract) therefore never gets a transcode because of a subtitle; a forced
+  track it cannot render stays off.
+- **`allowDegradeSubtitles`** (request, default false): when the named subtitle needs burn-in
+  and the server cannot burn in now, true starts the session without it (mode `off`, warning
+  `subtitle_burn_in_unavailable`); false answers the problem a transcode gets
+  (`session_limit_reached`, `transcode_unavailable`). This narrows the wording of section 3,
+  which dropped the subtitle unconditionally.
+- **Audio limits are profile fields**: `maxAudioSampleRate` (Hz) and `maxAudioBitDepth` next to
+  `maxAudioChannels`. `CodecLimit` stays video only (its bit depth ends at 16). Reason
+  `hires_downsampled` refers to the two fields; `MediaStream.sampleRate` and
+  `MediaStream.bitDepth` show the source values of an audio stream.
+- **Session list** (`GET /playback/sessions`): `PlaybackSessionSummary` carries the catalog
+  title and never a file name, path or stream URL. `transcodeSpeed` and `paused` are absent for
+  direct play. The viewer's own session resource also gets `transcodeSpeed` and
+  `StreamDecision.hardware` for the stream-info overlay (M4-16e); `paused` stays admin only.
+- **Transcoder** (`GET /system/transcoder`, `POST /system/transcoder/test`): the test answers
+  202 with the status as it is and 409 `conflict` while a run is active; clients poll until
+  `lastTestedAt` changes.
+- **Trickplay** (`GET`/`POST /media-files/{fileId}/trickplay`, sheets as a stream route): the
+  manifest lists `sheetUrls`, opaque like `SubtitleTrack.url`, so clients never build the sheet
+  route. The trickplay routes are **not** management operations: every viewer scrubs, also
+  remotely and on a managed profile. Only the session list and the transcoder pair carry the
+  ADR 0028 guard.
+- The five strict operations answer 501 `not_implemented` until M4-14b.

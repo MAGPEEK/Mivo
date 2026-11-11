@@ -8,7 +8,7 @@ All player logic for ADR 0030 lives in `player-core` and is unit-tested without 
 
 ## Acceptance criteria
 - [ ] Client profile gets `preferredAudioLanguages`, `preferredSubtitleLanguages`, `subtitleMode`, `subtitleFormats: ["webvtt"]`, `maxAudioChannels` (from
-      `navigator`/MediaCapabilities probing), bounded; session requests carry `audioStreamIndex`, `subtitleTrackId`, `maxBitrate`.
+      `navigator`/MediaCapabilities probing), bounded; session requests carry `audioStreamIndex`, `subtitleTrackId`, `maxBitRate`.
 - [ ] `parseWebVtt(text)` returns cues (start, end, plain text, line/position ignored); `activeCues(cues, fileTime)`; the engine maps `fileTime = actualStart + currentTime`;
       a track switch for text subtitles never restarts the stream.
 - [ ] Switching audio or a burn-in subtitle or quality restarts through `replacesSessionId` at the current position (existing restart helper).

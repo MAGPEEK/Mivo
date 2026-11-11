@@ -7,7 +7,7 @@ Files/areas: `internal/adapters/http/restapi/**` (+ tests)
 All strict-server operations of M4-02a/b are implemented and mapped.
 
 ## Acceptance criteria
-- [ ] Session create maps `subtitleTrackId`, `maxBitrate`, returns subtitle decision, output and source bit rate; media-file resource lists tracks
+- [ ] Session create maps `subtitleTrackId`, `maxBitRate`, returns subtitle decision, output and source bit rate; media-file resource lists tracks
       (embedded + external) and versions.
 - [ ] `GET /playback/sessions`, `GET /system/transcoder`, `POST /system/transcoder/test` (202/409), trickplay manifest `GET`/`POST` work behind
       the ADR 0028 management guard (non-local peer → 403 `forbidden`).

@@ -44,6 +44,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/transcoder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe the transcoder's hardware acceleration
+         * @description Returns the configured hardware acceleration and what the last test run found (ADR 0030 section 5): one entry per hardware encoder the FFmpeg build lists, usable only when it encoded a test source. A server without usable hardware returns an empty or all-unusable list and encodes in software, which is no error. Management operation (ADR 0028): it needs the primary profile of an admin account selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local peers.
+         */
+        get: operations["getTranscoderStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/transcoder/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test the hardware acceleration again
+         * @description Starts a new test run in the background (ADR 0030 section 5: one second of a generated source per encoder, 10 seconds timeout each) and returns at once with the status as it is now. Poll getTranscoderStatus until lastTestedAt changes. While a run is active no second one starts and the call answers 409 "conflict". Management operation (ADR 0028): it needs the primary profile of an admin account selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local peers. Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". A server that is shutting down answers 503 "unavailable".
+         */
+        post: operations["testTranscoder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/setup": {
         parameters: {
             query?: never;
@@ -1039,11 +1079,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the running playback sessions
+         * @description Returns the sessions of all clients that are starting or ready, oldest first, with what the server does for each (ADR 0030 section 7). Stopped, ended and reaped sessions are not listed; nothing is persisted. An entry names its item by the catalog title and never carries a file name or path. Stop a session with stopPlaybackSession. Management operation (ADR 0028): it needs the primary profile of an admin account selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local peers.
+         */
+        get: operations["listPlaybackSessions"];
         put?: never;
         /**
          * Start playing a media file
-         * @description Decides how the client plays the file (direct play, remux or transcode) from its profile and the server's capabilities, starts FFmpeg when needed and returns the session with an opaque streamUrl. Problem codes: "invalid" (400, for example a malformed profile), "forbidden" (403, only for a client outside the local network while server.lan_only is on), "not_found" (404, unknown file or a file deleted from disk), "unsupported" (422, the file cannot be played, for example because probing failed or its path now leads outside its library folder), "no_compatible_format" and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and "unavailable" (503, for example the server is shutting down or the library folder is unreachable). Set replacesSessionId when seeking outside the produced range or when changing the audio track, a burned-in subtitle or maxBitrate: the old session stops before the limit is checked. audioStreamIndex, subtitleTrackId and maxBitrate are optional (ADR 0030); without them the server picks the tracks from the profile's language preference and plays the original quality.
+         * @description Decides how the client plays the file (direct play, remux or transcode) from its profile and the server's capabilities, starts FFmpeg when needed and returns the session with an opaque streamUrl. Problem codes: "invalid" (400, for example a malformed profile), "forbidden" (403, only for a client outside the local network while server.lan_only is on), "not_found" (404, unknown file or a file deleted from disk), "unsupported" (422, the file cannot be played, for example because probing failed or its path now leads outside its library folder), "no_compatible_format" and "transcode_unavailable" (422), "session_limit_reached" (503 with Retry-After) and "unavailable" (503, for example the server is shutting down or the library folder is unreachable). Set replacesSessionId when seeking outside the produced range or when changing the audio track, a burned-in subtitle or maxBitRate: the old session stops before the limit is checked. audioStreamIndex, subtitleTrackId and maxBitRate are optional (ADR 0030); without them the server picks the tracks from the profile's language preference and plays the original quality. The default policy never picks a subtitle that needs burn-in, so a request without subtitleTrackId never transcodes because of a subtitle.
          */
         post: operations["createPlaybackSession"];
         delete?: never;
@@ -1170,6 +1214,67 @@ export interface paths {
          * @description Serves one text subtitle track of a media file converted to WebVTT (ADR 0030 section 3). The rendition is keyed by file and track, not by playback session, so switching text subtitles never restarts the stream. Cue times are relative to the start of the file: a player subtracts PlaybackSession.startPositionSeconds to get the time of its media element. Styling of ASS/SSA tracks is dropped. The URL is opaque and needs the signed-in session (ADR 0032): clients load SubtitleTrack.url as it is and never build it. Problem codes: "not_found" (404, unknown file or track, or a file deleted from disk), "unsupported" (422, an image format such as PGS, VobSub or DVB that only burn-in can show, or a file whose path now leads outside its library folder), "profile_required" (403) and "unavailable" (503, for example the library folder is unreachable).
          */
         get: operations["getSubtitleTrack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media-files/{fileId}/trickplay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the media file (MediaFile.id).
+                 * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                 */
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Describe the seek preview of a media file
+         * @description Returns the manifest of the file's trickplay (ADR 0030 section 8): JPEG sprite sheets with one tile per interval, which a player shows while the viewer scrubs. The tile for a position is number floor(position / intervalSeconds), counted from 0; it lies on sheet floor(number / (columns * rows)) at column number mod columns of row floor(number / columns) mod rows. Trickplay is generated on demand, so an unknown file, a file without video and a file whose trickplay does not exist yet all answer 404 "not_found"; request it with requestTrickplay. Missing trickplay is never an error for a player: it shows no preview. Like the subtitle route it needs the signed-in session with a selected profile and is no management operation.
+         */
+        get: operations["getTrickplayManifest"];
+        put?: never;
+        /**
+         * Ask for the seek preview of a media file
+         * @description Queues the generation of the file's trickplay as a background job at low priority and returns at once (ADR 0030 section 8). Idempotent: a file whose trickplay exists or is queued already also answers 202. The server runs one job at a time and only while no transcode runs, so the result may take long or never arrive; clients poll getTrickplayManifest sparingly and play without a preview until it answers 200. An unknown file answers 404 "not_found", a file that cannot have trickplay (no video, not probed) 422 "unsupported", a server that is shutting down 503 "unavailable". Write operation: a cookie-authenticated call must pass the ADR 0028 same-origin rule (ADR 0032 section 3), else 403 "forbidden". It is no management operation.
+         */
+        post: operations["requestTrickplay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/media-files/{fileId}/trickplay/{sheet}.jpg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the media file (MediaFile.id).
+                 * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                 */
+                fileId: components["parameters"]["FileId"];
+                /**
+                 * @description Number of the sprite sheet, counted from 0 and below TrickplayManifest.sheetCount, in decimal digits without a sign.
+                 * @example 0
+                 */
+                sheet: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Download a sprite sheet of the seek preview
+         * @description Serves one JPEG sprite sheet of a file's trickplay (ADR 0030 section 8): columns times rows tiles of tileWidth by tileHeight pixels, in reading order; the last sheet may be filled only in part. The URL is opaque and needs the signed-in session (ADR 0032; the same-origin session cookie covers image elements): clients load the entries of TrickplayManifest.sheetUrls as they are and never build them. Problem codes: "not_found" (404, unknown file or sheet, or trickplay that does not exist yet), "profile_required" (403) and "unavailable" (503).
+         */
+        get: operations["getTrickplaySheet"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3102,7 +3207,7 @@ export interface components {
             level?: number;
             /**
              * Format: int32
-             * @description Bits per sample of a video stream.
+             * @description Bits per sample of a video stream, or of an audio stream whose codec has a fixed sample size (PCM, FLAC, ALAC, DSD); omitted when unknown.
              * @example 8
              */
             bitDepth?: number;
@@ -3231,12 +3336,12 @@ export interface components {
              */
             audioCodecs: components["schemas"]["MediaIdentifier"][];
         };
-        /** @description Extra limits of the client for one codec; a codec without an entry has none. */
+        /** @description Extra limits of the client for one video codec; a codec without an entry has none. */
         CodecLimit: {
             codec: components["schemas"]["MediaIdentifier"];
             /**
              * Format: int32
-             * @description Highest bit depth the client decodes for this codec; omitted when unlimited.
+             * @description Highest video bit depth the client decodes for this codec; omitted when unlimited. Audio has ClientProfile.maxAudioBitDepth instead.
              * @example 8
              */
             maxBitDepth?: number;
@@ -3285,7 +3390,7 @@ export interface components {
              */
             preferSdh?: boolean;
             /**
-             * @description Subtitle formats the client renders itself from the sidecar route, today only "webvtt". A text track is delivered as a sidecar when "webvtt" is listed; everything else needs burn-in. Omitted means the client renders no subtitles.
+             * @description Subtitle formats the client renders itself from the sidecar route, today only "webvtt". A text track is delivered as a sidecar when "webvtt" is listed; everything else needs burn-in, which only an explicit PlaybackRequest.subtitleTrackId gets. Omitted means the client renders no subtitles, so the default policy shows none.
              * @example [
              *       "webvtt"
              *     ]
@@ -3297,6 +3402,18 @@ export interface components {
              * @example 6
              */
             maxAudioChannels?: number;
+            /**
+             * Format: int32
+             * @description Highest audio sample rate the client plays, in Hz. Audio above it is resampled with reason "hires_downsampled". It is a limit of the client as a whole, apart from codecLimits, which describe video. Omitted means the server's default limit.
+             * @example 48000
+             */
+            maxAudioSampleRate?: number;
+            /**
+             * Format: int32
+             * @description Highest number of bits per audio sample the client plays. Audio above it is reduced with reason "hires_downsampled". It is apart from CodecLimit.maxBitDepth, which is the bit depth of video. Omitted means the server's default limit.
+             * @example 16
+             */
+            maxAudioBitDepth?: number;
         };
         /** @description One playback position report of reportItemProgress (ADR 0032 section 8). */
         ProgressReport: {
@@ -3367,16 +3484,21 @@ export interface components {
              */
             audioStreamIndex?: number;
             /**
-             * @description ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle preference of the profile. The empty string switches subtitles off; omitted lets the server pick by its default policy (ADR 0030 section 3), which shows nothing unless the profile asks for subtitles or the file has a forced track in the audio language. An ID that names no track of the file answers 400 "invalid". PlaybackSession.subtitle reports the result. Only a change from or to a burned-in track needs a new session.
+             * @description ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle preference of the profile. The empty string switches subtitles off; omitted lets the server pick by its default policy (ADR 0030 section 3), which shows nothing unless the profile asks for subtitles or the file has a forced track in the audio language. The default policy never picks a track that needs burn-in: a track the client cannot render itself (ClientProfile.subtitleFormats) is burned in only when this field names it, so a client that sends neither subtitleMode nor subtitleFormats keeps direct play. An ID that names no track of the file answers 400 "invalid". PlaybackSession.subtitle reports the result. Only a change from or to a burned-in track needs a new session.
              * @example s:3
              */
             subtitleTrackId?: string;
+            /**
+             * @description Whether the session may start without the subtitle named by subtitleTrackId when that subtitle needs burn-in and the server cannot burn it in now (the session limit is reached or transcoding is switched off). True starts the session with SubtitleDecision.mode "off" and the warning "subtitle_burn_in_unavailable"; omitted or false answers the problem a transcode gets in that situation (503 "session_limit_reached" or 422 "transcode_unavailable").
+             * @example true
+             */
+            allowDegradeSubtitles?: boolean;
             /**
              * Format: int64
              * @description Upper limit of the whole stream in bits per second (ADR 0030 section 6); omitted or 0 plays the original quality. A limit below the bit rate of the source forces a transcode with reason "bitrate_cap". The server only honours the number; picking it automatically is the client's job.
              * @example 8000000
              */
-            maxBitrate?: number;
+            maxBitRate?: number;
             /**
              * Format: uuid
              * @description Session this one replaces, for example after a seek outside the produced range. It is stopped before the session limit is checked; an unknown ID is ignored.
@@ -3439,7 +3561,7 @@ export interface components {
             url?: string;
         };
         /**
-         * @description When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients must tolerate values added in later versions.
+         * @description When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients send it and never receive it: the server answers 400 "invalid" for a value it does not know. Clients must tolerate values added in later versions when they read the list of values from this contract.
          * @example forced
          * @enum {string}
          */
@@ -3526,6 +3648,11 @@ export interface components {
              * @example libx264
              */
             encoder?: string;
+            /**
+             * @description Whether encoder is a hardware encoder (ADR 0030 section 5); omitted when the stream is copied or by a server that does not report it, which means software.
+             * @example false
+             */
+            hardware?: boolean;
         };
         /**
          * @description Part of the file a reason or warning concerns. Clients must tolerate values added in later versions.
@@ -3536,7 +3663,7 @@ export interface components {
         /** @description A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes. */
         PlaybackReason: {
             /**
-             * @description Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly), "subtitle_burn_in" (the selected subtitle is drawn into the video), "bitrate_cap" (maxBitrate lies below the source), "dsd_to_pcm" (DSD audio is always decoded to PCM), "hires_downsampled" (the audio exceeds the sample rate or bit depth the client plays) and "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in software). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server cannot do now; it stays off). New codes may be added within API v1.
+             * @description Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly), "subtitle_burn_in" (the selected subtitle is drawn into the video), "bitrate_cap" (maxBitRate lies below the source), "dsd_to_pcm" (DSD audio is always decoded to PCM), "hires_downsampled" (the audio exceeds ClientProfile.maxAudioSampleRate or ClientProfile.maxAudioBitDepth) and "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in software). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server cannot do now; it stays off). New codes may be added within API v1.
              * @example audio_codec_not_supported
              */
             code: string;
@@ -3604,6 +3731,12 @@ export interface components {
              * @example 8000000
              */
             outputBitRate?: number;
+            /**
+             * Format: double
+             * @description How fast FFmpeg produces the stream compared with playback, updated about once per second: 1.0 is real time, below 1.0 the client will stall. Omitted for direct play and until FFmpeg reports its first progress. Whether FFmpeg is paused by throttling is not shown here; the session list reports it.
+             * @example 2.4
+             */
+            transcodeSpeed?: number;
             subtitle?: components["schemas"]["SubtitleDecision"];
             /** @description One decision per selected source stream (video first, then audio). The audio entry's sourceIndex is the audio track that plays, requested or picked by the default policy. A session without the subtitle property shows no subtitle. */
             streams: components["schemas"]["StreamDecision"][];
@@ -3611,6 +3744,170 @@ export interface components {
             reasons: components["schemas"]["PlaybackReason"][];
             /** @description Degradations of the result, for example a downscaled video. */
             warnings: components["schemas"]["PlaybackReason"][];
+        };
+        /** @description One running playback session as the session list shows it (ADR 0030 section 7). It carries no file name, path or stream URL. */
+        PlaybackSessionSummary: {
+            /**
+             * Format: uuid
+             * @description ID of the session; stopPlaybackSession takes it.
+             * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the catalog item the played file belongs to.
+             * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+             */
+            itemId: string;
+            /**
+             * @description Title of the item from the catalog, never derived from the file name or path.
+             * @example Big Buck Bunny
+             */
+            title: string;
+            state: components["schemas"]["PlaybackSessionState"];
+            mode: components["schemas"]["PlaybackMode"];
+            /**
+             * @description FFmpeg encoder of the video, for example "libx264" or "h264_vaapi"; omitted when the video is copied or the file is played directly.
+             * @example libx264
+             */
+            videoEncoder?: string;
+            /**
+             * @description Whether videoEncoder is a hardware encoder; false when no video is encoded.
+             * @example false
+             */
+            hardware: boolean;
+            /**
+             * Format: int64
+             * @description Bit rate the client receives in bits per second (PlaybackSession.outputBitRate); omitted when unknown.
+             * @example 8000000
+             */
+            outputBitRate?: number;
+            /**
+             * Format: double
+             * @description How fast FFmpeg produces the stream compared with playback, updated about once per second: 1.0 is real time, below 1.0 the client will stall. Omitted for direct play and until FFmpeg reports its first progress.
+             * @example 2.4
+             */
+            transcodeSpeed?: number;
+            /**
+             * @description Whether FFmpeg is paused because it is far enough ahead of the client (throttling, ADR 0030 section 2); such a session still counts against the session limit. Omitted for direct play.
+             * @example false
+             */
+            paused?: boolean;
+            /**
+             * @description Name the client gave itself in ClientProfile.name; free text of the client, shown as text only.
+             * @example chromium-desktop
+             */
+            clientName: string;
+            /**
+             * Format: date-time
+             * @description When the session was created (UTC).
+             * @example 2026-11-11T19:30:00Z
+             */
+            startedAt: string;
+        };
+        /** @description The running playback sessions of all clients. */
+        PlaybackSessionList: {
+            /** @description Every session that is starting or ready, oldest first. */
+            sessions: components["schemas"]["PlaybackSessionSummary"][];
+        };
+        /**
+         * @description Value of the server setting transcode.hwaccel (ADR 0030 section 5): "auto" (the first usable API in the order NVENC, QSV, VAAPI, AMF, else software), "off" (software only) or one API to use. Clients must tolerate values added in later versions.
+         * @example auto
+         * @enum {string}
+         */
+        HardwareAccelerationSetting: "auto" | "off" | "vaapi" | "qsv" | "nvenc" | "amf";
+        /**
+         * @description Hardware encoding API of a tested encoder. Clients must tolerate values added in later versions.
+         * @example vaapi
+         * @enum {string}
+         */
+        HardwareAccelerationApi: "vaapi" | "qsv" | "nvenc" | "amf";
+        /** @description One hardware encoder the FFmpeg build lists, with the result of its test encode (ADR 0030 section 5). */
+        TranscoderDevice: {
+            api: components["schemas"]["HardwareAccelerationApi"];
+            /**
+             * @description FFmpeg encoder name, for example "h264_vaapi" or "hevc_nvenc".
+             * @example h264_vaapi
+             */
+            encoder: string;
+            /**
+             * @description Codec the encoder produces (ffprobe codec_name), "h264" or "hevc".
+             * @example h264
+             */
+            codec: string;
+            /**
+             * @description Whether the test encode completed, so sessions may use the encoder.
+             * @example true
+             */
+            usable: boolean;
+            /**
+             * @description Whether a session failed with this encoder before its first segment, so the server encodes in software instead until it restarts.
+             * @example false
+             */
+            degraded: boolean;
+            /**
+             * @description Short English text why the encoder is unusable or degraded, for an administrator; it never contains a file system path. Omitted when there is nothing to say.
+             * @example The test encode timed out.
+             */
+            message?: string;
+        };
+        /** @description Hardware acceleration of the transcoder: the setting, the tested encoders and whether the platform can throttle (ADR 0030 sections 2 and 5). */
+        TranscoderStatus: {
+            hwaccel: components["schemas"]["HardwareAccelerationSetting"];
+            /** @description Tested hardware encoders, in the order "auto" tries them; empty when the FFmpeg build lists none or no test run finished yet. No usable entry means software encoding. */
+            devices: components["schemas"]["TranscoderDevice"][];
+            /**
+             * @description Whether the server can pause FFmpeg that is far ahead of the client (Linux only, ADR 0030 section 2).
+             * @example true
+             */
+            throttleSupported: boolean;
+            /**
+             * Format: date-time
+             * @description When the last test run finished (UTC); omitted until the first one has finished. It changes with every finished run.
+             * @example 2026-11-11T19:30:00Z
+             */
+            lastTestedAt?: string;
+        };
+        /** @description Layout of a media file's seek preview (ADR 0030 section 8): sprite sheets of columns times rows tiles, one tile per intervalSeconds. */
+        TrickplayManifest: {
+            /**
+             * Format: int32
+             * @description Width of one tile in pixels.
+             * @example 160
+             */
+            tileWidth: number;
+            /**
+             * Format: int32
+             * @description Height of one tile in pixels; it follows the aspect ratio of the video.
+             * @example 90
+             */
+            tileHeight: number;
+            /**
+             * Format: int32
+             * @description Number of tiles in one row of a sheet.
+             * @example 10
+             */
+            columns: number;
+            /**
+             * Format: int32
+             * @description Number of tile rows of a full sheet.
+             * @example 10
+             */
+            rows: number;
+            /**
+             * Format: double
+             * @description Seconds of the file between two tiles; tile 0 shows the start.
+             * @example 10
+             */
+            intervalSeconds: number;
+            /**
+             * Format: int32
+             * @description Number of sprite sheets; equals the length of sheetUrls.
+             * @example 6
+             */
+            sheetCount: number;
+            /** @description One entry per sprite sheet (getTrickplaySheet), sheet 0 first. */
+            sheetUrls: string[];
         };
         /**
          * Format: binary
@@ -3850,6 +4147,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTranscoderStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The transcoder status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscoderStatus"];
+                };
+            };
+            /** @description The caller may not manage the server ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    testTranscoder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The test run was started; the body is the status before its result. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TranscoderStatus"];
+                };
+            };
+            /** @description The caller may not manage the server ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A test run is active already ("conflict"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
                 };
             };
             default: components["responses"]["Problem"];
@@ -5419,6 +5785,36 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listPlaybackSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The running sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSessionList"];
+                };
+            };
+            /** @description The caller may not manage the server ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     createPlaybackSession: {
         parameters: {
             query?: never;
@@ -5739,6 +6135,117 @@ export interface operations {
             };
             /** @description The track is an image format that cannot be delivered as text ("unsupported"). */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTrickplayManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the media file (MediaFile.id).
+                 * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                 */
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The trickplay manifest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrickplayManifest"];
+                };
+            };
+            /** @description The file is unknown or has no trickplay yet ("not_found"). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    requestTrickplay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the media file (MediaFile.id).
+                 * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                 */
+                fileId: components["parameters"]["FileId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The generation is queued, runs or is done already. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file does not exist ("not_found"). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getTrickplaySheet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the media file (MediaFile.id).
+                 * @example 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
+                 */
+                fileId: components["parameters"]["FileId"];
+                /**
+                 * @description Number of the sprite sheet, counted from 0 and below TrickplayManifest.sheetCount, in decimal digits without a sign.
+                 * @example 0
+                 */
+                sheet: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sprite sheet. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": components["schemas"]["ImageBytes"];
+                };
+            };
+            /** @description The file, its trickplay or the sheet does not exist ("not_found"). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

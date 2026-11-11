@@ -265,7 +265,12 @@ func TestCreatePlaybackSessionPassesTheTrackPreference(t *testing.T) {
 func TestCreatePlaybackSessionRejectsInvalidTrackPreferences(t *testing.T) {
 	t.Parallel()
 
-	const tooManyLanguages = 9
+	const (
+		tooManyLanguages = 9
+		// tooLongLanguageTag is well-formed but has 17 characters, one above the contract's
+		// maxLength.
+		tooLongLanguageTag = "de-Latn-DE-1996-x"
+	)
 
 	tests := []struct {
 		name   string
@@ -275,8 +280,18 @@ func TestCreatePlaybackSessionRejectsInvalidTrackPreferences(t *testing.T) {
 			languages := slices.Repeat([]string{"de"}, tooManyLanguages)
 			profile.PreferredAudioLanguages = &languages
 		}},
+		{name: "too many subtitle languages", change: func(profile *apigen.ClientProfile) {
+			languages := slices.Repeat([]string{"de"}, tooManyLanguages)
+			profile.PreferredSubtitleLanguages = &languages
+		}},
 		{name: "subtitle language is no tag", change: func(profile *apigen.ClientProfile) {
 			profile.PreferredSubtitleLanguages = &[]string{"german please"}
+		}},
+		{name: "audio language tag longer than 16 characters", change: func(profile *apigen.ClientProfile) {
+			profile.PreferredAudioLanguages = &[]string{tooLongLanguageTag}
+		}},
+		{name: "subtitle language tag longer than 16 characters", change: func(profile *apigen.ClientProfile) {
+			profile.PreferredSubtitleLanguages = &[]string{tooLongLanguageTag}
 		}},
 		{name: "unknown subtitle mode", change: func(profile *apigen.ClientProfile) {
 			profile.SubtitleMode = playbackPointer(apigen.SubtitlePreferenceMode("sometimes"))

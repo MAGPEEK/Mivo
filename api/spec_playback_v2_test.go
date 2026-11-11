@@ -32,11 +32,17 @@ func playbackV2Shapes() map[string]schemaShape {
 	return map[string]schemaShape{
 		"PlaybackRequest": {
 			required: []string{"fileId", "profile"},
-			optional: []string{"audioStreamIndex", "subtitleTrackId", "maxBitrate", "startPositionSeconds", "replacesSessionId"},
+			optional: []string{
+				"audioStreamIndex", "subtitleTrackId", "allowDegradeSubtitles", "maxBitRate", "startPositionSeconds", "replacesSessionId",
+			},
 		},
 		"PlaybackSession": {
 			required: []string{"id", "fileId", "state", "mode", "delivery", "streamUrl", "streams", "reasons", "warnings"},
-			optional: []string{"subtitle", "outputBitRate", "sourceBitRate"},
+			optional: []string{"subtitle", "outputBitRate", "sourceBitRate", "transcodeSpeed"},
+		},
+		"StreamDecision": {
+			required: []string{"kind", "sourceIndex", "action", "sourceCodec", "targetCodec"},
+			optional: []string{"encoder", "hardware"},
 		},
 		"SubtitleDecision": {required: []string{"mode"}, optional: []string{"trackId"}},
 		"SubtitleTrack": {
@@ -50,12 +56,15 @@ func playbackV2Shapes() map[string]schemaShape {
 				"versionLabel", "width", "height", "resolution", "bitRate",
 			},
 		},
-		"MediaStream": {required: []string{"index", "kind", "default"}, optional: []string{"language", "title", "channels"}},
+		"MediaStream": {
+			required: []string{"index", "kind", "default"},
+			optional: []string{"language", "title", "channels", "sampleRate", "bitDepth"},
+		},
 		"ClientProfile": {
 			required: []string{"name", "directPlay", "hls"},
 			optional: []string{
 				"preferredAudioLanguages", "preferredSubtitleLanguages", "subtitleMode", "preferSdh",
-				"subtitleFormats", "maxAudioChannels",
+				"subtitleFormats", "maxAudioChannels", "maxAudioSampleRate", "maxAudioBitDepth",
 			},
 		},
 	}
@@ -162,9 +171,14 @@ func requiredProperty(t *testing.T, spec *openapi3.T, location string) *openapi3
 func TestTrackSelectionFields(t *testing.T) {
 	spec := loadSpec(t)
 
-	maxBitrate := requiredProperty(t, spec, "PlaybackRequest.maxBitrate")
-	if maxBitrate.Format != "int64" || maxBitrate.Min == nil || *maxBitrate.Min != 0 {
-		t.Error("PlaybackRequest.maxBitrate is no int64 bounded below by 0")
+	maxBitRate := requiredProperty(t, spec, "PlaybackRequest.maxBitRate")
+	if maxBitRate.Format != "int64" || maxBitRate.Min == nil || *maxBitRate.Min != 0 {
+		t.Error("PlaybackRequest.maxBitRate is no int64 bounded below by 0")
+	}
+
+	// The field was renamed before any release carried it (ADR 0030 Notes M4-02b).
+	if propertySchema(spec, "PlaybackRequest.maxBitrate") != nil {
+		t.Error("PlaybackRequest still declares maxBitrate next to maxBitRate")
 	}
 
 	if outputBitRate := requiredProperty(t, spec, "PlaybackSession.outputBitRate"); outputBitRate.Format != "int64" {
@@ -180,6 +194,118 @@ func TestTrackSelectionFields(t *testing.T) {
 		if !requiredProperty(t, spec, location).Nullable {
 			t.Errorf("%s is not nullable", location)
 		}
+	}
+}
+
+// TestDefaultSubtitlePolicyNeverBurnsIn: burn-in forces a transcode, so only an explicit
+// subtitleTrackId gets it. A client of the milestone-2 contract, which sends neither
+// subtitleMode nor subtitleFormats, therefore keeps direct play.
+func TestDefaultSubtitlePolicyNeverBurnsIn(t *testing.T) {
+	spec := loadSpec(t)
+
+	requested := requiredProperty(t, spec, "PlaybackRequest.subtitleTrackId")
+	for _, text := range []string{"never picks a track that needs burn-in", "only when this field names it", "keeps direct play"} {
+		if !strings.Contains(joinLines(requested.Description), text) {
+			t.Errorf("PlaybackRequest.subtitleTrackId does not say: %s", text)
+		}
+	}
+
+	formats := requiredProperty(t, spec, "ClientProfile.subtitleFormats")
+	if !strings.Contains(joinLines(formats.Description), "only an explicit PlaybackRequest.subtitleTrackId") {
+		t.Error("ClientProfile.subtitleFormats does not tie burn-in to an explicit subtitleTrackId")
+	}
+
+	create := getOperation(t, spec, http.MethodPost, "/api/v1/playback/sessions")
+	if !strings.Contains(joinLines(create.Description), "never picks a subtitle that needs burn-in") {
+		t.Error("createPlaybackSession does not state the default subtitle policy")
+	}
+
+	// The fields a milestone-2 client does not send stay optional.
+	for _, schema := range []string{"PlaybackRequest", "ClientProfile"} {
+		required := spec.Components.Schemas[schema].Value.Required
+		for _, property := range []string{"subtitleTrackId", "allowDegradeSubtitles", "subtitleMode", "subtitleFormats"} {
+			if slices.Contains(required, property) {
+				t.Errorf("%s.%s is required", schema, property)
+			}
+		}
+	}
+}
+
+// joinLines undoes the line folding of a YAML description, so a phrase is found wherever
+// the line breaks fall.
+func joinLines(text string) string {
+	return strings.Join(strings.Fields(text), " ")
+}
+
+// TestAllowDegradeSubtitles: the request decides whether a burn-in the server cannot do now
+// drops the subtitle or fails the start (ADR 0030 Notes M4-02b).
+func TestAllowDegradeSubtitles(t *testing.T) {
+	spec := loadSpec(t)
+
+	allow := requiredProperty(t, spec, "PlaybackRequest.allowDegradeSubtitles")
+	if !allow.Type.Is(openapi3.TypeBoolean) {
+		t.Error("PlaybackRequest.allowDegradeSubtitles is no boolean")
+	}
+
+	for _, text := range []string{`"subtitle_burn_in_unavailable"`, `"session_limit_reached"`, "omitted or false"} {
+		if !strings.Contains(joinLines(allow.Description), text) {
+			t.Errorf("PlaybackRequest.allowDegradeSubtitles does not mention %s", text)
+		}
+	}
+}
+
+// TestAudioLimitsAreProfileFields: sample rate and bit depth of audio are limits of the
+// client as a whole. CodecLimit stays video only; its bit depth ends at 16, which 24-bit
+// audio would not fit.
+func TestAudioLimitsAreProfileFields(t *testing.T) {
+	spec := loadSpec(t)
+
+	const maxVideoBitDepth, minAudioBitDepthLimit = 16, 24
+
+	for _, location := range []string{"ClientProfile.maxAudioSampleRate", "ClientProfile.maxAudioBitDepth"} {
+		limit := requiredProperty(t, spec, location)
+		if !limit.Type.Is(openapi3.TypeInteger) || limit.Min == nil || limit.Max == nil {
+			t.Errorf("%s is no bounded integer", location)
+		}
+
+		if !strings.Contains(limit.Description, `"hires_downsampled"`) {
+			t.Errorf("%s does not name the reason hires_downsampled", location)
+		}
+	}
+
+	if depth := requiredProperty(t, spec, "ClientProfile.maxAudioBitDepth"); depth.Max != nil && *depth.Max < minAudioBitDepthLimit {
+		t.Errorf("ClientProfile.maxAudioBitDepth ends at %g, below %d bit", *depth.Max, minAudioBitDepthLimit)
+	}
+
+	if video := requiredProperty(t, spec, "CodecLimit.maxBitDepth"); video.Max == nil || *video.Max != maxVideoBitDepth ||
+		!strings.Contains(video.Description, "video") {
+		t.Error("CodecLimit.maxBitDepth is not the video bit depth capped at 16")
+	}
+
+	code := requiredProperty(t, spec, "PlaybackReason.code")
+	for _, field := range []string{"ClientProfile.maxAudioSampleRate", "ClientProfile.maxAudioBitDepth"} {
+		if !strings.Contains(code.Description, field) {
+			t.Errorf("reason hires_downsampled does not refer to %s", field)
+		}
+	}
+
+	if depth := requiredProperty(t, spec, "MediaStream.bitDepth"); !strings.Contains(depth.Description, "audio") {
+		t.Error("MediaStream.bitDepth does not cover audio streams")
+	}
+}
+
+// TestSubtitleContractWording pins two rules clients rely on: the WebVTT URL is opaque, and
+// the preference mode is a request value the server validates.
+func TestSubtitleContractWording(t *testing.T) {
+	spec := loadSpec(t)
+
+	if url := requiredProperty(t, spec, "SubtitleTrack.url"); url.Format != "uri-reference" || !strings.Contains(url.Description, "opaque") {
+		t.Error("SubtitleTrack.url is not documented as an opaque URI reference")
+	}
+
+	mode := spec.Components.Schemas["SubtitlePreferenceMode"]
+	if mode == nil || !strings.Contains(joinLines(mode.Value.Description), `400 "invalid" for a value it does not know`) {
+		t.Error("SubtitlePreferenceMode does not say that an unknown value answers 400 invalid")
 	}
 }
 

@@ -26,6 +26,7 @@ output-options:
     - headPlaybackFile
     - getPlaybackHlsFile
     - getSubtitleTrack
+    - getTrickplaySheet
     - headPlaybackHlsFile
     - getImage
     - getCandidatePoster

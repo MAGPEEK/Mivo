@@ -284,6 +284,60 @@ func (e FolderReason) Valid() bool {
 	}
 }
 
+// Defines values for HardwareAccelerationAPI.
+const (
+	HardwareAccelerationAPIAmf   HardwareAccelerationAPI = "amf"
+	HardwareAccelerationAPINvenc HardwareAccelerationAPI = "nvenc"
+	HardwareAccelerationAPIQsv   HardwareAccelerationAPI = "qsv"
+	HardwareAccelerationAPIVaapi HardwareAccelerationAPI = "vaapi"
+)
+
+// Valid indicates whether the value is a known member of the HardwareAccelerationAPI enum.
+func (e HardwareAccelerationAPI) Valid() bool {
+	switch e {
+	case HardwareAccelerationAPIAmf:
+		return true
+	case HardwareAccelerationAPINvenc:
+		return true
+	case HardwareAccelerationAPIQsv:
+		return true
+	case HardwareAccelerationAPIVaapi:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for HardwareAccelerationSetting.
+const (
+	HardwareAccelerationSettingAmf   HardwareAccelerationSetting = "amf"
+	HardwareAccelerationSettingAuto  HardwareAccelerationSetting = "auto"
+	HardwareAccelerationSettingNvenc HardwareAccelerationSetting = "nvenc"
+	HardwareAccelerationSettingOff   HardwareAccelerationSetting = "off"
+	HardwareAccelerationSettingQsv   HardwareAccelerationSetting = "qsv"
+	HardwareAccelerationSettingVaapi HardwareAccelerationSetting = "vaapi"
+)
+
+// Valid indicates whether the value is a known member of the HardwareAccelerationSetting enum.
+func (e HardwareAccelerationSetting) Valid() bool {
+	switch e {
+	case HardwareAccelerationSettingAmf:
+		return true
+	case HardwareAccelerationSettingAuto:
+		return true
+	case HardwareAccelerationSettingNvenc:
+		return true
+	case HardwareAccelerationSettingOff:
+		return true
+	case HardwareAccelerationSettingQsv:
+		return true
+	case HardwareAccelerationSettingVaapi:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HdrFormat.
 const (
 	HdrFormatHdr10 HdrFormat = "hdr10"
@@ -1191,10 +1245,20 @@ type ClientProfile struct {
 	// Hls Codecs the client plays inside HLS with fMP4 segments.
 	Hls HlsProfile `json:"hls"`
 
+	// MaxAudioBitDepth Highest number of bits per audio sample the client plays. Audio above it is reduced with reason "hires_downsampled". It is apart from CodecLimit.maxBitDepth, which is the bit depth of video. Omitted means the server's default limit.
+	//
+	// Example: 16
+	MaxAudioBitDepth *int32 `json:"maxAudioBitDepth,omitempty"`
+
 	// MaxAudioChannels Highest number of audio channels the client plays; 6 or more keeps 5.1 when audio is re-encoded. Omitted means the server's default limit.
 	//
 	// Example: 6
 	MaxAudioChannels *int32 `json:"maxAudioChannels,omitempty"`
+
+	// MaxAudioSampleRate Highest audio sample rate the client plays, in Hz. Audio above it is resampled with reason "hires_downsampled". It is a limit of the client as a whole, apart from codecLimits, which describe video. Omitted means the server's default limit.
+	//
+	// Example: 48000
+	MaxAudioSampleRate *int32 `json:"maxAudioSampleRate,omitempty"`
 
 	// Name Free text naming the client, for logs and the stream-info overlay.
 	//
@@ -1216,25 +1280,25 @@ type ClientProfile struct {
 	// Example: ["de"]
 	PreferredSubtitleLanguages *[]string `json:"preferredSubtitleLanguages,omitempty"`
 
-	// SubtitleFormats Subtitle formats the client renders itself from the sidecar route, today only "webvtt". A text track is delivered as a sidecar when "webvtt" is listed; everything else needs burn-in. Omitted means the client renders no subtitles.
+	// SubtitleFormats Subtitle formats the client renders itself from the sidecar route, today only "webvtt". A text track is delivered as a sidecar when "webvtt" is listed; everything else needs burn-in, which only an explicit PlaybackRequest.subtitleTrackId gets. Omitted means the client renders no subtitles, so the default policy shows none.
 	//
 	// Example: ["webvtt"]
 	SubtitleFormats *[]MediaIdentifier `json:"subtitleFormats,omitempty"`
 
-	// SubtitleMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients must tolerate values added in later versions.
+	// SubtitleMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients send it and never receive it: the server answers 400 "invalid" for a value it does not know. Clients must tolerate values added in later versions when they read the list of values from this contract.
 	//
 	// Example: forced
 	SubtitleMode *SubtitlePreferenceMode `json:"subtitleMode,omitempty"`
 }
 
-// CodecLimit Extra limits of the client for one codec; a codec without an entry has none.
+// CodecLimit Extra limits of the client for one video codec; a codec without an entry has none.
 type CodecLimit struct {
 	// Codec Lower-case identifier of a container (ADR 0023 direct-play key, for example "mp4") or a codec (ffprobe codec_name, for example "h264" or "pcm_s16le").
 	//
 	// Example: h264
 	Codec MediaIdentifier `json:"codec"`
 
-	// MaxBitDepth Highest bit depth the client decodes for this codec; omitted when unlimited.
+	// MaxBitDepth Highest video bit depth the client decodes for this codec; omitted when unlimited. Audio has ClientProfile.maxAudioBitDepth instead.
 	//
 	// Example: 8
 	MaxBitDepth *int32 `json:"maxBitDepth,omitempty"`
@@ -1481,6 +1545,16 @@ type FolderRootList struct {
 	// Example: mivo
 	ServiceUser string `json:"serviceUser"`
 }
+
+// HardwareAccelerationAPI Hardware encoding API of a tested encoder. Clients must tolerate values added in later versions.
+//
+// Example: vaapi
+type HardwareAccelerationAPI string
+
+// HardwareAccelerationSetting Value of the server setting transcode.hwaccel (ADR 0030 section 5): "auto" (the first usable API in the order NVENC, QSV, VAAPI, AMF, else software), "off" (software only) or one API to use. Clients must tolerate values added in later versions.
+//
+// Example: auto
+type HardwareAccelerationSetting string
 
 // HdrFormat High dynamic range format of a video stream; absent for SDR video. Clients must tolerate values added in later versions (for example Dolby Vision).
 //
@@ -2494,7 +2568,7 @@ type MediaStream struct {
 	// Example: false
 	AttachedPicture bool `json:"attachedPicture"`
 
-	// BitDepth Bits per sample of a video stream.
+	// BitDepth Bits per sample of a video stream, or of an audio stream whose codec has a fixed sample size (PCM, FLAC, ALAC, DSD); omitted when unknown.
 	//
 	// Example: 8
 	BitDepth *int32 `json:"bitDepth,omitempty"`
@@ -2775,7 +2849,7 @@ type PlaybackMode string
 
 // PlaybackReason A machine-readable reason why a cheaper mode was not possible, or a warning about a degraded result (ADR 0023). Clients translate the code and show a generic text for unknown codes.
 type PlaybackReason struct {
-	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly), "subtitle_burn_in" (the selected subtitle is drawn into the video), "bitrate_cap" (maxBitrate lies below the source), "dsd_to_pcm" (DSD audio is always decoded to PCM), "hires_downsampled" (the audio exceeds the sample rate or bit depth the client plays) and "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in software). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server cannot do now; it stays off). New codes may be added within API v1.
+	// Code Reasons: "container_not_supported", "video_codec_not_supported", "video_profile_not_supported", "video_bit_depth_not_supported", "audio_codec_not_supported", "audio_channels_not_supported" (more than 5.1 channels), "audio_track_not_first" (the selected audio track is not the first one, which browsers play from the original file), "disc_source" (a DVD or Blu-ray disc is never played directly), "subtitle_burn_in" (the selected subtitle is drawn into the video), "bitrate_cap" (maxBitRate lies below the source), "dsd_to_pcm" (DSD audio is always decoded to PCM), "hires_downsampled" (the audio exceeds ClientProfile.maxAudioSampleRate or ClientProfile.maxAudioBitDepth) and "hwaccel_unavailable" (no usable hardware encoder, the video is encoded in software). Warnings: "hdr_not_tone_mapped", "subtitles_not_supported", "video_downscaled" and "subtitle_burn_in_unavailable" (the subtitle needs burn-in, which the server cannot do now; it stays off). New codes may be added within API v1.
 	//
 	// Example: audio_codec_not_supported
 	Code string `json:"code"`
@@ -2793,6 +2867,11 @@ type PlaybackReasonScope string
 
 // PlaybackRequest Asks the server to play one media file for a client.
 type PlaybackRequest struct {
+	// AllowDegradeSubtitles Whether the session may start without the subtitle named by subtitleTrackId when that subtitle needs burn-in and the server cannot burn it in now (the session limit is reached or transcoding is switched off). True starts the session with SubtitleDecision.mode "off" and the warning "subtitle_burn_in_unavailable"; omitted or false answers the problem a transcode gets in that situation (503 "session_limit_reached" or 422 "transcode_unavailable").
+	//
+	// Example: true
+	AllowDegradeSubtitles *bool `json:"allowDegradeSubtitles,omitempty"`
+
 	// AudioStreamIndex Index of the audio stream to play (MediaStream.index); it wins over the language preference of the profile. Omitted lets the server pick by its default policy (ADR 0030 section 4). An index that names no audio stream answers 400 "invalid". Changing the audio track of a running playback creates a new session with replacesSessionId.
 	//
 	// Example: 1
@@ -2803,10 +2882,10 @@ type PlaybackRequest struct {
 	// Example: 1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f
 	FileID uuid.UUID `json:"fileId"`
 
-	// MaxBitrate Upper limit of the whole stream in bits per second (ADR 0030 section 6); omitted or 0 plays the original quality. A limit below the bit rate of the source forces a transcode with reason "bitrate_cap". The server only honours the number; picking it automatically is the client's job.
+	// MaxBitRate Upper limit of the whole stream in bits per second (ADR 0030 section 6); omitted or 0 plays the original quality. A limit below the bit rate of the source forces a transcode with reason "bitrate_cap". The server only honours the number; picking it automatically is the client's job.
 	//
 	// Example: 8000000
-	MaxBitrate *int64 `json:"maxBitrate,omitempty"`
+	MaxBitRate *int64 `json:"maxBitRate,omitempty"`
 
 	// Profile What a client plays (ADR 0023). Browsers fill it from canPlayType, MediaSource.isTypeSupported and mediaCapabilities; arrays are bounded.
 	Profile ClientProfile `json:"profile"`
@@ -2821,7 +2900,7 @@ type PlaybackRequest struct {
 	// Example: 600
 	StartPositionSeconds *float64 `json:"startPositionSeconds,omitempty"`
 
-	// SubtitleTrackID ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle preference of the profile. The empty string switches subtitles off; omitted lets the server pick by its default policy (ADR 0030 section 3), which shows nothing unless the profile asks for subtitles or the file has a forced track in the audio language. An ID that names no track of the file answers 400 "invalid". PlaybackSession.subtitle reports the result. Only a change from or to a burned-in track needs a new session.
+	// SubtitleTrackID ID of the subtitle track to show (SubtitleTrack.id); it wins over the subtitle preference of the profile. The empty string switches subtitles off; omitted lets the server pick by its default policy (ADR 0030 section 3), which shows nothing unless the profile asks for subtitles or the file has a forced track in the audio language. The default policy never picks a track that needs burn-in: a track the client cannot render itself (ClientProfile.subtitleFormats) is burned in only when this field names it, so a client that sends neither subtitleMode nor subtitleFormats keeps direct play. An ID that names no track of the file answers 400 "invalid". PlaybackSession.subtitle reports the result. Only a change from or to a burned-in track needs a new session.
 	//
 	// Example: s:3
 	SubtitleTrackID *string `json:"subtitleTrackId,omitempty"`
@@ -2903,14 +2982,88 @@ type PlaybackSession struct {
 	// Example: mp4
 	TargetContainer string `json:"targetContainer"`
 
+	// TranscodeSpeed How fast FFmpeg produces the stream compared with playback, updated about once per second: 1.0 is real time, below 1.0 the client will stall. Omitted for direct play and until FFmpeg reports its first progress. Whether FFmpeg is paused by throttling is not shown here; the session list reports it.
+	//
+	// Example: 2.4
+	TranscodeSpeed *float64 `json:"transcodeSpeed,omitempty"`
+
 	// Warnings Degradations of the result, for example a downscaled video.
 	Warnings []PlaybackReason `json:"warnings"`
+}
+
+// PlaybackSessionList The running playback sessions of all clients.
+type PlaybackSessionList struct {
+	// Sessions Every session that is starting or ready, oldest first.
+	Sessions []PlaybackSessionSummary `json:"sessions"`
 }
 
 // PlaybackSessionState Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
 //
 // Example: ready
 type PlaybackSessionState string
+
+// PlaybackSessionSummary One running playback session as the session list shows it (ADR 0030 section 7). It carries no file name, path or stream URL.
+type PlaybackSessionSummary struct {
+	// ClientName Name the client gave itself in ClientProfile.name; free text of the client, shown as text only.
+	//
+	// Example: chromium-desktop
+	ClientName string `json:"clientName"`
+
+	// Hardware Whether videoEncoder is a hardware encoder; false when no video is encoded.
+	//
+	// Example: false
+	Hardware bool `json:"hardware"`
+
+	// ID ID of the session; stopPlaybackSession takes it.
+	//
+	// Example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+	ID uuid.UUID `json:"id"`
+
+	// ItemID ID of the catalog item the played file belongs to.
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	ItemID uuid.UUID `json:"itemId"`
+
+	// Mode How the file is played, from cheapest to most expensive: "direct_play" (the original file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least one stream re-encoded). Clients must tolerate values added in later versions.
+	//
+	// Example: remux
+	Mode PlaybackMode `json:"mode"`
+
+	// OutputBitRate Bit rate the client receives in bits per second (PlaybackSession.outputBitRate); omitted when unknown.
+	//
+	// Example: 8000000
+	OutputBitRate *int64 `json:"outputBitRate,omitempty"`
+
+	// Paused Whether FFmpeg is paused because it is far enough ahead of the client (throttling, ADR 0030 section 2); such a session still counts against the session limit. Omitted for direct play.
+	//
+	// Example: false
+	Paused *bool `json:"paused,omitempty"`
+
+	// StartedAt When the session was created (UTC).
+	//
+	// Example: 2026-11-11T19:30:00Z
+	StartedAt time.Time `json:"startedAt"`
+
+	// State Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
+	//
+	// Example: ready
+	State PlaybackSessionState `json:"state"`
+
+	// Title Title of the item from the catalog, never derived from the file name or path.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+
+	// TranscodeSpeed How fast FFmpeg produces the stream compared with playback, updated about once per second: 1.0 is real time, below 1.0 the client will stall. Omitted for direct play and until FFmpeg reports its first progress.
+	//
+	// Example: 2.4
+	TranscodeSpeed *float64 `json:"transcodeSpeed,omitempty"`
+
+	// VideoEncoder FFmpeg encoder of the video, for example "libx264" or "h264_vaapi"; omitted when the video is copied or the file is played directly.
+	//
+	// Example: libx264
+	VideoEncoder *string `json:"videoEncoder,omitempty"`
+}
 
 // Problem Problem details (RFC 9457) with a machine-readable code that clients translate.
 type Problem struct {
@@ -3335,6 +3488,11 @@ type StreamDecision struct {
 	// Example: libx264
 	Encoder *string `json:"encoder,omitempty"`
 
+	// Hardware Whether encoder is a hardware encoder (ADR 0030 section 5); omitted when the stream is copied or by a server that does not report it, which means software.
+	//
+	// Example: false
+	Hardware *bool `json:"hardware,omitempty"`
+
 	// Kind Kind of a stream inside a media file. Clients must tolerate values added in later versions.
 	//
 	// Example: video
@@ -3389,7 +3547,7 @@ type SubtitleDecision struct {
 // Example: sidecar
 type SubtitleDeliveryMode string
 
-// SubtitlePreferenceMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients must tolerate values added in later versions.
+// SubtitlePreferenceMode When a subtitle is switched on without a choice of the viewer: "off" (never), "forced" (a forced track in the language of the selected audio; also the meaning of an omitted value) or "always" (a full track in a preferred subtitle language). Clients send it and never receive it: the server answers 400 "invalid" for a value it does not know. Clients must tolerate values added in later versions when they read the list of values from this contract.
 //
 // Example: forced
 type SubtitlePreferenceMode string
@@ -3481,6 +3639,96 @@ type SystemInfo struct {
 //
 // Example: ready
 type ThumbnailState string
+
+// TranscoderDevice One hardware encoder the FFmpeg build lists, with the result of its test encode (ADR 0030 section 5).
+type TranscoderDevice struct {
+	// API Hardware encoding API of a tested encoder. Clients must tolerate values added in later versions.
+	//
+	// Example: vaapi
+	API HardwareAccelerationAPI `json:"api"`
+
+	// Codec Codec the encoder produces (ffprobe codec_name), "h264" or "hevc".
+	//
+	// Example: h264
+	Codec string `json:"codec"`
+
+	// Degraded Whether a session failed with this encoder before its first segment, so the server encodes in software instead until it restarts.
+	//
+	// Example: false
+	Degraded bool `json:"degraded"`
+
+	// Encoder FFmpeg encoder name, for example "h264_vaapi" or "hevc_nvenc".
+	//
+	// Example: h264_vaapi
+	Encoder string `json:"encoder"`
+
+	// Message Short English text why the encoder is unusable or degraded, for an administrator; it never contains a file system path. Omitted when there is nothing to say.
+	//
+	// Example: The test encode timed out.
+	Message *string `json:"message,omitempty"`
+
+	// Usable Whether the test encode completed, so sessions may use the encoder.
+	//
+	// Example: true
+	Usable bool `json:"usable"`
+}
+
+// TranscoderStatus Hardware acceleration of the transcoder: the setting, the tested encoders and whether the platform can throttle (ADR 0030 sections 2 and 5).
+type TranscoderStatus struct {
+	// Devices Tested hardware encoders, in the order "auto" tries them; empty when the FFmpeg build lists none or no test run finished yet. No usable entry means software encoding.
+	Devices []TranscoderDevice `json:"devices"`
+
+	// Hwaccel Value of the server setting transcode.hwaccel (ADR 0030 section 5): "auto" (the first usable API in the order NVENC, QSV, VAAPI, AMF, else software), "off" (software only) or one API to use. Clients must tolerate values added in later versions.
+	//
+	// Example: auto
+	Hwaccel HardwareAccelerationSetting `json:"hwaccel"`
+
+	// LastTestedAt When the last test run finished (UTC); omitted until the first one has finished. It changes with every finished run.
+	//
+	// Example: 2026-11-11T19:30:00Z
+	LastTestedAt *time.Time `json:"lastTestedAt,omitempty"`
+
+	// ThrottleSupported Whether the server can pause FFmpeg that is far ahead of the client (Linux only, ADR 0030 section 2).
+	//
+	// Example: true
+	ThrottleSupported bool `json:"throttleSupported"`
+}
+
+// TrickplayManifest Layout of a media file's seek preview (ADR 0030 section 8): sprite sheets of columns times rows tiles, one tile per intervalSeconds.
+type TrickplayManifest struct {
+	// Columns Number of tiles in one row of a sheet.
+	//
+	// Example: 10
+	Columns int32 `json:"columns"`
+
+	// IntervalSeconds Seconds of the file between two tiles; tile 0 shows the start.
+	//
+	// Example: 10
+	IntervalSeconds float64 `json:"intervalSeconds"`
+
+	// Rows Number of tile rows of a full sheet.
+	//
+	// Example: 10
+	Rows int32 `json:"rows"`
+
+	// SheetCount Number of sprite sheets; equals the length of sheetUrls.
+	//
+	// Example: 6
+	SheetCount int32 `json:"sheetCount"`
+
+	// SheetUrls One entry per sprite sheet (getTrickplaySheet), sheet 0 first.
+	SheetUrls []string `json:"sheetUrls"`
+
+	// TileHeight Height of one tile in pixels; it follows the aspect ratio of the video.
+	//
+	// Example: 90
+	TileHeight int32 `json:"tileHeight"`
+
+	// TileWidth Width of one tile in pixels.
+	//
+	// Example: 160
+	TileWidth int32 `json:"tileWidth"`
+}
 
 // User An account as the administration shows it (US-20).
 type User struct {
@@ -4032,9 +4280,18 @@ type ServerInterface interface {
 	// SelectProfile Select the profile of this session
 	// (PUT /api/v1/me/profile)
 	SelectProfile(w http.ResponseWriter, r *http.Request)
+	// GetTrickplayManifest Describe the seek preview of a media file
+	// (GET /api/v1/media-files/{fileId}/trickplay)
+	GetTrickplayManifest(w http.ResponseWriter, r *http.Request, fileID FileID)
+	// RequestTrickplay Ask for the seek preview of a media file
+	// (POST /api/v1/media-files/{fileId}/trickplay)
+	RequestTrickplay(w http.ResponseWriter, r *http.Request, fileID FileID)
 	// GetMetadataStatus Report the state of the online metadata providers
 	// (GET /api/v1/metadata/status)
 	GetMetadataStatus(w http.ResponseWriter, r *http.Request)
+	// ListPlaybackSessions List the running playback sessions
+	// (GET /api/v1/playback/sessions)
+	ListPlaybackSessions(w http.ResponseWriter, r *http.Request)
 	// CreatePlaybackSession Start playing a media file
 	// (POST /api/v1/playback/sessions)
 	CreatePlaybackSession(w http.ResponseWriter, r *http.Request)
@@ -4065,6 +4322,12 @@ type ServerInterface interface {
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(w http.ResponseWriter, r *http.Request)
+	// GetTranscoderStatus Describe the transcoder's hardware acceleration
+	// (GET /api/v1/system/transcoder)
+	GetTranscoderStatus(w http.ResponseWriter, r *http.Request)
+	// TestTranscoder Test the hardware acceleration again
+	// (POST /api/v1/system/transcoder/test)
+	TestTranscoder(w http.ResponseWriter, r *http.Request)
 	// ListUsers List the accounts
 	// (GET /api/v1/users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -5596,11 +5859,77 @@ func (siw *ServerInterfaceWrapper) SelectProfile(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetTrickplayManifest operation middleware
+func (siw *ServerInterfaceWrapper) GetTrickplayManifest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "fileId" -------------
+	var fileID FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", r.PathValue("fileId"), &fileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTrickplayManifest(w, r, fileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RequestTrickplay operation middleware
+func (siw *ServerInterfaceWrapper) RequestTrickplay(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "fileId" -------------
+	var fileID FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "fileId", r.PathValue("fileId"), &fileID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fileId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestTrickplay(w, r, fileID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetMetadataStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlaybackSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListPlaybackSessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlaybackSessions(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5789,6 +6118,34 @@ func (siw *ServerInterfaceWrapper) GetSystemInfo(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSystemInfo(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTranscoderStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscoderStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscoderStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestTranscoder operation middleware
+func (siw *ServerInterfaceWrapper) TestTranscoder(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestTranscoder(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6104,6 +6461,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system/info", wrapper.GetSystemInfo)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system/transcoder", wrapper.GetTranscoderStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system/transcoder/test", wrapper.TestTranscoder)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/setup", wrapper.GetSetupState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/setup", wrapper.CompleteSetup)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/auth/session", wrapper.DeleteSession)
@@ -6154,9 +6513,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.GetMetadataSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.UpdateMetadataSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/metadata/status", wrapper.GetMetadataStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.ListPlaybackSessions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.CreatePlaybackSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.StopPlaybackSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.GetPlaybackSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/media-files/{fileId}/trickplay", wrapper.GetTrickplayManifest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/media-files/{fileId}/trickplay", wrapper.RequestTrickplay)
 
 	return m
 }
@@ -7724,6 +8086,106 @@ func (response SelectProfiledefaultApplicationProblemPlusJSONResponse) VisitSele
 	return err
 }
 
+type GetTrickplayManifestRequestObject struct {
+	FileID FileID `json:"fileId"`
+}
+
+type GetTrickplayManifestResponseObject interface {
+	VisitGetTrickplayManifestResponse(w http.ResponseWriter) error
+}
+
+type GetTrickplayManifest200JSONResponse TrickplayManifest
+
+func (response GetTrickplayManifest200JSONResponse) VisitGetTrickplayManifestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrickplayManifest404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTrickplayManifest404ApplicationProblemPlusJSONResponse) VisitGetTrickplayManifestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTrickplayManifestdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTrickplayManifestdefaultApplicationProblemPlusJSONResponse) VisitGetTrickplayManifestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrickplayRequestObject struct {
+	FileID FileID `json:"fileId"`
+}
+
+type RequestTrickplayResponseObject interface {
+	VisitRequestTrickplayResponse(w http.ResponseWriter) error
+}
+
+type RequestTrickplay202Response struct {
+}
+
+func (response RequestTrickplay202Response) VisitRequestTrickplayResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type RequestTrickplay404ApplicationProblemPlusJSONResponse Problem
+
+func (response RequestTrickplay404ApplicationProblemPlusJSONResponse) VisitRequestTrickplayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrickplaydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RequestTrickplaydefaultApplicationProblemPlusJSONResponse) VisitRequestTrickplayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMetadataStatusRequestObject struct {
 }
 
@@ -7751,6 +8213,58 @@ type GetMetadataStatusdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetMetadataStatusdefaultApplicationProblemPlusJSONResponse) VisitGetMetadataStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlaybackSessionsRequestObject struct {
+}
+
+type ListPlaybackSessionsResponseObject interface {
+	VisitListPlaybackSessionsResponse(w http.ResponseWriter) error
+}
+
+type ListPlaybackSessions200JSONResponse PlaybackSessionList
+
+func (response ListPlaybackSessions200JSONResponse) VisitListPlaybackSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlaybackSessions403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlaybackSessions403ApplicationProblemPlusJSONResponse) VisitListPlaybackSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlaybackSessionsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListPlaybackSessionsdefaultApplicationProblemPlusJSONResponse) VisitListPlaybackSessionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8203,6 +8717,124 @@ type GetSystemInfodefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetSystemInfodefaultApplicationProblemPlusJSONResponse) VisitGetSystemInfoResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscoderStatusRequestObject struct {
+}
+
+type GetTranscoderStatusResponseObject interface {
+	VisitGetTranscoderStatusResponse(w http.ResponseWriter) error
+}
+
+type GetTranscoderStatus200JSONResponse TranscoderStatus
+
+func (response GetTranscoderStatus200JSONResponse) VisitGetTranscoderStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscoderStatus403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTranscoderStatus403ApplicationProblemPlusJSONResponse) VisitGetTranscoderStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscoderStatusdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTranscoderStatusdefaultApplicationProblemPlusJSONResponse) VisitGetTranscoderStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestTranscoderRequestObject struct {
+}
+
+type TestTranscoderResponseObject interface {
+	VisitTestTranscoderResponse(w http.ResponseWriter) error
+}
+
+type TestTranscoder202JSONResponse TranscoderStatus
+
+func (response TestTranscoder202JSONResponse) VisitTestTranscoderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestTranscoder403ApplicationProblemPlusJSONResponse Problem
+
+func (response TestTranscoder403ApplicationProblemPlusJSONResponse) VisitTestTranscoderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestTranscoder409ApplicationProblemPlusJSONResponse Problem
+
+func (response TestTranscoder409ApplicationProblemPlusJSONResponse) VisitTestTranscoderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestTranscoderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response TestTranscoderdefaultApplicationProblemPlusJSONResponse) VisitTestTranscoderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -8702,9 +9334,18 @@ type StrictServerInterface interface {
 	// SelectProfile Select the profile of this session
 	// (PUT /api/v1/me/profile)
 	SelectProfile(ctx context.Context, request SelectProfileRequestObject) (SelectProfileResponseObject, error)
+	// GetTrickplayManifest Describe the seek preview of a media file
+	// (GET /api/v1/media-files/{fileId}/trickplay)
+	GetTrickplayManifest(ctx context.Context, request GetTrickplayManifestRequestObject) (GetTrickplayManifestResponseObject, error)
+	// RequestTrickplay Ask for the seek preview of a media file
+	// (POST /api/v1/media-files/{fileId}/trickplay)
+	RequestTrickplay(ctx context.Context, request RequestTrickplayRequestObject) (RequestTrickplayResponseObject, error)
 	// GetMetadataStatus Report the state of the online metadata providers
 	// (GET /api/v1/metadata/status)
 	GetMetadataStatus(ctx context.Context, request GetMetadataStatusRequestObject) (GetMetadataStatusResponseObject, error)
+	// ListPlaybackSessions List the running playback sessions
+	// (GET /api/v1/playback/sessions)
+	ListPlaybackSessions(ctx context.Context, request ListPlaybackSessionsRequestObject) (ListPlaybackSessionsResponseObject, error)
 	// CreatePlaybackSession Start playing a media file
 	// (POST /api/v1/playback/sessions)
 	CreatePlaybackSession(ctx context.Context, request CreatePlaybackSessionRequestObject) (CreatePlaybackSessionResponseObject, error)
@@ -8735,6 +9376,12 @@ type StrictServerInterface interface {
 	// GetSystemInfo Describe the running server
 	// (GET /api/v1/system/info)
 	GetSystemInfo(ctx context.Context, request GetSystemInfoRequestObject) (GetSystemInfoResponseObject, error)
+	// GetTranscoderStatus Describe the transcoder's hardware acceleration
+	// (GET /api/v1/system/transcoder)
+	GetTranscoderStatus(ctx context.Context, request GetTranscoderStatusRequestObject) (GetTranscoderStatusResponseObject, error)
+	// TestTranscoder Test the hardware acceleration again
+	// (POST /api/v1/system/transcoder/test)
+	TestTranscoder(ctx context.Context, request TestTranscoderRequestObject) (TestTranscoderResponseObject, error)
 	// ListUsers List the accounts
 	// (GET /api/v1/users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -9775,6 +10422,58 @@ func (sh *strictHandler) SelectProfile(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetTrickplayManifest operation middleware
+func (sh *strictHandler) GetTrickplayManifest(w http.ResponseWriter, r *http.Request, fileID FileID) {
+	var request GetTrickplayManifestRequestObject
+
+	request.FileID = fileID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTrickplayManifest(ctx, request.(GetTrickplayManifestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTrickplayManifest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTrickplayManifestResponseObject); ok {
+		if err := validResponse.VisitGetTrickplayManifestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestTrickplay operation middleware
+func (sh *strictHandler) RequestTrickplay(w http.ResponseWriter, r *http.Request, fileID FileID) {
+	var request RequestTrickplayRequestObject
+
+	request.FileID = fileID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestTrickplay(ctx, request.(RequestTrickplayRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestTrickplay")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestTrickplayResponseObject); ok {
+		if err := validResponse.VisitRequestTrickplayResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMetadataStatus operation middleware
 func (sh *strictHandler) GetMetadataStatus(w http.ResponseWriter, r *http.Request) {
 	var request GetMetadataStatusRequestObject
@@ -9792,6 +10491,30 @@ func (sh *strictHandler) GetMetadataStatus(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetMetadataStatusResponseObject); ok {
 		if err := validResponse.VisitGetMetadataStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlaybackSessions operation middleware
+func (sh *strictHandler) ListPlaybackSessions(w http.ResponseWriter, r *http.Request) {
+	var request ListPlaybackSessionsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlaybackSessions(ctx, request.(ListPlaybackSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlaybackSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlaybackSessionsResponseObject); ok {
+		if err := validResponse.VisitListPlaybackSessionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -10068,6 +10791,54 @@ func (sh *strictHandler) GetSystemInfo(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSystemInfoResponseObject); ok {
 		if err := validResponse.VisitGetSystemInfoResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTranscoderStatus operation middleware
+func (sh *strictHandler) GetTranscoderStatus(w http.ResponseWriter, r *http.Request) {
+	var request GetTranscoderStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTranscoderStatus(ctx, request.(GetTranscoderStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTranscoderStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTranscoderStatusResponseObject); ok {
+		if err := validResponse.VisitGetTranscoderStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestTranscoder operation middleware
+func (sh *strictHandler) TestTranscoder(w http.ResponseWriter, r *http.Request) {
+	var request TestTranscoderRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestTranscoder(ctx, request.(TestTranscoderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestTranscoder")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestTranscoderResponseObject); ok {
+		if err := validResponse.VisitTestTranscoderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
