@@ -210,6 +210,8 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   Amendment (M7-35): also when a seek ends and when the item ends; never more than once per
   2 s, unchanged positions are skipped, a failed report is not queued (the next one carries the
   position). Shared implementation: `createProgressReporter` in `web/packages/player-core`.
+  Amendment (M7-36): stop and page hide are exempt from the 2 s rule and send at once, because
+  nothing runs after them; a report held back by the throttle would be lost.
 
 ### 9 Administration after accounts (refines ADR 0028)
 - Every management and administration request (libraries write, scan, folder browser,

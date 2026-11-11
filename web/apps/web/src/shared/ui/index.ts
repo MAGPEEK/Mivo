@@ -26,6 +26,7 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export {
   AlertIcon,
   BackIcon,
+  ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -33,6 +34,7 @@ export {
   FilmIcon,
   FullscreenIcon,
   HomeIcon,
+  IconFrame,
   InfoIcon,
   LibraryIcon,
   LockIcon,
@@ -77,3 +79,11 @@ export {
 } from "./MetadataAttribution";
 export { useRowTitle } from "./useRowTitle";
 export { useMenu, type MenuOptions, type MenuPlacement, type MenuRefs } from "./useMenu";
+export {
+  CountBadge,
+  ProgressBar,
+  WatchedBadge,
+  type CountBadgeProps,
+  type ProgressBarProps,
+  type WatchedBadgeProps,
+} from "./WatchBadges";

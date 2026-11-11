@@ -20,3 +20,10 @@ export { useScanStatusText } from "./hooks/useScanStatusText";
 export { useSidebarLibraries } from "./hooks/useSidebarLibraries";
 export { libraryLocales, libraryNamespace } from "./locales";
 export { formatDuration } from "./lib/formatDuration";
+export { WatchBadgeOverlay, type WatchBadgeOverlayProps } from "./components/WatchBadgeOverlay";
+export {
+  useWatchedToggle,
+  type WatchedToggle,
+  type WatchedToggleFailure,
+  type WatchedToggleItem,
+} from "./hooks/useWatchedToggle";

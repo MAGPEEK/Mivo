@@ -177,5 +177,16 @@
     "unavailable": "Der Server ist gerade nicht verfügbar. Versuche es gleich noch einmal.",
     "networkError": "Der Server ist nicht erreichbar.",
     "generic": "Etwas ist schiefgelaufen. Versuche es später noch einmal."
+  },
+  "watch": {
+    "watched": "Gesehen",
+    "unwatchedEpisodes_one": "{{count, number}} ungesehene Folge",
+    "unwatchedEpisodes_other": "{{count, number}} ungesehene Folgen",
+    "progress": "{{percent, number}} % gesehen",
+    "markWatched": "Als gesehen markieren",
+    "markUnwatched": "Als ungesehen markieren",
+    "markWatchedTitled": "{{title}} als gesehen markieren",
+    "markUnwatchedTitled": "{{title}} als ungesehen markieren",
+    "failed": "Der Gesehen-Status konnte nicht gespeichert werden."
   }
 }

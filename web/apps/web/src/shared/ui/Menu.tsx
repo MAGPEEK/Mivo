@@ -22,6 +22,11 @@ export interface MenuProps {
   readonly entries: readonly MenuEntry[];
   /** Which edge of the button the popup aligns to. */
   readonly align?: "start" | "end";
+  /**
+   * Replaces the look of the button, e.g. for the menu half of a split button; the button
+   * fills the height its parent gives the menu.
+   */
+  readonly triggerClassName?: string;
 }
 
 const roles = { item: "menuitem", radio: "menuitemradio", checkbox: "menuitemcheckbox" } as const;
@@ -33,7 +38,8 @@ const itemClass =
  * focus, Enter/Space choose, Escape closes and returns focus to the button. The popup opens
  * upward when there is no room below.
  */
-export function Menu({ trigger, ariaLabel, entries, align = "start" }: MenuProps) {
+export function Menu(props: MenuProps) {
+  const { trigger, ariaLabel, entries, align = "start" } = props;
   const menuId = useId();
   const triggerId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -47,7 +53,7 @@ export function Menu({ trigger, ariaLabel, entries, align = "start" }: MenuProps
     { trigger: triggerRef, menu: menuRef, items: itemRefs },
   );
   return (
-    <div className="relative inline-block">
+    <div className="relative inline-flex">
       <button
         ref={triggerRef}
         id={triggerId}
@@ -58,7 +64,7 @@ export function Menu({ trigger, ariaLabel, entries, align = "start" }: MenuProps
         aria-label={ariaLabel}
         onClick={state.toggle}
         onKeyDown={state.onTriggerKeyDown}
-        className={secondaryButtonClass}
+        className={props.triggerClassName ?? secondaryButtonClass}
       >
         {trigger}
       </button>

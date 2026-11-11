@@ -1,2 +1,2 @@
 export { ApiClientProvider, useApiClient, type ApiClientProviderProps } from "./ApiClientProvider";
-export { itemQueryKey } from "./itemQueryKey";
+export { itemQueryKey, itemsQueryKey } from "./itemQueryKey";

@@ -17,12 +17,14 @@ export interface ItemMatchMenuProps {
   readonly year: string | undefined;
   /** Called after the item changed on the server, with its new state when the server sent it. */
   readonly onItemChanged: (item?: ItemDetail) => void;
+  /** Entries of the page shown before the match actions, e.g. "Mark as watched". */
+  readonly extraEntries?: readonly MenuEntry[];
 }
 
 /**
  * The detail page's overflow menu with "Correct match…", "Remove match" and "Refresh
  * metadata", and the dialogs behind them. Renders nothing for seasons, episodes and extras:
- * they follow their show or parent. Like library management it is shown to everyone, and the
+ * they follow their show or parent, and the page shows its own actions as buttons there. Like library management it is shown to everyone, and the
  * server refuses peers outside the local network (ADR 0028).
  */
 export function ItemMatchMenu(props: ItemMatchMenuProps) {
@@ -32,11 +34,12 @@ export function ItemMatchMenu(props: ItemMatchMenuProps) {
   return <MatchMenu {...props} />;
 }
 
-function MatchMenu({ itemId, title, year, onItemChanged }: ItemMatchMenuProps) {
+function MatchMenu({ itemId, title, year, onItemChanged, extraEntries = [] }: ItemMatchMenuProps) {
   const { t } = useTranslation(identifyNamespace);
   const actions = useMatchActions({ itemId, onItemChanged });
   const outcomeText = useOutcomeText(actions.outcome);
   const entries: MenuEntry[] = [
+    ...extraEntries,
     { id: "identify", label: t("menu.identify"), onSelect: actions.openIdentify },
     { id: "remove", label: t("menu.removeMatch"), onSelect: actions.openRemove },
     {

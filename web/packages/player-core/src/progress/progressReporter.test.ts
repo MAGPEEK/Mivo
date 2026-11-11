@@ -235,6 +235,41 @@ describe("createProgressReporter throttle", () => {
     expect(sent).toEqual([10, 11]);
   });
 
+  it.each(["stop", "pagehide"] as const)(
+    "sends the last position at once on %s inside the throttle window, before dispose",
+    (trigger) => {
+      const { reporter, sent } = createHarness();
+      reporter.update(10);
+      reporter.notify("pause");
+      advanceTimersByTime(500);
+      reporter.update(11);
+
+      reporter.notify(trigger);
+      reporter.dispose();
+      advanceTimersByTime(3 * progressIntervalMilliseconds);
+
+      expect(sent).toEqual([10, 11]);
+      expect(timerCount()).toBe(0);
+    },
+  );
+
+  it("drops a held-back report when a final one has sent its position", () => {
+    const { reporter, sent } = createHarness();
+    reporter.update(10);
+    reporter.notify("play");
+    reporter.notify("seeked");
+    advanceTimersByTime(500);
+    reporter.update(11);
+    reporter.notify("seeked");
+
+    reporter.notify("pagehide");
+    reporter.update(50);
+    advanceTimersByTime(3 * progressIntervalMilliseconds);
+
+    expect(sent).toEqual([10, 11]);
+    expect(timerCount()).toBe(0);
+  });
+
   it("starts the interval after a held-back report when playback went on", () => {
     const { reporter, sent } = createHarness();
     reporter.update(10);

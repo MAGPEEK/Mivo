@@ -9,7 +9,7 @@ import type { LibraryItemFilter } from "../lib/browseQuery";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
 import { itemGridClass } from "./gridLayout";
-import { ItemCard } from "./ItemCard";
+import { WatchableItemCard } from "./WatchableItemCard";
 
 /** The translated texts of a {@link BrowseItemGrid}; the defaults speak of videos. */
 export interface BrowseItemTexts {
@@ -47,7 +47,7 @@ export interface BrowseItemGridProps {
 }
 
 function renderPosterCard({ item, focusOnMount }: BrowseCardProps): ReactNode {
-  return <ItemCard item={item} focusOnMount={focusOnMount} />;
+  return <WatchableItemCard item={item} focusOnMount={focusOnMount} />;
 }
 
 function useVideoTexts(): BrowseItemTexts {

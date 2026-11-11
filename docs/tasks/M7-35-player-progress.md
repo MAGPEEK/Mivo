@@ -10,8 +10,9 @@ Continue watching work across devices.
 ## Acceptance criteria
 - [x] Framework-free `createProgressReporter({ send, clock })` in `player-core`: reports every
       10 s while playing, immediately on pause, seek end, stop, ended and page hide; skips
-      unchanged positions; never sends more than once per 2 s; `send` failures are retried on
-      the next tick only (no queue growth).
+      unchanged positions; never sends more than once per 2 s, except on stop and page hide,
+      which send at once (amended in M7-36); `send` failures are retried on the next tick only
+      (no queue growth).
 - [x] The player wires it with `fetch(..., { keepalive: true })` to
       `PUT /items/{id}/progress`, using media position + `startPositionSeconds` (session
       offset) as the absolute position; music and photos do not report.
@@ -29,6 +30,8 @@ audiobook player (M5-73) uses the same reporter.
 - Reporter: `web/packages/player-core/src/progress/progressReporter.ts`. Its clock is
   `{ now, startTimer }`; a trigger inside the 2 s throttle window is sent at the end of the
   window (one timer, latest position), so the throttle never drops the position of a pause.
+  Amendment (M7-36): `stop` and `pagehide` bypass the throttle and send at once, because the
+  timer of a held-back report is cancelled by `dispose()` or dies with the page.
   The reporter tests drive the injected clock, because player-core has no timer globals.
 - The position always comes from the engine (`PlaybackEngine.currentPosition`), which adds the
   session offset and keeps the position while the element is empty during a remux seek restart.

@@ -7,14 +7,21 @@ import type { StartTimer } from "../profile/probes";
 /** Time between two reports while playing. */
 export const progressIntervalMilliseconds = 10_000;
 
-/** Shortest time between two reports, whatever triggers them. */
+/**
+ * Shortest time between two reports. `stop` and `pagehide` are the exception: nothing runs
+ * after them, so a report held back would be lost.
+ */
 export const progressThrottleMilliseconds = 2_000;
 
 /**
  * What happened in the player. `play` starts the interval; `seeked` reports and keeps the play
- * state; `pause`, `stop`, `ended` and `pagehide` report and stop the interval.
+ * state; `pause`, `stop`, `ended` and `pagehide` report and stop the interval. `stop` and
+ * `pagehide` send at once, even inside the throttle window.
  */
 export type ProgressTrigger = "play" | "pause" | "seeked" | "stop" | "ended" | "pagehide";
+
+/** Triggers after which no timer can be relied on: the player closes or the page is hidden. */
+const finalTriggers: ReadonlySet<ProgressTrigger> = new Set<ProgressTrigger>(["stop", "pagehide"]);
 
 /** Time for the reporter; player-core has no timer globals. */
 export interface ProgressClock {
@@ -43,7 +50,10 @@ export interface ProgressReporter {
   update(positionSeconds: number): void;
   /** Tells the reporter what happened; see {@link ProgressTrigger}. */
   notify(trigger: ProgressTrigger): void;
-  /** Cancels the timer; nothing is sent afterwards. */
+  /**
+   * Cancels the timer; nothing is sent afterwards. Notify `stop` first: it sends the last
+   * position at once, so no held-back report is lost.
+   */
   dispose(): void;
 }
 
@@ -81,6 +91,11 @@ class ThrottledProgressReporter implements ProgressReporter {
     }
     if (trigger !== "seeked") {
       this.playing = false;
+    }
+    if (finalTriggers.has(trigger)) {
+      this.clearTimer();
+      this.reportAndContinue();
+      return;
     }
     this.reportSoon();
   }
@@ -154,8 +169,9 @@ class ThrottledProgressReporter implements ProgressReporter {
  * Creates the reporter of one item's playback position. It reports every
  * {@link progressIntervalMilliseconds} while playing and at once on every other trigger,
  * skips a position it has reported already and never sends twice within
- * {@link progressThrottleMilliseconds}: a report inside that window waits for its end. A failed
- * report is not repeated by itself; the next report carries the position.
+ * {@link progressThrottleMilliseconds}: a report inside that window waits for its end. Only
+ * `stop` and `pagehide` are sent at once inside the window, because no timer outlives them. A
+ * failed report is not repeated by itself; the next report carries the position.
  */
 export function createProgressReporter(options: ProgressReporterOptions): ProgressReporter {
   return new ThrottledProgressReporter(options);

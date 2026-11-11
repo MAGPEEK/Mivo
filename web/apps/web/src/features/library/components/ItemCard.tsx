@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { rowCardSizes, type CardFormat } from "../../../shared/lib/rowScroll";
+import { watchBadges, type WatchBadges } from "../../../shared/lib/watchState";
 import {
   AlertIcon,
   Badge,
@@ -15,6 +16,7 @@ import {
   type RowCardProps,
 } from "../../../shared/ui";
 import { useFocusOnMount } from "../hooks/useFocusOnMount";
+import type { WatchedToggle } from "../hooks/useWatchedToggle";
 import {
   cardArtwork,
   cardEpisodeNumbers,
@@ -23,6 +25,8 @@ import {
 } from "../lib/itemCard";
 import { libraryNamespace } from "../locales";
 import { itemPosterSizes } from "./gridLayout";
+import { WatchBadgeOverlay } from "./WatchBadgeOverlay";
+import { WatchedCardToggle } from "./WatchedCardToggle";
 
 /** Props of {@link ItemCard}. */
 export interface ItemCardProps {
@@ -36,8 +40,13 @@ export interface ItemCardProps {
    * item summary does not carry it.
    */
   readonly seasonNumber?: number;
-  /** Badges or progress over the artwork; filled by the watched state (M7). */
+  /** Replaces the watch-state badges over the artwork. */
   readonly overlay?: ReactNode;
+  /**
+   * Adds the hover toggle "Mark as watched" and shows its expected state in the badges while
+   * a request runs. Without it the card only shows the state of `item`.
+   */
+  readonly watchedToggle?: WatchedToggle | undefined;
   /** Set when the card sits in a `MediaRow`: the row's tab stop and a fixed card width. */
   readonly rowCard?: RowCardProps;
 }
@@ -51,6 +60,7 @@ export function ItemCard({
   format = "poster",
   seasonNumber,
   overlay,
+  watchedToggle,
   rowCard,
 }: ItemCardProps) {
   const linkRef = useFocusOnMount<HTMLAnchorElement>(focusOnMount);
@@ -68,16 +78,15 @@ export function ItemCard({
           aspect={artwork.aspect}
           alt={card.title}
           sizes={rowCard === undefined ? itemPosterSizes : rowCardSizes(format)}
-          icon={
-            card.isShow ? (
-              <ScreenIcon className={placeholderIconClass} />
-            ) : (
-              <FilmIcon className={placeholderIconClass} />
-            )
-          }
+          icon={<PlaceholderIcon isShow={card.isShow} />}
         />
       }
-      overlay={overlay}
+      overlay={overlay ?? <WatchBadgeOverlay badges={cardBadges(item, watchedToggle)} />}
+      actions={
+        watchedToggle === undefined ? undefined : (
+          <WatchedCardToggle title={card.title} toggle={watchedToggle} />
+        )
+      }
       muted={!card.available}
       headingLevel={rowCard === undefined ? 2 : 3}
       renderLink={(linkProps) => (
@@ -92,6 +101,23 @@ export function ItemCard({
       details={<CardDetails card={card} episodeCode={episodeCode} />}
     />
   );
+}
+
+function PlaceholderIcon({ isShow }: { readonly isShow: boolean }) {
+  return isShow ? (
+    <ScreenIcon className={placeholderIconClass} />
+  ) : (
+    <FilmIcon className={placeholderIconClass} />
+  );
+}
+
+// With a toggle the badges follow its state, which is the expected one while a request runs.
+function cardBadges(item: ItemSummary, watchedToggle: WatchedToggle | undefined): WatchBadges {
+  return watchBadges({
+    kind: item.kind,
+    viewerState: watchedToggle === undefined ? item.viewerState : watchedToggle.viewerState,
+    durationSeconds: item.media?.durationSeconds,
+  });
 }
 
 interface CardDetailsProps {

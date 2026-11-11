@@ -62,4 +62,24 @@ describe("toChildRow", () => {
     expect(toChildRow(summary({ media }), texts).runtime).toBe("duration:minutes");
     expect(toChildRow(summary({}), texts).runtime).toBe("");
   });
+
+  it("carries the watch badges: the count of a season, the progress of an episode", () => {
+    const media = { available: true, durationSeconds: 2700 };
+    const season = summary({
+      kind: "season",
+      viewerState: { watched: false, positionSeconds: 0, playCount: 0, unwatchedCount: 6 },
+    });
+    const episode = summary({
+      media,
+      viewerState: { watched: false, positionSeconds: 1350, playCount: 0 },
+    });
+
+    expect(toChildRow(season, texts).watch).toMatchObject({ unwatchedCount: 6, watched: false });
+    expect(toChildRow(episode, texts).watch).toMatchObject({ progressPercent: 50 });
+    expect(toChildRow(summary({ media }), texts).watch).toEqual({
+      watched: false,
+      progressPercent: undefined,
+      unwatchedCount: undefined,
+    });
+  });
 });

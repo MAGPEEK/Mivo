@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useEpisodeCode } from "../hooks/useEpisodeCode";
@@ -12,13 +12,15 @@ import { AncestorLinks, SiblingArrows } from "./ItemNavigation";
 export interface EpisodePageProps {
   readonly headingRef: Ref<HTMLHeadingElement>;
   readonly item: ItemView;
+  /** Shown next to Play, e.g. "Mark as watched". */
+  readonly actions?: ReactNode;
 }
 
 /**
  * An episode: links to its show and season, previous/next episode, then the technical details
  * and Play of every playable item.
  */
-export function EpisodePage({ headingRef, item }: EpisodePageProps) {
+export function EpisodePage({ headingRef, item, actions }: EpisodePageProps) {
   const { t } = useTranslation(itemNamespace);
   const siblings = useSiblingLinks(item, "episode");
   const code = useEpisodeCode(item);
@@ -31,6 +33,7 @@ export function EpisodePage({ headingRef, item }: EpisodePageProps) {
       headingRef={headingRef}
       item={item}
       leadFacts={leadFacts}
+      actions={actions}
       above={
         <div className="flex flex-wrap items-center gap-4">
           <AncestorLinks ancestors={item.ancestors} />

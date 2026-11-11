@@ -126,5 +126,16 @@
   "summaryToggle": {
     "more": "More",
     "less": "Less"
+  },
+  "resume": {
+    "label": "Resume from {{position}}",
+    "more": "More ways to play",
+    "fromStart": "Play from start"
+  },
+  "watched": {
+    "mark": "Mark as watched",
+    "unmark": "Mark as unwatched",
+    "unsupported": "This server cannot store what you have watched yet.",
+    "failed": "The watched state could not be saved. Try again."
   }
 }

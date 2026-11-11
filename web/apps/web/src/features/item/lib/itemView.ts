@@ -5,9 +5,12 @@ import type {
   ItemKind,
   MediaFile,
   PersonRole,
+  ViewerState,
 } from "@mivo/api-client";
 import { bookTimeline, resolutionLabel } from "@mivo/player-core";
 
+import { resumeSeconds } from "../../../shared/lib/watchState";
+import { formatDuration } from "../../library";
 import { formatAirDate } from "./airDate";
 import type { DurationParts } from "./duration";
 import { formatFileSize } from "./fileSize";
@@ -36,13 +39,27 @@ export type AncestorView = Pick<ItemAncestor, "id" | "kind" | "title" | "number"
 /** Why Play is disabled: a file problem, or a show or season without an episode to start. */
 export type PlayUnavailableReason = UnavailableReason | "noEpisodes";
 
+/** Where Play continues (DT-05): the stored position of a movie or episode in progress. */
+export interface ResumeView {
+  /** Whole seconds, for the player link. */
+  readonly seconds: number;
+  /** Clock notation for the button, e.g. `42:10` or `1:02:10`. */
+  readonly position: string;
+}
+
 /**
  * What the Play button shows: a link to the player, or the reason it is disabled. A movie or
  * episode names its file; a show or season only the episode to start (the player then picks
- * that episode's primary file).
+ * that episode's primary file). With `resume` the button continues there and offers "Play
+ * from start".
  */
 export type PlayView =
-  | { readonly kind: "playable"; readonly itemId: string; readonly fileId?: string }
+  | {
+      readonly kind: "playable";
+      readonly itemId: string;
+      readonly fileId?: string;
+      readonly resume?: ResumeView;
+    }
   | { readonly kind: "unavailable"; readonly explanation: string };
 
 /** Everything the detail page shows of a loaded item, as display text. */
@@ -92,6 +109,8 @@ export interface ItemView {
   readonly play: PlayView;
   /** Where the metadata came from, e.g. `["nfo", "tmdb"]`; empty when unknown. */
   readonly metadataSources: readonly string[];
+  /** The profile's watch state; `undefined` without any, and for kinds that have none. */
+  readonly viewerState: ViewerState | undefined;
 }
 
 /** The translated texts the view needs; the hook builds them from i18next. */
@@ -160,6 +179,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     backdrop: item.artwork?.backdrop,
     play: playView(item, texts),
     metadataSources: item.metadataSources ?? [],
+    viewerState: item.viewerState,
     ...fileView,
     facts:
       item.kind === "audiobook"
@@ -276,7 +296,24 @@ function playView(item: ItemDetail, texts: ItemViewTexts): PlayView {
     return { kind: "unavailable", explanation: texts.unavailable("noFile") };
   }
   const target = playTarget(item);
-  return target.kind === "playable"
-    ? { kind: "playable", itemId: item.id, fileId: target.fileId }
-    : { kind: "unavailable", explanation: texts.unavailable(target.reason) };
+  if (target.kind !== "playable") {
+    return { kind: "unavailable", explanation: texts.unavailable(target.reason) };
+  }
+  const resume = resumeView(item.viewerState);
+  return {
+    kind: "playable",
+    itemId: item.id,
+    fileId: target.fileId,
+    ...(resume === undefined ? {} : { resume }),
+  };
+}
+
+function resumeView(viewerState: ViewerState | undefined): ResumeView | undefined {
+  const position = resumeSeconds(viewerState);
+  if (position === undefined) {
+    return undefined;
+  }
+  const seconds = Math.floor(position);
+  // Less than a second played is no place to resume from.
+  return seconds > 0 ? { seconds, position: formatDuration(seconds) } : undefined;
 }

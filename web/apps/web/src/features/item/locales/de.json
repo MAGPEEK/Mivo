@@ -126,5 +126,16 @@
   "summaryToggle": {
     "more": "Mehr",
     "less": "Weniger"
+  },
+  "resume": {
+    "label": "Fortsetzen ab {{position}}",
+    "more": "Weitere Wiedergabeoptionen",
+    "fromStart": "Von Anfang an abspielen"
+  },
+  "watched": {
+    "mark": "Als gesehen markieren",
+    "unmark": "Als ungesehen markieren",
+    "unsupported": "Dieser Server kann noch nicht speichern, was gesehen wurde.",
+    "failed": "Der Gesehen-Status konnte nicht gespeichert werden. Bitte erneut versuchen."
   }
 }

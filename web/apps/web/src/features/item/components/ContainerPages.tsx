@@ -34,10 +34,12 @@ export function ShowPage({ headingRef, itemId, item, actions }: ShowPageProps) {
 /** Props of {@link SeasonPage}. */
 export interface SeasonPageProps extends ContainerPageProps {
   readonly order: ChildOrder;
+  /** Shown next to Play, e.g. "Mark as watched". */
+  readonly actions?: ReactNode;
 }
 
 /** A season: link to the show, previous/next season, Play and its episodes in order. */
-export function SeasonPage({ headingRef, itemId, item, order }: SeasonPageProps) {
+export function SeasonPage({ headingRef, itemId, item, order, actions }: SeasonPageProps) {
   const siblings = useSiblingLinks(item, "season");
   return (
     <article>
@@ -45,6 +47,7 @@ export function SeasonPage({ headingRef, itemId, item, order }: SeasonPageProps)
         headingRef={headingRef}
         item={item}
         aspect="poster"
+        actions={actions}
         above={
           <div className="flex flex-wrap items-center gap-4">
             <AncestorLinks ancestors={item.ancestors} />

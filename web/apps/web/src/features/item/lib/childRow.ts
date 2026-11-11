@@ -1,6 +1,7 @@
 import type { ImageRef, ItemKind, ItemSummary } from "@mivo/api-client";
 
 import { episodeRange, type EpisodeRange } from "../../../shared/lib/episodeCode";
+import { watchBadges, type WatchBadges } from "../../../shared/lib/watchState";
 import { durationParts, type DurationParts } from "./duration";
 
 /** The translated texts a child row needs; the hook builds them from i18next. */
@@ -28,6 +29,8 @@ export interface ChildRow {
   readonly runtime: string;
   /** Season poster or episode still; `undefined` shows the placeholder. */
   readonly image: ImageRef | undefined;
+  /** Watch-state badges over the artwork: unwatched count of a season, progress of an episode. */
+  readonly watch: WatchBadges;
 }
 
 function seasonName(item: ItemSummary, texts: ChildRowTexts): string {
@@ -47,6 +50,7 @@ export function toChildRow(item: ItemSummary, texts: ChildRowTexts): ChildRow {
       label: "",
       runtime: "",
       image: item.poster,
+      watch: watchBadges({ kind: item.kind, viewerState: item.viewerState }),
     };
   }
   const range = episodeRange(item.number, item.numberEnd);
@@ -58,5 +62,10 @@ export function toChildRow(item: ItemSummary, texts: ChildRowTexts): ChildRow {
     label: range === undefined ? "" : texts.episodeNumber(range),
     runtime: seconds === undefined ? "" : texts.duration(durationParts(seconds)),
     image: item.thumb,
+    watch: watchBadges({
+      kind: item.kind,
+      viewerState: item.viewerState,
+      durationSeconds: seconds,
+    }),
   };
 }

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { rowCardSizes, type CardFormat } from "../../../shared/lib/rowScroll";
+import { watchBadges } from "../../../shared/lib/watchState";
 import {
   Badge,
   FilmIcon,
@@ -14,6 +15,7 @@ import {
 } from "../../../shared/ui";
 import { rowCardArtwork, toRowCardModel, type RowCardDetail } from "../lib/rowCard";
 import { libraryNamespace } from "../locales";
+import { WatchBadgeOverlay } from "./WatchBadgeOverlay";
 
 /** Props of {@link RowItemCard}. */
 export interface RowItemCardProps {
@@ -55,13 +57,7 @@ export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
           }
         />
       }
-      overlay={
-        card.newEpisodeCount === undefined ? undefined : (
-          <span aria-hidden="true" className={countBadgeClass}>
-            {card.newEpisodeCount}
-          </span>
-        )
-      }
+      overlay={<RowCardOverlay item={item} newEpisodeCount={card.newEpisodeCount} />}
       muted={!card.available}
       headingLevel={3}
       renderLink={(linkProps) => (
@@ -76,6 +72,30 @@ export function RowItemCard({ item, format, rowCard }: RowItemCardProps) {
         </>
       }
     />
+  );
+}
+
+interface RowCardOverlayProps {
+  readonly item: ItemSummary;
+  readonly newEpisodeCount: number | undefined;
+}
+
+// The "new episodes" count keeps the corner; the progress bar shows either way.
+function RowCardOverlay({ item, newEpisodeCount }: RowCardOverlayProps) {
+  const badges = watchBadges({
+    kind: item.kind,
+    viewerState: item.viewerState,
+    durationSeconds: item.media?.durationSeconds,
+  });
+  return (
+    <>
+      {newEpisodeCount !== undefined && (
+        <span aria-hidden="true" className={countBadgeClass}>
+          {newEpisodeCount}
+        </span>
+      )}
+      <WatchBadgeOverlay badges={badges} cornerTaken={newEpisodeCount !== undefined} />
+    </>
   );
 }
 

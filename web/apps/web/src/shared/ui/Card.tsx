@@ -32,6 +32,11 @@ export interface MediaCardProps {
    * stays visible to assistive technology, so it must label itself.
    */
   readonly overlay?: ReactNode;
+  /**
+   * Buttons shown in the top left corner of the artwork while the card is hovered or holds
+   * focus, e.g. the watched toggle. They come after the link in the tab order.
+   */
+  readonly actions?: ReactNode;
   /** Greys the card out, e.g. for a file that cannot be played. */
   readonly muted?: boolean;
   readonly headingLevel?: CardHeadingLevel;
@@ -53,6 +58,7 @@ export function MediaCard({
   renderLink,
   details,
   overlay,
+  actions,
   muted = false,
   headingLevel = 2,
 }: MediaCardProps) {
@@ -88,6 +94,21 @@ export function MediaCard({
       >
         {details}
       </div>
+      {actions !== undefined && <CardActions>{actions}</CardActions>}
+    </div>
+  );
+}
+
+// Last in the card's DOM, so the link stays its first tab stop; z-10 lifts the buttons above
+// the link's stretched click area. Hidden, not transparent, until hover or focus: a tap on a
+// touch screen must reach the link, never an invisible button.
+function CardActions({ children }: { readonly children: ReactNode }) {
+  return (
+    <div
+      data-card-actions=""
+      className={`absolute top-1.5 left-1.5 z-10 hidden gap-1 group-focus-within:flex group-hover:flex ${liftClass}`}
+    >
+      {children}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FilmIcon, Poster, ScreenIcon, Skeleton, stretchedLinkClass } from "../../../shared/ui";
+import { WatchBadgeOverlay } from "../../library";
 import { useItemChildren, type ItemChildren } from "../hooks/useItemChildren";
 import type { ChildRow } from "../lib/childRow";
 import { oppositeOrder, searchForOrder, type ChildOrder } from "../lib/itemSearch";
@@ -120,14 +121,16 @@ function ChildrenBody({ list, childKind }: ChildrenBodyProps) {
 function SeasonCard({ row }: { readonly row: ChildRow }) {
   return (
     <div className="group relative flex flex-col gap-2">
-      <Poster
-        imageRef={row.image}
-        aspect="poster"
-        alt=""
-        sizes={seasonPosterSizes}
-        icon={<ScreenIcon className={placeholderIconClass} />}
-        className="rounded-md shadow-card"
-      />
+      <div className="relative overflow-hidden rounded-md shadow-card">
+        <Poster
+          imageRef={row.image}
+          aspect="poster"
+          alt=""
+          sizes={seasonPosterSizes}
+          icon={<ScreenIcon className={placeholderIconClass} />}
+        />
+        <WatchBadgeOverlay badges={row.watch} />
+      </div>
       <h3 className="text-sm font-medium">
         <Link to="/items/$itemId" params={{ itemId: row.id }} className={stretchedLinkClass}>
           {row.title}
@@ -141,14 +144,16 @@ function EpisodeRow({ row }: { readonly row: ChildRow }) {
   const details = [row.label, row.runtime].filter((text) => text !== "");
   return (
     <div className="relative flex items-center gap-4">
-      <Poster
-        imageRef={row.image}
-        aspect="still"
-        alt=""
-        sizes={episodeStillSizes}
-        icon={<FilmIcon className={placeholderIconClass} />}
-        className="w-40 shrink-0 rounded-md shadow-card"
-      />
+      <div className="relative w-40 shrink-0 overflow-hidden rounded-md shadow-card">
+        <Poster
+          imageRef={row.image}
+          aspect="still"
+          alt=""
+          sizes={episodeStillSizes}
+          icon={<FilmIcon className={placeholderIconClass} />}
+        />
+        <WatchBadgeOverlay badges={row.watch} />
+      </div>
       <div className="flex min-w-0 flex-col gap-1">
         <h3 className="font-medium break-words">
           <Link to="/items/$itemId" params={{ itemId: row.id }} className={stretchedLinkClass}>

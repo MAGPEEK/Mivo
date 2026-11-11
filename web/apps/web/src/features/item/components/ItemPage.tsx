@@ -1,9 +1,11 @@
 import { ItemMatchMenu } from "../../identify";
+import { useWatchedToggle } from "../../library";
 import { MetadataAttribution } from "../../../shared/ui";
 import { useHeadingFocusAfterNavigation } from "../hooks/useHeadingFocusAfterNavigation";
 import { useHeadingFocusAfterRetry } from "../hooks/useHeadingFocusAfterRetry";
 import { useItemChanged } from "../hooks/useItemChanged";
 import { useItemDetails } from "../hooks/useItemDetails";
+import { useWatchedMenuEntries } from "../hooks/useWatchedMenuEntries";
 import { childOrder, type ItemSearch } from "../lib/itemSearch";
 import type { ItemView } from "../lib/itemView";
 import { EpisodePage } from "./EpisodePage";
@@ -13,7 +15,8 @@ import { ItemLoadError, ItemLoading, ItemNotFound } from "./ItemStates";
 import { AlbumPage } from "./MusicPages";
 import { AudiobookPage } from "./AudiobookPage";
 import { PhotoAlbumPage, PhotoPage } from "./PhotoPages";
-import type { Ref } from "react";
+import { WatchedAction } from "./WatchedAction";
+import type { ReactNode, Ref } from "react";
 
 /** Props of {@link ItemPage}. */
 export interface ItemPageProps {
@@ -60,6 +63,45 @@ export function ItemPage({ itemId, search = {} }: ItemPageProps) {
   }
 }
 
+/** What a detail page shows next to Play, by what the kind of item supports. */
+interface ItemActions {
+  /** "Mark as watched"; renders nothing for kinds without it (extras, music, photos). */
+  readonly watchedAction: ReactNode;
+  /** The overflow menu; renders nothing for kinds that follow their parent. */
+  readonly matchMenu: ReactNode;
+  /** Both, for movies and shows. */
+  readonly videoActions: ReactNode;
+}
+
+function useItemActions(itemId: string, item: ItemView): ItemActions {
+  const onItemChanged = useItemChanged(itemId);
+  // One toggle for the button and the menu entry, so both show the same state.
+  const watchedToggle = useWatchedToggle({
+    id: itemId,
+    kind: item.kind,
+    viewerState: item.viewerState,
+  });
+  const watchedEntries = useWatchedMenuEntries(watchedToggle);
+  const watchedAction = <WatchedAction toggle={watchedToggle} />;
+  const matchMenu = (
+    <ItemMatchMenu
+      itemId={itemId}
+      kind={item.kind}
+      title={item.title}
+      year={item.year}
+      onItemChanged={onItemChanged}
+      extraEntries={watchedEntries}
+    />
+  );
+  const videoActions = (
+    <>
+      {watchedAction}
+      {matchMenu}
+    </>
+  );
+  return { watchedAction, matchMenu, videoActions };
+}
+
 interface ItemByKindProps {
   readonly headingRef: Ref<HTMLHeadingElement>;
   readonly itemId: string;
@@ -68,21 +110,12 @@ interface ItemByKindProps {
 }
 
 function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
-  const onItemChanged = useItemChanged(itemId);
-  // The menu decides by kind itself: it renders nothing for kinds that follow their parent
-  // (seasons, episodes, extras, tracks).
-  const matchMenu = (
-    <ItemMatchMenu
-      itemId={itemId}
-      kind={item.kind}
-      title={item.title}
-      year={item.year}
-      onItemChanged={onItemChanged}
-    />
-  );
+  const { watchedAction, matchMenu, videoActions } = useItemActions(itemId, item);
   switch (item.kind) {
     case "show":
-      return <ShowPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
+      return (
+        <ShowPage headingRef={headingRef} itemId={itemId} item={item} actions={videoActions} />
+      );
     case "season":
       return (
         <SeasonPage
@@ -90,10 +123,11 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
           itemId={itemId}
           item={item}
           order={childOrder(search)}
+          actions={watchedAction}
         />
       );
     case "episode":
-      return <EpisodePage headingRef={headingRef} item={item} />;
+      return <EpisodePage headingRef={headingRef} item={item} actions={watchedAction} />;
     case "album":
       return <AlbumPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
     case "audiobook":
@@ -111,6 +145,6 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
     case "artist":
     case "track":
     default:
-      return <ItemDetails headingRef={headingRef} item={item} actions={matchMenu} />;
+      return <ItemDetails headingRef={headingRef} item={item} actions={videoActions} />;
   }
 }

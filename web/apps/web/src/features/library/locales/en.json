@@ -177,5 +177,16 @@
     "unavailable": "The server is not available right now. Try again in a moment.",
     "networkError": "The server cannot be reached.",
     "generic": "Something went wrong. Try again later."
+  },
+  "watch": {
+    "watched": "Watched",
+    "unwatchedEpisodes_one": "{{count, number}} unwatched episode",
+    "unwatchedEpisodes_other": "{{count, number}} unwatched episodes",
+    "progress": "Watched {{percent, number}} %",
+    "markWatched": "Mark as watched",
+    "markUnwatched": "Mark as unwatched",
+    "markWatchedTitled": "Mark {{title}} as watched",
+    "markUnwatchedTitled": "Mark {{title}} as unwatched",
+    "failed": "The watched state could not be saved."
   }
 }
