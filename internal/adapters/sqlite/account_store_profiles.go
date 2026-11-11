@@ -52,7 +52,8 @@ type ManagedProfileCheck func(existingManaged int) error
 // CreateProfile adds a managed profile when check (nil allows) agrees inside the transaction;
 // independent of check, account.CheckManagedProfileLimit applies (domain.ErrConflict). A
 // primary profile is created only with its account (domain.ErrInvalid); an unknown account
-// wraps domain.ErrNotFound, an unknown library domain.ErrInvalid.
+// wraps domain.ErrNotFound, an unknown library domain.ErrInvalid, a name another profile of the
+// account holds (ignoring case) account.ErrNameTaken.
 func (store *AccountStore) CreateProfile(ctx context.Context, write ProfileWrite, check ManagedProfileCheck) error {
 	profile := write.Record.Profile
 	if profile.Primary {
@@ -102,13 +103,14 @@ func (store *AccountStore) insertProfile(ctx context.Context, queries *sqlcgen.Q
 	maxAge, hideUnrated := limitColumns(record.Limit)
 
 	err := queries.InsertProfile(ctx, sqlcgen.InsertProfileParams{
-		ID: record.Profile.ID, UserID: record.Profile.AccountID, Name: record.Profile.Name,
+		ID: record.Profile.ID, UserID: record.Profile.AccountID,
+		Name: record.Profile.Name, NameKey: profileNameKey(record.Profile.Name),
 		IsPrimary: boolToInt(record.Profile.Primary), AvatarColor: string(record.Profile.AvatarColor),
 		PinHash: pinColumn(write), MaxAge: maxAge, HideUnrated: hideUnrated,
 		AllLibraries: boolToInt(record.Libraries.IsAll()), CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
-		return accountWriteError("insert profile", err)
+		return profileWriteError("insert profile", err)
 	}
 
 	return writeProfileLibraries(ctx, queries, record.Profile.ID, record.Libraries)
@@ -191,12 +193,13 @@ func writeProfileRow(ctx context.Context, queries *sqlcgen.Queries, record Profi
 	maxAge, hideUnrated := limitColumns(record.Limit)
 
 	changed, err := queries.UpdateProfile(ctx, sqlcgen.UpdateProfileParams{
-		Name: record.Profile.Name, AvatarColor: string(record.Profile.AvatarColor),
-		MaxAge: maxAge, HideUnrated: hideUnrated, AllLibraries: boolToInt(record.Libraries.IsAll()),
+		Name: record.Profile.Name, NameKey: profileNameKey(record.Profile.Name),
+		AvatarColor: string(record.Profile.AvatarColor),
+		MaxAge:      maxAge, HideUnrated: hideUnrated, AllLibraries: boolToInt(record.Libraries.IsAll()),
 		UpdatedAt: now, ID: record.Profile.ID, UserID: record.Profile.AccountID,
 	})
 	if err != nil {
-		return fmt.Errorf("update profile row: %w", err)
+		return profileWriteError("update profile row", err)
 	}
 
 	if changed == 0 {

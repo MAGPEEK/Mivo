@@ -151,7 +151,8 @@ func (store *AccountStore) insertAccount(ctx context.Context, queries *sqlcgen.Q
 // UpdateAccount reads the account, lets change compute its new state and stores it, all in
 // one transaction. A new name also renames the primary profile, which carries the account
 // name, and PrimaryLimit becomes the primary profile's limit. Independent of change, demoting
-// or disabling the last enabled admin wraps domain.ErrConflict.
+// or disabling the last enabled admin wraps domain.ErrConflict; a name another account or a
+// managed profile of this account holds is account.ErrNameTaken.
 func (store *AccountStore) UpdateAccount(ctx context.Context, accountID string, change AccountChange) (AccountRecord, error) {
 	var updated AccountRecord
 
@@ -216,10 +217,11 @@ func (store *AccountStore) writeAccountRow(ctx context.Context, queries *sqlcgen
 	maxAge, hideUnrated := limitColumns(next.PrimaryLimit)
 
 	err = queries.UpdatePrimaryProfile(ctx, sqlcgen.UpdatePrimaryProfileParams{
-		Name: next.Account.Name, MaxAge: maxAge, HideUnrated: hideUnrated, UpdatedAt: now, UserID: next.Account.ID,
+		Name: next.Account.Name, NameKey: profileNameKey(next.Account.Name),
+		MaxAge: maxAge, HideUnrated: hideUnrated, UpdatedAt: now, UserID: next.Account.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("update primary profile: %w", err)
+		return profileWriteError("update primary profile", err)
 	}
 
 	return writeUserLibraries(ctx, queries, next.Account.ID, next.Libraries)

@@ -52,7 +52,7 @@ ORDER BY users.name_key, users.id;
 -- UpdatePrimaryProfile keeps the primary profile's name and limit in step with its account.
 -- name: UpdatePrimaryProfile :exec
 UPDATE profiles
-SET name = ?, max_age = ?, hide_unrated = ?, updated_at = ?
+SET name = ?, name_key = ?, max_age = ?, hide_unrated = ?, updated_at = ?
 WHERE user_id = ? AND is_primary = 1;
 
 -- name: ListUserLibraryIDs :many
@@ -73,16 +73,16 @@ INSERT INTO user_libraries (user_id, library_id)
 VALUES (?, ?);
 
 -- name: InsertProfile :exec
-INSERT INTO profiles (id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated,
+INSERT INTO profiles (id, user_id, name, name_key, is_primary, avatar_color, pin_hash, max_age, hide_unrated,
                       all_libraries, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- Profile writes are scoped to the owning account, so a profile id of another account
 -- changes nothing (no rows) instead of someone else's profile.
 
 -- name: UpdateProfile :execrows
 UPDATE profiles
-SET name = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
+SET name = ?, name_key = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
 WHERE id = ? AND user_id = ?;
 
 -- name: SetProfilePINHash :execrows
@@ -96,13 +96,13 @@ WHERE id = ? AND user_id = ?;
 
 -- name: GetProfile :one
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE id = ?;
 
 -- name: GetPrimaryProfile :one
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE user_id = ? AND is_primary = 1;
 
@@ -110,7 +110,7 @@ WHERE user_id = ? AND is_primary = 1;
 -- order.
 -- name: ListProfilesOfUser :many
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE user_id = ?
 ORDER BY is_primary DESC, created_at, id;
@@ -131,3 +131,22 @@ WHERE profile_id = ?;
 -- name: InsertProfileLibrary :exec
 INSERT INTO profile_libraries (profile_id, library_id)
 VALUES (?, ?);
+
+-- Profile name keys (migration 00015, task M7-41). Rows older than the migration have no key.
+
+-- ListProfilesWithoutNameKey returns the profiles that still lack a key, oldest first, so of
+-- two colliding rows the older one is offered the key first.
+-- name: ListProfilesWithoutNameKey :many
+SELECT id, name FROM profiles
+WHERE name_key IS NULL
+ORDER BY created_at, id;
+
+-- SetProfileNameKeyIfFree gives a profile without a key its key unless another profile of the
+-- same account already holds it (no rows then).
+-- name: SetProfileNameKeyIfFree :execrows
+UPDATE profiles
+SET name_key = sqlc.arg(name_key)
+WHERE profiles.id = sqlc.arg(id)
+  AND profiles.name_key IS NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles AS sibling
+                  WHERE sibling.user_id = profiles.user_id AND sibling.name_key = sqlc.arg(name_key));

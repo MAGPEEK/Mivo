@@ -277,6 +277,7 @@ type Profile struct {
 	AllLibraries int64
 	CreatedAt    int64
 	UpdatedAt    int64
+	NameKey      sql.NullString
 }
 
 type ProfileLibrary struct {

@@ -9,26 +9,26 @@ account names), also when two requests race: the database refuses the second one
 client gets `409 name_taken` (ADR 0032 §1) instead of a duplicate tile in the profile picker.
 
 ## Acceptance criteria
-- [ ] Migration `00015`: `profiles` gains `name_key` (the `account.NameKey` of the name) and a
+- [x] Migration `00015`: `profiles` gains `name_key` (the `account.NameKey` of the name) and a
       unique index on `(user_id, name_key)`; the down migration removes both. Rows written
       before the migration keep a NULL key, so the migration cannot fail on existing data.
-- [ ] The store writes `name_key` on every profile insert and rename, including the primary
+- [x] The store writes `name_key` on every profile insert and rename, including the primary
       profile created with an account and renamed with it.
-- [ ] A violated index on profile insert and on profile update returns the existing
+- [x] A violated index on profile insert and on profile update returns the existing
       name-taken sentinel (wraps `domain.ErrConflict`); no other constraint error is mapped
       to it (test with a second unique violation, e.g. the one-primary index).
-- [ ] `BackfillProfileNameKeys(ctx)` on the account store fills NULL keys; when two legacy
+- [x] `BackfillProfileNameKeys(ctx)` on the account store fills NULL keys; when two legacy
       rows of one account collide, the older keeps the key, the newer stays NULL and is
       reported in the returned count. Idempotent. (M7-25 calls it at start-up.)
-- [ ] Tests: integration tests against real SQLite
+- [x] Tests: integration tests against real SQLite
       (`go test ./internal/adapters/sqlite/ -run 'ProfileName|Migration'`): same name twice,
       differing only in case (`Mia`/`mia`, `Ärzte`/`ärzte`), same name in two accounts
       (allowed), rename onto a sibling's name, rename to the own name with other case
       (allowed), two concurrent inserts (exactly one succeeds), backfill with and without a
       legacy collision, migration up/down on a database with profiles.
-- [ ] A handler test in `restapi` shows `409 name_taken` for create and for update when the
+- [x] A handler test in `restapi` shows `409 name_taken` for create and for update when the
       service returns the sentinel (add only if M7-22 did not cover both).
-- [ ] Gates: lint + layer rules + coverage thresholds pass; `sqlc generate` diff is clean.
+- [x] Gates: lint + layer rules + coverage thresholds pass; `sqlc generate` diff is clean.
 
 ## Notes
 - `profiles` has no `name_key` column in migration `00011`, and SQLite cannot case-fold

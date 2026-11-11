@@ -232,7 +232,11 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   local records (M6-14); `00013` watch state; `00014` age ratings. They merge in numeric order
   (goose refuses missing (out-of-order) versions on existing databases).
 - Amendment (2026-11-11): `00015` unique profile names per account (M7-41, enforces the
-  `409 name_taken` of §1 in the database).
+  `409 name_taken` of §1 in the database). `profiles.name_key` is nullable: rows older than the
+  migration get their key from `AccountStore.BackfillProfileNameKeys` at start-up (M7-25). Of
+  two legacy profiles of one account with the same name the older keeps the key; the newer is
+  neither renamed nor deleted, stays without a key and is counted for the log until it is
+  renamed. The primary profile carries the account name, so no managed profile may use it.
 
 ## Consequences
 

@@ -101,7 +101,7 @@ func (q *Queries) DeleteUserLibraries(ctx context.Context, userID string) error 
 
 const getPrimaryProfile = `-- name: GetPrimaryProfile :one
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE user_id = ? AND is_primary = 1
 `
@@ -121,13 +121,14 @@ func (q *Queries) GetPrimaryProfile(ctx context.Context, userID string) (Profile
 		&i.AllLibraries,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NameKey,
 	)
 	return i, err
 }
 
 const getProfile = `-- name: GetProfile :one
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE id = ?
 `
@@ -147,6 +148,7 @@ func (q *Queries) GetProfile(ctx context.Context, id string) (Profile, error) {
 		&i.AllLibraries,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NameKey,
 	)
 	return i, err
 }
@@ -198,15 +200,16 @@ func (q *Queries) GetUserByNameKey(ctx context.Context, nameKey string) (User, e
 }
 
 const insertProfile = `-- name: InsertProfile :exec
-INSERT INTO profiles (id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated,
+INSERT INTO profiles (id, user_id, name, name_key, is_primary, avatar_color, pin_hash, max_age, hide_unrated,
                       all_libraries, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertProfileParams struct {
 	ID           string
 	UserID       string
 	Name         string
+	NameKey      sql.NullString
 	IsPrimary    int64
 	AvatarColor  string
 	PinHash      sql.NullString
@@ -222,6 +225,7 @@ func (q *Queries) InsertProfile(ctx context.Context, arg InsertProfileParams) er
 		arg.ID,
 		arg.UserID,
 		arg.Name,
+		arg.NameKey,
 		arg.IsPrimary,
 		arg.AvatarColor,
 		arg.PinHash,
@@ -355,7 +359,7 @@ func (q *Queries) ListProfileLibraryIDs(ctx context.Context, profileID string) (
 
 const listProfilesOfUser = `-- name: ListProfilesOfUser :many
 SELECT id, user_id, name, is_primary, avatar_color, pin_hash, max_age, hide_unrated, all_libraries,
-       created_at, updated_at
+       created_at, updated_at, name_key
 FROM profiles
 WHERE user_id = ?
 ORDER BY is_primary DESC, created_at, id
@@ -384,7 +388,46 @@ func (q *Queries) ListProfilesOfUser(ctx context.Context, userID string) ([]Prof
 			&i.AllLibraries,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NameKey,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProfilesWithoutNameKey = `-- name: ListProfilesWithoutNameKey :many
+
+SELECT id, name FROM profiles
+WHERE name_key IS NULL
+ORDER BY created_at, id
+`
+
+type ListProfilesWithoutNameKeyRow struct {
+	ID   string
+	Name string
+}
+
+// Profile name keys (migration 00015, task M7-41). Rows older than the migration have no key.
+// ListProfilesWithoutNameKey returns the profiles that still lack a key, oldest first, so of
+// two colliding rows the older one is offered the key first.
+func (q *Queries) ListProfilesWithoutNameKey(ctx context.Context) ([]ListProfilesWithoutNameKeyRow, error) {
+	rows, err := q.db.QueryContext(ctx, listProfilesWithoutNameKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProfilesWithoutNameKeyRow{}
+	for rows.Next() {
+		var i ListProfilesWithoutNameKeyRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -488,6 +531,30 @@ func (q *Queries) ListUserSummaries(ctx context.Context) ([]ListUserSummariesRow
 	return items, nil
 }
 
+const setProfileNameKeyIfFree = `-- name: SetProfileNameKeyIfFree :execrows
+UPDATE profiles
+SET name_key = ?1
+WHERE profiles.id = ?2
+  AND profiles.name_key IS NULL
+  AND NOT EXISTS (SELECT 1 FROM profiles AS sibling
+                  WHERE sibling.user_id = profiles.user_id AND sibling.name_key = ?1)
+`
+
+type SetProfileNameKeyIfFreeParams struct {
+	NameKey sql.NullString
+	ID      string
+}
+
+// SetProfileNameKeyIfFree gives a profile without a key its key unless another profile of the
+// same account already holds it (no rows then).
+func (q *Queries) SetProfileNameKeyIfFree(ctx context.Context, arg SetProfileNameKeyIfFreeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setProfileNameKeyIfFree, arg.NameKey, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setProfilePINHash = `-- name: SetProfilePINHash :execrows
 UPDATE profiles
 SET pin_hash = ?, updated_at = ?
@@ -536,12 +603,13 @@ func (q *Queries) SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHa
 
 const updatePrimaryProfile = `-- name: UpdatePrimaryProfile :exec
 UPDATE profiles
-SET name = ?, max_age = ?, hide_unrated = ?, updated_at = ?
+SET name = ?, name_key = ?, max_age = ?, hide_unrated = ?, updated_at = ?
 WHERE user_id = ? AND is_primary = 1
 `
 
 type UpdatePrimaryProfileParams struct {
 	Name        string
+	NameKey     sql.NullString
 	MaxAge      sql.NullInt64
 	HideUnrated int64
 	UpdatedAt   int64
@@ -552,6 +620,7 @@ type UpdatePrimaryProfileParams struct {
 func (q *Queries) UpdatePrimaryProfile(ctx context.Context, arg UpdatePrimaryProfileParams) error {
 	_, err := q.db.ExecContext(ctx, updatePrimaryProfile,
 		arg.Name,
+		arg.NameKey,
 		arg.MaxAge,
 		arg.HideUnrated,
 		arg.UpdatedAt,
@@ -563,12 +632,13 @@ func (q *Queries) UpdatePrimaryProfile(ctx context.Context, arg UpdatePrimaryPro
 const updateProfile = `-- name: UpdateProfile :execrows
 
 UPDATE profiles
-SET name = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
+SET name = ?, name_key = ?, avatar_color = ?, max_age = ?, hide_unrated = ?, all_libraries = ?, updated_at = ?
 WHERE id = ? AND user_id = ?
 `
 
 type UpdateProfileParams struct {
 	Name         string
+	NameKey      sql.NullString
 	AvatarColor  string
 	MaxAge       sql.NullInt64
 	HideUnrated  int64
@@ -583,6 +653,7 @@ type UpdateProfileParams struct {
 func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, updateProfile,
 		arg.Name,
+		arg.NameKey,
 		arg.AvatarColor,
 		arg.MaxAge,
 		arg.HideUnrated,
