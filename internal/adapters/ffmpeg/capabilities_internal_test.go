@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -63,7 +64,7 @@ func TestCapabilityOutputsParseFixtures(t *testing.T) {
 				t.Fatalf("parse: %v", err)
 			}
 
-			if got != test.want {
+			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("capabilities = %+v, want %+v", got, test.want)
 			}
 		})
@@ -317,7 +318,7 @@ func TestParseCapabilitiesMatchesTheNameColumn(t *testing.T) {
 				t.Fatalf("parse: %v", err)
 			}
 
-			if got != test.want {
+			if !reflect.DeepEqual(got, test.want) {
 				t.Errorf("capabilities = %+v, want %+v", got, test.want)
 			}
 		})
@@ -383,7 +384,7 @@ func TestCapabilityOutputsParseRejectsUnknownOutput(t *testing.T) {
 				t.Fatalf("error = %v, want %v", err, test.wantErr)
 			}
 
-			if got != (playback.ServerCapabilities{}) {
+			if !reflect.DeepEqual(got, playback.ServerCapabilities{}) {
 				t.Errorf("capabilities = %+v, want zero", got)
 			}
 		})
@@ -439,7 +440,7 @@ func TestDetectCapabilitiesRunsTheThreeQueries(t *testing.T) {
 		FFmpegVersion: "9.0.2", HLSMuxing: true,
 		H264Encoder: playback.EncoderLibx264, AACEncoder: playback.EncoderAAC,
 	}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("capabilities = %+v, want %+v", got, want)
 	}
 
@@ -503,7 +504,7 @@ func TestDetectCapabilitiesFailsClosed(t *testing.T) {
 				t.Fatalf("error = %v, want ErrUnavailable wrapping %v", err, test.wantErr)
 			}
 
-			if got != (playback.ServerCapabilities{}) {
+			if !reflect.DeepEqual(got, playback.ServerCapabilities{}) {
 				t.Errorf("capabilities = %+v, want zero", got)
 			}
 
@@ -530,7 +531,7 @@ func TestDetectCapabilitiesReportsCallerCancellationAsIs(t *testing.T) {
 		t.Errorf("error = %v, must not claim FFmpeg is unavailable", err)
 	}
 
-	if got != (playback.ServerCapabilities{}) {
+	if !reflect.DeepEqual(got, playback.ServerCapabilities{}) {
 		t.Errorf("capabilities = %+v, want zero", got)
 	}
 }
@@ -567,7 +568,7 @@ func TestDetectCapabilitiesWithMissingExecutable(t *testing.T) {
 			t.Errorf("DetectCapabilities(%q) error = %v, want ErrUnavailable", path, err)
 		}
 
-		if got != (playback.ServerCapabilities{}) {
+		if !reflect.DeepEqual(got, playback.ServerCapabilities{}) {
 			t.Errorf("DetectCapabilities(%q) = %+v, want zero", path, got)
 		}
 

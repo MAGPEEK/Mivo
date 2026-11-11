@@ -19,14 +19,21 @@ type codecSet struct {
 
 // directPlayReasons returns why the client cannot play the original file; empty means
 // direct play works. Codecs are only checked when the profile lists the container, because
-// without an entry there is nothing to check them against.
-func directPlayReasons(chosen selection, container media.Container, profile ClientProfile) []Reason {
+// without an entry there is nothing to check them against. A bit-rate cap below the source
+// rules the original out as well.
+func directPlayReasons(input Input, chosen selection) []Reason {
 	var reasons []Reason
 
-	if codecs, found := profile.directPlayCodecs(container); found {
-		reasons = append(reasons, chosen.codecReasons(codecs, profile.CodecLimits)...)
+	profile := input.Profile
+
+	if codecs, found := profile.directPlayCodecs(input.Description.Container); found {
+		reasons = append(reasons, chosen.codecReasons(codecs, profile)...)
 	} else {
 		reasons = append(reasons, Reason{Code: ReasonContainerNotSupported, Scope: ScopeContainer})
+	}
+
+	if chosen.hasVideo {
+		reasons = append(reasons, bitrateCapReasons(input, chosen.video)...)
 	}
 
 	if !chosen.audioIsFirst {
@@ -65,16 +72,17 @@ func (profile ClientProfile) hlsCodecs() codecSet {
 	return codecSet{video: profile.HLS.VideoCodecs, audio: profile.HLS.AudioCodecs}
 }
 
-// codecReasons checks the selected streams that exist against the codecs and limits.
-func (chosen selection) codecReasons(codecs codecSet, limits []CodecLimit) []Reason {
+// codecReasons checks the selected streams that exist against the codecs and the profile's
+// limits.
+func (chosen selection) codecReasons(codecs codecSet, profile ClientProfile) []Reason {
 	var reasons []Reason
 
 	if chosen.hasVideo {
-		reasons = append(reasons, videoReasons(chosen.video, codecs.video, limits)...)
+		reasons = append(reasons, videoReasons(chosen.video, codecs.video, profile.CodecLimits)...)
 	}
 
 	if chosen.hasAudio {
-		reasons = append(reasons, audioReasons(chosen.audio, codecs.audio)...)
+		reasons = append(reasons, audioReasons(chosen.audio, codecs.audio, profile.audioLimits())...)
 	}
 
 	return reasons
@@ -89,21 +97,31 @@ func videoReasons(stream media.Stream, codecs []string, limits []CodecLimit) []R
 	return limitReasons(stream, limits)
 }
 
-// audioReasons returns why the client cannot decode the audio stream. Codec limits are not
-// applied to audio (media.Stream carries no audio sample depth); the channel count is capped
-// for every client, because no profile can express it and browsers fail on more than 5.1
-// although their probes accept the codec (MaxAudioChannels). An unknown count passes, like
-// an unknown profile: it is a probe quirk, not a layout.
-func audioReasons(stream media.Stream, codecs []string) []Reason {
-	if !slices.Contains(codecs, stream.Codec) {
-		return []Reason{{Code: ReasonAudioCodecNotSupported, Scope: ScopeAudio}}
+// audioReasons returns why the audio stream is not passed through. Codec limits are video
+// only; audio has the profile's own limits (ADR 0030 Notes (M4-02b)). DSD is never passed
+// through, whatever the client lists. The channel count is checked only for a codec the client
+// plays, and an unknown count passes, like an unknown profile: it is a probe quirk, not a
+// layout. Audio above the sample-rate or bit-depth limit is named in addition to an unsupported
+// codec, because it explains the resampling the client hears.
+func audioReasons(stream media.Stream, codecs []string, limits audioLimits) []Reason {
+	if isDSD(stream.Codec) {
+		return []Reason{{Code: ReasonDSDToPCM, Scope: ScopeAudio}}
 	}
 
-	if stream.Channels > MaxAudioChannels {
-		return []Reason{{Code: ReasonAudioChannelsNotSupported, Scope: ScopeAudio}}
+	var reasons []Reason
+
+	switch {
+	case !slices.Contains(codecs, stream.Codec):
+		reasons = append(reasons, Reason{Code: ReasonAudioCodecNotSupported, Scope: ScopeAudio})
+	case stream.Channels > limits.channels:
+		reasons = append(reasons, Reason{Code: ReasonAudioChannelsNotSupported, Scope: ScopeAudio})
 	}
 
-	return nil
+	if limits.exceededBy(stream) {
+		reasons = append(reasons, Reason{Code: ReasonHiResDownsampled, Scope: ScopeAudio})
+	}
+
+	return reasons
 }
 
 // limitReasons applies every limit entry of the stream's codec. An unknown profile passes,

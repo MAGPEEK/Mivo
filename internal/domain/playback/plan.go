@@ -60,7 +60,8 @@ const (
 	ReasonVideoProfileNotSupported  ReasonCode = "video_profile_not_supported"
 	ReasonVideoBitDepthNotSupported ReasonCode = "video_bit_depth_not_supported"
 	ReasonAudioCodecNotSupported    ReasonCode = "audio_codec_not_supported"
-	// ReasonAudioChannelsNotSupported: the audio has more channels than MaxAudioChannels.
+	// ReasonAudioChannelsNotSupported: the audio has more channels than the client plays
+	// (ClientProfile.MaxAudioChannels, else DefaultMaxAudioChannels).
 	ReasonAudioChannelsNotSupported ReasonCode = "audio_channels_not_supported"
 	// ReasonAudioTrackNotFirst: the selected audio stream is not the first one, which is the
 	// one browsers play from the original file whatever the default flag says.
@@ -118,10 +119,22 @@ type StreamDecision struct {
 	// TargetHeight: after a downscale, or when odd source dimensions are rounded down to even
 	// ones. A 0 dimension is derived by FFmpeg with the aspect ratio kept.
 	ScaleRequired bool
+	// MaxBitrate is the request's cap for the whole stream in bits per second on a transcoded
+	// video (ADR 0030 section 6); 0 means constant quality without a cap. The adapter
+	// subtracts the audio.
+	MaxBitrate int64
+	// TargetSampleRate is the sample rate in Hz a transcoded audio stream is resampled to; 0
+	// keeps the rate of the source. TargetBitDepth is the sample depth of a lossless target;
+	// 0 for a lossy target and for copies.
+	TargetSampleRate int
+	TargetBitDepth   int
 	// TargetChannels is the channel count of an audio stream the client receives.
 	TargetChannels int
 	// Encoder is the FFmpeg encoder of a transcoded stream; empty when copied.
 	Encoder string
+	// Hardware reports that Encoder is a hardware video encoder (ChooseVideoEncoder); its API
+	// and device are found by name in ServerCapabilities.HardwareEncoders.
+	Hardware bool
 }
 
 // Plan is the result of Decide.

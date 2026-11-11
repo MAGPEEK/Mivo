@@ -172,19 +172,62 @@ How the decision engine (`internal/domain/playback`) carries section 3:
 
 - **`Plan.Subtitle`** reports the delivery (`off`, `sidecar`, `burn_in`) with the track id and
   its format; the reason `subtitle_burn_in` itself carries no format, like every reason.
-- **`Input.Subtitles`** holds `Formats` (wire: `ClientProfile.subtitleFormats`) and
-  `AllowDegrade` (wire: `PlaybackRequest.allowDegradeSubtitles`). Empty formats mean the client
-  renders nothing, as the contract says; the default `["webvtt"]` of the first task wording is
-  not applied. A text track is a sidecar exactly when `webvtt` is listed.
+- **One source per fact** (amended with M4-04c/d): the formats the client renders are
+  `ClientProfile.SubtitleFormats` (wire: `ClientProfile.subtitleFormats`, at most 8 lower-case
+  identifiers, validated with the profile), and `Request.AllowDegradeSubtitles` is the wire field
+  `PlaybackRequest.allowDegradeSubtitles`. The first version kept both on `Input.Subtitles`,
+  which duplicated the profile field. Empty formats mean the client renders nothing, as the
+  contract says; the default `["webvtt"]` of the first task wording is not applied. A text track
+  is a sidecar exactly when `webvtt` is listed.
 - **The default policy picks only from tracks the client renders.** An image track or, for a
   client without `webvtt`, any track is skipped, and the best renderable candidate is taken; so
   a forced PGS track next to a forced SubRip track shows the SubRip one.
 - **Burn-in re-encodes the video even when the client could play it as it is**; the audio is
   decided on its own and may be copied. The reason follows the container reasons.
 - **A burn-in that cannot happen** (no video, client without HLS or without the H.264 target,
-  server without HLS muxer or H.264 encoder): `AllowDegrade` gives `off` with the warning
+  server without HLS muxer or H.264 encoder): `AllowDegradeSubtitles` gives `off` with the warning
   `subtitle_burn_in_unavailable` and the plan the file would get without a subtitle; otherwise
   the decision fails like a transcode, client limits (`no_compatible_format`) before server
   limits (`transcode_unavailable`). The session limit is not known to the domain (M4-13a).
+- **A burn-in is a transcode like every other** (amended with M4-04c/d): it shares
+  `transcodeVideoDecision` with the codec transcode, so it gets the height of the ladder step,
+  the bit-rate cap and the encoder of the hardware setting. A cap above the source does not
+  re-encode a video, but a video re-encoded for a burn-in carries it.
 - **`subtitles_not_supported` is gone** from the engine. There is no `allowTranscode` profile
   field in the contract, so that part of the task wording has no counterpart.
+
+## Notes (M4-04c)
+
+How the decision engine carries sections 4 and 6:
+
+- **Target height**: the lower of the operator's limit and the height of the ladder step of
+  `maxBitRate`. A source below the step height keeps its height (never scaled up), so a
+  1920x800 film is not shrunk for a 1080p step.
+- **Unknown video bit rate** falls back to the bit rate of the container; when that is unknown
+  too, a cap forces a transcode (`bitrate_cap`), because only an encoder can guarantee it.
+- **FLAC only where AAC would lose something the client asked to keep**: DSD, and lossless
+  hi-res audio above the client's sample-rate or bit-depth limit, for a client that plays FLAC
+  inside HLS on a server with the encoder. Every other lossless source keeps the AAC target.
+- **AAC is capped at 48 kHz**; that resampling alone carries no `hires_downsampled`, which is
+  reserved for a client limit that was exceeded.
+- **A bit-depth limit below 16** rules FLAC out (FFmpeg writes 16 or 24 bit), so the target is
+  AAC.
+
+## Notes (M4-04d)
+
+How the decision engine carries section 5:
+
+- **`auto` order**: NVENC, QSV, VAAPI, AMF; the first available H.264 encoder wins, else
+  software without a reason (a server without a GPU is the normal case).
+- **A named API never falls back to another API**: without an available encoder of that API
+  the video is encoded in software with the reason `hwaccel_unavailable`.
+- **Skipped encoders**: degraded ones (a session failed with them), ones whose test encode
+  failed, and HEVC encoders (the transcode target is H.264).
+- **Without libx264** the software encoder name is empty, and a transcode that needs it fails
+  with `transcode_unavailable`; a server with an available hardware encoder still transcodes.
+- **Wiring** (reconciliation of M4-04b/c/d): `Policy.HardwareAcceleration` is the setting (zero
+  value `auto`, unknown values are invalid), `Decide` calls `ChooseVideoEncoder` for every
+  transcoded video, burn-in included, and `StreamDecision.Hardware` marks a hardware encoder.
+  API and device are looked up by encoder name in `ServerCapabilities.HardwareEncoders`.
+  `adapters/ffmpeg` reports no hardware encoders and builds arguments for libx264 only until
+  the detection and argument tasks land, so plans stay in software until then.

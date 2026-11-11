@@ -64,7 +64,7 @@ func sourceReasons(input Input, chosen selection) []Reason {
 		return []Reason{{Code: ReasonDiscSource, Scope: ScopeContainer}}
 	}
 
-	return directPlayReasons(chosen, input.Description.Container, input.Profile)
+	return directPlayReasons(input, chosen)
 }
 
 // directPlayPlan serves the original file. A sidecar subtitle does not change that: the

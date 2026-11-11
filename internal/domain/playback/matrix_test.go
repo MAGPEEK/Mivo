@@ -291,13 +291,13 @@ func TestDecideFormatMatrix(t *testing.T) {
 					name := row.name + "/" + profileName + "/" + capabilitiesName + "/hls " + string(delivery)
 					client := profile
 					client.HLS.Delivery = delivery
+					client.SubtitleFormats = webVTT().formats
 
 					t.Run(name, func(t *testing.T) {
 						t.Parallel()
 
 						plan, err := playback.Decide(playback.Input{
 							Description:  row.description,
-							Subtitles:    webVTT(),
 							Profile:      client,
 							Capabilities: capability,
 							Request:      row.request,

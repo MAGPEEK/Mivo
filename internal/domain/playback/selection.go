@@ -79,7 +79,7 @@ func selectAudio(description media.Description, request Request, preference Trac
 func selectSubtitle(tracks []SubtitleTrack, audioLanguage string, input Input) (SubtitleTrack, bool, error) {
 	requested := input.Request.SubtitleTrackID
 	if requested == nil {
-		id, found := SelectSubtitleTrack(input.Subtitles.renderable(tracks), audioLanguage, input.Profile.Tracks)
+		id, found := SelectSubtitleTrack(input.Profile.renderableSubtitles(tracks), audioLanguage, input.Profile.Tracks)
 		if !found {
 			return SubtitleTrack{}, false, nil
 		}

@@ -17,13 +17,10 @@ type Input struct {
 	// ExternalSubtitles are the subtitle files found next to the media file; together with the
 	// embedded subtitle streams they are the tracks a request may name.
 	ExternalSubtitles []SubtitleTrack
-	// Subtitles says which subtitle formats the client renders and whether the request accepts
-	// playback without a subtitle that cannot be burned in.
-	Subtitles    SubtitleOptions
-	Profile      ClientProfile
-	Capabilities ServerCapabilities
-	Request      Request
-	Policy       Policy
+	Profile           ClientProfile
+	Capabilities      ServerCapabilities
+	Request           Request
+	Policy            Policy
 }
 
 // Request carries the options of one playback request.
@@ -34,9 +31,16 @@ type Request struct {
 	// SubtitleTrackID is the id of the subtitle the user picked ("s:3", "x:<hash>"); nil applies
 	// the profile's track preference and an empty id switches subtitles off.
 	SubtitleTrackID *string
+	// AllowDegradeSubtitles starts playback without the requested subtitle when it needs a
+	// burn-in that is not possible (API allowDegradeSubtitles); false fails instead.
+	AllowDegradeSubtitles bool
 	// StartPosition is where playback starts. It does not change the decision, but a
 	// position outside the file makes the request invalid.
 	StartPosition time.Duration
+	// MaxBitrate caps the bit rate of the whole stream in bits per second (API maxBitRate,
+	// ADR 0030 section 6); OriginalQuality (0) plays the source as it is. A cap below the bit
+	// rate of the source forces a video transcode (ReasonBitrateCap).
+	MaxBitrate int64
 }
 
 // Policy holds the operator's limits for transcoding.
@@ -44,6 +48,9 @@ type Policy struct {
 	// MaxTranscodeHeight caps the height of transcoded video; 0 means no cap. The
 	// configured default (OD-5: 1080) is applied by the composition root, not here.
 	MaxTranscodeHeight int
+	// HardwareAcceleration is the server setting transcode.hwaccel: which hardware encoder a
+	// video transcode may use (ADR 0030 §5). The zero value is HardwareAccelerationAuto.
+	HardwareAcceleration HardwareAcceleration
 }
 
 // validate rejects input that breaks a rule; errors wrap domain.ErrInvalid.
@@ -64,10 +71,6 @@ func (input Input) validate() error {
 		return err
 	}
 
-	if err := input.Subtitles.validate(); err != nil {
-		return err
-	}
-
 	if err := input.Request.validate(input.Description.Duration); err != nil {
 		return err
 	}
@@ -77,8 +80,12 @@ func (input Input) validate() error {
 }
 
 // validate checks the start position against the probed duration; an unknown duration (0)
-// cannot bound it.
+// cannot bound it. A bit-rate cap is never negative.
 func (request Request) validate(duration time.Duration) error {
+	if request.MaxBitrate < OriginalQuality {
+		return fmt.Errorf("negative bit-rate cap %d: %w", request.MaxBitrate, domain.ErrInvalid)
+	}
+
 	if request.StartPosition < 0 {
 		return fmt.Errorf("negative start position %s: %w", request.StartPosition, domain.ErrInvalid)
 	}
@@ -92,13 +99,18 @@ func (request Request) validate(duration time.Duration) error {
 }
 
 // Validate rejects a negative or odd MaxTranscodeHeight: the cap becomes the output height
-// of H.264 4:2:0, which must be even. 0 (no cap) is valid. Callers validate the policy once
+// of H.264 4:2:0, which must be even. 0 (no cap) is valid. A HardwareAcceleration value the
+// domain does not know is rejected as well. Callers validate the policy once
 // when they are constructed, so a bad configuration fails at startup instead of at the
 // first transcode. The error wraps domain.ErrInvalid.
 func (policy Policy) Validate() error {
 	if policy.MaxTranscodeHeight < noHeightCap || policy.MaxTranscodeHeight%dimensionAlignment != 0 {
 		return fmt.Errorf("max transcode height %d must be 0 or a positive even number: %w",
 			policy.MaxTranscodeHeight, domain.ErrInvalid)
+	}
+
+	if !policy.HardwareAcceleration.valid() {
+		return fmt.Errorf("unknown hardware acceleration %q: %w", policy.HardwareAcceleration, domain.ErrInvalid)
 	}
 
 	return nil

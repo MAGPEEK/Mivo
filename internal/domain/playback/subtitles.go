@@ -4,16 +4,12 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
 // SubtitleFormatWebVTT is the one format of the sidecar route: the server converts every text
 // subtitle to WebVTT, so a client that lists it renders every text track (ADR 0030 §3).
 const SubtitleFormatWebVTT = "webvtt"
-
-// maxSubtitleFormats bounds SubtitleOptions.Formats like the API (ClientProfile.subtitleFormats).
-const maxSubtitleFormats = 8
 
 // SubtitleDelivery is how a plan shows its subtitle (API SubtitleDeliveryMode).
 type SubtitleDelivery string
@@ -38,45 +34,20 @@ type SubtitleDecision struct {
 	Format  string
 }
 
-// SubtitleOptions carries what the client and the request say about subtitle delivery. The
-// zero value is the milestone-2 client: it renders nothing, so it never gets a subtitle
-// without naming one.
-type SubtitleOptions struct {
-	// Formats are the subtitle formats the client renders itself (API
-	// ClientProfile.subtitleFormats), lower-case identifiers; empty renders none.
-	Formats []string
-	// AllowDegrade starts playback without the requested subtitle when it needs a burn-in
-	// that is not possible (API PlaybackRequest.allowDegradeSubtitles); false fails instead.
-	AllowDegrade bool
-}
-
-func (options SubtitleOptions) validate() error {
-	if err := validateCount("subtitle formats", len(options.Formats), maxSubtitleFormats); err != nil {
-		return err
-	}
-
-	for _, format := range options.Formats {
-		if !isIdentifier(format) {
-			return fmt.Errorf("subtitle format %q is no lower-case identifier: %w", format, domain.ErrInvalid)
-		}
-	}
-
-	return nil
-}
-
-// renders reports a track the client shows from the sidecar route. Image tracks never
+// rendersSubtitle reports a track the client shows from the sidecar route. Image tracks never
 // qualify: they have no text to convert.
-func (options SubtitleOptions) renders(track SubtitleTrack) bool {
-	return track.TextBased && slices.Contains(options.Formats, SubtitleFormatWebVTT)
+func (profile ClientProfile) rendersSubtitle(track SubtitleTrack) bool {
+	return track.TextBased && slices.Contains(profile.SubtitleFormats, SubtitleFormatWebVTT)
 }
 
-// renderable keeps the tracks the client renders itself. The default policy picks only from
-// these, so it never causes a burn-in and with it a transcode (ADR 0030 Notes (M4-02b)).
-func (options SubtitleOptions) renderable(tracks []SubtitleTrack) []SubtitleTrack {
+// renderableSubtitles keeps the tracks the client renders itself. The default policy picks
+// only from these, so it never causes a burn-in and with it a transcode (ADR 0030 Notes
+// (M4-02b)).
+func (profile ClientProfile) renderableSubtitles(tracks []SubtitleTrack) []SubtitleTrack {
 	var kept []SubtitleTrack
 
 	for _, track := range tracks {
-		if options.renders(track) {
+		if profile.rendersSubtitle(track) {
 			kept = append(kept, track)
 		}
 	}
@@ -106,7 +77,7 @@ func planSubtitle(input Input, chosen selection) (subtitlePlan, error) {
 
 	shown := SubtitleDecision{TrackID: chosen.subtitle.ID, Format: chosen.subtitle.Format}
 
-	if input.Subtitles.renders(chosen.subtitle) {
+	if input.Profile.rendersSubtitle(chosen.subtitle) {
 		shown.Mode = SubtitleSidecar
 
 		return subtitlePlan{decision: shown}, nil
@@ -114,7 +85,7 @@ func planSubtitle(input Input, chosen selection) (subtitlePlan, error) {
 
 	obstacle := burnInObstacle(input, chosen)
 
-	if obstacle != nil && input.Subtitles.AllowDegrade {
+	if obstacle != nil && input.Request.AllowDegradeSubtitles {
 		return subtitlePlan{
 			decision: SubtitleDecision{Mode: SubtitleOff},
 			warnings: []Warning{{Code: WarningSubtitleBurnInUnavailable, Scope: ScopeSubtitle}},
@@ -144,22 +115,12 @@ func burnInObstacle(input Input, chosen selection) error {
 			chosen.subtitle.ID, ErrNoCompatibleFormat)
 	case !input.Profile.playsTranscodedVideo():
 		return fmt.Errorf("subtitle %s needs burn-in, but %w", chosen.subtitle.ID, errNoVideoTarget())
-	case !input.Capabilities.HLSMuxing || input.Capabilities.H264Encoder == "":
+	case !input.Capabilities.HLSMuxing || chooseVideoEncoder(input).Name == "":
 		return fmt.Errorf("subtitle %s needs burn-in, but the server cannot encode video: %w",
 			chosen.subtitle.ID, ErrTranscodeUnavailable)
 	default:
 		return nil
 	}
-}
-
-// playsTranscodedVideo reports that the client plays the video transcode target inside HLS.
-func (profile ClientProfile) playsTranscodedVideo() bool {
-	return len(videoReasons(videoTarget(), profile.hlsCodecs().video, profile.CodecLimits)) == 0
-}
-
-func errNoVideoTarget() error {
-	return fmt.Errorf("the client plays no %s %s inside HLS: %w",
-		TranscodeVideoCodec, TranscodeVideoProfile, ErrNoCompatibleFormat)
 }
 
 // planBurnInVideo is planVideo for a video that gets a subtitle drawn in: a video the client
@@ -171,17 +132,5 @@ func planBurnInVideo(stream media.Stream, input Input) (StreamDecision, []Reason
 		return decision, reasons, err
 	}
 
-	if !input.Profile.playsTranscodedVideo() {
-		return StreamDecision{}, nil, fmt.Errorf("video %s: %w", stream.Codec, errNoVideoTarget())
-	}
-
-	size := targetSize(stream.Width, stream.Height, input.Policy.MaxTranscodeHeight)
-
-	return StreamDecision{
-		Kind: media.StreamKindVideo, SourceIndex: stream.Index, Action: ActionTranscode,
-		SourceCodec: stream.Codec, TargetCodec: TranscodeVideoCodec,
-		TargetWidth: size.width, TargetHeight: size.height,
-		Downscaled: size.downscaled, ScaleRequired: size.scaleRequired,
-		Encoder: input.Capabilities.H264Encoder,
-	}, reasons, nil
+	return transcodeVideoDecision(stream, input)
 }

@@ -13,8 +13,8 @@ func discReason() playback.Reason {
 }
 
 // TestDecideDiscSources: a disc never plays directly, whatever its streams (ADR 0029); its
-// reason is disc_source, the copy checks add why a stream is re-encoded, and bitmap subtitles
-// stay unsupported until milestone 4.
+// reason is disc_source, the copy checks add why a stream is re-encoded, and a bitmap subtitle
+// nobody asked for stays off, because it would need a burn-in.
 func TestDecideDiscSources(t *testing.T) {
 	t.Parallel()
 

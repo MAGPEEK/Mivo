@@ -13,12 +13,20 @@ import (
 
 const pgsCodec = "hdmv_pgs_subtitle"
 
-func webVTT() playback.SubtitleOptions {
-	return playback.SubtitleOptions{Formats: []string{playback.SubtitleFormatWebVTT}}
+// subtitleOptions is what a case says about subtitle delivery: the formats the client renders
+// (ClientProfile.SubtitleFormats) and whether the request accepts playback without the
+// subtitle (Request.AllowDegradeSubtitles). The zero value renders nothing and refuses.
+type subtitleOptions struct {
+	formats      []string
+	allowDegrade bool
 }
 
-func degradable(options playback.SubtitleOptions) playback.SubtitleOptions {
-	options.AllowDegrade = true
+func webVTT() subtitleOptions {
+	return subtitleOptions{formats: []string{playback.SubtitleFormatWebVTT}}
+}
+
+func degradable(options subtitleOptions) subtitleOptions {
+	options.allowDegrade = true
 
 	return options
 }
@@ -69,7 +77,7 @@ type subtitleCase struct {
 	external     []playback.SubtitleTrack
 	profile      *playback.ClientProfile
 	capabilities *playback.ServerCapabilities
-	options      playback.SubtitleOptions
+	options      subtitleOptions
 	request      playback.Request
 	want         outcome
 	subtitle     playback.SubtitleDecision
@@ -80,7 +88,6 @@ func (testCase subtitleCase) input() playback.Input {
 		Description:       testCase.description,
 		Layout:            testCase.layout,
 		ExternalSubtitles: testCase.external,
-		Subtitles:         testCase.options,
 		Profile:           playbacktest.ChromiumDesktop(),
 		Capabilities:      playbacktest.FullCapabilities(),
 		Request:           testCase.request,
@@ -94,6 +101,9 @@ func (testCase subtitleCase) input() playback.Input {
 	if testCase.capabilities != nil {
 		input.Capabilities = *testCase.capabilities
 	}
+
+	input.Profile.SubtitleFormats = testCase.options.formats
+	input.Request.AllowDegradeSubtitles = testCase.options.allowDegrade
 
 	return input
 }
@@ -234,7 +244,7 @@ func TestDecideSubtitleRequested(t *testing.T) {
 		{
 			name:        "a format list without webvtt renders no text track",
 			description: mp4With(subtitle(2, "subrip")),
-			options:     playback.SubtitleOptions{Formats: []string{"ttml"}}, request: trackRequest("s:2"),
+			options:     subtitleOptions{formats: []string{"ttml"}}, request: trackRequest("s:2"),
 			want:     transcode(transcoded, copied, burnInReason()),
 			subtitle: burnIn("s:2", "subrip"),
 		},
@@ -352,7 +362,7 @@ func TestDecideSubtitleBurnInUnavailable(t *testing.T) {
 		{
 			name:        "audio degrades when allowed",
 			description: audioOnly, external: externalText,
-			options: degradable(playback.SubtitleOptions{}), request: trackRequest("x:aa"),
+			options: degradable(subtitleOptions{}), request: trackRequest("x:aa"),
 			want: outcome{
 				mode: playback.ModeDirectPlay, audio: copied,
 				warnings: []playback.Warning{burnInUnavailableWarning()},
@@ -382,27 +392,35 @@ func withoutHLSAudio(profile playback.ClientProfile) *playback.ClientProfile {
 	return &profile
 }
 
-func TestDecideRejectsInvalidSubtitleFormats(t *testing.T) {
+// TestDecideSubtitleFormatBounds: the formats are validated with the profile, the one place
+// that holds them; exactly eight are still accepted.
+func TestDecideSubtitleFormatBounds(t *testing.T) {
 	t.Parallel()
 
-	tooMany := slices.Repeat([]string{playback.SubtitleFormatWebVTT}, 9)
+	const mostFormats = 8
 
-	for name, formats := range map[string][]string{
-		"more than eight formats": tooMany,
-		"upper-case format":       {"WebVTT"},
-		"empty format":            {""},
+	for name, testCase := range map[string]struct {
+		formats []string
+		want    error
+	}{
+		"exactly eight formats":   {formats: slices.Repeat([]string{playback.SubtitleFormatWebVTT}, mostFormats)},
+		"more than eight formats": {formats: slices.Repeat([]string{playback.SubtitleFormatWebVTT}, mostFormats+1), want: domain.ErrInvalid},
+		"upper-case format":       {formats: []string{"WebVTT"}, want: domain.ErrInvalid},
+		"empty format":            {formats: []string{""}, want: domain.ErrInvalid},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
+			profile := playbacktest.ChromiumDesktop()
+			profile.SubtitleFormats = testCase.formats
+
 			_, err := playback.Decide(playback.Input{
 				Description:  mp4With(),
-				Profile:      playbacktest.ChromiumDesktop(),
+				Profile:      profile,
 				Capabilities: playbacktest.FullCapabilities(),
-				Subtitles:    playback.SubtitleOptions{Formats: formats},
 			})
-			if !errors.Is(err, domain.ErrInvalid) {
-				t.Fatalf("Decide() error = %v, want %v", err, domain.ErrInvalid)
+			if !errors.Is(err, testCase.want) {
+				t.Fatalf("Decide() error = %v, want %v", err, testCase.want)
 			}
 		})
 	}

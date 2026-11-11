@@ -1,6 +1,7 @@
 package playbacktest_test
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -159,7 +160,7 @@ func TestServerCapabilities(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if test.capabilities != test.want {
+			if !reflect.DeepEqual(test.capabilities, test.want) {
 				t.Errorf("capabilities = %+v, want %+v", test.capabilities, test.want)
 			}
 		})

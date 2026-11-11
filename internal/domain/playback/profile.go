@@ -22,6 +22,21 @@ const (
 	maxIdentifierLength   = 32
 	maxLimitBitDepth      = 16
 	unlimitedBitDepth     = 0
+	maxSubtitleFormats    = 8
+)
+
+// Bounds of the audio limits (api/openapi.yaml ClientProfile). The ranges are wide on purpose:
+// they reject nonsense, not unusual hardware (32 channels, 768 kHz and 64-bit float exist).
+const (
+	// audioLimitOmitted is a limit the client left out; the server's default applies.
+	audioLimitOmitted     = 0
+	minProfileChannels    = 1
+	maxProfileChannels    = 32
+	minProfileSampleRate  = 8000
+	maxProfileSampleRate  = 768000
+	minProfileAudioDepth  = 8
+	maxProfileAudioDepth  = 64
+	unlimitedAudioSamples = 0
 )
 
 // identifierPunctuation may appear in an identifier, but not as its first character.
@@ -67,6 +82,48 @@ type ClientProfile struct {
 	// track with the default disposition, else the first one, and only a forced subtitle in the
 	// audio language is shown.
 	Tracks TrackPreference
+	// SubtitleFormats are the subtitle formats the client renders itself (API subtitleFormats,
+	// today only "webvtt"). Only the bounds are checked here.
+	SubtitleFormats []string
+	// MaxAudioChannels is the highest channel count the client plays; 0 means the client did
+	// not say and DefaultMaxAudioChannels applies. Six or more keeps 5.1 when audio is
+	// re-encoded, less gets a stereo downmix (ADR 0030 section 4).
+	MaxAudioChannels int
+	// MaxAudioSampleRate (Hz) and MaxAudioBitDepth (bits per sample) are the limits of the
+	// client as a whole, apart from CodecLimits, which describe video (ADR 0030 Notes
+	// (M4-02b)). Audio above them is resampled (ReasonHiResDownsampled); 0 means no limit.
+	MaxAudioSampleRate int
+	MaxAudioBitDepth   int
+}
+
+// audioLimits are the audio limits of a profile with the server's defaults filled in.
+type audioLimits struct {
+	// channels is at least 1.
+	channels int
+	// sampleRate and bitDepth are unlimitedAudioSamples when the client has no limit.
+	sampleRate int
+	bitDepth   int
+}
+
+func (profile ClientProfile) audioLimits() audioLimits {
+	limits := audioLimits{
+		channels: DefaultMaxAudioChannels, sampleRate: profile.MaxAudioSampleRate, bitDepth: profile.MaxAudioBitDepth,
+	}
+
+	if profile.MaxAudioChannels != audioLimitOmitted {
+		limits.channels = profile.MaxAudioChannels
+	}
+
+	return limits
+}
+
+// exceededBy reports audio above the sample-rate or bit-depth limit. An unknown value passes:
+// lossy codecs have no sample depth, and a missing rate is a probe quirk.
+func (limits audioLimits) exceededBy(stream media.Stream) bool {
+	aboveRate := limits.sampleRate != unlimitedAudioSamples && stream.SampleRate > limits.sampleRate
+	aboveDepth := limits.bitDepth != unlimitedAudioSamples && stream.BitDepth > limits.bitDepth
+
+	return aboveRate || aboveDepth
 }
 
 // DirectPlayProfile is a container the client plays as a progressive file with the codecs
@@ -97,9 +154,11 @@ type CodecLimit struct {
 
 // Validate checks the bounds of ADR 0023: the name and profile texts are valid UTF-8 within
 // their length, lists stay within their size, codec and container names are lower-case
-// identifiers, the HLS delivery is known, bit depths lie between 0 and 16 and the track
-// preference holds bounded language tags and a known subtitle mode. Errors wrap
-// domain.ErrInvalid.
+// identifiers, the HLS delivery is known, bit depths lie between 0 and 16, the track
+// preference holds bounded language tags and a known subtitle mode, at most eight subtitle
+// formats are listed and the audio limits are 0 (omitted) or within 1..32 channels,
+// 8000..768000 Hz and 8..64 bits. Errors wrap domain.ErrInvalid, which adapters answer as
+// 400 "invalid".
 func (profile ClientProfile) Validate() error {
 	if err := validateText("name", profile.Name, maxProfileNameLength); err != nil {
 		return fmt.Errorf("%s: %w", profileValidationPrefix, err)
@@ -131,6 +190,52 @@ func (profile ClientProfile) Validate() error {
 
 	if err := profile.Tracks.Validate(); err != nil {
 		return fmt.Errorf("%s: tracks: %w", profileValidationPrefix, err)
+	}
+
+	if err := profile.validateSubtitleFormats(); err != nil {
+		return fmt.Errorf("%s: %w", profileValidationPrefix, err)
+	}
+
+	if err := profile.validateAudioLimits(); err != nil {
+		return fmt.Errorf("%s: %w", profileValidationPrefix, err)
+	}
+
+	return nil
+}
+
+func (profile ClientProfile) validateSubtitleFormats() error {
+	if err := validateCount("subtitle formats", len(profile.SubtitleFormats), maxSubtitleFormats); err != nil {
+		return err
+	}
+
+	for _, format := range profile.SubtitleFormats {
+		if !isIdentifier(format) {
+			return fmt.Errorf("subtitle format %q is no lower-case identifier: %w", format, domain.ErrInvalid)
+		}
+	}
+
+	return nil
+}
+
+// validateAudioLimits accepts 0 for every limit, because the API fields are optional.
+func (profile ClientProfile) validateAudioLimits() error {
+	for _, limit := range []struct {
+		name               string
+		value, least, most int
+	}{
+		{name: "max audio channels", value: profile.MaxAudioChannels, least: minProfileChannels, most: maxProfileChannels},
+		{
+			name: "max audio sample rate", value: profile.MaxAudioSampleRate,
+			least: minProfileSampleRate, most: maxProfileSampleRate,
+		},
+		{
+			name: "max audio bit depth", value: profile.MaxAudioBitDepth,
+			least: minProfileAudioDepth, most: maxProfileAudioDepth,
+		},
+	} {
+		if limit.value != audioLimitOmitted && (limit.value < limit.least || limit.value > limit.most) {
+			return fmt.Errorf("%s %d outside %d..%d: %w", limit.name, limit.value, limit.least, limit.most, domain.ErrInvalid)
+		}
 	}
 
 	return nil
