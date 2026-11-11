@@ -18,20 +18,19 @@ type selection struct {
 	// Edge (Matroska) and Firefox (Matroska, MP4) play the first audio track whatever the
 	// default flag says.
 	audioIsFirst bool
-	hasSubtitles bool
-	// subtitle is the track to show, requested or picked by the track preference; the
-	// delivery decision (sidecar or burn-in) is M4-04b.
+	// subtitle is the track to show, requested or picked by the track preference; planSubtitle
+	// decides its delivery (sidecar or burn-in).
 	subtitle    SubtitleTrack
 	hasSubtitle bool
 }
 
 // selectStreams picks the video stream (never cover art, default disposition preferred),
 // the requested audio stream or the one the profile's track preference selects, and the
-// requested or preferred subtitle. An unknown requested audio index or subtitle id is a
-// bad request.
+// requested or preferred subtitle. The preference only picks subtitles the client renders
+// itself. An unknown requested audio index or subtitle id is a bad request.
 func selectStreams(input Input) (selection, error) {
 	description := input.Description
-	chosen := selection{hasSubtitles: hasSubtitles(description)}
+	chosen := selection{}
 	chosen.video, chosen.hasVideo = description.PrimaryVideo()
 
 	audio, hasAudio, err := selectAudio(description, input.Request, input.Profile.Tracks)
@@ -73,11 +72,14 @@ func selectAudio(description media.Description, request Request, preference Trac
 }
 
 // selectSubtitle returns the requested subtitle track (an empty id is "off"), or the one the
-// profile's track preference selects for the audio language without a request.
+// profile's track preference selects for the audio language without a request. The preference
+// never picks a track that needs burn-in: a transcode because of a subtitle nobody asked for
+// would cost direct play (ADR 0030 Notes (M4-02b)), so such a track stays off and the best
+// renderable candidate is taken instead.
 func selectSubtitle(tracks []SubtitleTrack, audioLanguage string, input Input) (SubtitleTrack, bool, error) {
 	requested := input.Request.SubtitleTrackID
 	if requested == nil {
-		id, found := SelectSubtitleTrack(tracks, audioLanguage, input.Profile.Tracks)
+		id, found := SelectSubtitleTrack(input.Subtitles.renderable(tracks), audioLanguage, input.Profile.Tracks)
 		if !found {
 			return SubtitleTrack{}, false, nil
 		}
@@ -106,14 +108,4 @@ func firstAudio(description media.Description) (media.Stream, bool) {
 	}
 
 	return media.Stream{}, false
-}
-
-func hasSubtitles(description media.Description) bool {
-	for _, stream := range description.Streams {
-		if stream.Kind == media.StreamKindSubtitle {
-			return true
-		}
-	}
-
-	return false
 }

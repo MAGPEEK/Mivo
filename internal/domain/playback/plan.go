@@ -66,18 +66,22 @@ const (
 	// one browsers play from the original file whatever the default flag says.
 	ReasonAudioTrackNotFirst ReasonCode = "audio_track_not_first"
 	ReasonDiscSource         ReasonCode = "disc_source"
+	// ReasonSubtitleBurnIn: the selected subtitle is drawn into the video, which is therefore
+	// re-encoded (ADR 0030 §3). Plan.Subtitle names the track and its format.
+	ReasonSubtitleBurnIn ReasonCode = "subtitle_burn_in"
 )
 
 // WarningCode describes a degraded result. Like reason codes, the values are stable.
 type WarningCode string
 
-// The warning codes of ADR 0023.
+// The warning codes of ADR 0023 and ADR 0030.
 const (
 	// WarningHDRNotToneMapped: an HDR source is transcoded without tone mapping until
 	// milestone 4 and looks washed out.
 	WarningHDRNotToneMapped WarningCode = "hdr_not_tone_mapped"
-	// WarningSubtitlesNotSupported: the file has subtitles, which milestone 2 ignores.
-	WarningSubtitlesNotSupported WarningCode = "subtitles_not_supported"
+	// WarningSubtitleBurnInUnavailable: the requested subtitle needs burn-in, which the client
+	// or the server cannot do; it stays off because the request allowed that.
+	WarningSubtitleBurnInUnavailable WarningCode = "subtitle_burn_in_unavailable"
 	// WarningVideoDownscaled: the transcoded video is smaller than the source (Policy).
 	WarningVideoDownscaled WarningCode = "video_downscaled"
 )
@@ -134,6 +138,8 @@ type Plan struct {
 	Reasons []Reason
 	// Warnings describe degradations of the result.
 	Warnings []Warning
+	// Subtitle is how the selected subtitle is shown; its mode is never empty.
+	Subtitle SubtitleDecision
 }
 
 // Video returns the decision for the selected video stream. The second result is false when

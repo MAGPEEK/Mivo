@@ -85,12 +85,12 @@ const DiscVideoTS = "Movie (2019)/VIDEO_TS"
 
 // ExpectedDisc returns the expectation of a disc of the library manifest, named by its path,
 // for a reference profile name. A disc is never played directly (disc_source); the DVD's
-// MPEG-2 and AC-3 are re-encoded, and its bitmap subtitles are not shown yet. The second
+// MPEG-2 and AC-3 are re-encoded; its bitmap subtitles stay off unless a request names one. The second
 // result is false for an unknown disc or profile. The caller owns the result.
 func ExpectedDisc(discPath, profileName string) (Expectation, bool) {
 	return expectedIn(map[string]caseExpectation{
 		DiscVideoTS: both(transcode(playback.ActionTranscode, playback.ActionTranscode,
-			discSourceReason(), videoCodecReason(), audioCodecReason()).withWarnings(subtitlesWarning())),
+			discSourceReason(), videoCodecReason(), audioCodecReason())),
 	}, discPath, profileName)
 }
 
@@ -201,9 +201,9 @@ func surroundExpectations() map[string]caseExpectation {
 func trackExpectations() map[string]caseExpectation {
 	return map[string]caseExpectation{
 		"subtitle-sidecar-srt-vtt-ass": both(remux(containerReason())),
-		"subtitle-mkv-srt-ass":         both(remux(containerReason()).withWarnings(subtitlesWarning())),
-		"subtitle-mp4-movtext":         both(directPlay(subtitlesWarning())),
-		"multitrack-mkv-eng-deu":       both(remux(containerReason()).withWarnings(subtitlesWarning())),
+		"subtitle-mkv-srt-ass":         both(remux(containerReason())),
+		"subtitle-mp4-movtext":         both(directPlay()),
+		"multitrack-mkv-eng-deu":       both(remux(containerReason())),
 		// German DTS is selected (default flag) and re-encoded; English AC-3 is not played.
 		"multitrack-mkv-dts-ac3-deu-eng": both(transcodeAudioOnly()),
 		// Browsers would play the first track (AC-3, silent), so the default AAC track is remuxed.
@@ -285,8 +285,4 @@ func audioTrackReason() playback.Reason {
 
 func hdrWarning() playback.Warning {
 	return playback.Warning{Code: playback.WarningHDRNotToneMapped, Scope: playback.ScopeVideo}
-}
-
-func subtitlesWarning() playback.Warning {
-	return playback.Warning{Code: playback.WarningSubtitlesNotSupported, Scope: playback.ScopeSubtitle}
 }

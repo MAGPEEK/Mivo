@@ -18,6 +18,8 @@ type matrixRow struct {
 	request     playback.Request
 	chromium    outcome
 	firefox     outcome
+	// subtitle is the delivery of the plan's subtitle; empty means off.
+	subtitle playback.SubtitleDelivery
 }
 
 func both(name string, description media.Description, expected outcome) matrixRow {
@@ -128,11 +130,11 @@ func corpusTrackRows() []matrixRow {
 		subtitle(3, "subrip"), subtitle(4, "subrip"))
 
 	germanAudio := both("multitrack-mkv-eng-deu (German audio)", multiTrack,
-		remux(containerReason(), audioTrackReason()).withWarnings(subtitlesWarning()))
+		remux(containerReason(), audioTrackReason()))
 	germanAudio.request = playback.Request{AudioStreamIndex: audioIndex(2)}
 
 	englishAudio := both("multitrack-mkv-eng-deu (English audio requested)", multiTrack,
-		remux(containerReason()).withWarnings(subtitlesWarning()))
+		remux(containerReason()))
 	englishAudio.request = playback.Request{AudioStreamIndex: audioIndex(1)}
 
 	return []matrixRow{
@@ -141,11 +143,11 @@ func corpusTrackRows() []matrixRow {
 		both("subtitle-mkv-srt-ass", clip(media.ContainerMKV,
 			asDefault(h264High(0)), asDefault(audio(1, "aac")),
 			asDefault(subtitle(2, "subrip")), subtitle(3, "ass")),
-			remux(containerReason()).withWarnings(subtitlesWarning())),
+			remux(containerReason())),
 		both("subtitle-mp4-movtext", clip(media.ContainerMP4, h264High(0), audio(1, "aac"), subtitle(2, "mov_text")),
-			directPlay(subtitlesWarning())),
+			directPlay()),
 		both("multitrack-mkv-eng-deu", multiTrack,
-			remux(containerReason()).withWarnings(subtitlesWarning())),
+			remux(containerReason())),
 		germanAudio,
 		englishAudio,
 		// A "German.DL" release: German DTS 5.1 first and default, English AC-3 2.0 second.
@@ -207,6 +209,47 @@ func syntheticRows() []matrixRow {
 	}
 }
 
+// subtitleRows are the subtitle deliveries of ADR 0030 §3 for a requested track: no subtitle,
+// SubRip and ASS (sidecar, the mode of the file is kept) and PGS (burn-in, the video is
+// re-encoded and the audio still copied), each in a container the browsers play directly and
+// in one they get remuxed. Every matrix client renders WebVTT.
+func subtitleRows() []matrixRow {
+	formats := []struct {
+		name, codec string
+		delivery    playback.SubtitleDelivery
+	}{
+		{name: "SRT", codec: "subrip", delivery: playback.SubtitleSidecar},
+		{name: "ASS", codec: "ass", delivery: playback.SubtitleSidecar},
+		{name: "PGS", codec: pgsCodec, delivery: playback.SubtitleBurnIn},
+	}
+
+	rows := []matrixRow{
+		both("subtitle off in mp4", clip(media.ContainerMP4, h264High(0), audio(1, "aac")), directPlay()),
+		both("subtitle off in mkv", clip(media.ContainerMKV, h264High(0), audio(1, "aac")), remux(containerReason())),
+	}
+
+	for _, entry := range formats {
+		inMP4, inMKV := directPlay(), remux(containerReason())
+		if entry.delivery == playback.SubtitleBurnIn {
+			inMP4 = transcode(transcoded, copied, burnInReason())
+			inMKV = transcode(transcoded, copied, containerReason(), burnInReason())
+		}
+
+		mp4 := both("subtitle "+entry.name+" in mp4",
+			clip(media.ContainerMP4, h264High(0), audio(1, "aac"), subtitle(2, entry.codec)), inMP4)
+		mkv := both("subtitle "+entry.name+" in mkv",
+			clip(media.ContainerMKV, h264High(0), audio(1, "aac"), subtitle(2, entry.codec)), inMKV)
+
+		for _, row := range []matrixRow{mp4, mkv} {
+			row.request = trackRequest("s:2")
+			row.subtitle = entry.delivery
+			rows = append(rows, row)
+		}
+	}
+
+	return rows
+}
+
 // expectedFor derives the outcome for a client without HLS or a server without encoders:
 // without HLS only direct play remains (ADR 0023), and without encoders every transcode
 // fails with transcode_unavailable (ADR 0025).
@@ -254,13 +297,16 @@ func TestDecideFormatMatrix(t *testing.T) {
 
 						plan, err := playback.Decide(playback.Input{
 							Description:  row.description,
+							Subtitles:    webVTT(),
 							Profile:      client,
 							Capabilities: capability,
 							Request:      row.request,
 							Policy:       playback.Policy{MaxTranscodeHeight: referenceMaxHeight},
 						})
 
-						assertOutcome(t, plan, err, expectedFor(row, profileName, capability, delivery))
+						want := expectedFor(row, profileName, capability, delivery)
+						assertOutcome(t, plan, err, want)
+						assertSubtitleDelivery(t, plan, want, row.subtitle)
 					})
 				}
 			}
@@ -272,6 +318,7 @@ func matrixRows() []matrixRow {
 	rows := corpusVideoRows()
 	rows = append(rows, corpusSurroundRows()...)
 	rows = append(rows, corpusTrackRows()...)
+	rows = append(rows, subtitleRows()...)
 
 	return append(rows, syntheticRows()...)
 }

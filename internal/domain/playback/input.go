@@ -17,10 +17,13 @@ type Input struct {
 	// ExternalSubtitles are the subtitle files found next to the media file; together with the
 	// embedded subtitle streams they are the tracks a request may name.
 	ExternalSubtitles []SubtitleTrack
-	Profile           ClientProfile
-	Capabilities      ServerCapabilities
-	Request           Request
-	Policy            Policy
+	// Subtitles says which subtitle formats the client renders and whether the request accepts
+	// playback without a subtitle that cannot be burned in.
+	Subtitles    SubtitleOptions
+	Profile      ClientProfile
+	Capabilities ServerCapabilities
+	Request      Request
+	Policy       Policy
 }
 
 // Request carries the options of one playback request.
@@ -58,6 +61,10 @@ func (input Input) validate() error {
 	}
 
 	if err := validateExternalSubtitles(input.ExternalSubtitles); err != nil {
+		return err
+	}
+
+	if err := input.Subtitles.validate(); err != nil {
 		return err
 	}
 

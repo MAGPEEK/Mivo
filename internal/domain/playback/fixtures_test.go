@@ -96,10 +96,6 @@ func downscaleWarning() playback.Warning {
 	return playback.Warning{Code: playback.WarningVideoDownscaled, Scope: playback.ScopeVideo}
 }
 
-func subtitlesWarning() playback.Warning {
-	return playback.Warning{Code: playback.WarningSubtitlesNotSupported, Scope: playback.ScopeSubtitle}
-}
-
 // clip describes a corpus file with the given container and streams.
 func clip(container media.Container, streams ...media.Stream) media.Description {
 	return media.Description{Container: container, Duration: clipDuration, Streams: streams}
@@ -190,6 +186,24 @@ func assertOutcome(t *testing.T, plan playback.Plan, err error, want outcome) {
 
 	if !slices.Equal(plan.Warnings, want.warnings) {
 		t.Errorf("Warnings = %v, want %v", plan.Warnings, want.warnings)
+	}
+}
+
+// assertSubtitleDelivery checks how a successful plan shows its subtitle; an empty delivery
+// means off.
+func assertSubtitleDelivery(t *testing.T, plan playback.Plan, want outcome, delivery playback.SubtitleDelivery) {
+	t.Helper()
+
+	if want.err != nil {
+		return
+	}
+
+	if delivery == "" {
+		delivery = playback.SubtitleOff
+	}
+
+	if plan.Subtitle.Mode != delivery {
+		t.Errorf("Subtitle.Mode = %q, want %q", plan.Subtitle.Mode, delivery)
 	}
 }
 

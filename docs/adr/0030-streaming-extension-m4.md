@@ -165,3 +165,26 @@ carried 1.15.0, and how the contract carries sections 5, 7 and 8:
   remotely and on a managed profile. Only the session list and the transcoder pair carry the
   ADR 0028 guard.
 - The five strict operations answer 501 `not_implemented` until M4-14b.
+
+## Notes (M4-04b)
+
+How the decision engine (`internal/domain/playback`) carries section 3:
+
+- **`Plan.Subtitle`** reports the delivery (`off`, `sidecar`, `burn_in`) with the track id and
+  its format; the reason `subtitle_burn_in` itself carries no format, like every reason.
+- **`Input.Subtitles`** holds `Formats` (wire: `ClientProfile.subtitleFormats`) and
+  `AllowDegrade` (wire: `PlaybackRequest.allowDegradeSubtitles`). Empty formats mean the client
+  renders nothing, as the contract says; the default `["webvtt"]` of the first task wording is
+  not applied. A text track is a sidecar exactly when `webvtt` is listed.
+- **The default policy picks only from tracks the client renders.** An image track or, for a
+  client without `webvtt`, any track is skipped, and the best renderable candidate is taken; so
+  a forced PGS track next to a forced SubRip track shows the SubRip one.
+- **Burn-in re-encodes the video even when the client could play it as it is**; the audio is
+  decided on its own and may be copied. The reason follows the container reasons.
+- **A burn-in that cannot happen** (no video, client without HLS or without the H.264 target,
+  server without HLS muxer or H.264 encoder): `AllowDegrade` gives `off` with the warning
+  `subtitle_burn_in_unavailable` and the plan the file would get without a subtitle; otherwise
+  the decision fails like a transcode, client limits (`no_compatible_format`) before server
+  limits (`transcode_unavailable`). The session limit is not known to the domain (M4-13a).
+- **`subtitles_not_supported` is gone** from the engine. There is no `allowTranscode` profile
+  field in the contract, so that part of the task wording has no counterpart.

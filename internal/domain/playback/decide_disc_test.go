@@ -45,15 +45,14 @@ func TestDecideDiscSources(t *testing.T) {
 			want:        transcode(transcoded, transcoded, discReason(), videoCodecReason(), audioCodecReason()),
 		},
 		{
-			name: "DVD bitmap subtitles are not supported", layout: media.LayoutVideoTS,
+			name: "DVD bitmap subtitles stay off without a request", layout: media.LayoutVideoTS,
 			description: clip(media.ContainerVOB, simpleVideo(0, "mpeg2video"), audio(1, "ac3"), subtitle(2, "dvd_subtitle")),
-			want: transcode(transcoded, transcoded, discReason(), videoCodecReason(), audioCodecReason()).
-				withWarnings(subtitlesWarning()),
+			want:        transcode(transcoded, transcoded, discReason(), videoCodecReason(), audioCodecReason()),
 		},
 		{
-			name: "Blu-ray PGS subtitles are not supported", layout: media.LayoutBDMV,
+			name: "Blu-ray PGS subtitles stay off without a request", layout: media.LayoutBDMV,
 			description: clip(media.ContainerM2TS, h264High(0), audio(1, "aac"), subtitle(2, "hdmv_pgs_subtitle")),
-			want:        remux(discReason()).withWarnings(subtitlesWarning()),
+			want:        remux(discReason()),
 		},
 		{
 			name: "unknown layout", layout: "dvd",

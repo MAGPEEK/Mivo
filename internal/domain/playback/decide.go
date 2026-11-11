@@ -33,12 +33,21 @@ func Decide(input Input) (Plan, error) {
 		return Plan{}, fmt.Errorf("decide playback: file has neither video nor audio: %w", domain.ErrUnsupported)
 	}
 
-	reasons := sourceReasons(input, chosen)
-	if len(reasons) == 0 {
-		return directPlayPlan(input.Description.Container, chosen), nil
+	subtitles, err := planSubtitle(input, chosen)
+	if err != nil {
+		return Plan{}, fmt.Errorf("decide playback: %w", err)
 	}
 
-	plan, err := hlsPlan(input, chosen, reasons)
+	reasons := sourceReasons(input, chosen)
+	if subtitles.burnsIn() {
+		reasons = append(reasons, Reason{Code: ReasonSubtitleBurnIn, Scope: ScopeSubtitle})
+	}
+
+	if len(reasons) == 0 {
+		return directPlayPlan(input.Description.Container, chosen, subtitles), nil
+	}
+
+	plan, err := hlsPlan(input, chosen, hlsCause{reasons: reasons, subtitles: subtitles})
 	if err != nil {
 		return Plan{}, fmt.Errorf("decide playback: %w", err)
 	}
@@ -58,11 +67,13 @@ func sourceReasons(input Input, chosen selection) []Reason {
 	return directPlayReasons(chosen, input.Description.Container, input.Profile)
 }
 
-func directPlayPlan(container media.Container, chosen selection) Plan {
+// directPlayPlan serves the original file. A sidecar subtitle does not change that: the
+// client loads it next to the file.
+func directPlayPlan(container media.Container, chosen selection, subtitles subtitlePlan) Plan {
 	plan := Plan{
 		Mode: ModeDirectPlay, Delivery: DeliveryFile,
 		SourceContainer: container, TargetContainer: container,
-		Warnings: subtitleWarnings(chosen),
+		Warnings: subtitles.warnings, Subtitle: subtitles.decision,
 	}
 
 	if chosen.hasVideo {
@@ -76,11 +87,26 @@ func directPlayPlan(container media.Container, chosen selection) Plan {
 	return plan
 }
 
-// hlsPlan builds a remux or transcode plan. directPlayReasons explain why the original file
-// is not served; the copy checks add why a stream is re-encoded. Failures follow one
-// precedence: every client limit (no_compatible_format) before any server limit
-// (transcode_unavailable).
-func hlsPlan(input Input, chosen selection, directPlayReasons []Reason) (Plan, error) {
+// hlsCause is why a file is not played directly, with the subtitle the HLS plan carries.
+type hlsCause struct {
+	// reasons explain why the original file is not served, a burn-in included.
+	reasons   []Reason
+	subtitles subtitlePlan
+}
+
+// videoPlanner is planVideo, or its burn-in variant that always re-encodes.
+func (cause hlsCause) videoPlanner() streamPlanner {
+	if cause.subtitles.burnsIn() {
+		return planBurnInVideo
+	}
+
+	return planVideo
+}
+
+// hlsPlan builds a remux or transcode plan. The cause explains why the original file is not
+// served; the copy checks add why a stream is re-encoded. Failures follow one precedence:
+// every client limit (no_compatible_format) before any server limit (transcode_unavailable).
+func hlsPlan(input Input, chosen selection, cause hlsCause) (Plan, error) {
 	if input.Profile.HLS.Delivery == HLSDeliveryNone {
 		return Plan{}, fmt.Errorf("client plays no HLS and not the original file: %w", ErrNoCompatibleFormat)
 	}
@@ -88,7 +114,7 @@ func hlsPlan(input Input, chosen selection, directPlayReasons []Reason) (Plan, e
 	plan := Plan{
 		Mode: ModeRemux, Delivery: DeliveryHLS,
 		SourceContainer: input.Description.Container, TargetContainer: media.ContainerMP4,
-		Reasons: directPlayReasons,
+		Reasons: cause.reasons, Subtitle: cause.subtitles.decision,
 	}
 
 	planned := []struct {
@@ -96,7 +122,7 @@ func hlsPlan(input Input, chosen selection, directPlayReasons []Reason) (Plan, e
 		stream  media.Stream
 		decide  streamPlanner
 	}{
-		{present: chosen.hasVideo, stream: chosen.video, decide: planVideo},
+		{present: chosen.hasVideo, stream: chosen.video, decide: cause.videoPlanner()},
 		{present: chosen.hasAudio, stream: chosen.audio, decide: planAudio},
 	}
 
@@ -120,7 +146,7 @@ func hlsPlan(input Input, chosen selection, directPlayReasons []Reason) (Plan, e
 		return Plan{}, err
 	}
 
-	plan.Warnings = hlsWarnings(plan, chosen)
+	plan.Warnings = append(hlsWarnings(plan, chosen), cause.subtitles.warnings...)
 
 	return plan, nil
 }
@@ -135,8 +161,8 @@ func (plan *Plan) add(decision StreamDecision, reasons []Reason) {
 	}
 }
 
-// hlsWarnings lists the degradations of a transcoded video and the ignored subtitles. A
-// copied HDR video keeps its signal, so only a transcode loses it.
+// hlsWarnings lists the degradations of a transcoded video. A copied HDR video keeps its
+// signal, so only a transcode loses it.
 func hlsWarnings(plan Plan, chosen selection) []Warning {
 	var warnings []Warning
 
@@ -150,14 +176,5 @@ func hlsWarnings(plan Plan, chosen selection) []Warning {
 		}
 	}
 
-	return append(warnings, subtitleWarnings(chosen)...)
-}
-
-// subtitleWarnings reports subtitles, which milestone 2 ignores in every mode.
-func subtitleWarnings(chosen selection) []Warning {
-	if !chosen.hasSubtitles {
-		return nil
-	}
-
-	return []Warning{{Code: WarningSubtitlesNotSupported, Scope: ScopeSubtitle}}
+	return warnings
 }
