@@ -8,6 +8,7 @@ package library
 import (
 	"context"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -87,8 +88,9 @@ type ListingReader interface {
 type FolderItemReader interface {
 	// ListFolderItems returns the items (never extras) that own a file directly in the
 	// directory of the library folder; directory is "/"-separated and empty for the folder
-	// itself. Each item appears once, named after its first file there.
-	ListFolderItems(ctx context.Context, rootID, directory string) ([]FolderItem, error)
+	// itself. Each item appears once, named after its first file there. Only items the
+	// restriction allows are returned; its zero value allows none.
+	ListFolderItems(ctx context.Context, rootID, directory string, restriction access.Restriction) ([]FolderItem, error)
 	// ItemSummaries returns the summaries of the given items as listings carry them; unknown
 	// IDs are left out.
 	ItemSummaries(ctx context.Context, itemIDs []string) ([]ItemSummary, error)

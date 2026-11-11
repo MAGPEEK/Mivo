@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -124,7 +125,8 @@ func (service *Service) folderEntries(ctx context.Context, managed library.Manag
 		return nil, fmt.Errorf("list directories: %w", err)
 	}
 
-	items, err := service.folderItems.ListFolderItems(ctx, folder.ID, path.Relative())
+	// TODO(M7-14): the viewer's restriction.
+	items, err := service.folderItems.ListFolderItems(ctx, folder.ID, path.Relative(), access.Unrestricted())
 	if err != nil {
 		return nil, fmt.Errorf("list folder items: %w", err)
 	}

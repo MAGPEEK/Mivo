@@ -7,6 +7,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -102,7 +103,7 @@ func TestListChildrenRejectsForeignAndMalformedCursors(t *testing.T) {
 	}
 
 	// The top-level reader rejects the cursor of a child page as well.
-	_, err = fixture.reader.ListItems(ctx, showsLibraryID, library.PageRequest{Limit: 1, Cursor: ascending.NextCursor}, library.ListingQuery{})
+	_, err = fixture.reader.ListItems(ctx, showsLibraryID, library.PageRequest{Limit: 1, Cursor: ascending.NextCursor}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("ListItems with a child cursor error = %v, want domain.ErrInvalid", err)
 	}
@@ -151,7 +152,7 @@ func TestListItemsServesShowsWithCountsAndPoster(t *testing.T) {
 		relativePath: "The Show/poster2.jpg", tag: "tagother",
 	})
 
-	page, err := fixture.reader.ListItems(t.Context(), showsLibraryID, library.PageRequest{Limit: 10}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), showsLibraryID, library.PageRequest{Limit: 10}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil || len(page.Items) != 1 {
 		t.Fatalf("ListItems = %+v, %v, want the show only", page, err)
 	}
@@ -185,7 +186,7 @@ func TestListItemsServesAMovieWithItsPrimaryFile(t *testing.T) {
 		relativePath: "z.mkv", partNumber: 1,
 	})
 
-	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 10}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 10}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil || len(page.Items) != 1 || page.Items[0].PrimaryFile.ID != testID('f', 1) {
 		t.Fatalf("ListItems = %+v, %v, want the movie with the part 1 file", page, err)
 	}

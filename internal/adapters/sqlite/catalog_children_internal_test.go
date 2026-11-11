@@ -9,6 +9,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -103,7 +104,7 @@ func TestListingQueriesUseTheCatalogIndexes(t *testing.T) {
 	recordings := map[string]func() error{
 		"top level": func() error {
 			recorder.query, recorder.args, _ = pageQuery(listingRequest{
-				target: listingTarget{libraryID: "library", kind: library.ItemKindMovie}, query: library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindMovie}},
+				target: listingTarget{libraryID: "library", kind: library.ItemKindMovie, restriction: access.Unrestricted()}, query: library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindMovie}},
 				after: listingKey{sortTitle: "title", id: "item"}, hasAfter: true, rowLimit: 101,
 			})
 

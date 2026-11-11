@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
 
@@ -194,7 +195,7 @@ func TestAudiobookDetailAndSummaryCoverAllParts(t *testing.T) {
 	}
 	assertDeepEqual(t, "detail chapters", detail.Chapters, want)
 
-	page, err := fixture.reader.ListItems(t.Context(), audiobooksLibraryID, library.PageRequest{}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), audiobooksLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil {
 		t.Fatalf("ListItems(audiobooks) error = %v", err)
 	}
@@ -224,7 +225,7 @@ func TestNonAudiobookDetailAndSummaryHaveNoChaptersOrPartsDuration(t *testing.T)
 		t.Errorf("movie detail chapters = %+v, want none", detail.Chapters)
 	}
 
-	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil {
 		t.Fatalf("ListItems(movies) error = %v", err)
 	}

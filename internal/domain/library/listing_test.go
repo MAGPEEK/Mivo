@@ -236,3 +236,13 @@ func TestLetterOf(t *testing.T) {
 		}
 	}
 }
+
+// A caller that forgets the restriction must get nothing: the zero query denies everything.
+func TestListingQueryZeroRestrictionDeniesEverything(t *testing.T) {
+	t.Parallel()
+
+	restriction := library.ListingQuery{}.Restriction
+	if !restriction.DeniesAll() || restriction.AllLibraries() || restriction.Allows("library", 0, true) {
+		t.Errorf("zero ListingQuery restriction = %+v, want one that denies everything", restriction)
+	}
+}

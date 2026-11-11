@@ -1,5 +1,7 @@
 package library
 
+import "github.com/magpeek/mivo/internal/domain/access"
+
 // ItemSort is the sort key of a library listing (API ItemSort). The text values are part of
 // the API contract.
 type ItemSort string
@@ -200,10 +202,14 @@ func (order ListingOrder) Key() ItemSort {
 	return order.Sort
 }
 
-// ListingQuery is the sort and filter of a library listing.
+// ListingQuery is the sort and filter of a library listing and the restriction of the viewer
+// it is read for.
 type ListingQuery struct {
 	Filter ListingFilter
 	Order  ListingOrder
+	// Restriction is what the viewer may see (ADR 0032 §7). The zero value denies everything,
+	// so a caller that forgets it gets no items instead of all.
+	Restriction access.Restriction
 }
 
 // IsDescending reports whether the listing runs in descending order; SortByRandom ignores the

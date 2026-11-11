@@ -8,6 +8,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -224,7 +225,7 @@ func TestListItemsOfAPhotosLibrary(t *testing.T) {
 	cat := fixture.addPhoto(t, "Home/cat.jpg", 2)[1]
 
 	albums, err := fixture.reader.ListItems(t.Context(), photosLibraryID, library.PageRequest{Limit: 10},
-		library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindPhotoAlbum}})
+		library.ListingQuery{Restriction: access.Unrestricted(), Filter: library.ListingFilter{Kind: library.ItemKindPhotoAlbum}})
 	if err != nil {
 		t.Fatalf("ListItems(photo_album) error = %v", err)
 	}
@@ -235,7 +236,7 @@ func TestListItemsOfAPhotosLibrary(t *testing.T) {
 	})
 
 	photos, err := fixture.reader.ListItems(t.Context(), photosLibraryID, library.PageRequest{Limit: 10},
-		library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindPhoto}})
+		library.ListingQuery{Restriction: access.Unrestricted(), Filter: library.ListingFilter{Kind: library.ItemKindPhoto}})
 	if err != nil {
 		t.Fatalf("ListItems(photo) error = %v", err)
 	}

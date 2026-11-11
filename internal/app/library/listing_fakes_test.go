@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -50,7 +51,7 @@ type memoryFolderItems struct {
 	summaryErr error
 }
 
-func (reader *memoryFolderItems) ListFolderItems(_ context.Context, rootID, directory string) ([]applibrary.FolderItem, error) {
+func (reader *memoryFolderItems) ListFolderItems(_ context.Context, rootID, directory string, _ access.Restriction) ([]applibrary.FolderItem, error) {
 	return reader.items[rootID+"/"+directory], reader.err
 }
 

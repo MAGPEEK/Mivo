@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/metadata/match"
 )
@@ -54,7 +55,7 @@ func TestListItemsFiltersByMatchState(t *testing.T) {
 
 			filter := library.ListingFilter{Kind: library.ItemKindMovie, MatchState: test.state}
 
-			got, total := fixture.listAllIDs(t, moviesLibraryID, library.ListingQuery{Filter: filter}, 2)
+			got, total := fixture.listAllIDs(t, moviesLibraryID, library.ListingQuery{Restriction: access.Unrestricted(), Filter: filter}, 2)
 			if !slices.Equal(got, test.want) || total != int64(len(test.want)) {
 				t.Errorf("ids = %v (total %d), want %v", got, total, test.want)
 			}

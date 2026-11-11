@@ -11,6 +11,7 @@ import (
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -77,7 +78,7 @@ func TestListItemsReturnsThePrimaryFileOfAnItemWithSeveralFiles(t *testing.T) {
 	mustSave(t, fixture.writer, later)
 	mustSave(t, fixture.writer, primary)
 
-	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil {
 		t.Fatalf("ListItems error = %v", err)
 	}
@@ -93,7 +94,7 @@ func TestListItemsOfAnEmptyLibraryIsAnEmptyLastPage(t *testing.T) {
 
 	fixture := newCatalogFixture(t)
 
-	page, err := fixture.reader.ListItems(t.Context(), showsLibraryID, library.PageRequest{Limit: 1}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), showsLibraryID, library.PageRequest{Limit: 1}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil || page.Items == nil || len(page.Items) != 0 || page.NextCursor != "" {
 		t.Errorf("ListItems = %#v, %v, want an empty, non-nil list without a cursor", page, err)
 	}
@@ -107,7 +108,7 @@ func TestListItemsWithALimitOfExactlyTheItemCountHasNoNextPage(t *testing.T) {
 	mustSave(t, fixture.writer, probedRecord(moviesLibraryID, testID('i', 1), testID('f', 1), "a.mkv"))
 	mustSave(t, fixture.writer, probedRecord(moviesLibraryID, testID('i', 2), testID('f', 2), "b.mkv"))
 
-	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2}, library.ListingQuery{})
+	page, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil || len(page.Items) != 2 || page.NextCursor != "" {
 		t.Errorf("ListItems = %d items, cursor %q, %v, want 2 items and no cursor", len(page.Items), page.NextCursor, err)
 	}
@@ -120,7 +121,7 @@ func TestListItemsRejectsInvalidRequests(t *testing.T) {
 	mustSave(t, fixture.writer, probedRecord(moviesLibraryID, testID('i', 1), testID('f', 1), "a.mkv"))
 	mustSave(t, fixture.writer, probedRecord(moviesLibraryID, testID('i', 2), testID('f', 2), "b.mkv"))
 
-	first, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 1}, library.ListingQuery{})
+	first, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 1}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil || first.NextCursor == "" {
 		t.Fatalf("first page = %+v, %v, want a cursor", first, err)
 	}
@@ -152,7 +153,7 @@ func TestListItemsRejectsInvalidRequests(t *testing.T) {
 				libraryID = moviesLibraryID
 			}
 
-			if _, err := fixture.reader.ListItems(t.Context(), libraryID, test.page, library.ListingQuery{}); !errors.Is(err, test.wantErr) {
+			if _, err := fixture.reader.ListItems(t.Context(), libraryID, test.page, library.ListingQuery{Restriction: access.Unrestricted()}); !errors.Is(err, test.wantErr) {
 				t.Errorf("ListItems error = %v, want %v", err, test.wantErr)
 			}
 		})
@@ -175,7 +176,7 @@ func TestListItemsContinuesAfterACursorWhoseItemWasRemoved(t *testing.T) {
 		mustSave(t, fixture.writer, record)
 	}
 
-	first, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2}, library.ListingQuery{})
+	first, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil {
 		t.Fatalf("first page error = %v", err)
 	}
@@ -184,7 +185,7 @@ func TestListItemsContinuesAfterACursorWhoseItemWasRemoved(t *testing.T) {
 		t.Fatalf("RemoveFiles error = %v", err)
 	}
 
-	second, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2, Cursor: first.NextCursor}, library.ListingQuery{})
+	second, err := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{Limit: 2, Cursor: first.NextCursor}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if err != nil {
 		t.Fatalf("second page error = %v", err)
 	}
@@ -311,7 +312,7 @@ func TestReadingCorruptCatalogRowsIsAServerError(t *testing.T) {
 
 			storeUnchecked(t, fixture.inspection, test.query)
 
-			_, listErr := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{})
+			_, listErr := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 			_, getErr := fixture.reader.GetItem(t.Context(), record.Item.ID)
 			_, playableErr := fixture.reader.PlayableFile(t.Context(), record.File.ID)
 
@@ -353,7 +354,7 @@ func TestCatalogReaderReportsDatabaseErrors(t *testing.T) {
 				closeTestDB(t, fixture.db)
 			}
 
-			_, listErr := fixture.reader.ListItems(test.ctx(t), moviesLibraryID, library.PageRequest{}, library.ListingQuery{})
+			_, listErr := fixture.reader.ListItems(test.ctx(t), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 			_, getErr := fixture.reader.GetItem(test.ctx(t), record.Item.ID)
 			_, playableErr := fixture.reader.PlayableFile(test.ctx(t), record.File.ID)
 
@@ -375,7 +376,7 @@ func listAllPages(t *testing.T, reader *sqlite.CatalogReader, libraryID string, 
 	)
 
 	for {
-		page, err := reader.ListItems(t.Context(), libraryID, library.PageRequest{Limit: limit, Cursor: cursor}, library.ListingQuery{})
+		page, err := reader.ListItems(t.Context(), libraryID, library.PageRequest{Limit: limit, Cursor: cursor}, library.ListingQuery{Restriction: access.Unrestricted()})
 		if err != nil {
 			t.Fatalf("ListItems page %d error = %v", len(pages)+1, err)
 		}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -143,6 +144,8 @@ func (service *Service) ListItems(ctx context.Context, libraryID string, page li
 	if query.Order.Key() == library.SortByRandom && !query.Order.HasSeed && page.Cursor == "" {
 		query.Order.Seed, query.Order.HasSeed = service.randomSeed(), true
 	}
+
+	query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
 
 	items, err := service.items.ListItems(ctx, libraryID, library.PageRequest{Limit: limit, Cursor: page.Cursor}, query)
 	if err != nil {

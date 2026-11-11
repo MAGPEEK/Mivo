@@ -7,6 +7,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -160,6 +161,7 @@ func TestListFacetsAsksForTheRequestedFieldsInContractOrder(t *testing.T) {
 
 			want := applibrary.FacetRequest{
 				Fields: test.want, Filter: library.ListingFilter{Kind: library.ItemKindMovie, Genres: []string{"Drama"}},
+				Restriction: access.Unrestricted(),
 			}
 			if got := environment.listings.facetRequests; len(got) != 1 || !reflect.DeepEqual(got[0], want) {
 				t.Errorf("reader requests = %+v, want %+v", got, want)
@@ -254,7 +256,7 @@ func TestListLettersFoldsFirstCharactersAtTheirFirstPosition(t *testing.T) {
 				t.Errorf("ListLetters = %+v, want %+v", index, test.want)
 			}
 
-			want := applibrary.LetterRequest{Descending: test.descending, Filter: library.ListingFilter{Kind: library.ItemKindShow}}
+			want := applibrary.LetterRequest{Descending: test.descending, Filter: library.ListingFilter{Kind: library.ItemKindShow}, Restriction: access.Unrestricted()}
 			if got := environment.listings.letterRequests; len(got) != 1 || !reflect.DeepEqual(got[0], want) {
 				t.Errorf("reader requests = %+v, want %+v", got, want)
 			}

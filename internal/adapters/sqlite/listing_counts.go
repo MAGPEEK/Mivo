@@ -24,7 +24,9 @@ func (catalog *CatalogReader) CountFacets(ctx context.Context, libraryID string,
 	}
 
 	err := inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, _ *sqlcgen.Queries) error {
-		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: libraryID, kind: request.Filter.Kind})
+		target, err := completeTarget(ctx, transaction, listingTarget{
+			libraryID: libraryID, kind: request.Filter.Kind, restriction: request.Restriction,
+		})
 		if err != nil {
 			return err
 		}
@@ -89,7 +91,9 @@ func (catalog *CatalogReader) CountFirstCharacters(ctx context.Context, libraryI
 	var counts []applibrary.CharacterCount
 
 	err := inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, _ *sqlcgen.Queries) error {
-		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: libraryID, kind: request.Filter.Kind})
+		target, err := completeTarget(ctx, transaction, listingTarget{
+			libraryID: libraryID, kind: request.Filter.Kind, restriction: request.Restriction,
+		})
 		if err != nil {
 			return err
 		}

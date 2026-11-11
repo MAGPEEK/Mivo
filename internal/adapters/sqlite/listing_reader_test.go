@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -51,8 +52,9 @@ func (fixture catalogFixture) listAllIDs(t *testing.T, libraryID string, query l
 
 func movieQuery(sort library.ItemSort, descending bool) library.ListingQuery {
 	return library.ListingQuery{
-		Filter: library.ListingFilter{Kind: library.ItemKindMovie},
-		Order:  library.ListingOrder{Sort: sort, Descending: descending},
+		Restriction: access.Unrestricted(),
+		Filter:      library.ListingFilter{Kind: library.ItemKindMovie},
+		Order:       library.ListingOrder{Sort: sort, Descending: descending},
 	}
 }
 
@@ -258,7 +260,7 @@ func TestListItemsFilters(t *testing.T) {
 				filter.Kind = library.ItemKindMovie
 			}
 
-			got, total := fixture.listAllIDs(t, cmpOr(test.libraryID, moviesLibraryID), library.ListingQuery{Filter: filter}, 2)
+			got, total := fixture.listAllIDs(t, cmpOr(test.libraryID, moviesLibraryID), library.ListingQuery{Restriction: access.Unrestricted(), Filter: filter}, 2)
 			if !slices.Equal(got, test.want) || total != int64(len(test.want)) {
 				t.Errorf("ids = %v (total %d), want %v", got, total, test.want)
 			}
@@ -310,7 +312,7 @@ func TestListItemsRejectsForeignCursors(t *testing.T) {
 		}
 	}
 
-	_, err = fixture.reader.ListItems(t.Context(), unknownID, library.PageRequest{}, library.ListingQuery{})
+	_, err = fixture.reader.ListItems(t.Context(), unknownID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown library: error = %v, want domain.ErrNotFound", err)
 	}

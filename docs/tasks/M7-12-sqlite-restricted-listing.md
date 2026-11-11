@@ -9,17 +9,17 @@ unrated items (when hidden) and libraries outside the access set are absent from
 facets, A–Z letters and folder views.
 
 ## Acceptance criteria
-- [ ] `library.ListingQuery` (and the facet/letter/folder requests) carry an
+- [x] `library.ListingQuery` (and the facet/letter/folder requests) carry an
       `access.Restriction`; the zero value denies everything, so a forgotten caller fails
       closed (test).
-- [ ] One SQL predicate builder (library ids, `effective_age_rating` ≤ max, unrated handling) is
+- [x] One SQL predicate builder (library ids, `effective_age_rating` ≤ max, unrated handling) is
       used by items, facets, letters, folders and total counts; facet counts and letter offsets
       match the filtered list.
-- [ ] Tests: integration tests (`go test ./internal/adapters/sqlite/ -run Listing`) with a
+- [x] Tests: integration tests (`go test ./internal/adapters/sqlite/ -run Listing`) with a
       fixture of FSK 0/12/16/18 and unrated movies plus a show with rated and unrated episodes:
       every endpoint shape returns identical item sets for a "Children" restriction; the
       listing benchmark does not regress by more than 10 % (`-bench Listing`).
-- [ ] Gates: lint + layer rules + coverage thresholds pass.
+- [x] Gates: lint + layer rules + coverage thresholds pass.
 
 ## Notes
 Folder view: a folder whose only items are hidden must not appear. Keep the predicate in one

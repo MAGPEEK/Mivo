@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -62,7 +63,7 @@ func TestListPhotoAlbumsDecidedByTheirPhotos(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		query := library.ListingQuery{Filter: test.filter, Order: library.ListingOrder{Sort: library.SortByTitle}}
+		query := library.ListingQuery{Restriction: access.Unrestricted(), Filter: test.filter, Order: library.ListingOrder{Sort: library.SortByTitle}}
 
 		got, total := fixture.listAllIDs(t, listingPhotosLibraryID, query, 2)
 		if !slices.Equal(got, test.want) || total != int64(len(test.want)) {

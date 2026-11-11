@@ -23,10 +23,12 @@ type listingRequest struct {
 // its own (countQuery) and the page keeps its index scan.
 func pageQuery(request listingRequest) (text string, args []any, counted bool) {
 	builder := &sqlBuilder{}
-	scope := newListingScope(builder, request.target)
 	order := request.query.Order
-	value := scope.sortValueSQL(order)
 	titleOnly := order.Key() == library.SortByTitle
+	target := request.target
+	target.readsInTitleOrder = titleOnly
+	scope := newListingScope(builder, target)
+	value := scope.sortValueSQL(order)
 	conditions := scope.filterConditions(request.query.Filter)
 	needs := needsOf(conditions)
 	counted = needs.decider

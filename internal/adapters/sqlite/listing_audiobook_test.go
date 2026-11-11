@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -41,8 +42,9 @@ func TestListItemsSortsAudiobooksByTheirTotalDuration(t *testing.T) {
 	}
 
 	query := library.ListingQuery{
-		Filter: library.ListingFilter{Kind: library.ItemKindAudiobook},
-		Order:  library.ListingOrder{Sort: library.SortByDuration},
+		Restriction: access.Unrestricted(),
+		Filter:      library.ListingFilter{Kind: library.ItemKindAudiobook},
+		Order:       library.ListingOrder{Sort: library.SortByDuration},
 	}
 
 	got, _ := fixture.listAllIDs(t, booksLibraryID, query, 1)

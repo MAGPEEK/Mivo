@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -16,10 +17,12 @@ import (
 var ErrItemKindMismatch = fmt.Errorf("item kind is not the library's top-level kind: %w", domain.ErrInvalid)
 
 // FacetRequest asks for the facet counts of a library listing. Fields are the facet fields to
-// count, in contract order without duplicates; Filter is the current filter.
+// count, in contract order without duplicates; Filter is the current filter. Restriction is
+// what the viewer may see; its zero value denies everything (ADR 0032 §7).
 type FacetRequest struct {
-	Fields []library.FacetField
-	Filter library.ListingFilter
+	Fields      []library.FacetField
+	Filter      library.ListingFilter
+	Restriction access.Restriction
 }
 
 // FacetValue is one value of a facet field with the number of top-level items carrying it.
@@ -44,6 +47,8 @@ const MaxFacetValues = 500
 type LetterRequest struct {
 	Descending bool
 	Filter     library.ListingFilter
+	// Restriction is what the viewer may see; its zero value denies everything.
+	Restriction access.Restriction
 }
 
 // CharacterCount is the number of listed items whose sort title starts with Character, as
@@ -79,7 +84,10 @@ func (service *Service) ListFacets(ctx context.Context, libraryID string, reques
 		return nil, fmt.Errorf("list facets of library %q: %w", libraryID, err)
 	}
 
-	facets, err := service.listings.CountFacets(ctx, libraryID, FacetRequest{Fields: facetFieldsOf(request.Fields), Filter: filter})
+	facets, err := service.listings.CountFacets(ctx, libraryID, FacetRequest{
+		Fields: facetFieldsOf(request.Fields), Filter: filter,
+		Restriction: access.Unrestricted(), // TODO(M7-14): the viewer's restriction.
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list facets of library %q: %w", libraryID, err)
 	}
@@ -113,6 +121,7 @@ func (service *Service) ListLetters(ctx context.Context, libraryID string, reque
 	}
 
 	request.Filter = filter
+	request.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
 
 	counts, err := service.listings.CountFirstCharacters(ctx, libraryID, request)
 	if err != nil {

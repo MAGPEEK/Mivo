@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -86,7 +87,7 @@ func TestListItemsOfAMusicLibrary(t *testing.T) {
 }
 
 func musicQuery(kind library.ItemKind, sort library.ItemSort) library.ListingQuery {
-	return library.ListingQuery{Filter: library.ListingFilter{Kind: kind}, Order: library.ListingOrder{Sort: sort}}
+	return library.ListingQuery{Restriction: access.Unrestricted(), Filter: library.ListingFilter{Kind: kind}, Order: library.ListingOrder{Sort: sort}}
 }
 
 func withAudioCodec(query library.ListingQuery, codec string) library.ListingQuery {

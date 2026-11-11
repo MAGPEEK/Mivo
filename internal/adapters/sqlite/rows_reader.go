@@ -8,6 +8,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	approws "github.com/magpeek/mivo/internal/app/rows"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -24,7 +25,10 @@ func (catalog *CatalogReader) ListRowItems(ctx context.Context, request approws.
 	var summaries []applibrary.ItemSummary
 
 	err := inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, queries *sqlcgen.Queries) error {
-		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: request.LibraryID, kind: request.Query.Filter.Kind})
+		target, err := completeTarget(ctx, transaction, listingTarget{
+			libraryID: request.LibraryID, kind: request.Query.Filter.Kind,
+			restriction: access.Unrestricted(), // TODO(M7-13): the viewer's restriction.
+		})
 		if err != nil {
 			return err
 		}
@@ -136,7 +140,8 @@ func (catalog *CatalogReader) inEpisodeQuery(ctx context.Context, request approw
 	read func(scan func(...any) error) error,
 ) error {
 	return inListingTransaction(ctx, catalog.reader, func(transaction *sql.Tx, _ *sqlcgen.Queries) error {
-		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: request.LibraryID})
+		// TODO(M7-13): the viewer's restriction.
+		target, err := completeTarget(ctx, transaction, listingTarget{libraryID: request.LibraryID, restriction: access.Unrestricted()})
 		if err != nil {
 			return err
 		}

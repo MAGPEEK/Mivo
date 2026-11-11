@@ -75,7 +75,7 @@ func listingRequestOf(libraryID string, page library.PageRequest, query library.
 	}
 
 	return listingRequest{
-		target: listingTarget{libraryID: libraryID, kind: query.Filter.Kind},
+		target: listingTarget{libraryID: libraryID, kind: query.Filter.Kind, restriction: query.Restriction},
 		query:  query, after: after, hasAfter: hasAfter, rowLimit: limit + 1,
 	}, scope, nil
 }
@@ -102,8 +102,13 @@ const libraryFolderCountSQL = `SELECT (SELECT COUNT(*) FROM library_roots WHERE 
 FROM libraries WHERE libraries.id = ?`
 
 // completeTarget reads whether the library has several folders (see primaryFileSQL). An
-// unknown library wraps domain.ErrNotFound.
+// unknown library wraps domain.ErrNotFound, and so does a library the viewer may not see: its
+// existence must not leak (ADR 0032 §7), and the answer needs no database read.
 func completeTarget(ctx context.Context, transaction *sql.Tx, target listingTarget) (listingTarget, error) {
+	if !libraryAllowed(target.restriction, target.libraryID) {
+		return listingTarget{}, domain.ErrNotFound
+	}
+
 	var folders int
 
 	err := transaction.QueryRowContext(ctx, libraryFolderCountSQL, target.libraryID).Scan(&folders)

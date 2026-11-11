@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -40,7 +42,7 @@ func BenchmarkListingFirstPageAndFacets(b *testing.B) {
 
 	reader := sqlite.NewCatalogReader(db)
 	filter := library.ListingFilter{Kind: library.ItemKindMovie, Genres: []string{"Drama", "War"}, Containers: []string{"mkv"}}
-	query := library.ListingQuery{Filter: filter, Order: library.ListingOrder{Sort: library.SortByYear, Descending: true}}
+	query := library.ListingQuery{Restriction: access.Unrestricted(), Filter: filter, Order: library.ListingOrder{Sort: library.SortByYear, Descending: true}}
 	ctx := context.Background()
 
 	listPage := func(b *testing.B, query library.ListingQuery) {
@@ -54,7 +56,7 @@ func BenchmarkListingFirstPageAndFacets(b *testing.B) {
 	countFacets := func(b *testing.B) {
 		b.Helper()
 
-		_, err := reader.CountFacets(ctx, moviesLibraryID, applibrary.FacetRequest{Fields: library.FacetFields(), Filter: filter})
+		_, err := reader.CountFacets(ctx, moviesLibraryID, applibrary.FacetRequest{Restriction: access.Unrestricted(), Fields: library.FacetFields(), Filter: filter})
 		if err != nil {
 			b.Fatalf("CountFacets error = %v", err)
 		}
@@ -78,9 +80,66 @@ func BenchmarkListingFirstPageAndFacets(b *testing.B) {
 	})
 	b.Run("default page", func(b *testing.B) {
 		for b.Loop() {
-			listPage(b, library.ListingQuery{Filter: library.ListingFilter{Kind: library.ItemKindMovie}})
+			listPage(b, library.ListingQuery{Restriction: access.Unrestricted(), Filter: library.ListingFilter{Kind: library.ItemKindMovie}})
 		}
 	})
+}
+
+// BenchmarkListingRestrictedFirstPageAndFacets measures the same requests for a "Children"
+// viewer (task M7-12), who sees half of the library (G and PG of G, PG, PG-13, R): the
+// restriction must keep the title page on its index scan and the facets in one statement.
+//
+//	go test -run '^$' -bench BenchmarkListingRestricted -benchtime 10x ./internal/adapters/sqlite/
+func BenchmarkListingRestrictedFirstPageAndFacets(b *testing.B) {
+	db, path := openBenchmarkDB(b)
+	seedBenchmarkLibrary(b, path)
+
+	ctx := context.Background()
+	children := benchmarkChildren(b, db)
+	reader := sqlite.NewCatalogReader(db)
+	// Action and Comedy are genres of movies a child may see (see insertBenchmarkMovie).
+	filter := library.ListingFilter{Kind: library.ItemKindMovie, Genres: []string{"Action", "Comedy"}, Containers: []string{"mkv"}}
+	queries := map[string]library.ListingQuery{
+		"page":         {Restriction: children, Filter: filter, Order: library.ListingOrder{Sort: library.SortByYear, Descending: true}},
+		"default page": {Restriction: children, Filter: library.ListingFilter{Kind: library.ItemKindMovie}},
+	}
+
+	for name, query := range queries {
+		b.Run(name, func(b *testing.B) {
+			for b.Loop() {
+				page, err := reader.ListItems(ctx, moviesLibraryID, library.PageRequest{Limit: library.DefaultPageLimit}, query)
+				if err != nil || len(page.Items) != library.DefaultPageLimit || page.TotalCount >= benchmarkItemCount {
+					b.Fatalf("ListItems = %d of %d items, %v", len(page.Items), page.TotalCount, err)
+				}
+			}
+		})
+	}
+
+	b.Run("facets", func(b *testing.B) {
+		for b.Loop() {
+			_, err := reader.CountFacets(ctx, moviesLibraryID, applibrary.FacetRequest{Restriction: children, Fields: library.FacetFields(), Filter: filter})
+			if err != nil {
+				b.Fatalf("CountFacets error = %v", err)
+			}
+		}
+	})
+}
+
+// benchmarkChildren computes the age buckets of the seeded library and returns the
+// restriction of a "Children" profile with access to the movies library only.
+func benchmarkChildren(b *testing.B, db *sqlite.DB) access.Restriction {
+	b.Helper()
+
+	if err := sqlite.NewLibraryCatalog(db, time.Now).BackfillAgeRatings(context.Background()); err != nil {
+		b.Fatalf("BackfillAgeRatings error = %v", err)
+	}
+
+	limit, err := access.LimitForPreset(access.PresetChildren, access.AgeAll)
+	if err != nil {
+		b.Fatalf("LimitForPreset error = %v", err)
+	}
+
+	return access.Viewer{Libraries: access.OnlyLibraries(moviesLibraryID), Limit: limit}.Restriction()
 }
 
 func openBenchmarkDB(b *testing.B) (*sqlite.DB, string) {

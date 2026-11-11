@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -43,7 +44,8 @@ func TestCountFacetsOfEveryField(t *testing.T) {
 	}
 
 	facets, err := fixture.reader.CountFacets(t.Context(), moviesLibraryID, applibrary.FacetRequest{
-		Fields: library.FacetFields(), Filter: library.ListingFilter{Kind: library.ItemKindMovie},
+		Restriction: access.Unrestricted(),
+		Fields:      library.FacetFields(), Filter: library.ListingFilter{Kind: library.ItemKindMovie},
 	})
 	if err != nil {
 		t.Fatalf("CountFacets error = %v", err)
@@ -70,8 +72,9 @@ func TestCountFacetsLeavesOutOnlyTheirOwnFilter(t *testing.T) {
 	fixture := newListingFixture(t)
 
 	facets, err := fixture.reader.CountFacets(t.Context(), moviesLibraryID, applibrary.FacetRequest{
-		Fields: []library.FacetField{library.FacetGenre, library.FacetYear, library.FacetContainer},
-		Filter: library.ListingFilter{Kind: library.ItemKindMovie, Genres: []string{"Drama"}, Containers: []string{"mkv"}},
+		Restriction: access.Unrestricted(),
+		Fields:      []library.FacetField{library.FacetGenre, library.FacetYear, library.FacetContainer},
+		Filter:      library.ListingFilter{Kind: library.ItemKindMovie, Genres: []string{"Drama"}, Containers: []string{"mkv"}},
 	})
 	if err != nil {
 		t.Fatalf("CountFacets error = %v", err)
@@ -96,8 +99,9 @@ func TestCountFacetsOfShowsCountsEachShowOnce(t *testing.T) {
 	fixture := newListingFixture(t)
 
 	facets, err := fixture.reader.CountFacets(t.Context(), showsLibraryID, applibrary.FacetRequest{
-		Fields: []library.FacetField{library.FacetResolution, library.FacetVideoCodec, library.FacetContainer},
-		Filter: library.ListingFilter{Kind: library.ItemKindShow},
+		Restriction: access.Unrestricted(),
+		Fields:      []library.FacetField{library.FacetResolution, library.FacetVideoCodec, library.FacetContainer},
+		Filter:      library.ListingFilter{Kind: library.ItemKindShow},
 	})
 	if err != nil {
 		t.Fatalf("CountFacets error = %v", err)
@@ -127,7 +131,8 @@ func TestCountFacetsCutsAtTheLimit(t *testing.T) {
 	})
 
 	facets, err := fixture.reader.CountFacets(t.Context(), moviesLibraryID, applibrary.FacetRequest{
-		Fields: []library.FacetField{library.FacetGenre}, Filter: library.ListingFilter{Kind: library.ItemKindMovie},
+		Restriction: access.Unrestricted(),
+		Fields:      []library.FacetField{library.FacetGenre}, Filter: library.ListingFilter{Kind: library.ItemKindMovie},
 	})
 	if err != nil {
 		t.Fatalf("CountFacets error = %v", err)
@@ -148,9 +153,9 @@ func TestCountFirstCharactersFollowsTheTitleOrder(t *testing.T) {
 		request applibrary.LetterRequest
 		want    []string
 	}{
-		{name: "ascending", request: applibrary.LetterRequest{}, want: []string{"1:1", "a:1", "b:1", "c:1", "ä:1"}},
-		{name: "descending", request: applibrary.LetterRequest{Descending: true}, want: []string{"ä:1", "c:1", "b:1", "a:1", "1:1"}},
-		{name: "filtered", request: applibrary.LetterRequest{Filter: library.ListingFilter{Genres: []string{"Drama"}}}, want: []string{"a:1", "ä:1"}},
+		{name: "ascending", request: applibrary.LetterRequest{Restriction: access.Unrestricted()}, want: []string{"1:1", "a:1", "b:1", "c:1", "ä:1"}},
+		{name: "descending", request: applibrary.LetterRequest{Restriction: access.Unrestricted(), Descending: true}, want: []string{"ä:1", "c:1", "b:1", "a:1", "1:1"}},
+		{name: "filtered", request: applibrary.LetterRequest{Restriction: access.Unrestricted(), Filter: library.ListingFilter{Genres: []string{"Drama"}}}, want: []string{"a:1", "ä:1"}},
 	}
 	for _, test := range tests {
 		test.request.Filter.Kind = library.ItemKindMovie
@@ -189,7 +194,7 @@ func TestListFolderItemsFindsItemsDirectlyInADirectory(t *testing.T) {
 		{rootID: showsLibraryID, directory: "Show A/Season 1", want: []string{"e0000001-0000-4000-8000-000000000000 e1.mkv", "e0000001-1000-4000-8000-000000000000 e2.mkv"}},
 	}
 	for _, test := range tests {
-		items, err := fixture.reader.ListFolderItems(t.Context(), test.rootID, test.directory)
+		items, err := fixture.reader.ListFolderItems(t.Context(), test.rootID, test.directory, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("ListFolderItems(%q) error = %v", test.directory, err)
 		}

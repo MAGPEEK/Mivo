@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -60,21 +61,28 @@ func (builder *sqlBuilder) write(parts ...string) {
 }
 
 // listingTarget is the library a listing reads: its ID, the top-level kind of the filter
-// (empty for libraries without one) and whether it has more than one folder.
+// (empty for libraries without one), whether it has more than one folder and what the viewer
+// may see of it. The zero restriction denies everything.
 type listingTarget struct {
 	libraryID   string
 	kind        library.ItemKind
 	multiFolder bool
+	restriction access.Restriction
+	// readsInTitleOrder marks the page in title order, which reads the sort index in order
+	// and stops after one page (see visibleSQL).
+	readsInTitleOrder bool
 }
 
 // listingScope is what every listing query of one request shares: the parameters of the
-// library and kind and the base condition on the top-level items (alias "items").
+// library and kind and the base condition on the top-level items (alias "items"), which
+// includes the viewer's restriction, so pages, counts, facets and letters agree.
 type listingScope struct {
 	builder     *sqlBuilder
 	base        string
 	members     memberPath
 	kind        library.ItemKind
 	multiFolder bool
+	restriction access.Restriction
 }
 
 // memberPath says which items decide the technical filters of a listed item: the item itself
@@ -134,7 +142,40 @@ func newListingScope(builder *sqlBuilder, target listingTarget) listingScope {
 		library.ItemKindExtra, library.ItemKindArtist, library.ItemKindTrack, library.ItemKindAudiobook:
 	}
 
-	return listingScope{builder: builder, base: base, members: memberPathOf(target.kind), kind: target.kind, multiFolder: target.multiFolder}
+	return listingScope{
+		builder: builder, base: base + visibleSQL(builder, target), members: memberPathOf(target.kind),
+		kind: target.kind, multiFolder: target.multiFolder, restriction: target.restriction,
+	}
+}
+
+// visibleSQL returns the viewer's restriction on the listed items, to append to the base
+// condition. The library is one known value, so it is decided here instead of in SQL: a
+// library the viewer may not see matches nothing. completeTarget already answers "not found"
+// for it; this keeps a statement built without that check closed too.
+//
+// A page in title order must keep its scan of the sort index (items_top_level, items_albums),
+// which ends after one page. With a plain age condition SQLite prefers
+// items_effective_age_rating, reads every visible item and sorts them for each page; the
+// unary plus takes the condition out of the index choice. Counts, letters and facets read
+// every visible item anyway and leave the choice to SQLite.
+func visibleSQL(builder *sqlBuilder, target listingTarget) string {
+	if !libraryAllowed(target.restriction, target.libraryID) {
+		return andSQL(neverMatches)
+	}
+
+	column := "items" + effectiveAgeColumn
+	if target.readsInTitleOrder {
+		column = "+" + column
+	}
+
+	return andSQL(ageConditionSQL(builder, target.restriction, column))
+}
+
+// visibleMemberSQL returns the content limit on the deciding members, to append to their
+// condition: an episode above the limit must not decide the filters and facets of its show.
+// It binds its parameter when called, so only a statement that reads the members carries it.
+func (scope listingScope) visibleMemberSQL() string {
+	return andSQL(ageConditionSQL(scope.builder, scope.restriction, "members"+effectiveAgeColumn))
 }
 
 // membersSQL selects (top_id, item_id) of the deciding items of the listed items.
@@ -146,11 +187,11 @@ func (scope listingScope) membersSQL() string {
 		return "SELECT items.id AS top_id, members.id AS item_id FROM items" +
 			" JOIN items AS middles ON middles.parent_id = items.id" +
 			" JOIN items AS members ON members.parent_id = middles.id" +
-			" WHERE " + scope.base + " AND members.kind = " + kind
+			" WHERE " + scope.base + " AND members.kind = " + kind + scope.visibleMemberSQL()
 	case memberChild:
 		return "SELECT items.id AS top_id, members.id AS item_id FROM items" +
 			" JOIN items AS members ON members.parent_id = items.id" +
-			" WHERE " + scope.base + " AND members.kind = " + kind
+			" WHERE " + scope.base + " AND members.kind = " + kind + scope.visibleMemberSQL()
 	default:
 		return "SELECT items.id AS top_id, items.id AS item_id FROM items WHERE " + scope.base
 	}
