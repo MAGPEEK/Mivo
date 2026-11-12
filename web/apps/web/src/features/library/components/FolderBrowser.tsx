@@ -4,11 +4,14 @@ import { useTranslation } from "react-i18next";
 import { EmptyState, Skeleton } from "../../../shared/ui";
 import { useFolderBrowser } from "../hooks/useFolderBrowser";
 import type { FolderListing } from "../hooks/useFolderListing";
+import { useFolderHeadingFocus } from "../hooks/useFolderHeadingFocus";
+import { useFolderItemTexts } from "../hooks/useFolderTexts";
+import { useFocusOnMount } from "../hooks/useFocusOnMount";
 import { useViewPreference } from "../hooks/useViewPreference";
 import { errorCodeOf } from "../lib/errorKeys";
 import { parseFolderPath } from "../lib/folderPath";
 import { libraryNamespace } from "../locales";
-import { BrowseItemGrid, type BrowseItemTexts } from "./BrowseItemGrid";
+import { BrowseItemGrid } from "./BrowseItemGrid";
 import { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
 import { FolderCrumbs } from "./FolderCrumbs";
 import { FolderList } from "./FolderList";
@@ -46,6 +49,7 @@ interface FolderContentProps {
 function FolderContent({ libraryId, path, segments }: FolderContentProps) {
   const { t } = useTranslation(libraryNamespace);
   const { library, listing, crumbs } = useFolderBrowser(libraryId, path, segments);
+  const focusHeading = useFolderHeadingFocus(path);
   if (
     listing.status === "notFound" ||
     (library.status === "error" && errorCodeOf(library.error) === "not_found")
@@ -62,6 +66,7 @@ function FolderContent({ libraryId, path, segments }: FolderContentProps) {
         listing={library.status === "error" ? { status: "error", retry: library.retry } : listing}
         scrollKey={`${libraryId}|folders|${path}`}
         title={crumbs.at(-1)?.name ?? t("folders.top")}
+        focusHeading={focusHeading}
       />
     </>
   );
@@ -73,9 +78,17 @@ interface FolderListingViewProps {
   readonly scrollKey: string;
   /** Name of the open folder, the heading of the listing. */
   readonly title: string;
+  /** Whether the heading takes focus when it appears (the user moved to this folder). */
+  readonly focusHeading: boolean;
 }
 
-function FolderListingView({ libraryId, listing, scrollKey, title }: FolderListingViewProps) {
+function FolderListingView({
+  libraryId,
+  listing,
+  scrollKey,
+  title,
+  focusHeading,
+}: FolderListingViewProps) {
   const { t } = useTranslation(libraryNamespace);
   if (listing.status === "pending") {
     return (
@@ -100,7 +113,13 @@ function FolderListingView({ libraryId, listing, scrollKey, title }: FolderListi
     return <FolderNotFound libraryId={libraryId} />;
   }
   return (
-    <LoadedFolder libraryId={libraryId} listing={listing} scrollKey={scrollKey} title={title} />
+    <LoadedFolder
+      libraryId={libraryId}
+      listing={listing}
+      scrollKey={scrollKey}
+      title={title}
+      focusHeading={focusHeading}
+    />
   );
 }
 
@@ -111,33 +130,46 @@ interface LoadedFolderProps {
   readonly listing: LoadedListing;
   readonly scrollKey: string;
   readonly title: string;
+  readonly focusHeading: boolean;
 }
 
-function LoadedFolder({ libraryId, listing, scrollKey, title }: LoadedFolderProps) {
+// Paging stopped while the loaded pages hold only folders, so the grid that would show the
+// failure is not there: say it here and offer the retry.
+function ItemsLoadFailed({ onRetry }: { readonly onRetry: () => void }) {
+  const { t } = useTranslation(libraryNamespace);
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <p role="alert" className="text-text-muted">
+        {t("folders.items.loadMoreFailed")}
+      </p>
+      <button type="button" onClick={onRetry} className={secondaryButtonClass}>
+        {t("retry")}
+      </button>
+    </div>
+  );
+}
+
+function LoadedFolder({ libraryId, listing, scrollKey, title, focusHeading }: LoadedFolderProps) {
   const { t } = useTranslation(libraryNamespace);
   const view = useViewPreference();
+  const texts = useFolderItemTexts();
+  const headingRef = useFocusOnMount<HTMLHeadingElement>(focusHeading);
   const { folders, items } = listing;
   const hasItems = items.items.length > 0;
   // Complete only when no page is left, so a half-loaded folder never claims to be empty.
   if (folders.length === 0 && !hasItems && !items.hasMore) {
     return <EmptyState title={t("folders.empty.title")} description={t("folders.empty.hint")} />;
   }
-  const texts: BrowseItemTexts = {
-    label: t("folders.items.label"),
-    loading: t("folders.items.loading"),
-    loadFailed: t("folders.items.loadFailed"),
-    loadingMore: t("folders.items.loadingMore"),
-    loadMoreFailed: t("folders.items.loadMoreFailed"),
-    emptyTitle: t("folders.empty.title"),
-    emptyHint: t("folders.empty.hint"),
-    emptyUnmatchedTitle: t("folders.empty.title"),
-    emptyUnmatchedHint: t("folders.empty.hint"),
-  };
   return (
     <>
-      <h2 className="mb-3 text-xl font-semibold">{title}</h2>
+      <h2 ref={headingRef} tabIndex={-1} className="mb-3 text-xl font-semibold outline-none">
+        {title}
+      </h2>
       {folders.length > 0 && (
         <FolderList libraryId={libraryId} label={t("folders.list")} folders={folders} />
+      )}
+      {!hasItems && items.loadMoreFailed && !items.loadingMore && (
+        <ItemsLoadFailed onRetry={items.loadMore} />
       )}
       {hasItems && (
         <>

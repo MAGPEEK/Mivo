@@ -17,6 +17,8 @@ import type { LibraryItems } from "./useLibraryItems";
 
 const notFoundStatus = 404;
 const badRequestStatus = 400;
+/** Pages of only folders loaded in a row before the view stops asking for items by itself. */
+export const maxFolderOnlyPages = 50;
 
 /** What the folder view shows for one folder of a library. */
 export type FolderListing =
@@ -68,14 +70,24 @@ function useFolderItems(query: FolderQuery, items: readonly ItemSummary[]): Libr
     void refetch();
   }, [refetch]);
   const failureCount = query.errorUpdateCount;
+  const pages = query.data?.pages ?? [];
+  const pageCount = pages.length;
   // Folders come first, so a page may hold none of the items; the grid is not there to ask for
-  // more, so keep loading until an item shows or the folder is complete.
+  // more, so keep loading until an item shows or the folder is complete. The chain is bounded
+  // and stops at a page without entries, so a misbehaving cursor cannot loop forever; it then
+  // counts as a failed load, which the view shows with a retry.
   const waitingForItems = query.data !== undefined && items.length === 0;
+  const gaveUp =
+    waitingForItems &&
+    hasNextPage &&
+    (pageCount >= maxFolderOnlyPages || pages.at(-1)?.entries.length === 0);
+  const loadMoreFailed = isFetchNextPageError || gaveUp;
   useEffect(() => {
-    if (waitingForItems && hasNextPage && !isFetchNextPageError) {
+    if (waitingForItems && hasNextPage && !loadMoreFailed) {
       loadMore();
     }
-  }, [waitingForItems, hasNextPage, isFetchNextPageError, loadMore]);
+    // pageCount: a page can arrive without a render in between that changes loadMore.
+  }, [waitingForItems, hasNextPage, loadMoreFailed, loadMore, pageCount]);
   return useMemo<LibraryItems>(
     () => ({
       status: "success",
@@ -85,12 +97,12 @@ function useFolderItems(query: FolderQuery, items: readonly ItemSummary[]): Libr
       totalCount: hasNextPage ? undefined : items.length,
       hasMore: hasNextPage,
       loadingMore: isFetchingNextPage,
-      loadMoreFailed: isFetchNextPageError,
+      loadMoreFailed,
       failureCount,
       loadMore,
       retry,
     }),
-    [items, hasNextPage, isFetchingNextPage, isFetchNextPageError, failureCount, loadMore, retry],
+    [items, hasNextPage, isFetchingNextPage, loadMoreFailed, failureCount, loadMore, retry],
   );
 }
 

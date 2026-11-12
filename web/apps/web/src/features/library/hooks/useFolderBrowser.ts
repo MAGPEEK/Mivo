@@ -1,7 +1,9 @@
 import type { Library } from "@mivo/api-client";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import { folderBasename, folderCrumbs, type FolderCrumb } from "../lib/folderPath";
+import { libraryNamespace } from "../locales";
 import { useFolderListing, type FolderListing } from "./useFolderListing";
 import { useLibrary, type LibraryState } from "./useLibrary";
 
@@ -15,9 +17,15 @@ export interface FolderBrowser {
 
 // The first path segment is the id of one of the library's folders; its name is the last name of
 // the server path. The absolute path itself is never shown.
-function topFolderName(library: Library | undefined, folderId: string | undefined): string {
+// Until the library has loaded (or if it does not know the id) a neutral word stands in: the
+// raw id is a UUID that means nothing to the user.
+function topFolderName(
+  library: Library | undefined,
+  folderId: string | undefined,
+  placeholder: string,
+): string {
   const folder = library?.folders.find((candidate) => candidate.id === folderId);
-  return folder === undefined ? (folderId ?? "") : folderBasename(folder.path);
+  return folder === undefined ? placeholder : folderBasename(folder.path);
 }
 
 /**
@@ -32,9 +40,11 @@ export function useFolderBrowser(
   const library = useLibrary(libraryId);
   const listing = useFolderListing(libraryId, path);
   const loaded = library.status === "success" ? library.library : undefined;
+  const { t } = useTranslation(libraryNamespace);
+  const placeholder = t("folders.unnamed");
   const crumbs = useMemo(
-    () => folderCrumbs(segments, topFolderName(loaded, segments[0])),
-    [loaded, segments],
+    () => folderCrumbs(segments, topFolderName(loaded, segments[0], placeholder)),
+    [loaded, segments, placeholder],
   );
   return { library, listing, crumbs };
 }

@@ -7,6 +7,7 @@ import {
   createFakeServer,
   jsonResponse,
   problemResponse,
+  respondNever,
   type FakeRoute,
 } from "../../../test/fakeApi";
 import { fakeItem, fakeLibrary, libraryRoute } from "../../../test/libraryFixtures";
@@ -145,6 +146,70 @@ describe("FolderBrowser", () => {
     router.history.back();
 
     expect(await screen.findByText("Big Buck Bunny")).toBeDefined();
+  });
+
+  it("restores the folder on Forward", async () => {
+    const { router } = renderFolders(topFolderId);
+    fireEvent.click(await screen.findByRole("link", { name: "Animation" }));
+    await screen.findByRole("heading", { name: "This folder is empty" });
+    router.history.back();
+    await screen.findByText("Big Buck Bunny");
+
+    router.history.forward();
+
+    expect(await screen.findByRole("heading", { name: "This folder is empty" })).toBeDefined();
+    expect(router.state.location.pathname).toBe(foldersUrl(animation));
+  });
+
+  it("keeps the heading levels: library name, then the open folder", async () => {
+    renderFolders(topFolderId);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Movies" })).toBeDefined();
+    expect(screen.getByRole("heading", { level: 2, name: "movies" })).toBeDefined();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
+  it("moves focus to the folder heading after the user opens another folder", async () => {
+    renderFolders(animation);
+    const crumbs = await screen.findByRole("navigation", { name: "Folder path" });
+    // A folder the page was opened on does not take focus.
+    await screen.findByRole("heading", { name: "This folder is empty" });
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.click(within(crumbs).getByRole("link", { name: "movies" }));
+
+    const heading = await screen.findByRole("heading", { level: 2, name: "movies" });
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it("shows a placeholder, not the folder id, for a folder the library does not list", async () => {
+    const unrelated = fakeLibrary({
+      folders: [{ id: "other-folder", path: "/media/other", available: true }],
+    });
+    const server = createFakeServer([libraryRoute(unrelated), foldersRoute(listings)]);
+    renderApp(foldersUrl(topFolderId), { fetch: server.fetch });
+
+    await screen.findByText("Big Buck Bunny");
+
+    const crumbs = screen.getByRole("navigation", { name: "Folder path" });
+    expect(crumbs.textContent).not.toContain(topFolderId);
+    expect(within(crumbs).getByRole("link", { name: "Folder" })).toBeDefined();
+  });
+
+  it("shows a loading state while the folder is on its way", async () => {
+    renderApp(foldersUrl(), { fetch: respondNever() });
+
+    expect(await screen.findByText("Loading folder")).toBeDefined();
+  });
+
+  it("treats a 400 from the server like a missing folder", async () => {
+    const server = createFakeServer([
+      libraryRoute(library),
+      { method: "GET", path: foldersApiPath, respond: () => problemResponse(400, "invalid") },
+    ]);
+    renderApp(foldersUrl(`${topFolderId}/odd`), { fetch: server.fetch });
+
+    expect(await screen.findByRole("heading", { name: "Folder not found" })).toBeDefined();
   });
 
   it("shows the not-found state for a folder the server does not have", async () => {

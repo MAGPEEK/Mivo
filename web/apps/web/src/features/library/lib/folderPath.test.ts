@@ -18,6 +18,10 @@ describe("parseFolderPath", () => {
     { splat: "id/..foo", path: "id/..foo", segments: ["id", "..foo"] },
     { splat: "id/a:b", path: "id/a:b", segments: ["id", "a:b"] },
     { splat: "id/100%", path: "id/100%", segments: ["id", "100%"] },
+    // The router decodes once; what is left here is a plain name for the server to judge.
+    { splat: "id/%2e%2e", path: "id/%2e%2e", segments: ["id", "%2e%2e"] },
+    { splat: "id/%252e%252e", path: "id/%252e%252e", segments: ["id", "%252e%252e"] },
+    { splat: "x".repeat(4096), path: "x".repeat(4096), segments: ["x".repeat(4096)] },
   ])("accepts $splat", ({ splat, path, segments }) => {
     expect(parseFolderPath(splat)).toEqual({ valid: true, path, segments });
   });
@@ -36,7 +40,7 @@ describe("parseFolderPath", () => {
     ["a backslash parent", "id/..\\x"],
     ["a control character", "id/a\u0000b"],
     ["a line break", "id/a\nb"],
-    ["more than 4096 characters", `id/${"x".repeat(4096)}`],
+    ["more than 4096 characters", "x".repeat(4097)],
   ])("rejects %s", (_, splat) => {
     expect(parseFolderPath(splat)).toEqual({ valid: false });
   });
