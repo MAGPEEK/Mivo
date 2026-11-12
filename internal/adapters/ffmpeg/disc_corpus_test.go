@@ -60,6 +60,8 @@ func requireDiscFixture(t *testing.T) discFixture {
 		t.Skip("skipping FFmpeg disc integration test: ffmpeg is not on PATH (install FFmpeg, see docs/development.md)")
 	}
 
+	requireFFmpegFeature(t, ffmpegPath, ffmpegFeature{listing: "-devices", name: "lavfi", reason: "the discs are generated with the lavfi input device"})
+
 	fixture := discFixture{
 		tools:   hlsTools{ffmpegPath: ffmpegPath, ffprobePath: ffprobePath, prober: newCorpusProber(t, ffprobePath)},
 		library: t.TempDir(),

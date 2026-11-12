@@ -117,6 +117,8 @@ func requireMusicTools(t *testing.T) musicTools {
 
 	ffprobePath := requireFFprobe(t)
 	ffmpegPath := requireFFmpeg(t)
+	requireFFmpegFeature(t, ffmpegPath, ffmpegFeature{listing: "-devices", name: "lavfi", reason: "the music and chapter fixtures need the lavfi device and encoders such as libmp3lame"})
+
 	logger := slog.New(slog.DiscardHandler)
 
 	prober, err := ffmpeg.NewProber(ffmpeg.ProberOptions{FFprobePath: ffprobePath, Logger: logger})

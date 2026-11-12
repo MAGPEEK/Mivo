@@ -18,6 +18,8 @@ set -u
 
 failures=0
 total=0
+# BUS_ERROR_STATUS is the exit status of a process killed by SIGBUS (128 + 7).
+readonly BUS_ERROR_STATUS=135
 bin=/tmp/bin
 scratch=/tmp/checks
 mkdir -p "$bin" "$scratch"
@@ -105,11 +107,11 @@ check_components() {
 	# Image-subtitle burn-in (burnin.go) needs the overlay filter; there is no libass, so no
 	# "subtitles" filter.
 	ffmpeg -hide_banner -filters >"$scratch/filters" 2>/dev/null
-	check "filter overlay" listed "$scratch/filters" overlay
-	for muxer in hls mp4 image2pipe; do check "muxer $muxer" listed "$scratch/muxers" "$muxer"; done
+	for filter in overlay tile; do check "filter $filter" listed "$scratch/filters" "$filter"; done
+	for muxer in hls mp4 image2pipe image2 webvtt; do check "muxer $muxer" listed "$scratch/muxers" "$muxer"; done
 	# The sets stay minimal: names of the configure lists, one per row of the listings.
-	# (mpegts is built on purpose: the hls muxer selects it.)
-	for muxer in image2 matroska webm gif; do
+	# (mpegts is not listed in MUXERS but configure pulls it in as a dependency of hls.)
+	for muxer in matroska webm gif; do
 		if listed "$scratch/muxers" "$muxer"; then failed "muxer $muxer is not built"; else pass "muxer $muxer is not built"; fi
 	done
 	for encoder in libx265 libvpx gif mpeg4 libopus; do
@@ -416,6 +418,35 @@ check_subtitles() {
 	done
 }
 
+# check_filter_graphs executes the graphs that need filters beyond the graph endpoints: the
+# overlay of image-subtitle burn-in (burnin.go) and the trickplay sheet chain
+# (trickplay_args.go: fps, scale, tile, format to mjpeg sheets through the image2 muxer). The
+# build has no lavfi, so the sources are corpus files.
+check_filter_graphs() {
+	source=/corpus/video/h264_aac.mkv
+	ffmpeg -hide_banner -nostdin -v error -format_whitelist "$(whitelist_for "$source")" \
+		-protocol_whitelist file -i "file:$source" -an -frames:v 5 -c:v mjpeg -f null - 2>"$scratch/h264.err"
+	decode_status=$?
+	if [ "$decode_status" -eq "$BUS_ERROR_STATUS" ]; then
+		# Known and unchanged since revision 4: the H.264 decoder dies with SIGBUS under qemu-user on
+		# the NEON-less Cortex-A9 model (README.md "Baselines", BACKLOG "spk-17 notes"). Report it
+		# instead of failing, so the other checks of this CPU model still count.
+		printf 'INFO h264 decode of the corpus clip crashes with SIGBUS on this CPU model; graph checks skipped\n'
+		return
+	fi
+	check "h264 decode of the corpus clip" test "$decode_status" -eq 0
+	check "overlay graph executes" ffmpeg -hide_banner -nostdin -v error -format_whitelist "$(whitelist_for "$source")" \
+		-protocol_whitelist file -i "file:$source" -i "file:$source" \
+		-filter_complex '[0:v][1:v]overlay' -an -frames:v 5 -c:v mjpeg -f null -
+	sheets=/tmp/sheets
+	mkdir -p "$sheets"
+	ffmpeg -hide_banner -nostdin -v error -y -format_whitelist "$(whitelist_for "$source")" -protocol_whitelist file \
+		-i "file:$source" -an -sn -dn \
+		-vf 'fps=1/1:eof_action=pass,scale=160:-2,tile=5x5,format=yuvj420p' -c:v mjpeg -q:v 5 -frames:v 2 \
+		-f image2 "file:$sheets/sheet-%d.jpg" 2>"$scratch/trickplay.err"
+	check "trickplay chain writes a non-empty sheet through image2" test -s "$sheets/sheet-1.jpg"
+}
+
 # run_go_tests runs the server's own FFmpeg adapter tests (corpus probe against the manifest,
 # hostile inputs, keyframes, HLS producer) against this build.
 run_go_tests() {
@@ -447,6 +478,7 @@ check_hls
 check_discs
 check_images
 check_subtitles
+check_filter_graphs
 run_go_tests
 printf 'SUMMARY %s %s: %s/%s checks passed\n' "$FAMILY" "$CPU_MODEL" "$((total - failures))" "$total"
 [ "$failures" -eq 0 ]

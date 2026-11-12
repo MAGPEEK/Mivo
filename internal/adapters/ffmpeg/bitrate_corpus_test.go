@@ -78,6 +78,8 @@ func TestHLSArgumentsKeepAStreamUnderItsBitRateCap(t *testing.T) {
 func generateCapClip(t *testing.T, ffmpegPath string) string {
 	t.Helper()
 
+	requireFFmpegFeature(t, ffmpegPath, ffmpegFeature{listing: "-devices", name: "lavfi", reason: "the fixture is generated with the lavfi input device"})
+
 	target := filepath.Join(t.TempDir(), "cap-1080p.mkv")
 
 	// The executable comes from PATH and the arguments are a slice; no shell is involved.

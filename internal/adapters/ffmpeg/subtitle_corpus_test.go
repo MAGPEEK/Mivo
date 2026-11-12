@@ -278,6 +278,9 @@ const (
 // from a generated SRT with one cue every two seconds.
 func TestExtractTwoHourTrackWithinLimit(t *testing.T) {
 	ffmpegPath := requireFFmpeg(t)
+	requireFFmpegFeature(t, ffmpegPath, ffmpegFeature{listing: "-muxers", name: "matroska", reason: "the 2 h clip is built as MKV with an srt encoder; the extraction is covered by the corpus tests"})
+	requireFFmpegFeature(t, ffmpegPath, ffmpegFeature{listing: "-encoders", name: "srt", reason: "the 2 h clip is built with an srt subtitle encoder"})
+
 	directory := t.TempDir()
 
 	var text strings.Builder

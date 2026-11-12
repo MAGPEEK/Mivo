@@ -98,6 +98,10 @@ func TestHLSAudioArgumentsDecodeDSD(t *testing.T) {
 func (tools hlsTools) runAudio(t *testing.T, source string, run audioCorpusRun, soxr bool) {
 	t.Helper()
 
+	if run.wantCodec == "flac" {
+		requireFFmpegFeature(t, tools.ffmpegPath, ffmpegFeature{listing: "-encoders", name: "flac", reason: "no FLAC encoder; the server sends AAC instead"})
+	}
+
 	description, err := tools.prober.Probe(t.Context(), source)
 	if err != nil {
 		t.Fatalf("Probe: %v", err)

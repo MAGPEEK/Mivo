@@ -231,7 +231,7 @@ seconds). It meets every criterion of ADR 0026 section 4 for all three families:
 - Every input (FFmpeg, x264, dav1d, zlib, musl, gcc, binutils, gmp, mpc, mpfr, musl-cross-make,
   NASM) is pinned by SHA-256 in `build/sources.list`; a changed checksum fails the build.
 - The recipe also produces the corresponding source archive
-  (`ffmpeg-9.0.2-static5-source.tar`, 168.6 MB, all sources plus the recipe); the SPK build puts
+  (`ffmpeg-9.0.2-static5-source.tar`, all sources plus the recipe); the SPK build puts
   it into `dist/` next to the SPKs with a line in `SHA256SUMS`, to attach to every GitHub
   Release. Clean builds give byte-identical binaries (the hashes in `sources.lock`).
 - Verified under the emulation conditions above for x86_64 (Opteron_G1), armv8 (cortex-a53) and

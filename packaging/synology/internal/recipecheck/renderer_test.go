@@ -21,10 +21,10 @@ func TestRecipeBuildsWhatTheImageRendererNeeds(t *testing.T) {
 	muxers := recipeList(t, script, "MUXERS")
 	encoders := recipeList(t, script, "ENCODERS")
 
-	assertExactSet(t, "MUXERS", muxers, []string{"hls", "mp4", "null", "image2pipe"})
+	assertExactSet(t, "MUXERS", muxers, []string{"hls", "mp4", "null", "image2pipe", "image2", "webvtt"})
 	assertExactSet(t, "ENCODERS", encoders, []string{"libx264", "aac", "mjpeg", "png", "webvtt"})
 
-	for _, muxer := range []string{"image2pipe", "hls", "mp4"} {
+	for _, muxer := range []string{"image2pipe", "image2", "webvtt", "hls", "mp4"} {
 		if !slices.Contains(muxers, muxer) {
 			t.Errorf("MUXERS of %s lacks %q", recipeScript, muxer)
 		}
@@ -56,6 +56,20 @@ func readFile(t *testing.T, path string) string {
 	return string(content)
 }
 
+// TestRecipeBuildsTheFiltersOfTheArgumentBuilders: filters the server's graphs name (trickplay
+// fps, scale, tile, format; burn-in overlay; audio aresample; pad) must stay in FILTERS.
+func TestRecipeBuildsTheFiltersOfTheArgumentBuilders(t *testing.T) {
+	t.Parallel()
+
+	filters := recipeList(t, readFile(t, recipeScript), "FILTERS")
+
+	for _, filter := range []string{"overlay", "tile", "fps", "scale", "format", "aresample", "pad"} {
+		if !slices.Contains(filters, filter) {
+			t.Errorf("FILTERS of %s lacks %q", recipeScript, filter)
+		}
+	}
+}
+
 // subtitleArgsSource builds the subtitle extraction arguments (M4-08a).
 const subtitleArgsSource = "../../../../internal/adapters/ffmpeg/subtitle_args.go"
 
@@ -82,7 +96,8 @@ func recipeList(t *testing.T, script, name string) []string {
 		t.Fatalf("%s has no readonly %s=\"...\" line", recipeScript, name)
 	}
 
-	return strings.Split(match[1], ",")
+	// A line continuation ("\" and a newline) inside the quotes is no part of a name.
+	return strings.Split(strings.ReplaceAll(match[1], "\\\n", ""), ",")
 }
 
 // assertExactSet fails on any difference between the recipe's list and the expected set, so

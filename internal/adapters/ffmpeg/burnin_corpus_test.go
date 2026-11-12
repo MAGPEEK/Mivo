@@ -2,6 +2,8 @@ package ffmpeg_test
 
 import (
 	"bytes"
+	"image/color"
+	"image/jpeg"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,6 +129,10 @@ func TestBurnInReadsAnExternalSubtitleFileWithAnyName(t *testing.T) {
 func (tools hlsTools) assertBurnIn(t *testing.T, source string, burnIn *ffmpeg.BurnIn, test burnInCase) {
 	t.Helper()
 
+	if burnIn.Kind == ffmpeg.BurnInText {
+		requireFFmpegFeature(t, tools.ffmpegPath, ffmpegFeature{listing: "-filters", name: "subtitles", reason: "no libass; the server reports BurnInText=false"})
+	}
+
 	withSubtitle := tools.burnInFrame(t, source, burnIn, test)
 	without := tools.burnInFrame(t, source, nil, test)
 
@@ -213,16 +219,44 @@ func (tools hlsTools) frameOfJob(t *testing.T, job ffmpeg.HLSJob) []byte {
 	// The executable comes from PATH and the arguments are a slice; no shell is involved.
 	command := exec.CommandContext(t.Context(), tools.ffmpegPath, //nolint:gosec // see above
 		"-hide_banner", "-nostdin", "-loglevel", "error", "-ss", strconv.FormatFloat(burnInFrameTime.Seconds(), 'f', 3, 64),
-		"-i", joined, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-")
+		"-i", joined, "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "1", "-f", "image2pipe", "-")
 
 	var stderr bytes.Buffer
 
 	command.Stderr = &stderr
 
-	frame, err := command.Output()
+	encoded, err := command.Output()
 	if err != nil {
 		t.Fatalf("decode a frame of the output: %v\n%s", err, stderr.Bytes())
 	}
 
-	return frame
+	return grayPixels(t, encoded)
+}
+
+// grayPixels decodes a JPEG frame into one gray byte per pixel. The frame travels as JPEG
+// because the bundled Synology FFmpeg has the mjpeg encoder and image2pipe muxer (the image
+// renderer needs them) but no rawvideo muxer.
+func grayPixels(t *testing.T, encoded []byte) []byte {
+	t.Helper()
+
+	picture, err := jpeg.Decode(bytes.NewReader(encoded))
+	if err != nil {
+		t.Fatalf("decode the JPEG frame: %v", err)
+	}
+
+	bounds := picture.Bounds()
+	pixels := make([]byte, 0, bounds.Dx()*bounds.Dy())
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			gray, isGray := color.GrayModel.Convert(picture.At(x, y)).(color.Gray)
+			if !isGray {
+				t.Fatal("GrayModel did not return color.Gray")
+			}
+
+			pixels = append(pixels, gray.Y)
+		}
+	}
+
+	return pixels
 }
