@@ -8,7 +8,7 @@ reference for every setting of the image; the step-by-step user guides are
 Container Manager, QNAP Container Station) with the ready-made
 [docker-compose.yml](docker-compose.yml) next to this file.
 
-Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.8` and `alpha`
+Published image: `docker.io/magpeek/mivo-media-server`, tags `0.1.0-alpha.9` and `alpha`
 (no `latest`), platforms `linux/amd64` and `linux/arm64`. The examples below use the
 published tag; replace it with `mivo:dev` for an image you built yourself.
 
@@ -49,7 +49,7 @@ docker run --rm --entrypoint cat mivo:dev /usr/local/share/doc/ffmpeg-capabiliti
 ```
 docker run -d --name mivo -p 0.0.0.0:8460:8460 --stop-timeout 20 \
   -v /path/to/config:/config -v /path/to/media:/media:ro -v /path/to/transcode:/transcode \
-  docker.io/magpeek/mivo-media-server:0.1.0-alpha.8
+  docker.io/magpeek/mivo-media-server:0.1.0-alpha.9
 ```
 
 `--stop-timeout 20` (compose: `stop_grace_period: 20s`) gives the server time for its
@@ -82,7 +82,7 @@ The image starts without a library. Mount your media below `/media` (for example
 the web app and add the folders in **Settings > Libraries** (ADR 0028). The folder browser
 starts at `/media` (`MIVO_BROWSE_ROOTS=/media`, `MIVO_INSTALL_KIND=docker` are set by the
 image). The server scans a library when you add or change it, at every start and
-periodically. Managing libraries works from the local network only until accounts exist.
+periodically. Sign-in is required: on the first start open the web app from the local network and create the first administrator right away (ADR 0032); managing libraries and the transcoder needs an administrator on the local network.
 
 To seed libraries from the configuration instead, list the container paths in
 `MIVO_LIBRARIES`, separated by `:`, or use `libraries` in `/config/config.yaml` (names and
@@ -162,14 +162,20 @@ against a world-readable copy (`cp -r testdata/media /tmp/corpus && chmod -R a+r
 
 ### Local network only
 
-The server has no accounts yet (milestone 7), so by default it refuses requests from outside
+Besides the sign-in, the server by default refuses requests from outside
 the local network with `403` (`MIVO_SERVER_LAN_ONLY=true`, ADR 0018); `/api/v1/health` stays
 reachable. It admits loopback, private (RFC 1918, IPv6 ULA), link-local and `100.64.0.0/10`
 addresses, plus IPv6 addresses inside a global prefix (`/48` or longer, without the Teredo
 and 6to4 tunnel ranges) of the server's own network interfaces, because dual-stack home
 networks give their clients global IPv6 addresses. If those prefixes cannot be read for
 about two minutes, such clients are refused. Only the address of the connection counts;
-`X-Forwarded-For` is ignored.
+`X-Forwarded-For` is ignored unless the connection comes from a trusted proxy.
+
+**Create the first administrator immediately.** The first-run setup is open to anyone who
+reaches the port from an address that counts as local, and Docker Desktop, a tunnel or a
+reverse proxy on the same host can make every client look local. If you put a reverse proxy
+in front, list its address in `MIVO_SERVER_TRUSTED_PROXIES` (comma separated) so that
+`X-Forwarded-For` is honoured and public clients are refused (ADR 0032 section 9).
 
 What Docker networking does to that address:
 
@@ -232,7 +238,7 @@ Synology (Container Manager project), one library from the `video` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.8
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.9
     user: "1026:100"
     stop_grace_period: 20s
     ports:
@@ -251,7 +257,7 @@ QNAP (Container Station application), two libraries from the `Multimedia` share:
 ```yaml
 services:
   mivo:
-    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.8
+    image: docker.io/magpeek/mivo-media-server:0.1.0-alpha.9
     user: "1000:100"
     stop_grace_period: 20s
     ports:
@@ -274,7 +280,7 @@ into a volume only when it creates the empty volume. They work with the default 
 with `--user` / `user:` set to another ID the server cannot write them. Use bind mounts in
 that case, or `chown` the volume to that user once before the first start (a one-off root
 container that only changes ownership, not the server):
-`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.8 -R 1026:100 /config`.
+`docker run --rm -v mivo-config:/config --user 0 --entrypoint chown docker.io/magpeek/mivo-media-server:0.1.0-alpha.9 -R 1026:100 /config`.
 Note that Docker re-initialises a volume from the image while it is still empty, so the
 `chown` only sticks once the volume holds a file; bind mounts avoid the problem.
 
