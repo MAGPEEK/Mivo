@@ -5,6 +5,32 @@
   "loadFailed": "Die Bibliothek konnte nicht geladen werden.",
   "retry": "Erneut versuchen",
   "backHome": "Zur Startseite",
+  "folders": {
+    "open": "Ordner durchsuchen",
+    "heading": "Ordner",
+    "top": "Ordner",
+    "breadcrumb": "Ordnerpfad",
+    "list": "Ordner",
+    "viewOptions": "Ansichtsoptionen",
+    "loading": "Ordner wird geladen",
+    "loadFailed": "Der Ordner konnte nicht geladen werden.",
+    "items": {
+      "label": "Einträge in diesem Ordner",
+      "loading": "Einträge werden geladen",
+      "loadFailed": "Die Einträge konnten nicht geladen werden.",
+      "loadingMore": "Weitere Einträge werden geladen",
+      "loadMoreFailed": "Weitere Einträge konnten nicht geladen werden."
+    },
+    "empty": {
+      "title": "Dieser Ordner ist leer",
+      "hint": "Hier gibt es weder Ordner noch Titel. Starte einen Scan, wenn du kürzlich Dateien hinzugefügt hast."
+    },
+    "notFound": {
+      "title": "Ordner nicht gefunden",
+      "hint": "Dieser Ordner existiert nicht oder gehört nicht zu dieser Bibliothek.",
+      "action": "Zurück zur Bibliothek"
+    }
+  },
   "pivots": {
     "label": "Bibliotheksansichten",
     "overview": "Übersicht",

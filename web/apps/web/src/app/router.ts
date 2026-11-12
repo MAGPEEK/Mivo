@@ -33,6 +33,7 @@ import {
 import { HomePage } from "../features/home";
 import { ItemPage, validateItemSearch } from "../features/item";
 import {
+  FolderBrowser,
   LibraryPage,
   validateBrowseSearch,
   type BrowseSearchChange,
@@ -90,6 +91,20 @@ function LibraryRoute() {
     search,
     onSearchChange,
     renderItems: itemsViewByType,
+  });
+}
+
+// The folder view: the splat is the folder path below the library, the URL is the whole state.
+function LibraryFoldersRoute() {
+  const { libraryId, _splat } = useParams({ from: "/shell/libraries/$libraryId/folders/$" });
+  return createElement(FolderBrowser, { libraryId, splat: _splat });
+}
+
+function libraryFoldersPage<Parent extends AnyRoute>(parent: Parent) {
+  return createRoute({
+    getParentRoute: () => parent,
+    path: "/libraries/$libraryId/folders/$",
+    component: LibraryFoldersRoute,
   });
 }
 
@@ -261,6 +276,7 @@ function createRouteTree() {
       validateSearch: validateBrowseSearch,
       component: LibraryRoute,
     }),
+    libraryFoldersPage(shellRoute),
     createRoute({
       getParentRoute: () => shellRoute,
       path: "/admin/manage/libraries",

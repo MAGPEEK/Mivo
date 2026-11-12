@@ -69,6 +69,12 @@ export type ScanCounts = Schemas["ScanCounts"];
 /** One page of a library's items; follow `nextCursor` until it is absent. */
 export type ItemPage = Schemas["ItemPage"];
 
+/** One page of the children of a library folder (folder view). */
+export type LibraryFolderListing = Schemas["LibraryFolderListing"];
+
+/** One child of a library folder: a sub-folder or a catalog item. */
+export type LibraryFolderEntry = Schemas["LibraryFolderEntry"];
+
 /** An item in a library listing. */
 export type ItemSummary = Schemas["ItemSummary"];
 

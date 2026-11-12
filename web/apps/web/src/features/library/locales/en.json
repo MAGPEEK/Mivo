@@ -5,6 +5,32 @@
   "loadFailed": "The library could not be loaded.",
   "retry": "Try again",
   "backHome": "Back to home",
+  "folders": {
+    "open": "Browse folders",
+    "heading": "Folders",
+    "top": "Folders",
+    "breadcrumb": "Folder path",
+    "list": "Folders",
+    "viewOptions": "View options",
+    "loading": "Loading folder",
+    "loadFailed": "The folder could not be loaded.",
+    "items": {
+      "label": "Items in this folder",
+      "loading": "Loading items",
+      "loadFailed": "The items could not be loaded.",
+      "loadingMore": "Loading more items",
+      "loadMoreFailed": "More items could not be loaded."
+    },
+    "empty": {
+      "title": "This folder is empty",
+      "hint": "There are no folders or titles here. Run a scan if you added files recently."
+    },
+    "notFound": {
+      "title": "Folder not found",
+      "hint": "This folder does not exist or is not in this library.",
+      "action": "Back to the library"
+    }
+  },
   "pivots": {
     "label": "Library views",
     "overview": "Overview",

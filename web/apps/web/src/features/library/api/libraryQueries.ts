@@ -209,6 +209,41 @@ export function libraryLettersQueryOptions(
   });
 }
 
+/**
+ * Cache key of `GET /api/v1/libraries/{libraryId}/folders`. Below the library key, so a finished
+ * scan, which changes the folders and their items, refreshes the folder view too.
+ */
+export function libraryFoldersQueryKey(libraryId: string) {
+  return [...libraryQueryKey(libraryId), "folders"] as const;
+}
+
+/**
+ * Infinite query options that page through the children of the library folder `path` (empty: the
+ * top). The path is library-relative and already validated by the caller.
+ */
+export function libraryFoldersQueryOptions(client: ApiClient, libraryId: string, path: string) {
+  return infiniteQueryOptions({
+    queryKey: [...libraryFoldersQueryKey(libraryId), path] as const,
+    queryFn: ({ pageParam, signal }) =>
+      requestData(
+        client.GET("/api/v1/libraries/{libraryId}/folders", {
+          params: {
+            path: { libraryId },
+            query: {
+              ...(path === "" ? {} : { path }),
+              limit: libraryItemsPageSize,
+              ...(pageParam === undefined ? {} : { cursor: pageParam }),
+            },
+          },
+          signal,
+        }),
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page) => page.nextCursor,
+    retry: shouldRetryLibraryQuery,
+  });
+}
+
 /** Query options for the rows of a library's Overview pivot, as the server generates them. */
 export function libraryRowsQueryOptions(client: ApiClient, libraryId: string) {
   return queryOptions({

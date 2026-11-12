@@ -54,6 +54,8 @@ export type {
   ItemDetail,
   ItemKind,
   ItemPage,
+  LibraryFolderEntry,
+  LibraryFolderListing,
   ItemPerson,
   ItemPhoto,
   ItemQuickFilter,

@@ -10,7 +10,7 @@ import { libraryPivots, type BrowseSearch } from "../lib/browseQuery";
 import { errorCodeOf, errorKeyForCode } from "../lib/errorKeys";
 import { libraryNamespace } from "../locales";
 import { BrowsePivot, type LibraryItemsRenderer } from "./BrowsePivot";
-import { primaryButtonClass } from "./buttonClasses";
+import { primaryButtonClass, secondaryButtonClass } from "./buttonClasses";
 import { OverviewPivot } from "./OverviewPivot";
 import { ScanControl } from "./ScanControl";
 
@@ -63,6 +63,31 @@ interface LibraryContentProps extends Omit<LibraryPageProps, "libraryId"> {
   readonly library: Library;
 }
 
+// Name, availability, scan control and the way into the folder view.
+function LibraryHeader({ library }: { readonly library: Library }) {
+  const { t } = useTranslation(libraryNamespace);
+  return (
+    <div className="mb-6 flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h1 className={headingClass}>{library.name}</h1>
+        {!library.available && (
+          <Badge icon={<AlertIcon className="size-3 shrink-0 text-accent" />}>
+            {t("libraryUnavailable")}
+          </Badge>
+        )}
+      </div>
+      <ScanControl library={library} />
+      <Link
+        to="/libraries/$libraryId/folders/$"
+        params={{ libraryId: library.id, _splat: "" }}
+        className={`self-start ${secondaryButtonClass}`}
+      >
+        {t("folders.open")}
+      </Link>
+    </div>
+  );
+}
+
 function LibraryContent({ library, search, onSearchChange, renderItems }: LibraryContentProps) {
   const { t } = useTranslation(libraryNamespace);
   const { pivot, selectPivot, onBrowseSearchChange } = useLibraryPivot({
@@ -72,17 +97,7 @@ function LibraryContent({ library, search, onSearchChange, renderItems }: Librar
   });
   return (
     <>
-      <div className="mb-6 flex flex-col gap-3">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className={headingClass}>{library.name}</h1>
-          {!library.available && (
-            <Badge icon={<AlertIcon className="size-3 shrink-0 text-accent" />}>
-              {t("libraryUnavailable")}
-            </Badge>
-          )}
-        </div>
-        <ScanControl library={library} />
-      </div>
+      <LibraryHeader library={library} />
       <Tabs
         label={t("pivots.label")}
         tabs={libraryPivots.map((id) => ({ id, label: t(`pivots.${id}`) }))}
