@@ -56,6 +56,7 @@ export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
       {view.streamInfoOpen ? (
         <StreamInfoOverlay
           info={view.streamInfo}
+          networkStats={view.networkStats}
           regionRef={streamInfoRegionRef}
           headingRef={streamInfoHeadingRef}
           onClose={actions.closeStreamInfo}

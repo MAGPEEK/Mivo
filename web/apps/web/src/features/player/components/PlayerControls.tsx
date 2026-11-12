@@ -2,6 +2,7 @@ import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InfoIcon, SettingsIcon } from "../../../shared/ui";
+import { ModeBadge } from "./ModeBadge";
 import { playerControlsMarker } from "../hooks/useControlsVisibility";
 import type { PlayerActions, PlayerView } from "../hooks/usePlayer";
 import { playerNamespace } from "../locales";
@@ -13,12 +14,11 @@ import { TransportControls } from "./TransportControls";
 import { VolumeControl } from "./VolumeControl";
 
 /**
- * Places in the control bar that later tasks fill (PL-04): the mode indicator (M5-62), the
- * More menu (M5-63) and the queue panel button (M5-65). The playback options button
+ * Places in the control bar that later tasks fill (PL-04): the More menu (M5-63) and the queue
+ * panel button (M5-65). The playback options button
  * (PL-10 … PL-13) is part of the bar itself.
  */
 export interface PlayerSlots {
-  readonly modeIndicator?: ReactNode;
   readonly more?: ReactNode;
   readonly queue?: ReactNode;
 }
@@ -79,7 +79,7 @@ type SideControlsProps = Omit<PlayerControlsProps, "playButtonRef" | "slots"> & 
   readonly slots: PlayerSlots;
 };
 
-/** The right group (PL-04): mode indicator, stream info, More, repeat, shuffle, panels, sound. */
+/** The right group (PL-04): mode badge (stream info), More, repeat, shuffle, panels, sound. */
 function SideControls({
   view,
   actions,
@@ -90,17 +90,7 @@ function SideControls({
   const { t } = useTranslation(playerNamespace);
   return (
     <div className="flex flex-wrap items-center justify-center gap-1 md:justify-end">
-      {slots.modeIndicator}
-      <button
-        ref={streamInfoToggleRef}
-        type="button"
-        onClick={actions.toggleStreamInfo}
-        aria-expanded={view.streamInfoOpen}
-        aria-label={t("controls.streamInfo")}
-        className={iconButtonClass}
-      >
-        <InfoIcon className="size-6" />
-      </button>
+      <StreamInfoToggle view={view} actions={actions} toggleRef={streamInfoToggleRef} />
       {slots.more}
       <QueueModeControls
         queue={view.queue}
@@ -125,5 +115,40 @@ function SideControls({
         onVolumeChange={actions.setVolume}
       />
     </div>
+  );
+}
+
+/** The mode badge opens the stream info; before the first session a plain info button does. */
+function StreamInfoToggle({
+  view,
+  actions,
+  toggleRef,
+}: {
+  readonly view: PlayerView;
+  readonly actions: PlayerActions;
+  readonly toggleRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const { t } = useTranslation(playerNamespace);
+  if (view.streamInfo !== undefined) {
+    return (
+      <ModeBadge
+        info={view.streamInfo}
+        open={view.streamInfoOpen}
+        onToggle={actions.toggleStreamInfo}
+        buttonRef={toggleRef}
+      />
+    );
+  }
+  return (
+    <button
+      ref={toggleRef}
+      type="button"
+      onClick={actions.toggleStreamInfo}
+      aria-expanded={view.streamInfoOpen}
+      aria-label={t("controls.streamInfo")}
+      className={iconButtonClass}
+    >
+      <InfoIcon className="size-6" />
+    </button>
   );
 }

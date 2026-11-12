@@ -118,7 +118,25 @@
     "container": "Container",
     "containerChange": "{{source}} → {{target}}",
     "encoder": "Encoder",
-    "sourceBitRate": "Bitrate der Quelle"
+    "sourceBitRate": "Bitrate der Quelle",
+    "bufferAhead": "Puffer voraus",
+    "bufferAheadValue": "{{value, number(maximumFractionDigits: 0)}} s",
+    "throughput": "Netzwerk",
+    "throughputValue": "{{value, number(maximumFractionDigits: 1)}} MB/s",
+    "unknown": "unbekannt",
+    "badge": {
+      "label": "Stream-Info, Modus: {{mode}}",
+      "allCopied": "Nichts wird umgewandelt: Die Datei wird unverändert geliefert."
+    },
+    "hint": {
+      "audio_codec_not_supported": "Wähle eine AAC-Spur, um die Umwandlung zu vermeiden.",
+      "audio_channels_not_supported": "Wähle eine Stereo- oder 5.1-Spur, um die Umwandlung zu vermeiden.",
+      "audio_track_not_first": "Wähle die erste Audiospur, um die Datei unverändert abzuspielen.",
+      "subtitle_burn_in": "Wähle einen Text-Untertitel oder schalte Untertitel aus, um das Einbrennen zu vermeiden.",
+      "bitrate_cap": "Wähle die Qualität „Original“, um die Umwandlung zu vermeiden.",
+      "video_downscaled": "Wähle die Qualität „Original“, um die volle Auflösung zu behalten.",
+      "subtitle_burn_in_unavailable": "Wähle einen Text-Untertitel oder versuche es später erneut."
+    }
   },
   "streamInfo": {
     "mode": {
@@ -136,12 +154,18 @@
       "audio_channels_not_supported": "Audio mit mehr als 5.1 Kanälen → {{targetCodec}} 5.1",
       "audio_track_not_first": "Die gewählte Audiospur ist nicht die erste, und Browser spielen nur die erste Spur einer Datei",
       "disc_source": "DVDs und Blu-rays werden nie direkt abgespielt → {{targetContainer}}",
+      "subtitle_burn_in": "{{sourceCodec}}-Untertitel sind ein Bildformat und werden ins Video eingebrannt, das Video wird dadurch umgewandelt",
+      "bitrate_cap": "Das Qualitätslimit liegt unter der Bitrate der Quelle, das Video wird umgewandelt",
+      "dsd_to_pcm": "DSD-Audio wird immer in PCM umgewandelt",
+      "hires_downsampled": "Das Audio übersteigt, was dieses Gerät abspielt, und wird reduziert",
+      "hwaccel_unavailable": "Kein Hardware-Encoder verfügbar, das Video wird in Software kodiert",
       "unknown": "Anderer Grund ({{code}})"
     },
     "warning": {
       "hdr_not_tone_mapped": "HDR wird ohne Tone Mapping umgewandelt, die Farben können blass wirken",
       "subtitles_not_supported": "Untertitel werden noch nicht angezeigt",
       "video_downscaled": "Video auf {{resolution}} verkleinert",
+      "subtitle_burn_in_unavailable": "Der Server kann den gewählten Untertitel gerade nicht einbrennen, Untertitel bleiben aus",
       "unknown": "Anderer Hinweis ({{code}})"
     },
     "streamKind": {

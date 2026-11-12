@@ -3,6 +3,8 @@ import { useId, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AlertIcon, CloseIcon } from "../../../shared/ui";
+import type { NetworkStats } from "../hooks/useNetworkStats";
+import { reasonHintKey } from "../lib/reasonHints";
 import { streamLineParts } from "../lib/streamLineText";
 import { playerNamespace } from "../locales";
 import { iconButtonClass } from "./playerStyles";
@@ -11,10 +13,14 @@ import { iconButtonClass } from "./playerStyles";
 export interface StreamInfoOverlayProps {
   /** What to show; `undefined` before the first session. */
   readonly info: StreamInfo | undefined;
+  /** Buffer ahead and throughput; unknown values read "unknown". */
+  readonly networkStats: NetworkStats;
   readonly regionRef: RefObject<HTMLElement | null>;
   readonly headingRef: RefObject<HTMLHeadingElement | null>;
   readonly onClose: () => void;
 }
+
+const bytesPerMegabyte = 1_000_000;
 
 // Status colours of ADR 0011 by player-core's token name; the compile-time check in
 // apiTypeChecks.ts keeps the names in ui-tokens.
@@ -31,6 +37,7 @@ export const modeBadgeClasses: Readonly<Record<StreamInfoColorToken, string>> = 
  */
 export function StreamInfoOverlay({
   info,
+  networkStats,
   regionRef,
   headingRef,
   onClose,
@@ -59,13 +66,19 @@ export function StreamInfoOverlay({
       {info === undefined ? (
         <p className="text-text-muted">{t("overlay.noSession")}</p>
       ) : (
-        <StreamInfoDetails info={info} />
+        <StreamInfoDetails info={info} networkStats={networkStats} />
       )}
     </section>
   );
 }
 
-function StreamInfoDetails({ info }: { readonly info: StreamInfo }) {
+function StreamInfoDetails({
+  info,
+  networkStats,
+}: {
+  readonly info: StreamInfo;
+  readonly networkStats: NetworkStats;
+}) {
   const { t } = useTranslation(playerNamespace);
   const { mode, container, encoder, sourceBitRate } = info;
   return (
@@ -103,10 +116,36 @@ function StreamInfoDetails({ info }: { readonly info: StreamInfo }) {
             value={t(sourceBitRate.key, sourceBitRate.params)}
           />
         )}
+        <NetworkRows stats={networkStats} />
       </dl>
       <ReasonList heading={t("overlay.warnings")} reasons={info.warnings} warning />
     </div>
   );
+}
+
+/** Buffer ahead and throughput as description rows; "unknown" until measured. */
+function NetworkRows({ stats }: { readonly stats: NetworkStats }) {
+  const { t } = useTranslation(playerNamespace);
+  const { bufferAheadSeconds, throughputBytesPerSecond } = stats;
+  const rows = [
+    {
+      key: "bufferAhead",
+      label: t("overlay.bufferAhead"),
+      value:
+        bufferAheadSeconds === undefined
+          ? t("overlay.unknown")
+          : t("overlay.bufferAheadValue", { value: bufferAheadSeconds }),
+    },
+    {
+      key: "throughput",
+      label: t("overlay.throughput"),
+      value:
+        throughputBytesPerSecond === undefined
+          ? t("overlay.unknown")
+          : t("overlay.throughputValue", { value: throughputBytesPerSecond / bytesPerMegabyte }),
+    },
+  ];
+  return rows.map((row) => <InfoRow key={row.key} label={row.label} value={row.value} />);
 }
 
 function InfoRow({ label, value }: { readonly label: string; readonly value: string }) {
@@ -142,10 +181,28 @@ function ReasonList({ heading, reasons, warning = false }: ReasonListProps) {
             {warning ? <AlertIcon className="mt-0.5 size-4 shrink-0 text-transcode" /> : null}
             {/* Through `replace`: params with an index signature make i18next's types read the
                 key's underscores as a context suffix. */}
-            <span>{t(reason.key, { replace: reason.params })}</span>
+            <span>
+              {t(reason.key, { replace: reason.params })}
+              <ReasonHint code={reason.code} />
+            </span>
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function ReasonHint({ code }: { readonly code: string }) {
+  const { t } = useTranslation(playerNamespace);
+  const key = reasonHintKey(code);
+  if (key === undefined) {
+    return null;
+  }
+  // The space keeps the sentences apart in the text a screen reader reads.
+  return (
+    <>
+      {" "}
+      <span className="block text-text-muted">{t(key)}</span>
+    </>
   );
 }

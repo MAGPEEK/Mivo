@@ -19,6 +19,7 @@ import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
 import type { PlayerQueueView } from "./usePlayerQueue";
 import { usePlayerShortcuts } from "./usePlayerShortcuts";
 import { usePlayerTransport, type TransportActions } from "./usePlayerTransport";
+import { useNetworkStats, type NetworkStats } from "./useNetworkStats";
 import { useSessionToasts } from "./useSessionToasts";
 import { useStreamInfoOverlay, type StreamInfoOverlay } from "./useStreamInfoOverlay";
 import { useSubtitleCues } from "./useSubtitleCues";
@@ -32,6 +33,8 @@ export interface PlayerView {
   readonly notice: PlaybackNotice;
   /** What the stream-info overlay shows; `undefined` before the first session. */
   readonly streamInfo: StreamInfo | undefined;
+  /** Buffer ahead and throughput for the overlay; sampled only while it is open. */
+  readonly networkStats: NetworkStats;
   /** Displayed file position in seconds. */
   readonly position: number;
   /** Probed duration of the file in seconds; `undefined` until known. */
@@ -185,6 +188,7 @@ export function usePlayer(target: PlaybackTarget): Player {
   const { media, actions: mediaActions } = usePlayerMedia(video, playback);
   const fullscreen = useFullscreen(container);
   const overlay = useStreamInfoOverlay();
+  const networkStats = useNetworkStats(video, session?.streamUrl, overlay.open);
   const [playButtonRef, retryAndFocus] = useRetryWithFocus(retry);
   const { item, duration, transport } = usePlayerNavigation(target, playback, seek);
   const { view: trackView, actions: trackActions, optionsToggleRef } = useTracks(playback, video);
@@ -206,6 +210,7 @@ export function usePlayer(target: PlaybackTarget): Player {
       queue: transport.queue,
       notice: playbackNotice(playback),
       streamInfo: session === undefined ? undefined : streamInfo(session),
+      networkStats,
       position: playback.position,
       duration,
       media,

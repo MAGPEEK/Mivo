@@ -118,7 +118,25 @@
     "container": "Container",
     "containerChange": "{{source}} → {{target}}",
     "encoder": "Encoder",
-    "sourceBitRate": "Source bit rate"
+    "sourceBitRate": "Source bit rate",
+    "bufferAhead": "Buffer ahead",
+    "bufferAheadValue": "{{value, number(maximumFractionDigits: 0)}} s",
+    "throughput": "Network",
+    "throughputValue": "{{value, number(maximumFractionDigits: 1)}} MB/s",
+    "unknown": "unknown",
+    "badge": {
+      "label": "Stream info, mode: {{mode}}",
+      "allCopied": "Nothing is converted: the file is delivered as it is."
+    },
+    "hint": {
+      "audio_codec_not_supported": "Choose an AAC track to avoid converting.",
+      "audio_channels_not_supported": "Choose a stereo or 5.1 track to avoid converting.",
+      "audio_track_not_first": "Choose the first audio track to play the file as it is.",
+      "subtitle_burn_in": "Choose a text subtitle or switch subtitles off to avoid burning in.",
+      "bitrate_cap": "Choose \"Original\" quality to avoid converting.",
+      "video_downscaled": "Choose \"Original\" quality to keep the full resolution.",
+      "subtitle_burn_in_unavailable": "Choose a text subtitle or try again later."
+    }
   },
   "streamInfo": {
     "mode": {
@@ -136,12 +154,18 @@
       "audio_channels_not_supported": "Audio with more than 5.1 channels → {{targetCodec}} 5.1",
       "audio_track_not_first": "The selected audio track is not the first one, and browsers play only the first track of a file",
       "disc_source": "DVDs and Blu-rays are never played directly → {{targetContainer}}",
+      "subtitle_burn_in": "{{sourceCodec}} subtitles are an image format and are burned into the video, which converts it",
+      "bitrate_cap": "The quality limit is below the source bit rate, so the video is converted",
+      "dsd_to_pcm": "DSD audio is always converted to PCM",
+      "hires_downsampled": "The audio exceeds what this device plays and is reduced",
+      "hwaccel_unavailable": "No hardware encoder is available, so the video is encoded in software",
       "unknown": "Other reason ({{code}})"
     },
     "warning": {
       "hdr_not_tone_mapped": "HDR is converted without tone mapping, so colours may look pale",
       "subtitles_not_supported": "Subtitles are not shown yet",
       "video_downscaled": "Video downscaled to {{resolution}}",
+      "subtitle_burn_in_unavailable": "The server cannot burn in the chosen subtitle right now, so subtitles stay off",
       "unknown": "Other warning ({{code}})"
     },
     "streamKind": {

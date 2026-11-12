@@ -41,6 +41,7 @@ export {
   MutedIcon,
   PauseIcon,
   PlayIcon,
+  ResetIcon,
   ScreenIcon,
   SearchIcon,
   SettingsIcon,

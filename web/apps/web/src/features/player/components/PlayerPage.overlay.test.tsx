@@ -60,6 +60,8 @@ describe("PlayerPage stream-info overlay", () => {
       ["Video", "H.264 · Copied"],
       ["Audio", "AAC · Copied"],
       ["Source bit rate", "950 kbit/s"],
+      ["Buffer ahead", "unknown"],
+      ["Network", "unknown"],
     ]);
     expect(within(overlay()).queryByRole("list")).toBeNull();
   });
@@ -70,7 +72,7 @@ describe("PlayerPage stream-info overlay", () => {
     expect(within(overlay()).getByText("Direct Stream").className).toContain("bg-direct-stream");
     expect(listItems("Why")).toEqual(["MKV not supported → MP4"]);
     expect(overlayRows()[0]).toEqual(["Container", "MKV → MP4"]);
-    expect(overlayRows().at(-1)).toEqual(["Source bit rate", "4.1 Mbit/s"]);
+    expect(overlayRows().at(-3)).toEqual(["Source bit rate", "4.1 Mbit/s"]);
   });
 
   it("shows a transcode in amber with reasons, streams, encoder and warnings", async () => {
@@ -80,7 +82,7 @@ describe("PlayerPage stream-info overlay", () => {
     expect(listItems("Why")).toEqual([
       "MKV not supported → MP4",
       "Video HEVC not supported → H.264",
-      "Audio AC-3 not supported → AAC",
+      "Audio AC-3 not supported → AAC Choose an AAC track to avoid converting.",
     ]);
     expect(overlayRows()).toEqual([
       ["Container", "MKV → MP4"],
@@ -88,10 +90,12 @@ describe("PlayerPage stream-info overlay", () => {
       ["Audio", "AC-3 → AAC · 2.0 · Transcoded"],
       ["Encoder", "Software (libx264)"],
       ["Source bit rate", "18.5 Mbit/s"],
+      ["Buffer ahead", "unknown"],
+      ["Network", "unknown"],
     ]);
     expect(listItems("Warnings")).toEqual([
       "HDR is converted without tone mapping, so colours may look pale",
-      "Video downscaled to 1080p",
+      'Video downscaled to 1080p Choose "Original" quality to keep the full resolution.',
       "Subtitles are not shown yet",
     ]);
   });
@@ -118,7 +122,13 @@ describe("PlayerPage stream-info overlay", () => {
     expect(within(overlay()).getByText("Other mode").className).toContain("bg-text-muted");
     expect(listItems("Why")).toEqual(["Other reason (future_reason)"]);
     // An unknown source bit rate is left out instead of reading "0 kbit/s".
-    expect(overlayRows().map(([label]) => label)).toEqual(["Container", "Video", "Audio"]);
+    expect(overlayRows().map(([label]) => label)).toEqual([
+      "Container",
+      "Video",
+      "Audio",
+      "Buffer ahead",
+      "Network",
+    ]);
   });
 
   it("says so before the first session", async () => {
@@ -129,7 +139,7 @@ describe("PlayerPage stream-info overlay", () => {
 
   it("moves focus into the overlay and back to its toggle when it closes", async () => {
     await renderPlayer({ status: "playing", session: directPlaySession });
-    const toggle = screen.getByRole("button", { name: "Stream info" });
+    const toggle = screen.getByRole("button", { name: /^Stream info/ });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(toggle);
@@ -150,7 +160,7 @@ describe("PlayerPage stream-info overlay", () => {
     const playButton = screen.getByRole("button", { name: "Play" });
     playButton.focus();
 
-    fireEvent.click(screen.getByRole("button", { name: "Stream info" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Stream info/ }));
 
     expect(screen.queryByRole("region")).toBeNull();
     expect(document.activeElement).toBe(playButton);

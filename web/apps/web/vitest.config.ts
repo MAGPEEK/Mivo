@@ -9,6 +9,8 @@ const testTimeoutMs = 15_000;
 // Kept apart from vite.config.ts, so tests load neither Tailwind nor the dev proxy.
 export default defineProject({
   plugins: [react()],
+  // Tests may read the API contract (`api/openapi.yaml`, `?raw`) from the repository root.
+  server: { fs: { allow: ["../../.."] } },
   test: {
     name: "web",
     environment: "jsdom",

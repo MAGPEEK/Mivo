@@ -64,7 +64,7 @@ describe("PlayerPage control bar", () => {
     expect(playback.attachVideo).toHaveBeenCalledWith(video);
     expect(video.hasAttribute("controls")).toBe(false);
     const bar = within(controls());
-    for (const name of ["Play", "Mute", "Stream info"]) {
+    for (const name of ["Play", "Mute", /^Stream info/]) {
       expect(bar.getByRole("button", { name })).toBeTruthy();
     }
     expect(scrubber().getAttribute("aria-valuetext")).toBe("0:00:30 of 0:02:00");

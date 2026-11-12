@@ -120,6 +120,12 @@ export {
   type StreamInfoColorToken,
   type StreamInfoSession,
 } from "./streamInfo/streamInfo";
+export {
+  bufferAheadSeconds,
+  throughputBytesPerSecond,
+  throughputWindowSize,
+  type TransferSample,
+} from "./streamInfo/networkStats";
 export type { ReasonSession, ReasonText, TextParams } from "./streamInfo/reasonTexts";
 export type { EncoderText, StreamLine } from "./streamInfo/streamLines";
 export {

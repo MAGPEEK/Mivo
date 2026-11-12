@@ -26,6 +26,11 @@ export const knownReasonCodes = [
   "audio_channels_not_supported",
   "audio_track_not_first",
   "disc_source",
+  "subtitle_burn_in",
+  "bitrate_cap",
+  "dsd_to_pcm",
+  "hires_downsampled",
+  "hwaccel_unavailable",
 ] as const;
 
 /** Warning codes of ADR 0023: degradations of the result. */
@@ -33,6 +38,7 @@ export const knownWarningCodes = [
   "hdr_not_tone_mapped",
   "subtitles_not_supported",
   "video_downscaled",
+  "subtitle_burn_in_unavailable",
 ] as const;
 
 /** Stream kinds of the API. */
