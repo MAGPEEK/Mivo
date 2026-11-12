@@ -30,12 +30,14 @@ import {
   writeQualityChoice,
   type QualityChoice,
 } from "../lib/qualityPreference";
+import type { PlaybackSpeed } from "../lib/playbackSpeed";
 import { sessionToasts } from "../lib/sessionToasts";
 import {
   readSubtitleSize,
   writeSubtitleSize,
   type SubtitleSize,
 } from "../lib/subtitleSizePreference";
+import type { PlaybackPreferences } from "./usePlaybackPreferences";
 import type { PlaybackSessionView } from "./usePlaybackSession";
 
 /** What the playback options panel shows (PL-10 … PL-13). */
@@ -59,6 +61,10 @@ export interface PlaybackOptionsView {
   readonly sizeLockedBy: "burnIn" | undefined;
   /** A switch is replacing the session; the panel shows a spinner (PL-11). */
   readonly switching: boolean;
+  /** Whether the next queue item starts by itself (PL-14). */
+  readonly autoPlay: boolean;
+  /** The playback speed (PL-15). */
+  readonly speed: PlaybackSpeed;
 }
 
 /** What the panel's controls do. */
@@ -71,6 +77,8 @@ export interface PlaybackOptionsActions {
   readonly chooseQuality: (row: QualityRow) => void;
   readonly toggleAllSteps: () => void;
   readonly setSubtitleSize: (size: SubtitleSize) => void;
+  readonly setAutoPlay: (enabled: boolean) => void;
+  readonly setSpeed: (speed: PlaybackSpeed) => void;
 }
 
 /** The panel's state and actions. */
@@ -127,7 +135,7 @@ function buildView(
   playback: PlaybackOptionsInput,
   shownId: string,
   panel: PanelState,
-): PlaybackOptionsView {
+): Omit<PlaybackOptionsView, "autoPlay" | "speed"> {
   const { session, selection, tracks, profile } = playback;
   const choice = availableQualityChoice(panel.storedChoice, tracks?.quality ?? []);
   const allQuality = qualityRows(tracks?.quality ?? [], choice, profile?.hls.delivery === "mse");
@@ -172,7 +180,7 @@ function createActions({
   playback,
   state,
   set,
-}: ActionContext): Omit<PlaybackOptionsActions, "close"> {
+}: ActionContext): Omit<PlaybackOptionsActions, "close" | "setAutoPlay" | "setSpeed"> {
   const subtitleTracks = playback.tracks?.subtitles ?? [];
   return {
     toggle: () => {
@@ -217,7 +225,10 @@ function createActions({
  * subtitle) is decided there; the engine carries the plan out. Quality and subtitle size are
  * remembered per device.
  */
-export function usePlaybackOptions(playback: PlaybackOptionsInput): PlaybackOptions {
+export function usePlaybackOptions(
+  playback: PlaybackOptionsInput,
+  preferences: PlaybackPreferences,
+): PlaybackOptions {
   const { session, selection, tracks } = playback;
   const toggleRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -247,9 +258,10 @@ export function usePlaybackOptions(playback: PlaybackOptionsInput): PlaybackOpti
     // having remembered it as the opener.
     toggleRef.current?.focus();
   };
+  const { autoPlay, speed, setAutoPlay, setSpeed } = preferences;
   return {
-    view: buildView(playback, shownId, panel),
-    actions: { ...actions, close },
+    view: { ...buildView(playback, shownId, panel), autoPlay, speed },
+    actions: { ...actions, close, setAutoPlay, setSpeed },
     sidecarTrack: subtitleTracks.find((track) => track.id === shownId && track.sidecar),
     toggleRef,
   };

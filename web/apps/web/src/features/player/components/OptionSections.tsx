@@ -10,6 +10,7 @@ import type { AudioRow, QualityRow, SubtitleRow } from "../lib/optionRows";
 import { isSubtitleSize, subtitleSizes } from "../lib/subtitleSizePreference";
 import { playerNamespace } from "../locales";
 import { OptionItem, OptionMenu, tabbableIndex } from "./OptionMenu";
+import { SpeedControl } from "./SpeedControl";
 
 /** Props every section of the panel takes. */
 export interface OptionSectionProps {
@@ -231,6 +232,34 @@ export function SubtitleSection({ view, actions }: OptionSectionProps) {
       <p className={hintClass}>
         {view.subtitles.length === 0 ? t("options.subtitles.none") : t("options.subtitles.instant")}
       </p>
+    </section>
+  );
+}
+
+/** PL-14, PL-15: whether the next item starts by itself, and the playback speed. */
+export function PlaybackSection({ view, actions }: OptionSectionProps) {
+  const { t } = useTranslation(playerNamespace);
+  const headingId = useId();
+  const autoPlayId = useId();
+  return (
+    <section aria-labelledby={headingId}>
+      <SectionHeading id={headingId}>{t("options.playback.heading")}</SectionHeading>
+      <div className="flex flex-col gap-3">
+        <label htmlFor={autoPlayId} className="flex items-center gap-2 text-sm text-text">
+          <input
+            id={autoPlayId}
+            type="checkbox"
+            checked={view.autoPlay}
+            onChange={(event) => {
+              actions.setAutoPlay(event.target.checked);
+            }}
+            className="size-4 accent-accent"
+          />
+          {t("options.autoPlay.label")}
+        </label>
+        <SpeedControl value={view.speed} onChange={actions.setSpeed} />
+      </div>
+      <p className={hintClass}>{t("options.playback.device")}</p>
     </section>
   );
 }

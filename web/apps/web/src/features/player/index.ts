@@ -5,6 +5,9 @@ export {
   playerMinimiseEvent,
   type PlayerMinimiseDetail,
 } from "./lib/playerEvents";
+export { SpeedControl, type SpeedControlProps } from "./components/SpeedControl";
+export { readAutoPlay } from "./lib/autoPlayPreference";
+export { playbackSpeeds, type PlaybackSpeed } from "./lib/playbackSpeed";
 export { queueHandoffState, type QueueHandoff } from "./lib/queueHandoff";
 export { validatePlayerSearch, type PlayerSearch } from "./lib/playerSearch";
 export { playerLocales, playerNamespace } from "./locales";

@@ -28,7 +28,18 @@
       "quality": "Qualität",
       "audio": "Audio",
       "subtitles": "Untertitel",
-      "size": "Größe"
+      "size": "Größe",
+      "playback": "Wiedergabe"
+    },
+    "playback": {
+      "heading": "Wiedergabe",
+      "device": "Gilt für dieses Gerät."
+    },
+    "autoPlay": {
+      "label": "Nächste automatisch abspielen"
+    },
+    "speed": {
+      "label": "Geschwindigkeit"
     },
     "quality": {
       "heading": "Qualität",

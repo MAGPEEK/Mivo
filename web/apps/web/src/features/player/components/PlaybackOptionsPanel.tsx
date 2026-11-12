@@ -8,6 +8,7 @@ import type { PlayerActions, PlayerView } from "../hooks/usePlayer";
 import { playerNamespace } from "../locales";
 import {
   AudioSection,
+  PlaybackSection,
   QualitySection,
   SizeSection,
   SubtitleSection,
@@ -24,17 +25,18 @@ export interface PlaybackOptionsPanelProps {
 
 const narrowScreenQuery = belowBreakpointQuery("md");
 
-type SectionId = "quality" | "audio" | "subtitles" | "size";
+type SectionId = "playback" | "quality" | "audio" | "subtitles" | "size";
 
 const sections: Readonly<Record<SectionId, (props: OptionSectionProps) => ReactElement>> = {
+  playback: PlaybackSection,
   quality: QualitySection,
   audio: AudioSection,
   subtitles: SubtitleSection,
   size: SizeSection,
 };
 
-/** Tab order of the phone sheet; the panel opens on audio, the most used section. */
-const tabOrder: readonly SectionId[] = ["quality", "audio", "subtitles", "size"];
+/** Section order: the panel is an ordered list, so a section is added here; it opens on audio. */
+const tabOrder: readonly SectionId[] = ["quality", "audio", "subtitles", "size", "playback"];
 const startSection: SectionId = "audio";
 
 function isSectionId(id: string): id is SectionId {
@@ -104,7 +106,7 @@ function PanelSections({
   const Selected = sections[section];
   if (!narrow) {
     return (
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-3 xl:grid-cols-5">
         {tabOrder.map((id) => {
           const Section = sections[id];
           return <Section key={id} {...sectionProps} />;

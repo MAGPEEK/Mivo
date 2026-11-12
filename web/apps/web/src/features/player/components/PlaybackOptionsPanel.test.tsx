@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { blockingAxeViolations } from "../../../test/axe";
 import { stubMediaQueries } from "../../../test/mediaQuery";
+import { autoPlayStorageKey } from "../lib/autoPlayPreference";
+import { speedStorageKey } from "../lib/playbackSpeed";
 import { playerTracks } from "../lib/playerTracks";
 import { qualityStorageKey } from "../lib/qualityPreference";
 import { subtitleSizeStorageKey } from "../lib/subtitleSizePreference";
@@ -387,6 +389,80 @@ describe("quality section", () => {
   });
 });
 
+describe("playback section", () => {
+  beforeEach(() => {
+    window.localStorage.removeItem(autoPlayStorageKey);
+    window.localStorage.removeItem(speedStorageKey);
+  });
+
+  it("offers auto play, on by default, and the speed steps with 1× chosen", async () => {
+    await openPanel();
+
+    const autoPlay = screen.getByRole<HTMLInputElement>("checkbox", {
+      name: "Play next automatically",
+    });
+    expect(autoPlay.checked).toBe(true);
+    const speed = screen.getByRole<HTMLSelectElement>("combobox", { name: "Playback speed" });
+    expect([...speed.options].map((option) => option.textContent)).toEqual([
+      "0.5×",
+      "0.75×",
+      "1×",
+      "1.25×",
+      "1.5×",
+      "1.75×",
+      "2×",
+    ]);
+    expect(speed.value).toBe("1");
+  });
+
+  it("applies the chosen speed to the video with the pitch kept, and remembers it", async () => {
+    await openPanel();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Playback speed" }), {
+      target: { value: "1.5" },
+    });
+
+    const video = document.querySelector("video");
+    expect(video?.playbackRate).toBe(1.5);
+    expect(video?.preservesPitch).toBe(true);
+    expect(window.localStorage.getItem(speedStorageKey)).toBe("1.5");
+  });
+
+  it("starts with the saved speed and auto play choice", async () => {
+    window.localStorage.setItem(speedStorageKey, "0.75");
+    window.localStorage.setItem(autoPlayStorageKey, "false");
+    await openPanel();
+
+    expect(document.querySelector("video")?.playbackRate).toBe(0.75);
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Playback speed" }).value).toBe(
+      "0.75",
+    );
+    expect(
+      screen.getByRole<HTMLInputElement>("checkbox", { name: "Play next automatically" }).checked,
+    ).toBe(false);
+  });
+
+  it("saves the auto play choice and keeps the keys inside the panel", async () => {
+    const { playback } = await openPanel();
+    const autoPlay = screen.getByRole("checkbox", { name: "Play next automatically" });
+
+    click(autoPlay);
+    autoPlay.focus();
+    press("ArrowLeft");
+
+    expect(window.localStorage.getItem(autoPlayStorageKey)).toBe("false");
+    expect(playback.seek).not.toHaveBeenCalled();
+  });
+
+  it("is in German, too, and has no serious accessibility violations", async () => {
+    await openPanel(["de"]);
+
+    expect(screen.getByRole("checkbox", { name: "Nächste automatisch abspielen" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Geschwindigkeit" })).toBeTruthy();
+    expect(await blockingAxeViolations(document.body)).toEqual([]);
+  });
+});
+
 describe("toasts", () => {
   it("tells that the server could not burn the subtitle in, once, with a close button", async () => {
     const session = {
@@ -446,7 +522,7 @@ describe("narrow screens", () => {
       within(tabs)
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["Quality", "Audio", "Subtitles", "Size"]);
+    ).toEqual(["Quality", "Audio", "Subtitles", "Size", "Playback"]);
     expect(screen.queryByRole("menu", { name: "Subtitles" })).toBeNull();
 
     click(within(tabs).getByRole("tab", { name: "Subtitles" }));

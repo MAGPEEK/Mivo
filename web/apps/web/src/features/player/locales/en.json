@@ -28,7 +28,18 @@
       "quality": "Quality",
       "audio": "Audio",
       "subtitles": "Subtitles",
-      "size": "Size"
+      "size": "Size",
+      "playback": "Playback"
+    },
+    "playback": {
+      "heading": "Playback",
+      "device": "Applies to this device."
+    },
+    "autoPlay": {
+      "label": "Play next automatically"
+    },
+    "speed": {
+      "label": "Playback speed"
     },
     "quality": {
       "heading": "Quality",

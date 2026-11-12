@@ -15,6 +15,7 @@ import {
   type PlaybackOptionsInput,
   type PlaybackOptionsView,
 } from "./usePlaybackOptions";
+import { usePlaybackPreferences } from "./usePlaybackPreferences";
 import { usePlaybackSession, type PlaybackTarget } from "./usePlaybackSession";
 import { usePlayerItem, type PlayerItemInfo } from "./usePlayerItem";
 import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
@@ -179,7 +180,8 @@ function useTracks(
   playback: PlaybackOptionsInput & Pick<PlaybackSnapshot, "switchedSessionId">,
   video: HTMLVideoElement | null,
 ) {
-  const options = usePlaybackOptions(playback);
+  const preferences = usePlaybackPreferences(video);
+  const options = usePlaybackOptions(playback, preferences);
   const toasts = useSessionToasts(playback);
   const subtitleText = useSubtitleCues(video, playback.session, options.sidecarTrack);
   return {
