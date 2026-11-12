@@ -135,6 +135,8 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Search:    services.searchService(),
 		Scan:      services.scans,
 		Playback:  services.playback,
+		// The scan service owns the probe step, so it also re-analyzes single items.
+		Reanalysis: services.scans,
 		// The manager also serves the folder browser: it marks the folders that cannot be chosen.
 		Manager:      services.management.manager,
 		Folders:      services.management.manager,

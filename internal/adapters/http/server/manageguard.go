@@ -25,6 +25,7 @@ const (
 	profilesRefusalDetail         = "Administrators manage profiles from the local network only."
 	sessionsRefusalDetail         = "The running playback sessions are only shown to an administrator on the local network."
 	transcoderRefusalDetail       = "Transcoder settings need an administrator on the local network."
+	analysisRefusalDetail         = "Re-analyzing files needs an administrator on the local network."
 )
 
 // manageArea is the guarded area a request belongs to; areaNone is not guarded.
@@ -48,6 +49,8 @@ const (
 	areaSessions
 	// areaTranscoder is the hardware acceleration status and its test run.
 	areaTranscoder
+	// areaAnalysis is re-analyzing the files of an item (PL-35).
+	areaAnalysis
 )
 
 // Paths of the guarded routes (api/openapi.yaml).
@@ -74,6 +77,10 @@ const (
 	userProfilesSegments = 5
 	// sessionListSegments counts "api", "v1", "playback" and "sessions".
 	sessionListSegments = 4
+	// itemSubRouteSegments counts "api", "v1", "items", the item ID and the sub-route;
+	// itemReanalyzeSegment is the sub-route that probes the item's files again.
+	itemSubRouteSegments = 5
+	itemReanalyzeSegment = "reanalyze"
 )
 
 // manageGuard protects the management and administration operations (ADR 0028, ADR 0032
@@ -221,6 +228,8 @@ func areaRefusalDetail(area manageArea) string {
 		return sessionsRefusalDetail
 	case areaTranscoder:
 		return transcoderRefusalDetail
+	case areaAnalysis:
+		return analysisRefusalDetail
 	case areaNone, areaLibraries:
 		return manageRefusalDetail
 	default:
@@ -241,6 +250,7 @@ func areaRefusalDetail(area manageArea) string {
 //   - profiles: every request below /api/v1/profiles (see profileRefusal).
 //   - sessions: reading the list at /api/v1/playback/sessions (GET and HEAD, ADR 0030 §7).
 //   - transcoder: every request below /api/v1/system/transcoder (ADR 0030 §5).
+//   - analysis: re-analyzing an item's files, POST /api/v1/items/{id}/reanalyze (M5-17).
 //
 // The path is classified twice and the first guarded answer wins (fail closed): once split
 // into segments that are unescaped one by one, as ServeMux matches them, so an encoded slash
@@ -278,8 +288,7 @@ func segmentArea(segments []string, isRead bool) manageArea {
 	case isPrefixOf(segments, apiV1Libraries):
 		return libraryArea(segments, isRead)
 	case isPrefixOf(segments, apiV1Items):
-		// /api/v1/items/{id}/identify, .../identify/search, .../match and .../refresh
-		return areaIf(!isRead && len(segments) >= 5 && slices.Contains(itemMetadataSegments(), segments[4]), areaMetadata)
+		return itemArea(segments, isRead)
 	case isPrefixOf(segments, apiV1MetadataSettings):
 		return areaIf(len(segments) == settingsSegments, areaMetadataSettings)
 	case isPrefixOf(segments, apiV1Posters):
@@ -343,6 +352,23 @@ func libraryArea(segments []string, isRead bool) manageArea {
 		return areaLibraries
 	case len(segments) == 5 && segments[4] == "refresh":
 		return areaMetadata
+	default:
+		return areaNone
+	}
+}
+
+// itemArea classifies writes below /api/v1/items/{id}: .../identify, .../identify/search,
+// .../match and .../refresh change the online metadata, .../reanalyze probes the files again.
+func itemArea(segments []string, isRead bool) manageArea {
+	if isRead || len(segments) < itemSubRouteSegments {
+		return areaNone
+	}
+
+	switch {
+	case slices.Contains(itemMetadataSegments(), segments[4]):
+		return areaMetadata
+	case segments[4] == itemReanalyzeSegment:
+		return areaAnalysis
 	default:
 		return areaNone
 	}

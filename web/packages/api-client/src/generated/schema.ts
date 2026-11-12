@@ -888,6 +888,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{itemId}/reanalyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Probe the files of an item again
+         * @description Probes the media files of the item (for a show its episodes) again and updates their streams and duration in the catalog; it answers at once and the probe runs in the background, so the result shows when the item is read again. A file that is gone from disk is marked unavailable, not removed. Only movie and show libraries are supported. Management operation (ADR 0028): an administrator on the local network; an item the profile may not see answers like an unknown one. Problem codes: "not_found" (404, unknown item or none the viewer may see), "conflict" (409, the item is being re-analysed already) and "invalid" (400, the library kind has no video probe).
+         */
+        post: operations["reanalyzeItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{itemId}/progress": {
         parameters: {
             query?: never;
@@ -5574,6 +5600,40 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["OnlineDisabled"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    reanalyzeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description ID of the item.
+                 * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+                 */
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The re-analysis is running. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A re-analysis of the item is running already ("conflict"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.17.0"
+  version: "1.18.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -1570,6 +1570,35 @@ paths:
           description: The refresh is queued.
         "409":
           $ref: "#/components/responses/OnlineDisabled"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/items/{itemId}/reanalyze:
+    parameters:
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      operationId: reanalyzeItem
+      summary: Probe the files of an item again
+      description: >-
+        Probes the media files of the item (for a show its episodes) again and updates their
+        streams and duration in the catalog; it answers at once and the probe runs in the
+        background, so the result shows when the item is read again. A file that is gone
+        from disk is marked unavailable, not removed. Only movie and show libraries are
+        supported. Management operation (ADR 0028): an administrator on the local network;
+        an item the profile may not see answers like an unknown one. Problem codes:
+        "not_found" (404, unknown item or none the viewer may see), "conflict" (409, the item
+        is being re-analysed already) and "invalid" (400, the library kind has no video
+        probe).
+      tags:
+        - items
+      responses:
+        "202":
+          description: The re-analysis is running.
+        "409":
+          description: A re-analysis of the item is running already ("conflict").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/items/{itemId}/progress:

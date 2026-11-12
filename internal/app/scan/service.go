@@ -107,7 +107,9 @@ type Service struct {
 	// unsupportedDiscs holds, per library ID, the discs this server start probed as
 	// disc_unsupported; an unchanged one is probed again only after a restart (needsProbe).
 	unsupportedDiscs map[string]map[fileKey]struct{}
-	closed           bool
+	// reanalyses holds, per item ID, the channel closed when its running re-analysis ends.
+	reanalyses map[string]chan struct{}
+	closed     bool
 }
 
 // NewService validates the dependencies and returns a Service. A missing dependency is a
@@ -155,6 +157,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		withoutVideo:   map[string]map[fileKey]library.FileState{},
 
 		unsupportedDiscs: map[string]map[fileKey]struct{}{},
+		reanalyses:       map[string]chan struct{}{},
 	}, nil
 }
 
@@ -249,15 +252,19 @@ func (service *Service) Close(ctx context.Context) error {
 	service.closed = true
 	service.cancelScans()
 
-	pending := make([]*tracker, 0, len(service.trackers))
+	pending := make([]<-chan struct{}, 0, len(service.trackers)+len(service.reanalyses))
 	for _, scanTracker := range service.trackers {
-		pending = append(pending, scanTracker)
+		pending = append(pending, scanTracker.done)
+	}
+
+	for _, done := range service.reanalyses {
+		pending = append(pending, done)
 	}
 	service.mutex.Unlock()
 
-	for _, scanTracker := range pending {
+	for _, done := range pending {
 		select {
-		case <-scanTracker.done:
+		case <-done:
 		case <-ctx.Done():
 			return fmt.Errorf("close scan service: %w", ctx.Err())
 		}

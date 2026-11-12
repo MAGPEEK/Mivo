@@ -4281,6 +4281,9 @@ type ServerInterface interface {
 	// ReportItemProgress Report the playback position of an item
 	// (PUT /api/v1/items/{itemId}/progress)
 	ReportItemProgress(w http.ResponseWriter, r *http.Request, itemID ItemID)
+	// ReanalyzeItem Probe the files of an item again
+	// (POST /api/v1/items/{itemId}/reanalyze)
+	ReanalyzeItem(w http.ResponseWriter, r *http.Request, itemID ItemID)
 	// RefreshItemMetadata Queue a metadata refresh of an item
 	// (POST /api/v1/items/{itemId}/refresh)
 	RefreshItemMetadata(w http.ResponseWriter, r *http.Request, itemID ItemID)
@@ -4816,6 +4819,32 @@ func (siw *ServerInterfaceWrapper) ReportItemProgress(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReportItemProgress(w, r, itemID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReanalyzeItem operation middleware
+func (siw *ServerInterfaceWrapper) ReanalyzeItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "itemId" -------------
+	var itemID ItemID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "itemId", r.PathValue("itemId"), &itemID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "itemId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReanalyzeItem(w, r, itemID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6645,6 +6674,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify", wrapper.IdentifyItem)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/match", wrapper.RemoveItemMatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/refresh", wrapper.RefreshItemMetadata)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/reanalyze", wrapper.ReanalyzeItem)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/items/{itemId}/progress", wrapper.ReportItemProgress)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/items/{itemId}/watched", wrapper.MarkItemUnwatched)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/items/{itemId}/watched", wrapper.MarkItemWatched)
@@ -7334,6 +7364,53 @@ type ReportItemProgressdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ReportItemProgressdefaultApplicationProblemPlusJSONResponse) VisitReportItemProgressResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReanalyzeItemRequestObject struct {
+	ItemID ItemID `json:"itemId"`
+}
+
+type ReanalyzeItemResponseObject interface {
+	VisitReanalyzeItemResponse(w http.ResponseWriter) error
+}
+
+type ReanalyzeItem202Response struct {
+}
+
+func (response ReanalyzeItem202Response) VisitReanalyzeItemResponse(w http.ResponseWriter) error {
+	w.WriteHeader(202)
+	return nil
+}
+
+type ReanalyzeItem409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReanalyzeItem409ApplicationProblemPlusJSONResponse) VisitReanalyzeItemResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReanalyzeItemdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReanalyzeItemdefaultApplicationProblemPlusJSONResponse) VisitReanalyzeItemResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9450,6 +9527,9 @@ type StrictServerInterface interface {
 	// ReportItemProgress Report the playback position of an item
 	// (PUT /api/v1/items/{itemId}/progress)
 	ReportItemProgress(ctx context.Context, request ReportItemProgressRequestObject) (ReportItemProgressResponseObject, error)
+	// ReanalyzeItem Probe the files of an item again
+	// (POST /api/v1/items/{itemId}/reanalyze)
+	ReanalyzeItem(ctx context.Context, request ReanalyzeItemRequestObject) (ReanalyzeItemResponseObject, error)
 	// RefreshItemMetadata Queue a metadata refresh of an item
 	// (POST /api/v1/items/{itemId}/refresh)
 	RefreshItemMetadata(ctx context.Context, request RefreshItemMetadataRequestObject) (RefreshItemMetadataResponseObject, error)
@@ -10032,6 +10112,32 @@ func (sh *strictHandler) ReportItemProgress(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReportItemProgressResponseObject); ok {
 		if err := validResponse.VisitReportItemProgressResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReanalyzeItem operation middleware
+func (sh *strictHandler) ReanalyzeItem(w http.ResponseWriter, r *http.Request, itemID ItemID) {
+	var request ReanalyzeItemRequestObject
+
+	request.ItemID = itemID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReanalyzeItem(ctx, request.(ReanalyzeItemRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReanalyzeItem")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReanalyzeItemResponseObject); ok {
+		if err := validResponse.VisitReanalyzeItemResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

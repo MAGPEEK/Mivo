@@ -42,3 +42,22 @@ func (service *Service) WaitForScan(ctx context.Context, libraryID string) error
 		return fmt.Errorf("wait for scan of %s: %w", libraryID, ctx.Err())
 	}
 }
+
+// WaitForReanalysis blocks until the re-analysis of itemID has finished or ctx ends. It
+// returns at once when none runs.
+func (service *Service) WaitForReanalysis(ctx context.Context, itemID string) error {
+	service.mutex.Lock()
+	done := service.reanalyses[itemID]
+	service.mutex.Unlock()
+
+	if done == nil {
+		return nil
+	}
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("wait for re-analysis of %s: %w", itemID, ctx.Err())
+	}
+}

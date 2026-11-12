@@ -62,6 +62,9 @@ type Options struct {
 	// and the external subtitle tracks of the media file resource (ADR 0030). Every service in
 	// it is optional; see StreamingServices.
 	Streaming StreamingServices
+	// Reanalysis re-probes the files of one item (PL-35). It is optional: without it the
+	// endpoint answers 501 "not_implemented".
+	Reanalysis ItemReanalyzer
 }
 
 // Mount is one extra route of the API mux.
