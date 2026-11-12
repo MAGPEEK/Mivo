@@ -53,7 +53,7 @@ type outputSummary struct {
 func (graph *corpusGraph) probeOutput(t *testing.T, service *appplayback.Service, id string) outputSummary {
 	t.Helper()
 
-	access, err := service.Access(t.Context(), id)
+	access, err := service.Access(adminContext(t), id)
 	if err != nil {
 		t.Fatalf("Access: %v", err)
 	}

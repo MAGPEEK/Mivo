@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
@@ -177,7 +178,7 @@ func TestWatchUpNextAgreesWithTheDomainRule(t *testing.T) {
 		t.Fatalf("fixture yields %v under the domain rule, want %v", want, pinned)
 	}
 
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit, Restriction: access.Unrestricted()}
 	assertRow(t, upNextOf(fixture), query, want)
 
 	query.Limit = 2
@@ -212,7 +213,7 @@ func TestWatchUpNextLooksPastFinishedShows(t *testing.T) {
 		states: map[int]watch.State{0: watchedAt(hoursAgo(2))},
 	})
 
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit, Restriction: access.Unrestricted()}
 	assertRow(t, upNextOf(fixture), query, []string{"older-s01e02"})
 }
 
@@ -237,7 +238,7 @@ func TestWatchUpNextIgnoresEpisodesOfAParentlessSeason(t *testing.T) {
 		fixture.put(t, watchProfileID, id, state)
 	}
 
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit, Restriction: access.Unrestricted()}
 	assertRow(t, upNextOf(fixture), query, []string{"gap-s02e01"})
 }
 
@@ -248,7 +249,7 @@ func TestWatchUpNextIgnoresRowsOfDeletedItems(t *testing.T) {
 	fixture := newWatchFixture(t)
 	fixture.insertRowShow(t, upNextShows()[0])
 
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit, Restriction: access.Unrestricted()}
 
 	execute(t, fixture.inspection, "DELETE FROM items WHERE id = 'gap-s02e01'")
 	assertRow(t, upNextOf(fixture), query, []string{})
@@ -327,7 +328,7 @@ func BenchmarkWatchUpNext(b *testing.B) {
 	seedUpNextBenchmark(b, openInspectionDB(b, path))
 
 	store := sqlite.NewWatchStore(db)
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, PlayedSince: watchSince(), Limit: watch.UpNextLimit, Restriction: access.Unrestricted()}
 
 	for b.Loop() {
 		itemIDs, err := store.UpNext(b.Context(), query)

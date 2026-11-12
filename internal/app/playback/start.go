@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
@@ -45,12 +47,21 @@ func (s *Service) Start(ctx context.Context, request StartRequest) (Session, err
 }
 
 func (s *Service) start(ctx context.Context, request StartRequest) (Session, error) {
-	prepared, err := s.prepare(ctx, request)
+	// The viewer comes first: without one nothing is read, and a file the viewer may not see
+	// is refused as not found while the plan is made, before a slot is taken.
+	viewer, ok := appaccess.ViewerFrom(ctx)
+	if !ok {
+		return Session{}, fmt.Errorf("viewer: %w", domain.ErrUnauthenticated)
+	}
+
+	prepared, err := s.prepare(ctx, request, viewer.Restriction())
 	if err != nil {
 		return Session{}, err
 	}
 
-	// A viewer check (M7-14) belongs here: after the plan, before a slot is taken.
+	prepared.owner = viewer.AuthSessionID
+	request.ReplacesSessionID = s.replaceableBy(viewer, request.ReplacesSessionID)
+
 	prepared, entry, err := s.reserveSlot(prepared, request)
 	if err != nil {
 		return Session{}, err
@@ -128,7 +139,9 @@ type preparedStart struct {
 	playable PlayableFile
 	plan     playback.Plan
 	// input is what the plan was decided from, kept to decide again without a subtitle.
-	input     playback.Input
+	input playback.Input
+	// owner is the auth session that starts the session (Viewer.AuthSessionID).
+	owner     string
 	inputPath string
 	// disc is the title of a disc source; nil for a single file. inputPath is then the
 	// absolute disc root.
@@ -138,8 +151,8 @@ type preparedStart struct {
 // prepare decides the plan and resolves the file's path. Every mode resolves it, so a
 // deleted file or one that escapes its library fails here for direct play too, before a
 // slot is taken. A disc also resolves its main title.
-func (s *Service) prepare(ctx context.Context, request StartRequest) (preparedStart, error) {
-	prepared, err := s.decide(ctx, request)
+func (s *Service) prepare(ctx context.Context, request StartRequest, restriction access.Restriction) (preparedStart, error) {
+	prepared, err := s.decide(ctx, request, restriction)
 	if err != nil {
 		return preparedStart{}, err
 	}
@@ -191,12 +204,12 @@ func (s *Service) resolveFailure(ctx context.Context, file media.File, err error
 }
 
 // decide validates the profile, loads the file and runs the decision engine.
-func (s *Service) decide(ctx context.Context, request StartRequest) (preparedStart, error) {
+func (s *Service) decide(ctx context.Context, request StartRequest, restriction access.Restriction) (preparedStart, error) {
 	if err := request.Profile.Validate(); err != nil {
 		return preparedStart{}, err
 	}
 
-	playable, err := s.files.PlayableFile(ctx, request.FileID)
+	playable, err := s.files.PlayableFile(ctx, request.FileID, restriction)
 	if err != nil {
 		return preparedStart{}, fmt.Errorf("load file: %w", err)
 	}
@@ -243,6 +256,7 @@ func (s *Service) newEntry(prepared preparedStart, replaces string) (*sessionEnt
 			OutputBitRate: outputBitRate(plan, file.Description.BitRate),
 		},
 		replaces:     replaces,
+		owner:        prepared.owner,
 		reencodes:    plan.Mode == playback.ModeTranscode,
 		runsFFmpeg:   hls,
 		libraryRoot:  prepared.playable.LibraryRoot,

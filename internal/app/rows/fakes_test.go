@@ -44,6 +44,17 @@ type fakeCatalog struct {
 	failWith  error
 	// requests records the ListRowItems requests.
 	requests []approws.ItemRequest
+	// restrictions records the restriction of every read, per port method.
+	restrictions map[string][]access.Restriction
+}
+
+// record remembers the restriction a port method was called with.
+func (catalog *fakeCatalog) record(method string, restriction access.Restriction) {
+	if catalog.restrictions == nil {
+		catalog.restrictions = map[string][]access.Restriction{}
+	}
+
+	catalog.restrictions[method] = append(catalog.restrictions[method], restriction)
 }
 
 func (catalog *fakeCatalog) VisibleLibraries(context.Context) ([]library.ManagedLibrary, error) {
@@ -61,6 +72,7 @@ func (catalog *fakeCatalog) VisibleLibrary(_ context.Context, id string) (librar
 }
 
 func (catalog *fakeCatalog) ListRowItems(_ context.Context, request approws.ItemRequest) ([]applibrary.ItemSummary, error) {
+	catalog.record("ListRowItems", request.Query.Restriction)
 	catalog.requests = append(catalog.requests, request)
 
 	if catalog.failWith != nil {
@@ -120,6 +132,7 @@ func (catalog *fakeCatalog) episodesOf(request approws.EpisodeRequest) []fakeIte
 }
 
 func (catalog *fakeCatalog) ListEpisodeGroups(_ context.Context, request approws.EpisodeRequest) ([]rows.EpisodeGroup, error) {
+	catalog.record("ListEpisodeGroups", request.Restriction)
 	newest := map[string]time.Time{}
 
 	for _, episode := range catalog.episodesOf(request) {
@@ -165,6 +178,7 @@ func (catalog *fakeCatalog) ListEpisodeGroups(_ context.Context, request approws
 }
 
 func (catalog *fakeCatalog) ListRecentEpisodes(_ context.Context, request approws.EpisodeRequest) ([]approws.EpisodeRef, error) {
+	catalog.record("ListRecentEpisodes", request.Restriction)
 	episodes := slices.DeleteFunc(catalog.episodesOf(request), func(item fakeItem) bool { return item.releaseDate == "" })
 	slices.SortFunc(episodes, func(left, right fakeItem) int { return strings.Compare(right.releaseDate, left.releaseDate) })
 
@@ -176,7 +190,9 @@ func (catalog *fakeCatalog) ListRecentEpisodes(_ context.Context, request approw
 	return refs, nil
 }
 
-func (catalog *fakeCatalog) ItemSummaries(_ context.Context, ids []string, _ access.Restriction) ([]applibrary.ItemSummary, error) {
+func (catalog *fakeCatalog) ItemSummaries(_ context.Context, ids []string, restriction access.Restriction) ([]applibrary.ItemSummary, error) {
+	catalog.record("ItemSummaries", restriction)
+
 	var summaries []applibrary.ItemSummary
 
 	for _, id := range ids {
@@ -252,4 +268,13 @@ func (catalog *fakeCatalog) Status(libraryID string) appscan.Status {
 	}
 
 	return appscan.Status{State: appscan.StateIdle}
+}
+
+// ListManaged and GetManaged make the catalog a LibraryReader for app/access.ScopedLibraries.
+func (catalog *fakeCatalog) ListManaged(ctx context.Context) ([]library.ManagedLibrary, error) {
+	return catalog.VisibleLibraries(ctx)
+}
+
+func (catalog *fakeCatalog) GetManaged(ctx context.Context, id string) (library.ManagedLibrary, error) {
+	return catalog.VisibleLibrary(ctx, id)
 }

@@ -9,7 +9,6 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
 	appsearch "github.com/magpeek/mivo/internal/app/search"
-	"github.com/magpeek/mivo/internal/domain/access"
 )
 
 // SearchService searches the catalog. Implemented by app/search.Service.
@@ -110,9 +109,6 @@ func (api *API) Search(ctx context.Context, request apigen.SearchRequestObject) 
 
 		return apigen.SearchdefaultApplicationProblemPlusJSONResponse{Body: problem, StatusCode: int(problem.Status)}, nil
 	}
-
-	// TODO(M7-14): the viewer's restriction.
-	searchParams.Restriction = access.Unrestricted()
 
 	page, err := api.search.Search(ctx, searchParams)
 	if err != nil {

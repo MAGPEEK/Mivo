@@ -62,7 +62,7 @@ func playAndVerify(t *testing.T, run sessionRun) {
 func startSession(t *testing.T, service *appplayback.Service, request appplayback.StartRequest) appplayback.Session {
 	t.Helper()
 
-	session, err := service.Start(t.Context(), request)
+	session, err := service.Start(adminContext(t), request)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -75,7 +75,7 @@ func startSession(t *testing.T, service *appplayback.Service, request appplaybac
 func stopSession(t *testing.T, service *appplayback.Service, id string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(adminContext(t)), shutdownTimeout)
 	defer cancel()
 
 	if err := service.Stop(ctx, id); err != nil {
@@ -127,7 +127,7 @@ func assertStart(t *testing.T, session appplayback.Session, run sessionRun) {
 func assertDirectPlaySource(t *testing.T, run sessionRun, id string) {
 	t.Helper()
 
-	access, err := run.group.service.Access(t.Context(), id)
+	access, err := run.group.service.Access(adminContext(t), id)
 	if err != nil {
 		t.Fatalf("Access: %v", err)
 	}
@@ -170,7 +170,7 @@ func waitForEnd(t *testing.T, service *appplayback.Service, id string) {
 	deadline := time.Now().Add(sessionTimeout)
 
 	for {
-		session, err := service.Get(t.Context(), id)
+		session, err := service.Get(adminContext(t), id)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
@@ -213,7 +213,7 @@ func decideOnly(t *testing.T, run decisionRun) {
 		return
 	}
 
-	session, err := run.group.service.Start(t.Context(), request)
+	session, err := run.group.service.Start(adminContext(t), request)
 	if err == nil {
 		stopSession(t, run.group.service, session.ID)
 		t.Fatalf("Start = %s plan, want the failure %s", session.Plan.Mode, run.wantFailure)

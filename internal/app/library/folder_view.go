@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -66,6 +67,12 @@ func (service *Service) ListFolder(ctx context.Context, libraryID string, path l
 }
 
 func (service *Service) listFolder(ctx context.Context, libraryID string, path library.FolderPath, page library.PageRequest) (FolderView, error) {
+	// The access check comes first: a denied library must answer not found whatever else is wrong.
+	restriction, err := appaccess.LibraryRestriction(ctx, libraryID)
+	if err != nil {
+		return FolderView{}, err
+	}
+
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
 		return FolderView{}, err
@@ -81,7 +88,7 @@ func (service *Service) listFolder(ctx context.Context, libraryID string, path l
 		return FolderView{}, storedDataError(err)
 	}
 
-	entries, err := service.folderEntries(ctx, managed, path)
+	entries, err := service.folderEntries(ctx, managed, path, restriction)
 	if err != nil {
 		return FolderView{}, err
 	}
@@ -96,14 +103,14 @@ func (service *Service) listFolder(ctx context.Context, libraryID string, path l
 		listing.NextCursor = encodeFolderCursor(path, end)
 	}
 
-	listing.Entries, err = service.withSummaries(ctx, listing.Entries)
+	listing.Entries, err = service.withSummaries(ctx, listing.Entries, restriction)
 
 	return listing, err
 }
 
 // folderEntries returns every child of the folder in view order, items still without their
 // summary.
-func (service *Service) folderEntries(ctx context.Context, managed library.ManagedLibrary, path library.FolderPath) ([]FolderViewEntry, error) {
+func (service *Service) folderEntries(ctx context.Context, managed library.ManagedLibrary, path library.FolderPath, restriction access.Restriction) ([]FolderViewEntry, error) {
 	if path.IsTop() {
 		return libraryFolderEntries(managed.Folders), nil
 	}
@@ -115,18 +122,12 @@ func (service *Service) folderEntries(ctx context.Context, managed library.Manag
 
 	folder := managed.Folders[index]
 
-	directories, err := service.directories.ListDirectories(ctx, folder.Path, path.Relative())
-	if errors.Is(err, domain.ErrForbidden) {
-		// A directory outside the library folder (a symlink leaving it) must look missing.
-		return nil, fmt.Errorf("folder not inside the library folder: %w", domain.ErrNotFound)
-	}
-
+	directories, err := service.visibleDirectories(ctx, folder, path, restriction)
 	if err != nil {
-		return nil, fmt.Errorf("list directories: %w", err)
+		return nil, err
 	}
 
-	// TODO(M7-14): the viewer's restriction.
-	items, err := service.folderItems.ListFolderItems(ctx, folder.ID, path.Relative(), access.Unrestricted())
+	items, err := service.folderItems.ListFolderItems(ctx, folder.ID, path.Relative(), restriction)
 	if err != nil {
 		return nil, fmt.Errorf("list folder items: %w", err)
 	}
@@ -189,7 +190,7 @@ func compareEntryNames(left, right FolderViewEntry) int {
 
 // withSummaries replaces the placeholder summaries of the item entries with the catalog's.
 // An item removed since the listing was read is dropped.
-func (service *Service) withSummaries(ctx context.Context, entries []FolderViewEntry) ([]FolderViewEntry, error) {
+func (service *Service) withSummaries(ctx context.Context, entries []FolderViewEntry, restriction access.Restriction) ([]FolderViewEntry, error) {
 	var itemIDs []string
 
 	for _, entry := range entries {
@@ -202,8 +203,7 @@ func (service *Service) withSummaries(ctx context.Context, entries []FolderViewE
 		return entries, nil
 	}
 
-	// TODO(M7-14): the viewer's restriction.
-	summaries, err := service.folderItems.ItemSummaries(ctx, itemIDs, access.Unrestricted())
+	summaries, err := service.folderItems.ItemSummaries(ctx, itemIDs, restriction)
 	if err != nil {
 		return nil, fmt.Errorf("read item summaries: %w", err)
 	}
@@ -229,4 +229,62 @@ func (service *Service) withSummaries(ctx context.Context, entries []FolderViewE
 	}
 
 	return completed, nil
+}
+
+// visibleDirectories returns the sub-directories of the directory the viewer may see: the
+// file-system directories, intersected with the catalog's directories that hold a visible
+// item unless the viewer is unrestricted (an administrator sees empty directories too). A
+// directory that is hidden by the restriction answers like a missing one, so opening it by
+// path reveals nothing.
+func (service *Service) visibleDirectories(
+	ctx context.Context, folder library.Folder, path library.FolderPath, restriction access.Restriction,
+) ([]string, error) {
+	directories, err := service.directories.ListDirectories(ctx, folder.Path, path.Relative())
+	if errors.Is(err, domain.ErrForbidden) {
+		// A directory outside the library folder (a symlink leaving it) must look missing.
+		return nil, fmt.Errorf("folder not inside the library folder: %w", domain.ErrNotFound)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("list directories: %w", err)
+	}
+
+	if restriction.IsUnrestricted() {
+		return directories, nil
+	}
+
+	if err := service.checkDirectoryVisible(ctx, folder, path, restriction); err != nil {
+		return nil, err
+	}
+
+	visible, err := service.folderItems.ListFolderDirectories(ctx, folder.ID, path.Relative(), restriction)
+	if err != nil {
+		return nil, fmt.Errorf("list visible directories: %w", err)
+	}
+
+	return slices.DeleteFunc(directories, func(name string) bool { return !slices.Contains(visible, name) }), nil
+}
+
+// checkDirectoryVisible refuses a directory below the library folder that holds no visible
+// item. Checking the last segment against its parent suffices: a visible directory has a
+// visible item beneath it, which makes every ancestor visible too.
+func (service *Service) checkDirectoryVisible(
+	ctx context.Context, folder library.Folder, path library.FolderPath, restriction access.Restriction,
+) error {
+	if len(path.Segments) == 0 {
+		return nil
+	}
+
+	last := len(path.Segments) - 1
+
+	siblings, err := service.folderItems.ListFolderDirectories(ctx, folder.ID, strings.Join(path.Segments[:last], "/"), restriction)
+	if err != nil {
+		return fmt.Errorf("list visible directories: %w", err)
+	}
+
+	if !slices.Contains(siblings, path.Segments[last]) {
+		return fmt.Errorf("directory %q: %w", path.Segments[last], domain.ErrNotFound)
+	}
+
+	return nil
 }

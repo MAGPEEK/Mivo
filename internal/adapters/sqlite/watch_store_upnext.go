@@ -19,13 +19,14 @@ const upNextShowBatch = watch.UpNextLimit
 // with an episode watched at or after query.PlayedSince, the episode watch.NextUp picks;
 // shows with an episode in Continue watching are left out, so a show appears in at most one
 // of the two rows. Newest show activity first. Rows of items that no longer exist are
-// skipped. Restrictions are applied by the caller, as for ContinueWatching.
+// skipped. The episodes are chosen among those query.Restriction allows; the show and its library
+// are filtered by the caller, as for ContinueWatching.
 //
 // SQL finds and orders the candidate shows; the next episode of each comes from the domain
 // rule, so the row cannot drift from watch.NextUp. Reads share one snapshot.
 func (store *WatchStore) UpNext(ctx context.Context, query WatchRowQuery) ([]string, error) {
 	itemIDs := []string{}
-	if query.Limit <= 0 {
+	if query.Limit <= 0 || query.Restriction.DeniesAll() {
 		return itemIDs, nil
 	}
 
@@ -38,7 +39,7 @@ func (store *WatchStore) UpNext(ctx context.Context, query WatchRowQuery) ([]str
 		}
 
 		for batch := range slices.Chunk(shows, upNextShowBatch) {
-			next, err := nextEpisodes(ctx, queries, query.ProfileID, batch)
+			next, err := nextEpisodes(ctx, queries, query, batch)
 			if err != nil {
 				return err
 			}
@@ -60,13 +61,16 @@ func (store *WatchStore) UpNext(ctx context.Context, query WatchRowQuery) ([]str
 }
 
 // nextEpisodes returns the next episode of each show that has one, in the order of showIDs.
-func nextEpisodes(ctx context.Context, queries *sqlcgen.Queries, profileID string, showIDs []string) ([]string, error) {
+func nextEpisodes(ctx context.Context, queries *sqlcgen.Queries, query WatchRowQuery, showIDs []string) ([]string, error) {
+	content := contentLimitOf(query.Restriction)
 	parentIDs := make([]sql.NullString, len(showIDs))
 	for index, showID := range showIDs {
 		parentIDs[index] = sql.NullString{String: showID, Valid: true}
 	}
 
-	rows, err := queries.ListShowEpisodeStates(ctx, sqlcgen.ListShowEpisodeStatesParams{ProfileID: profileID, ShowIds: parentIDs})
+	rows, err := queries.ListShowEpisodeStates(ctx, sqlcgen.ListShowEpisodeStatesParams{
+		ProfileID: query.ProfileID, ShowIds: parentIDs, MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list show episodes: %w", err)
 	}

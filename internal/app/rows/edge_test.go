@@ -1,14 +1,12 @@
 package rows_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
 
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
@@ -43,7 +41,7 @@ func TestLibraryRowsHints(t *testing.T) {
 			catalog := test.catalog()
 			catalog.scanning[test.libraryID] = test.scanning
 
-			got, err := newTestService(t, catalog).LibraryRows(context.Background(), test.libraryID, 0)
+			got, err := newTestService(t, catalog).LibraryRows(adminContext(), test.libraryID, 0)
 			if err != nil {
 				t.Fatalf("LibraryRows: %v", err)
 			}
@@ -84,7 +82,7 @@ func TestLibraryRowsErrors(t *testing.T) {
 			catalog := newFixtureCatalog()
 			catalog.failWith = test.failWith
 
-			_, err := newTestService(t, catalog).LibraryRows(context.Background(), test.libraryID, test.limit)
+			_, err := newTestService(t, catalog).LibraryRows(adminContext(), test.libraryID, test.limit)
 			if !errors.Is(err, test.want) {
 				t.Errorf("LibraryRows error = %v, want %v", err, test.want)
 			}
@@ -112,7 +110,7 @@ func TestGenreRotationFollowsTheClock(t *testing.T) {
 			t.Fatalf("NewService: %v", err)
 		}
 
-		got, err := service.LibraryRows(context.Background(), moviesID, 0)
+		got, err := service.LibraryRows(adminContext(), moviesID, 0)
 		if err != nil {
 			t.Fatalf("LibraryRows: %v", err)
 		}
@@ -168,41 +166,5 @@ func TestNewServiceRequiresEveryDependency(t *testing.T) {
 	_, err := approws.NewService(approws.Dependencies{})
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("NewService error = %v, want ErrInvalid", err)
-	}
-}
-
-// managedReader is the ManagedReader behind AllLibraries.
-type managedReader struct{ libraries []library.ManagedLibrary }
-
-func (reader managedReader) ListManaged(context.Context) ([]library.ManagedLibrary, error) {
-	return reader.libraries, nil
-}
-
-func (reader managedReader) GetManaged(_ context.Context, id string) (library.ManagedLibrary, error) {
-	for _, managed := range reader.libraries {
-		if managed.ID == id {
-			return managed, nil
-		}
-	}
-
-	return library.ManagedLibrary{}, domain.ErrNotFound
-}
-
-func TestAllLibrariesShowsEveryLibrary(t *testing.T) {
-	t.Parallel()
-
-	source := approws.NewAllLibraries(managedReader{libraries: newFixtureCatalog().libraries})
-
-	all, err := source.VisibleLibraries(context.Background())
-	if err != nil || len(all) != 3 {
-		t.Errorf("VisibleLibraries = %d libraries, %v; want 3", len(all), err)
-	}
-
-	if _, err := source.VisibleLibrary(context.Background(), moviesID); err != nil {
-		t.Errorf("VisibleLibrary(movies): %v", err)
-	}
-
-	if _, err := source.VisibleLibrary(context.Background(), "nope"); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("VisibleLibrary(unknown) error = %v, want ErrNotFound", err)
 	}
 }

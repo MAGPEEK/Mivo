@@ -33,7 +33,7 @@ func TestListItemsCompletesTheFilterKind(t *testing.T) {
 			environment := newBrowseEnvironment()
 			query := library.ListingQuery{Filter: library.ListingFilter{Kind: test.kind}}
 
-			_, err := environment.service(t).ListItems(t.Context(), test.libraryID, library.PageRequest{}, query)
+			_, err := environment.service(t).ListItems(adminContext(t), test.libraryID, library.PageRequest{}, query)
 			if test.wantErr != nil {
 				assertWrappedError(t, err, test.wantErr, "list items of library")
 
@@ -79,7 +79,7 @@ func TestListItemsPicksARandomSeedOnlyForAFirstPageWithoutSeed(t *testing.T) {
 			environment := newBrowseEnvironment()
 			environment.putItems(2)
 
-			_, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{Cursor: test.cursor},
+			_, err := environment.service(t).ListItems(adminContext(t), moviesID, library.PageRequest{Cursor: test.cursor},
 				library.ListingQuery{Order: test.order})
 			if err != nil {
 				t.Fatalf("ListItems error = %v", err)
@@ -114,7 +114,7 @@ func TestListItemsMarksOfflineFoldersForTheUnavailableFilter(t *testing.T) {
 			environment.roots = test.roots
 
 			query := library.ListingQuery{Filter: library.ListingFilter{Quick: test.quick}}
-			if _, err := environment.service(t).ListItems(t.Context(), moviesID, library.PageRequest{}, query); err != nil {
+			if _, err := environment.service(t).ListItems(adminContext(t), moviesID, library.PageRequest{}, query); err != nil {
 				t.Fatalf("ListItems error = %v", err)
 			}
 
@@ -148,7 +148,7 @@ func TestListFacetsAsksForTheRequestedFieldsInContractOrder(t *testing.T) {
 			environment := newBrowseEnvironment()
 			environment.listings.facets = []applibrary.Facet{{Field: library.FacetGenre}}
 
-			facets, err := environment.service(t).ListFacets(t.Context(), moviesID, applibrary.FacetRequest{
+			facets, err := environment.service(t).ListFacets(adminContext(t), moviesID, applibrary.FacetRequest{
 				Fields: test.requested, Filter: library.ListingFilter{Genres: []string{"Drama"}},
 			})
 			if err != nil {
@@ -176,30 +176,30 @@ func TestListFacetsAndLettersReportErrors(t *testing.T) {
 	environment := newBrowseEnvironment()
 	service := environment.service(t)
 
-	_, err := service.ListFacets(t.Context(), unknownID, applibrary.FacetRequest{})
+	_, err := service.ListFacets(adminContext(t), unknownID, applibrary.FacetRequest{})
 	assertWrappedError(t, err, domain.ErrNotFound, "list facets of library")
 
-	_, err = service.ListLetters(t.Context(), unknownID, applibrary.LetterRequest{})
+	_, err = service.ListLetters(adminContext(t), unknownID, applibrary.LetterRequest{})
 	assertWrappedError(t, err, domain.ErrNotFound, "list letters of library")
 
 	environment.listings.err = errBoom
 
-	_, err = service.ListFacets(t.Context(), moviesID, applibrary.FacetRequest{})
+	_, err = service.ListFacets(adminContext(t), moviesID, applibrary.FacetRequest{})
 	assertWrappedError(t, err, errBoom, "list facets of library")
 
-	_, err = service.ListLetters(t.Context(), moviesID, applibrary.LetterRequest{})
+	_, err = service.ListLetters(adminContext(t), moviesID, applibrary.LetterRequest{})
 	assertWrappedError(t, err, errBoom, "list letters of library")
 
 	bare := newTestEnvironment()
 	bare.storedMoviesAndShows()
 
-	_, err = bare.service(t).ListFacets(t.Context(), moviesID, applibrary.FacetRequest{})
+	_, err = bare.service(t).ListFacets(adminContext(t), moviesID, applibrary.FacetRequest{})
 	assertWrappedError(t, err, domain.ErrUnavailable, "no listing reader")
 
-	_, err = bare.service(t).ListLetters(t.Context(), moviesID, applibrary.LetterRequest{})
+	_, err = bare.service(t).ListLetters(adminContext(t), moviesID, applibrary.LetterRequest{})
 	assertWrappedError(t, err, domain.ErrUnavailable, "no listing reader")
 
-	_, err = service.ListLetters(t.Context(), moviesID, applibrary.LetterRequest{Filter: library.ListingFilter{Kind: library.ItemKindShow}})
+	_, err = service.ListLetters(adminContext(t), moviesID, applibrary.LetterRequest{Filter: library.ListingFilter{Kind: library.ItemKindShow}})
 	assertWrappedError(t, err, applibrary.ErrItemKindMismatch, "list letters of library")
 }
 
@@ -247,7 +247,7 @@ func TestListLettersFoldsFirstCharactersAtTheirFirstPosition(t *testing.T) {
 
 			request := applibrary.LetterRequest{Descending: test.descending}
 
-			index, err := environment.service(t).ListLetters(t.Context(), showsID, request)
+			index, err := environment.service(t).ListLetters(adminContext(t), showsID, request)
 			if err != nil {
 				t.Fatalf("ListLetters error = %v", err)
 			}

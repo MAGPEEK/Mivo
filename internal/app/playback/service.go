@@ -156,9 +156,15 @@ func (options Options) validate() error {
 	return options.Policy.Validate()
 }
 
-// Get returns the session with the given ID or an error wrapping domain.ErrNotFound. It does
+// Get returns the session with the given ID or an error wrapping domain.ErrNotFound. A
+// session of another sign-in session (non-admin) counts as unknown; without a viewer the error
+// wraps domain.ErrUnauthenticated. It does
 // not count as an access: only stream requests keep a session alive.
-func (s *Service) Get(_ context.Context, id string) (Session, error) {
+func (s *Service) Get(ctx context.Context, id string) (Session, error) {
+	if err := s.authorize(ctx, id); err != nil {
+		return Session{}, err
+	}
+
 	session, found := s.sessions.get(id)
 	if !found {
 		return Session{}, fmt.Errorf("playback session %s: %w", id, domain.ErrNotFound)
@@ -172,7 +178,11 @@ func (s *Service) Get(_ context.Context, id string) (Session, error) {
 // caller must call StreamAccess.Release (deferred) when the request ends; Stop, Close and a
 // replacement still end the session while it is in use. An unknown or stopped session wraps
 // domain.ErrNotFound.
-func (s *Service) Access(_ context.Context, id string) (StreamAccess, error) {
+func (s *Service) Access(ctx context.Context, id string) (StreamAccess, error) {
+	if err := s.authorize(ctx, id); err != nil {
+		return StreamAccess{}, err
+	}
+
 	access, entry, found := s.sessions.touch(id, s.clock())
 	if !found {
 		return StreamAccess{}, fmt.Errorf("playback session %s: %w", id, domain.ErrNotFound)
@@ -186,9 +196,13 @@ func (s *Service) Access(_ context.Context, id string) (StreamAccess, error) {
 // Stop ends a session: it kills and waits for its FFmpeg and removes its workspace. Stopping
 // an unknown or already stopped session is not an error, and neither is a workspace that
 // cannot be removed: the session is gone, the leftover directory is logged and purged at the
-// next start. Stop therefore succeeds today; the error result is there for the owner check
-// of milestone 7 (ADR 0024), so the HTTP port need not change then.
+// next start. A session of another sign-in session (non-admin) answers domain.ErrNotFound and is left
+// running (ADR 0024, Notes M7-14); without a viewer the error wraps domain.ErrUnauthenticated.
 func (s *Service) Stop(ctx context.Context, id string) error {
+	if err := s.authorize(ctx, id); err != nil {
+		return err
+	}
+
 	if entry, found := s.sessions.remove(id); found {
 		defer s.sessions.untrack()
 

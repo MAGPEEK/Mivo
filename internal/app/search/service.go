@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
@@ -57,8 +58,8 @@ var (
 	ErrInvalidCursor = fmt.Errorf("search cursor not valid: %w", domain.ErrInvalid)
 )
 
-// LibrarySource lists the libraries the caller may see, the same port as the rows use
-// (M5-13); access control (M7) plugs in here.
+// LibrarySource lists the libraries the viewer may see, the same port as the rows use
+// (M5-13); app/access.ScopedLibraries implements it.
 type LibrarySource interface {
 	// VisibleLibraries returns the visible libraries.
 	VisibleLibraries(ctx context.Context) ([]library.ManagedLibrary, error)
@@ -80,14 +81,13 @@ type Dependencies struct {
 }
 
 // Request is one search. Limit 0 means the default of the type; a larger limit than the type
-// allows is clamped. Cursor is empty for the first page. Restriction is what the viewer may
-// see; its zero value allows nothing.
+// allows is clamped. Cursor is empty for the first page. What the viewer may see
+// comes from the context (app/access.ViewerFrom), never from the request.
 type Request struct {
-	Query       string
-	Type        Type
-	Limit       int
-	Cursor      string
-	Restriction access.Restriction
+	Query  string
+	Type   Type
+	Limit  int
+	Cursor string
 }
 
 // Page is one page of hits, best match first. NextCursor is empty on the last page and
@@ -183,6 +183,12 @@ func clampLimit(limit, defaultLimit, maxLimit int) int {
 // The index ranks at most MaxLimit hits per search, so a pivot ends there even when more
 // items match: the best MaxLimit hits are what a results page shows.
 func (service *Service) Search(ctx context.Context, request Request) (Page, error) {
+	// The viewer comes first: without one nothing else is looked at (fail closed).
+	restriction, err := appaccess.RestrictionFrom(ctx)
+	if err != nil {
+		return Page{}, fmt.Errorf("search: %w", err)
+	}
+
 	query := strings.TrimSpace(request.Query)
 	if utf8.RuneCountInString(query) < MinQueryLength {
 		return Page{}, fmt.Errorf("search: %w", ErrQueryTooShort)
@@ -212,14 +218,14 @@ func (service *Service) Search(ctx context.Context, request Request) (Page, erro
 
 	// The index applies the restriction before the limit, so hidden items do not shorten a
 	// page; the summaries apply it again to what they count.
-	filter := Filter{LibraryIDs: libraryIDs, Kinds: kinds, Restriction: request.Restriction}
+	filter := Filter{LibraryIDs: libraryIDs, Kinds: kinds, Restriction: restriction}
 
 	hits, err := service.index.Search(ctx, query, filter, fetched)
 	if err != nil {
 		return Page{}, fmt.Errorf("search: %w", indexFault(err))
 	}
 
-	return service.pageOf(ctx, request, page, hits)
+	return service.pageOf(ctx, pageRead{request: request, page: page, restriction: restriction}, hits)
 }
 
 // indexFault hides domain.ErrInvalid of the index: the request was checked before, so the
@@ -251,7 +257,15 @@ func (service *Service) visibleLibraryIDs(ctx context.Context) ([]string, error)
 }
 
 // pageOf cuts the page out of the ranked hits and loads its summaries in rank order.
-func (service *Service) pageOf(ctx context.Context, request Request, page window, hits []Hit) (Page, error) {
+// pageRead is what pageOf needs of one search besides its hits.
+type pageRead struct {
+	request     Request
+	page        window
+	restriction access.Restriction
+}
+
+func (service *Service) pageOf(ctx context.Context, read pageRead, hits []Hit) (Page, error) {
+	request, page := read.request, read.page
 	end := min(page.offset+page.limit, len(hits))
 	if page.offset >= end {
 		return Page{Items: []applibrary.ItemSummary{}}, nil
@@ -262,7 +276,7 @@ func (service *Service) pageOf(ctx context.Context, request Request, page window
 		itemIDs = append(itemIDs, hit.ItemID)
 	}
 
-	summaries, err := service.summaries.ItemSummaries(ctx, itemIDs, request.Restriction)
+	summaries, err := service.summaries.ItemSummaries(ctx, itemIDs, read.restriction)
 	if err != nil {
 		return Page{}, fmt.Errorf("search: read hits: %w", err)
 	}

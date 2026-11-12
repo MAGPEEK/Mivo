@@ -46,7 +46,7 @@ func TestListItemsChecksTheKindPerLibraryKind(t *testing.T) {
 
 			query := library.ListingQuery{Filter: library.ListingFilter{Kind: test.kind}}
 
-			_, err := environment.service(t).ListItems(t.Context(), test.libraryID, library.PageRequest{}, query)
+			_, err := environment.service(t).ListItems(adminContext(t), test.libraryID, library.PageRequest{}, query)
 			if test.wantErr {
 				assertWrappedError(t, err, applibrary.ErrItemKindMismatch, "library")
 

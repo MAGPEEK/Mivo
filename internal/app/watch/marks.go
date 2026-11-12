@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/app/access"
+	domainaccess "github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
@@ -44,7 +45,7 @@ func (service *Service) applyToMarkTarget(ctx context.Context, operation, itemID
 		return fmt.Errorf("%s %q: %w", operation, itemID, err)
 	}
 
-	keys, err := service.markKeys(ctx, itemID)
+	keys, err := service.markKeys(ctx, itemID, viewer.Restriction())
 	if err != nil {
 		return fmt.Errorf("%s: %w", operation, err)
 	}
@@ -65,7 +66,7 @@ func (service *Service) applyToMarkTarget(ctx context.Context, operation, itemID
 
 // markKeys returns the state keys a mark of the item applies to: the item itself, or the
 // episodes of a show or season (none when it has no episodes yet).
-func (service *Service) markKeys(ctx context.Context, itemID string) ([]StateKey, error) {
+func (service *Service) markKeys(ctx context.Context, itemID string, restriction domainaccess.Restriction) ([]StateKey, error) {
 	target, err := service.deps.Items.LookupWatchTarget(ctx, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("look up item %q: %w", itemID, err)
@@ -79,7 +80,7 @@ func (service *Service) markKeys(ctx context.Context, itemID string) ([]StateKey
 		return []StateKey{keyOf(target)}, nil
 	}
 
-	episodes, err := service.deps.Episodes.ListEpisodes(ctx, target.ItemID)
+	episodes, err := service.deps.Episodes.ListEpisodes(ctx, target.ItemID, restriction)
 	if err != nil {
 		return nil, fmt.Errorf("list episodes of %q: %w", itemID, err)
 	}

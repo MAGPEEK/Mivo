@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -75,6 +76,11 @@ type LetterIndex struct {
 // the filter without that field's own values. Errors as ListItems; without a wired
 // ListingReader the error wraps domain.ErrUnavailable.
 func (service *Service) ListFacets(ctx context.Context, libraryID string, request FacetRequest) ([]Facet, error) {
+	restriction, err := appaccess.LibraryRestriction(ctx, libraryID)
+	if err != nil {
+		return nil, fmt.Errorf("list facets of library %q: %w", libraryID, err)
+	}
+
 	if service.listings == nil {
 		return nil, fmt.Errorf("list facets of library %q: no listing reader: %w", libraryID, domain.ErrUnavailable)
 	}
@@ -86,7 +92,7 @@ func (service *Service) ListFacets(ctx context.Context, libraryID string, reques
 
 	facets, err := service.listings.CountFacets(ctx, libraryID, FacetRequest{
 		Fields: facetFieldsOf(request.Fields), Filter: filter,
-		Restriction: access.Unrestricted(), // TODO(M7-14): the viewer's restriction.
+		Restriction: restriction,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list facets of library %q: %w", libraryID, err)
@@ -111,6 +117,11 @@ func facetFieldsOf(requested []library.FacetField) []library.FacetField {
 // characters ("A" and "Ä") start at the first of them. Letters without items are left out.
 // Errors as ListFacets.
 func (service *Service) ListLetters(ctx context.Context, libraryID string, request LetterRequest) (LetterIndex, error) {
+	restriction, err := appaccess.LibraryRestriction(ctx, libraryID)
+	if err != nil {
+		return LetterIndex{}, fmt.Errorf("list letters of library %q: %w", libraryID, err)
+	}
+
 	if service.listings == nil {
 		return LetterIndex{}, fmt.Errorf("list letters of library %q: no listing reader: %w", libraryID, domain.ErrUnavailable)
 	}
@@ -121,7 +132,7 @@ func (service *Service) ListLetters(ctx context.Context, libraryID string, reque
 	}
 
 	request.Filter = filter
-	request.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
+	request.Restriction = restriction
 
 	counts, err := service.listings.CountFirstCharacters(ctx, libraryID, request)
 	if err != nil {

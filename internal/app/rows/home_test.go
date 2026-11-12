@@ -1,7 +1,6 @@
 package rows_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -18,7 +17,7 @@ func TestHomeRows(t *testing.T) {
 
 	catalog := newFixtureCatalog()
 
-	got, err := newTestService(t, catalog).Home(context.Background(), 0)
+	got, err := newTestService(t, catalog).Home(adminContext(), 0)
 	if err != nil {
 		t.Fatalf("Home: %v", err)
 	}
@@ -60,7 +59,7 @@ func TestHomeHero(t *testing.T) {
 
 	catalog.items = append(catalog.items, movie("m-plain", day(20), ""))
 
-	got, err := newTestService(t, catalog).Home(context.Background(), 0)
+	got, err := newTestService(t, catalog).Home(adminContext(), 0)
 	if err != nil {
 		t.Fatalf("Home: %v", err)
 	}
@@ -97,7 +96,7 @@ func TestHomeCapsTheRows(t *testing.T) {
 		catalog.items = append(catalog.items, item)
 	}
 
-	got, err := newTestService(t, catalog).Home(context.Background(), 0)
+	got, err := newTestService(t, catalog).Home(adminContext(), 0)
 	if err != nil {
 		t.Fatalf("Home: %v", err)
 	}
@@ -134,7 +133,7 @@ func TestHomeHints(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			got, err := newTestService(t, test.catalog()).Home(context.Background(), 0)
+			got, err := newTestService(t, test.catalog()).Home(adminContext(), 0)
 			if err != nil {
 				t.Fatalf("Home: %v", err)
 			}
@@ -154,11 +153,11 @@ func TestHomeErrors(t *testing.T) {
 	catalog := newFixtureCatalog()
 	catalog.failWith = failure
 
-	if _, err := newTestService(t, catalog).Home(context.Background(), 0); !errors.Is(err, failure) {
+	if _, err := newTestService(t, catalog).Home(adminContext(), 0); !errors.Is(err, failure) {
 		t.Errorf("Home error = %v, want %v", err, failure)
 	}
 
-	if _, err := newTestService(t, newFixtureCatalog()).Home(context.Background(), 51); err == nil {
+	if _, err := newTestService(t, newFixtureCatalog()).Home(adminContext(), 51); err == nil {
 		t.Error("Home with limit 51 succeeded")
 	}
 }

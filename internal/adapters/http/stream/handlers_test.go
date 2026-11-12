@@ -134,7 +134,7 @@ func TestStreamRoutesRefuseUnknownAndMalformedSessions(t *testing.T) {
 	env := newEnvironment(t)
 	stopped := env.start(t, directFileID)
 
-	if err := env.service.Stop(t.Context(), stopped.ID); err != nil {
+	if err := env.service.Stop(adminContext(t), stopped.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestStreamRequestsRecordTheAccess(t *testing.T) {
 func lastAccess(t *testing.T, env *environment, sessionID string) time.Time {
 	t.Helper()
 
-	session, err := env.service.Get(t.Context(), sessionID)
+	session, err := env.service.Get(adminContext(t), sessionID)
 	if err != nil {
 		t.Fatalf("Get(%s) error = %v", sessionID, err)
 	}

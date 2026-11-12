@@ -25,7 +25,7 @@ func TestFailureTranscodeFailedMatchesTheAPI(t *testing.T) {
 func mustGet(t *testing.T, service *appplayback.Service, id string) appplayback.Session {
 	t.Helper()
 
-	session, err := service.Get(t.Context(), id)
+	session, err := service.Get(adminContext(t), id)
 	if err != nil {
 		t.Fatalf("Get(%s) error = %v", id, err)
 	}
@@ -122,7 +122,7 @@ func TestAFailedProductionFailsTheSession(t *testing.T) {
 
 				// A failed session stays visible until it is stopped or reaped, so the
 				// client can read why it failed.
-				if err := service.Stop(t.Context(), started.ID); err != nil {
+				if err := service.Stop(adminContext(t), started.ID); err != nil {
 					t.Errorf("Stop of a failed session error = %v", err)
 				}
 			})
@@ -172,7 +172,7 @@ func TestAStoppedProductionIsNotAFailure(t *testing.T) {
 		service := env.service(t)
 		started := mustStart(t, service, request(remuxFileID))
 
-		if err := service.Stop(t.Context(), started.ID); err != nil {
+		if err := service.Stop(adminContext(t), started.ID); err != nil {
 			t.Fatalf("Stop error = %v", err)
 		}
 
@@ -210,14 +210,14 @@ func TestCloseStopsEverySessionAndRefusesNewOnes(t *testing.T) {
 			assertGone(t, service, session.ID)
 		}
 
-		_, err := service.Start(t.Context(), request(directFileID))
+		_, err := service.Start(adminContext(t), request(directFileID))
 		assertWrappedError(t, err, appplayback.ErrServiceClosed, "start playback")
 
 		if !errors.Is(err, domain.ErrUnavailable) {
 			t.Errorf("Start after Close error = %v, want it to wrap domain.ErrUnavailable", err)
 		}
 
-		if err := service.Stop(t.Context(), sessions[1].ID); err != nil {
+		if err := service.Stop(adminContext(t), sessions[1].ID); err != nil {
 			t.Errorf("Stop after Close error = %v, want nil", err)
 		}
 	})
@@ -543,7 +543,7 @@ func TestPurgeWorkspaceRefusesOnceSessionsExist(t *testing.T) {
 	}
 
 	// Still refused after the session is gone: another one may start at any time.
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -578,7 +578,7 @@ func TestNoSessionStartsWhileTheWorkspaceIsPurged(t *testing.T) {
 
 		synctest.Wait()
 
-		_, err := service.Start(t.Context(), request(directFileID))
+		_, err := service.Start(adminContext(t), request(directFileID))
 		assertWrappedError(t, err, domain.ErrUnavailable, "purged")
 
 		if err := service.PurgeWorkspace(t.Context()); !errors.Is(err, domain.ErrConflict) {
@@ -603,7 +603,7 @@ func TestAFinishedTranscodeFreesItsReencodingSlot(t *testing.T) {
 		service := env.service(t)
 		finished := mustStart(t, service, request(transcodeFileID))
 
-		if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+		if _, err := service.Start(adminContext(t), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 			t.Fatalf("second transcode while the first runs error = %v, want ErrSessionLimitReached", err)
 		}
 
@@ -648,7 +648,7 @@ func TestTeardownLogsTheOpenStreamRequests(t *testing.T) {
 		end  func(t *testing.T, service *appplayback.Service, id string)
 	}{
 		{"stop", func(t *testing.T, service *appplayback.Service, id string) {
-			if err := service.Stop(t.Context(), id); err != nil {
+			if err := service.Stop(adminContext(t), id); err != nil {
 				t.Fatalf("Stop error = %v", err)
 			}
 		}},
@@ -693,7 +693,7 @@ func TestTeardownWithoutOpenStreamRequestsLogsNoOpenRequests(t *testing.T) {
 
 	env := newEnvironment()
 	teardownWithOpenRequests(t, env, 0, func(service *appplayback.Service, id string) {
-		if err := service.Stop(t.Context(), id); err != nil {
+		if err := service.Stop(adminContext(t), id); err != nil {
 			t.Fatalf("Stop error = %v", err)
 		}
 	})

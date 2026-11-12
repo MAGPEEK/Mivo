@@ -20,8 +20,10 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	domainaccess "github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/playback"
 	"github.com/magpeek/mivo/internal/domain/playback/playbacktest"
@@ -71,7 +73,7 @@ type memoryFiles struct {
 	files map[string]appplayback.PlayableFile
 }
 
-func (source memoryFiles) PlayableFile(_ context.Context, fileID string) (appplayback.PlayableFile, error) {
+func (source memoryFiles) PlayableFile(_ context.Context, fileID string, _ domainaccess.Restriction) (appplayback.PlayableFile, error) {
 	file, found := source.files[fileID]
 	if !found {
 		return appplayback.PlayableFile{}, fmt.Errorf("file %s: %w", fileID, domain.ErrNotFound)
@@ -397,7 +399,29 @@ func mustAPI(t *testing.T, logger *slog.Logger, mounts []restapi.Mount) http.Han
 		t.Fatalf("restapi.NewHandler error = %v", err)
 	}
 
-	return api
+	return withAdminViewer(api)
+}
+
+// withAdminViewer stands in for the session middleware: every request carries an unrestricted
+// administrator, as the pre-account mode of the server chain does.
+func withAdminViewer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		next.ServeHTTP(writer, request.WithContext(appaccess.WithViewer(request.Context(), adminViewer())))
+	})
+}
+
+func adminViewer() domainaccess.Viewer {
+	return domainaccess.Viewer{
+		AuthSessionID: "auth-admin", AccountID: "admin", ProfileID: "admin", Admin: true,
+		Libraries: domainaccess.AllLibraries(), Limit: domainaccess.NoLimit(),
+	}
+}
+
+// adminContext carries the administrator of withAdminViewer for direct service calls.
+func adminContext(t *testing.T) context.Context {
+	t.Helper()
+
+	return appaccess.WithViewer(t.Context(), adminViewer())
 }
 
 // apiWithOutput returns the REST API with stream handlers of the environment's service that
@@ -429,7 +453,7 @@ func writeFile(t *testing.T, path string, content []byte) {
 func (env *environment) start(t *testing.T, fileID string) appplayback.Session {
 	t.Helper()
 
-	session, err := env.service.Start(t.Context(), appplayback.StartRequest{
+	session, err := env.service.Start(adminContext(t), appplayback.StartRequest{
 		FileID: fileID, Profile: playbacktest.ChromiumDesktop(),
 	})
 	if err != nil {

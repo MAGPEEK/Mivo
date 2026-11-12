@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -16,6 +17,8 @@ type target struct {
 	// offline are the folders that cannot be reached now; their items are left out.
 	offline []string
 	limit   int
+	// restriction is what the viewer may see; every read of the rows passes it on.
+	restriction access.Restriction
 }
 
 // LibraryRows returns the rows of a library's Overview pivot in display order (see
@@ -23,7 +26,13 @@ type target struct {
 // rows.DefaultItemLimit; one outside 1 to MaxItemLimit wraps domain.ErrInvalid, an unknown
 // library domain.ErrNotFound.
 func (service *Service) LibraryRows(ctx context.Context, libraryID string, limit int) (LibraryRows, error) {
-	limit, err := itemLimit(limit)
+	// A denied library answers not found before the limit is validated.
+	restriction, err := appaccess.LibraryRestriction(ctx, libraryID)
+	if err != nil {
+		return LibraryRows{}, fmt.Errorf("library rows of %q: %w", libraryID, err)
+	}
+
+	limit, err = itemLimit(limit)
 	if err != nil {
 		return LibraryRows{}, fmt.Errorf("library rows of %q: %w", libraryID, err)
 	}
@@ -33,7 +42,7 @@ func (service *Service) LibraryRows(ctx context.Context, libraryID string, limit
 		return LibraryRows{}, fmt.Errorf("library rows of %q: %w", libraryID, err)
 	}
 
-	built, state, err := service.overview(ctx, service.targetOf(ctx, managed, limit))
+	built, state, err := service.overview(ctx, service.targetOf(ctx, managed, limit, restriction))
 	if err != nil {
 		return LibraryRows{}, fmt.Errorf("library rows of %q: %w", libraryID, err)
 	}
@@ -41,8 +50,8 @@ func (service *Service) LibraryRows(ctx context.Context, libraryID string, limit
 	return LibraryRows{LibraryID: libraryID, Rows: built, Hint: rows.LibraryHint(state)}, nil
 }
 
-func (service *Service) targetOf(ctx context.Context, managed library.ManagedLibrary, limit int) target {
-	return target{library: managed, offline: service.catalog.OfflineFolders(ctx, managed.Folders), limit: limit}
+func (service *Service) targetOf(ctx context.Context, managed library.ManagedLibrary, limit int, restriction access.Restriction) target {
+	return target{library: managed, offline: service.catalog.OfflineFolders(ctx, managed.Folders), limit: limit, restriction: restriction}
 }
 
 // overview builds the Overview rows. A library without recently added items has no items at
@@ -119,7 +128,7 @@ func listedQuery(source target, sort library.ItemSort) library.ListingQuery {
 // topLevelItems reads the items of a top-level row for the query, leaving out offline items.
 func (service *Service) topLevelItems(ctx context.Context, source target, query library.ListingQuery) ([]Item, error) {
 	query.Filter.OfflineRootIDs = source.offline
-	query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
+	query.Restriction = source.restriction
 
 	summaries, err := service.rows.ListRowItems(ctx, ItemRequest{LibraryID: source.library.ID, Query: query, Limit: source.limit})
 	if err != nil {

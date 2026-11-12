@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -24,6 +24,11 @@ type ChildPageRequest struct {
 // unknown item wraps domain.ErrNotFound. Without a wired ChildReader the error wraps
 // domain.ErrUnavailable.
 func (service *Service) ListChildren(ctx context.Context, itemID string, request ChildPageRequest) (ItemPage, error) {
+	restriction, err := appaccess.RestrictionFrom(ctx)
+	if err != nil {
+		return ItemPage{}, fmt.Errorf("list children of item %q: %w", itemID, err)
+	}
+
 	if service.children == nil {
 		return ItemPage{}, fmt.Errorf("list children of item %q: no child reader: %w", itemID, domain.ErrUnavailable)
 	}
@@ -36,9 +41,8 @@ func (service *Service) ListChildren(ctx context.Context, itemID string, request
 	request.Page.Limit = limit
 
 	// Unlike ListItems no existence check is needed: the reader knows the item and reports
-	// an unknown one itself.
-	// TODO(M7-14): the viewer's restriction.
-	children, err := service.children.ListChildren(ctx, itemID, request, access.Unrestricted())
+	// an unknown or hidden one itself.
+	children, err := service.children.ListChildren(ctx, itemID, request, restriction)
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("list children of item %q: %w", itemID, err)
 	}

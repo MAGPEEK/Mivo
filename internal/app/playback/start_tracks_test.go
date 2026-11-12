@@ -132,7 +132,7 @@ func TestStartSubtitleTrackLookupFailure(t *testing.T) {
 	env := subtitledEnvironment()
 	env.subtitles = fakeSubtitles{err: errBoom}
 
-	_, err := env.service(t).Start(t.Context(), subtitleRequest(nil))
+	_, err := env.service(t).Start(adminContext(t), subtitleRequest(nil))
 
 	assertWrappedError(t, err, errBoom, "subtitle tracks")
 }
@@ -142,7 +142,7 @@ func TestStartUnknownSubtitleTrackIsInvalid(t *testing.T) {
 
 	env := subtitledEnvironment()
 
-	_, err := env.service(t).Start(t.Context(), subtitleRequest(ptr("s:99")))
+	_, err := env.service(t).Start(adminContext(t), subtitleRequest(ptr("s:99")))
 
 	assertWrappedError(t, err, domain.ErrInvalid, "s:99")
 }
@@ -221,7 +221,7 @@ func TestStartBurnInAtTheReencodingLimit(t *testing.T) {
 			startRequest := subtitleRequest(ptr(pgsTrackID))
 			startRequest.AllowDegradeSubtitles = test.allowDegrade
 
-			session, err := service.Start(t.Context(), startRequest)
+			session, err := service.Start(adminContext(t), startRequest)
 			if test.wantErr {
 				assertWrappedError(t, err, appplayback.ErrSessionLimitReached, "re-encoding sessions")
 
@@ -292,7 +292,7 @@ func TestStartReplacementWithBurnIn(t *testing.T) {
 			startRequest.ReplacesSessionID = old.ID
 			startRequest.AllowDegradeSubtitles = test.allowDegrade
 
-			session, err := service.Start(t.Context(), startRequest)
+			session, err := service.Start(adminContext(t), startRequest)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("Start error = %v, want error %t", err, test.wantErr)
 			}
@@ -315,7 +315,7 @@ func TestStartReplacementWithBurnIn(t *testing.T) {
 func assertReplacedSession(t *testing.T, service *appplayback.Service, oldID string, wantAlive bool) {
 	t.Helper()
 
-	_, err := service.Get(t.Context(), oldID)
+	_, err := service.Get(adminContext(t), oldID)
 	if alive := err == nil; alive != wantAlive {
 		t.Errorf("old session alive = %t, want %t", alive, wantAlive)
 	}
@@ -339,7 +339,7 @@ func TestStartReplacementOfATranscodeWithBurnInNeedsNoFreeSlot(t *testing.T) {
 		t.Errorf("session mode %s rate %d, want burn-in at %d", session.SubtitleMode, session.OutputBitRate, twoMegabits)
 	}
 
-	if _, err := service.Get(t.Context(), old.ID); err == nil {
+	if _, err := service.Get(adminContext(t), old.ID); err == nil {
 		t.Error("the replaced session is still visible")
 	}
 }

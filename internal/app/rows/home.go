@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"slices"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
@@ -36,7 +36,12 @@ const MaxHomeRows = 100
 // row. A row's title parameter is the library name, which library.MaxNameLength keeps within
 // the API's 200 characters. A limit as in LibraryRows.
 func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
-	limit, err := itemLimit(limit)
+	restriction, err := appaccess.RestrictionFrom(ctx)
+	if err != nil {
+		return Home{}, fmt.Errorf("home rows: %w", err)
+	}
+
+	limit, err = itemLimit(limit)
 	if err != nil {
 		return Home{}, fmt.Errorf("home rows: %w", err)
 	}
@@ -56,7 +61,7 @@ func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
 			break
 		}
 
-		source := service.targetOf(ctx, managed, limit)
+		source := service.targetOf(ctx, managed, limit, restriction)
 
 		row, err := service.recentlyAdded(ctx, source, rows.TitleRecentlyAddedIn, map[string]string{rows.ParamLibrary: managed.Name})
 		if err != nil {
@@ -125,7 +130,7 @@ func (service *Service) heroCandidates(ctx context.Context, libraries []target) 
 
 		query := listedQuery(source, library.SortByDateAdded)
 		query.Filter.OfflineRootIDs = source.offline
-		query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
+		query.Restriction = source.restriction
 
 		summaries, err := service.rows.ListRowItems(ctx, ItemRequest{LibraryID: source.library.ID, Query: query, Limit: heroCandidatesPerLibrary})
 		if err != nil {

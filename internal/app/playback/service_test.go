@@ -136,7 +136,7 @@ func TestGetReturnsTheSession(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(remuxFileID))
 
-	got, err := service.Get(t.Context(), started.ID)
+	got, err := service.Get(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Get error = %v", err)
 	}
@@ -156,7 +156,7 @@ func TestGetReturnsACopy(t *testing.T) {
 	started.Plan.Streams[0].TargetCodec = "changed"
 	started.Plan.Reasons[0].Code = "changed"
 
-	got, err := service.Get(t.Context(), started.ID)
+	got, err := service.Get(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Get error = %v", err)
 	}
@@ -171,10 +171,10 @@ func TestGetAndAccessReportUnknownSessions(t *testing.T) {
 
 	service := newEnvironment().service(t)
 
-	_, err := service.Get(t.Context(), unknownSessionID)
+	_, err := service.Get(adminContext(t), unknownSessionID)
 	assertWrappedError(t, err, domain.ErrNotFound, unknownSessionID)
 
-	_, err = service.Access(t.Context(), unknownSessionID)
+	_, err = service.Access(adminContext(t), unknownSessionID)
 	assertWrappedError(t, err, domain.ErrNotFound, unknownSessionID)
 }
 
@@ -185,7 +185,7 @@ func TestStopEndsTheSession(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(remuxFileID))
 
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -197,7 +197,7 @@ func TestStopEndsTheSession(t *testing.T) {
 		t.Errorf("removed workspaces = %v, want [%s]", removed, started.ID)
 	}
 
-	if _, err := service.Get(t.Context(), started.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), started.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get after Stop error = %v, want ErrNotFound", err)
 	}
 }
@@ -210,12 +210,12 @@ func TestStopIsIdempotent(t *testing.T) {
 	started := mustStart(t, service, request(remuxFileID))
 
 	for attempt := range 3 {
-		if err := service.Stop(t.Context(), started.ID); err != nil {
+		if err := service.Stop(adminContext(t), started.ID); err != nil {
 			t.Fatalf("Stop #%d error = %v", attempt+1, err)
 		}
 	}
 
-	if err := service.Stop(t.Context(), unknownSessionID); err != nil {
+	if err := service.Stop(adminContext(t), unknownSessionID); err != nil {
 		t.Errorf("Stop(unknown) error = %v, want nil", err)
 	}
 
@@ -235,7 +235,7 @@ func TestStopOfADirectPlaySessionTouchesNoWorkspace(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(directFileID))
 
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -252,7 +252,7 @@ func TestStopLogsALeftoverWorkspaceAndSucceeds(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(remuxFileID))
 
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Fatalf("Stop error = %v, want nil: the session is gone, only a directory is left", err)
 	}
 
@@ -262,11 +262,11 @@ func TestStopLogsALeftoverWorkspaceAndSucceeds(t *testing.T) {
 		t.Errorf("logs = %q, want a warning naming the session and the leftover", logs)
 	}
 
-	if _, err := service.Get(t.Context(), started.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), started.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get after a failed removal error = %v, want ErrNotFound (the session is gone)", err)
 	}
 
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Errorf("second Stop error = %v, want nil", err)
 	}
 }
@@ -297,7 +297,7 @@ func TestAccessOfADirectPlaySession(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(directFileID))
 
-	access, err := service.Access(t.Context(), started.ID)
+	access, err := service.Access(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Access error = %v", err)
 	}
@@ -326,7 +326,7 @@ func TestAccessOfAnHLSSessionWaitsForTheProduction(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(remuxFileID))
 
-	access, err := service.Access(t.Context(), started.ID)
+	access, err := service.Access(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Access error = %v", err)
 	}
@@ -355,14 +355,14 @@ func TestWaitReadyAfterStopReportsAStoppedProduction(t *testing.T) {
 	service := env.service(t)
 	started := mustStart(t, service, request(remuxFileID))
 
-	access, err := service.Access(t.Context(), started.ID)
+	access, err := service.Access(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Access error = %v", err)
 	}
 
 	defer access.Release()
 
-	if err := service.Stop(t.Context(), started.ID); err != nil {
+	if err := service.Stop(adminContext(t), started.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -392,7 +392,7 @@ func TestAccessRecordsTheAccessTime(t *testing.T) {
 
 	env.clock.advance(time.Second)
 
-	got, err := service.Get(t.Context(), started.ID)
+	got, err := service.Get(adminContext(t), started.ID)
 	if err != nil {
 		t.Fatalf("Get error = %v", err)
 	}

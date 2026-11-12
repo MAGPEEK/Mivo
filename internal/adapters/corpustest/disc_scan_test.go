@@ -11,6 +11,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/app/scan"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/playback"
 	"github.com/magpeek/mivo/internal/domain/playback/playbacktest"
@@ -90,7 +91,7 @@ func TestCorpusDiscLibraryScans(t *testing.T) {
 				t.Fatalf("the disc %q is not catalogued (catalogued: %v)", row.Path, files)
 			}
 
-			playable, err := reader.PlayableFile(t.Context(), fileID)
+			playable, err := reader.PlayableFile(t.Context(), fileID, access.Unrestricted())
 			if err != nil {
 				t.Fatalf("PlayableFile: %v", err)
 			}

@@ -327,7 +327,7 @@ func TestStartFailures(t *testing.T) {
 			test.configure(env, &startRequest)
 			service := env.service(t)
 
-			session, err := service.Start(t.Context(), startRequest)
+			session, err := service.Start(adminContext(t), startRequest)
 			assertWrappedError(t, err, test.wantErr, test.wantText)
 
 			if session.ID != "" {
@@ -350,7 +350,7 @@ func TestStartRejectsAnInvalidProfileBeforeLoadingTheFile(t *testing.T) {
 	startRequest := request(remuxFileID)
 	startRequest.Profile.Name = "evil\nname"
 
-	_, err := env.service(t).Start(t.Context(), startRequest)
+	_, err := env.service(t).Start(adminContext(t), startRequest)
 	assertWrappedError(t, err, domain.ErrInvalid, "client profile")
 
 	if loads := env.files.loadCount(); loads != 0 {
@@ -365,7 +365,7 @@ func TestStartCleansTheWorkspaceWhenTheProducerFails(t *testing.T) {
 	env.producer.err = fmt.Errorf("ffmpeg missing: %w", domain.ErrUnavailable)
 	service := env.service(t)
 
-	_, err := service.Start(t.Context(), request(remuxFileID))
+	_, err := service.Start(adminContext(t), request(remuxFileID))
 	assertWrappedError(t, err, domain.ErrUnavailable, "start stream producer")
 
 	created, removed := env.workspace.createdIDs(), env.workspace.removedIDs()
@@ -373,7 +373,7 @@ func TestStartCleansTheWorkspaceWhenTheProducerFails(t *testing.T) {
 		t.Errorf("created %v, removed %v; want the created workspace removed", created, removed)
 	}
 
-	if _, err := service.Get(t.Context(), sessionID(1)); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), sessionID(1)); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get of the failed session error = %v, want ErrNotFound", err)
 	}
 
@@ -388,7 +388,7 @@ func TestStartLogsAFailedCleanupButReportsTheProducerError(t *testing.T) {
 	env.producer.err = errBoom
 	env.workspace.removeErr = errors.New("directory locked")
 
-	_, err := env.service(t).Start(t.Context(), request(remuxFileID))
+	_, err := env.service(t).Start(adminContext(t), request(remuxFileID))
 	assertWrappedError(t, err, errBoom, "start stream producer")
 
 	if logs := env.logs.String(); !strings.Contains(logs, "directory locked") {
@@ -434,7 +434,7 @@ func TestStartReportsADuplicateSessionIDAsAnInternalError(t *testing.T) {
 	service := env.service(t)
 	first := mustStart(t, service, request(remuxFileID))
 
-	_, err := service.Start(t.Context(), request(remuxFileID))
+	_, err := service.Start(adminContext(t), request(remuxFileID))
 	if err == nil || !strings.Contains(err.Error(), first.ID+" is already in use") {
 		t.Fatalf("Start with a repeated ID error = %v, want it to name the ID in use", err)
 	}
@@ -463,7 +463,7 @@ func TestStartReportsALibraryEscapeAsUnsupported(t *testing.T) {
 	env := newEnvironment()
 	env.resolver.err = fmt.Errorf("evaluated path leaves the library root: %w", domain.ErrForbidden)
 
-	_, err := env.service(t).Start(t.Context(), request(directFileID))
+	_, err := env.service(t).Start(adminContext(t), request(directFileID))
 
 	if !errors.Is(err, domain.ErrUnsupported) || errors.Is(err, domain.ErrForbidden) {
 		t.Errorf("error = %v, want it to wrap ErrUnsupported and not ErrForbidden", err)
@@ -491,7 +491,7 @@ func TestStartRejectsSessionsAboveTheTranscodeLimit(t *testing.T) {
 		mustStart(t, service, request(transcodeFileID))
 	}
 
-	_, err := service.Start(t.Context(), request(audioTranscodeFileID))
+	_, err := service.Start(adminContext(t), request(audioTranscodeFileID))
 	assertWrappedError(t, err, appplayback.ErrSessionLimitReached, "re-encoding")
 
 	if !errors.Is(err, domain.ErrUnavailable) {
@@ -517,7 +517,7 @@ func TestStartRejectsFFmpegSessionsAboveTheSafetyCap(t *testing.T) {
 		mustStart(t, service, request(remuxFileID))
 	}
 
-	_, err := service.Start(t.Context(), request(remuxFileID))
+	_, err := service.Start(adminContext(t), request(remuxFileID))
 	assertWrappedError(t, err, appplayback.ErrSessionLimitReached, "FFmpeg")
 
 	// Direct play runs no FFmpeg and is never limited.
@@ -535,7 +535,7 @@ func TestStartRejectsSessionsAboveTheOverallCap(t *testing.T) {
 		last = mustStart(t, service, request(directFileID))
 	}
 
-	_, err := service.Start(t.Context(), request(directFileID))
+	_, err := service.Start(adminContext(t), request(directFileID))
 	assertWrappedError(t, err, appplayback.ErrSessionLimitReached, "sessions running")
 
 	// Seeking at the cap still works: the replacement takes over the old session's slot.
@@ -543,7 +543,7 @@ func TestStartRejectsSessionsAboveTheOverallCap(t *testing.T) {
 	seek.ReplacesSessionID = last.ID
 	mustStart(t, service, seek)
 
-	if _, err := service.Get(t.Context(), last.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), last.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get of the replaced session error = %v, want ErrNotFound", err)
 	}
 }
@@ -556,11 +556,11 @@ func TestStopFreesTheSlot(t *testing.T) {
 	service := env.service(t)
 	first := mustStart(t, service, request(transcodeFileID))
 
-	if _, err := service.Start(t.Context(), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Fatalf("second transcode error = %v, want ErrSessionLimitReached", err)
 	}
 
-	if err := service.Stop(t.Context(), first.ID); err != nil {
+	if err := service.Stop(adminContext(t), first.ID); err != nil {
 		t.Fatalf("Stop error = %v", err)
 	}
 
@@ -589,7 +589,7 @@ func TestStartReplacesASessionBeforeCheckingTheLimit(t *testing.T) {
 		t.Errorf("replaced production stops = %d, want 1", stops)
 	}
 
-	if _, err := service.Get(t.Context(), first.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), first.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get of the replaced session error = %v, want ErrNotFound", err)
 	}
 }
@@ -616,11 +616,11 @@ func TestAFailedReplacementKeepsTheOldSession(t *testing.T) {
 	seek.ReplacesSessionID = first.ID
 	env.producer.err = errBoom
 
-	if _, err := service.Start(t.Context(), seek); !errors.Is(err, errBoom) {
+	if _, err := service.Start(adminContext(t), seek); !errors.Is(err, errBoom) {
 		t.Fatalf("failing replacement error = %v, want errBoom", err)
 	}
 
-	if _, err := service.Get(t.Context(), first.ID); err != nil {
+	if _, err := service.Get(adminContext(t), first.ID); err != nil {
 		t.Errorf("Get of the old session error = %v, want it still running", err)
 	}
 
@@ -648,11 +648,11 @@ func TestStartKeepsTheReplacedSessionWhenTheDecisionFails(t *testing.T) {
 	bad.StartPosition = fileDuration
 	bad.ReplacesSessionID = first.ID
 
-	if _, err := service.Start(t.Context(), bad); !errors.Is(err, domain.ErrInvalid) {
+	if _, err := service.Start(adminContext(t), bad); !errors.Is(err, domain.ErrInvalid) {
 		t.Fatalf("Start error = %v, want ErrInvalid", err)
 	}
 
-	if _, err := service.Get(t.Context(), first.ID); err != nil {
+	if _, err := service.Get(adminContext(t), first.ID); err != nil {
 		t.Errorf("Get of the session to replace error = %v, want it still running", err)
 	}
 }
@@ -694,13 +694,13 @@ func assertSlotsFree(t *testing.T, env *environment, service *appplayback.Servic
 	}
 
 	for range transcodes {
-		if _, err := service.Start(t.Context(), request(transcodeFileID)); err != nil {
+		if _, err := service.Start(adminContext(t), request(transcodeFileID)); err != nil {
 			t.Fatalf("transcode after the failure error = %v, want a free slot", err)
 		}
 	}
 
 	for range cappedFFmpegSessions - transcodes {
-		if _, err := service.Start(t.Context(), request(remuxFileID)); err != nil {
+		if _, err := service.Start(adminContext(t), request(remuxFileID)); err != nil {
 			t.Fatalf("remux after the failure error = %v, want a free slot", err)
 		}
 	}

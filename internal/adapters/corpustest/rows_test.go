@@ -1,6 +1,7 @@
 package corpustest_test
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,9 +11,11 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	"github.com/magpeek/mivo/internal/app/scan"
+	domainaccess "github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
@@ -58,17 +61,17 @@ func TestCorpusRowsLeaveOutUnavailableItems(t *testing.T) {
 		t.Fatalf("unavailable movies = %v, want the two stand-ins", unavailable)
 	}
 
-	movies, err := service.LibraryRows(t.Context(), corpus.moviesID, approws.MaxItemLimit)
+	movies, err := service.LibraryRows(adminContext(t), corpus.moviesID, approws.MaxItemLimit)
 	if err != nil {
 		t.Fatalf("LibraryRows(movies): %v", err)
 	}
 
-	shows, err := service.LibraryRows(t.Context(), corpus.showsID, approws.MaxItemLimit)
+	shows, err := service.LibraryRows(adminContext(t), corpus.showsID, approws.MaxItemLimit)
 	if err != nil {
 		t.Fatalf("LibraryRows(shows): %v", err)
 	}
 
-	home, err := service.Home(t.Context(), approws.MaxItemLimit)
+	home, err := service.Home(adminContext(t), approws.MaxItemLimit)
 	if err != nil {
 		t.Fatalf("Home: %v", err)
 	}
@@ -214,7 +217,7 @@ func (corpus rowsCorpus) services(t *testing.T) (*applibrary.Service, *approws.S
 	}
 
 	service, err := approws.NewService(approws.Dependencies{
-		Libraries: approws.NewAllLibraries(corpus.store), Rows: reader, Summaries: reader,
+		Libraries: appaccess.NewScopedLibraries(corpus.store), Rows: reader, Summaries: reader,
 		Catalog: items, Scans: corpus.scans, Clock: time.Now,
 	})
 	if err != nil {
@@ -229,7 +232,7 @@ func (corpus rowsCorpus) services(t *testing.T) (*applibrary.Service, *approws.S
 func unavailableItems(t *testing.T, items *applibrary.Service, libraryID string) map[string]string {
 	t.Helper()
 
-	page, err := items.ListItems(t.Context(), libraryID, library.PageRequest{Limit: library.MaxPageLimit},
+	page, err := items.ListItems(adminContext(t), libraryID, library.PageRequest{Limit: library.MaxPageLimit},
 		library.ListingQuery{Filter: library.ListingFilter{Quick: library.QuickUnavailable}})
 	if err != nil {
 		t.Fatalf("list the unavailable movies: %v", err)
@@ -275,4 +278,15 @@ func assertNoneOf(t *testing.T, rowList []approws.Row, unavailable map[string]st
 			}
 		}
 	}
+}
+
+// adminContext carries an unrestricted administrator: the use cases read the viewer from the
+// context (M7-14).
+func adminContext(t *testing.T) context.Context {
+	t.Helper()
+
+	return appaccess.WithViewer(t.Context(), domainaccess.Viewer{
+		AccountID: "account", ProfileID: "profile", Admin: true,
+		Libraries: domainaccess.AllLibraries(), Limit: domainaccess.NoLimit(),
+	})
 }

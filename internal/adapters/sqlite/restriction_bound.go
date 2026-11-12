@@ -31,6 +31,12 @@ type contentLimit struct {
 
 // contentLimitOf returns the bound form of the restriction's content limit.
 func contentLimitOf(restriction access.Restriction) contentLimit {
+	// A restriction that allows no library gets the strictest limit as well, so a read that
+	// forgets the library check still shows nothing.
+	if restriction.DeniesAll() {
+		return contentLimit{}
+	}
+
 	limit := contentLimit{maxAge: int64(access.Age18), allowUnrated: storedFlag(!restriction.HideUnrated())}
 	if maxAge, limited := restriction.MaxAge(); limited {
 		limit.maxAge = int64(maxAge)

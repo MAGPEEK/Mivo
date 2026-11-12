@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
@@ -48,7 +49,7 @@ func TestSavePlacedFileStoresTheLayout(t *testing.T) {
 			t.Errorf("%s: layout column = %q, want %q", test.file.RelativePath, column, test.wantColumn)
 		}
 
-		playable, err := fixture.reader.PlayableFile(t.Context(), test.file.ID)
+		playable, err := fixture.reader.PlayableFile(t.Context(), test.file.ID, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("PlayableFile(%s) error = %v", test.file.RelativePath, err)
 		}

@@ -209,6 +209,21 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   (`WithViewer`, `ViewerFrom`). Use cases that list or read catalog data **fail closed**: no
   viewer → `domain.ErrUnauthenticated`. Background jobs (scan, enrichment) never use the
   viewer-scoped reads.
+- **Use-case rules (M7-14).** `app/library`, `app/rows`, `app/search` and `app/playback` build the
+  restriction from the viewer in the context. A use case that takes a library id checks the
+  viewer's access **first**, before validating limit, cursor, filter or path and before any store
+  or file-system call: a library outside the access set answers `domain.ErrNotFound`, like an
+  unknown one. The library source of the rows and the search is `app/access.ScopedLibraries`
+  (the viewer's effective access set). The folder view lists the file-system directories
+  intersected with the catalog's directories that hold a visible item; an administrator without
+  a content limit still sees every directory, also empty ones, and a directory with no visible
+  item opened by path answers `ErrNotFound`.
+- **Pre-account mode (until M7-25).** While `server.Options.Authentication` is unset, the HTTP
+  chain stores an unrestricted administrator viewer (no auth session id) in every request
+  context (`preAccountViewer`), so the server is open by design exactly as before accounts
+  existed: same exposure as today, and the use cases above stay fail-closed. With
+  Authentication wired, a request without a valid session is answered by the middleware and
+  carries no viewer at all. M7-25 deletes the pre-account viewer (`TODO(M7-25)`).
 
 ### 8 Watch state
 - Table `watch_state` (migration `00013`): `profile_id` (FK, `ON DELETE CASCADE`), `item_id`

@@ -246,7 +246,7 @@ func TestPlayableFileReturnsTheFileWithStreamsAndTheLibraryRoot(t *testing.T) {
 	record := probedRecord(showsLibraryID, testID('i', 1), testID('f', 1), "Show/Season 1/S01E01.mkv")
 	mustSave(t, fixture.writer, record)
 
-	playable, err := fixture.reader.PlayableFile(t.Context(), record.File.ID)
+	playable, err := fixture.reader.PlayableFile(t.Context(), record.File.ID, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("PlayableFile error = %v", err)
 	}
@@ -262,7 +262,7 @@ func TestPlayableFileReturnsAFileWhoseProbeFailed(t *testing.T) {
 	record := failedRecord(moviesLibraryID, testID('i', 1), testID('f', 1), "broken.avi")
 	mustSave(t, fixture.writer, record)
 
-	playable, err := fixture.reader.PlayableFile(t.Context(), record.File.ID)
+	playable, err := fixture.reader.PlayableFile(t.Context(), record.File.ID, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("PlayableFile error = %v", err)
 	}
@@ -275,7 +275,7 @@ func TestPlayableFileOfAnUnknownIDReturnsNotFound(t *testing.T) {
 
 	fixture := newCatalogFixture(t)
 
-	if _, err := fixture.reader.PlayableFile(t.Context(), unknownID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := fixture.reader.PlayableFile(t.Context(), unknownID, access.Unrestricted()); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("PlayableFile error = %v, want domain.ErrNotFound", err)
 	}
 }
@@ -314,7 +314,7 @@ func TestReadingCorruptCatalogRowsIsAServerError(t *testing.T) {
 
 			_, listErr := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 			_, getErr := fixture.reader.GetItem(t.Context(), record.Item.ID, access.Unrestricted())
-			_, playableErr := fixture.reader.PlayableFile(t.Context(), record.File.ID)
+			_, playableErr := fixture.reader.PlayableFile(t.Context(), record.File.ID, access.Unrestricted())
 
 			errs := map[string]error{"ListItems": listErr, "GetItem": getErr, "PlayableFile": playableErr}
 			for operation, err := range errs {
@@ -356,7 +356,7 @@ func TestCatalogReaderReportsDatabaseErrors(t *testing.T) {
 
 			_, listErr := fixture.reader.ListItems(test.ctx(t), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
 			_, getErr := fixture.reader.GetItem(test.ctx(t), record.Item.ID, access.Unrestricted())
-			_, playableErr := fixture.reader.PlayableFile(test.ctx(t), record.File.ID)
+			_, playableErr := fixture.reader.PlayableFile(test.ctx(t), record.File.ID, access.Unrestricted())
 
 			errs := map[string]error{"ListItems": listErr, "GetItem": getErr, "PlayableFile": playableErr}
 			for operation, err := range errs {

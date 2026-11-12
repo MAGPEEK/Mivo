@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	"github.com/magpeek/mivo/internal/domain"
-	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -131,6 +131,11 @@ type ItemDetail struct {
 // Sort "random" without a seed gets a fresh seed on the first page; the reader keeps it in
 // the cursor, so later pages repeat the order.
 func (service *Service) ListItems(ctx context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (ItemPage, error) {
+	restriction, err := appaccess.LibraryRestriction(ctx, libraryID)
+	if err != nil {
+		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
+	}
+
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("list items of library %q: %w", libraryID, err)
@@ -145,7 +150,7 @@ func (service *Service) ListItems(ctx context.Context, libraryID string, page li
 		query.Order.Seed, query.Order.HasSeed = service.randomSeed(), true
 	}
 
-	query.Restriction = access.Unrestricted() // TODO(M7-14): the viewer's restriction.
+	query.Restriction = restriction
 
 	items, err := service.items.ListItems(ctx, libraryID, library.PageRequest{Limit: limit, Cursor: page.Cursor}, query)
 	if err != nil {
@@ -158,8 +163,12 @@ func (service *Service) ListItems(ctx context.Context, libraryID string, page li
 // GetItem returns an item with its detail (see ItemDetail). An unknown ID wraps
 // domain.ErrNotFound.
 func (service *Service) GetItem(ctx context.Context, itemID string) (ItemDetail, error) {
-	// TODO(M7-14): the viewer's restriction.
-	detail, err := service.items.GetItem(ctx, itemID, access.Unrestricted())
+	restriction, err := appaccess.RestrictionFrom(ctx)
+	if err != nil {
+		return ItemDetail{}, fmt.Errorf("get item %q: %w", itemID, err)
+	}
+
+	detail, err := service.items.GetItem(ctx, itemID, restriction)
 	if err != nil {
 		return ItemDetail{}, fmt.Errorf("get item %q: %w", itemID, err)
 	}

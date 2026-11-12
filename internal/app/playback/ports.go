@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
@@ -31,8 +32,9 @@ type PlayableFile struct {
 // FileSource loads media files for playback. Implemented by adapters/sqlite.
 type FileSource interface {
 	// PlayableFile returns the file with its streams and library root, or an error wrapping
-	// domain.ErrNotFound for an unknown file ID.
-	PlayableFile(ctx context.Context, fileID string) (PlayableFile, error)
+	// domain.ErrNotFound for an unknown file ID and for a file whose item the restriction
+	// hides (itself or through an ancestor, or its library); the zero restriction hides all.
+	PlayableFile(ctx context.Context, fileID string, restriction access.Restriction) (PlayableFile, error)
 }
 
 // PathResolver turns a library-relative path into the absolute path FFmpeg opens, refusing

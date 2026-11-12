@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
-	approws "github.com/magpeek/mivo/internal/app/rows"
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	appsearch "github.com/magpeek/mivo/internal/app/search"
 )
 
@@ -26,11 +26,11 @@ func withCatalogReaders(db *sqlite.DB, catalog catalogServices) (catalogServices
 	return catalog, nil
 }
 
-// newSearchService builds the search on the sqlite full-text index and catalog. Every library
-// is visible until profiles exist (M7), through the same library source as the rows.
+// newSearchService builds the search on the sqlite full-text index and catalog. The libraries
+// are the viewer's, through the same scoped library source as the rows (M7-14).
 func newSearchService(db *sqlite.DB, catalog catalogServices) (*appsearch.Service, error) {
 	service, err := appsearch.NewService(appsearch.Dependencies{
-		Libraries: approws.NewAllLibraries(catalog.store),
+		Libraries: appaccess.NewScopedLibraries(catalog.store),
 		Index:     sqlite.NewSearchIndex(db),
 		Summaries: sqlite.NewCatalogReader(db),
 	})

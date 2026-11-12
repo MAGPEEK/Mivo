@@ -65,9 +65,9 @@ func (catalog *CatalogReader) GetItem(
 }
 
 // PlayableFile returns a file with its streams and the root of its library. It also returns
-// a file whose probe failed; the caller decides whether it can play. An unknown ID wraps
-// domain.ErrNotFound.
-func (catalog *CatalogReader) PlayableFile(ctx context.Context, fileID string) (appplayback.PlayableFile, error) {
+// a file whose probe failed; the caller decides whether it can play. An unknown ID and a file
+// whose item the restriction hides wrap domain.ErrNotFound; the zero restriction hides all.
+func (catalog *CatalogReader) PlayableFile(ctx context.Context, fileID string, restriction access.Restriction) (appplayback.PlayableFile, error) {
 	var playable appplayback.PlayableFile
 
 	err := inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
@@ -78,6 +78,12 @@ func (catalog *CatalogReader) PlayableFile(ctx context.Context, fileID string) (
 
 		if err != nil {
 			return fmt.Errorf("read file: %w", err)
+		}
+
+		// The item of the file decides: hidden itself, through an ancestor or by its library, the file
+		// answers like an unknown one.
+		if _, err := viewOf(restriction).item(ctx, queries, row.MediaFile.ItemID); err != nil {
+			return err
 		}
 
 		files, err := filesWithStreams(ctx, queries, []sqlcgen.MediaFile{row.MediaFile})

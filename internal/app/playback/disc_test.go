@@ -235,7 +235,7 @@ func TestStartRefusesDiscsThatCannotPlay(t *testing.T) {
 			env, titles, _ := discEnvironment()
 			test.prepare(env, titles)
 
-			_, err := env.service(t).Start(t.Context(), request(blurayFileID))
+			_, err := env.service(t).Start(adminContext(t), request(blurayFileID))
 
 			assertWrappedError(t, err, test.wantErr, test.wantText)
 

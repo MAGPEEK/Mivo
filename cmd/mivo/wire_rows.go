@@ -5,16 +5,17 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	approws "github.com/magpeek/mivo/internal/app/rows"
 )
 
-// newRowsService builds the Home and Overview rows on the sqlite catalog. Every library is
-// visible until profiles exist (M7); the server's local clock seeds the genre rotation.
+// newRowsService builds the Home and Overview rows on the sqlite catalog. A library is
+// visible to its viewer, scoped by the request context (M7-14); the server's local clock seeds the genre rotation.
 func newRowsService(db *sqlite.DB, catalog catalogServices) (*approws.Service, error) {
 	reader := sqlite.NewCatalogReader(db)
 
 	service, err := approws.NewService(approws.Dependencies{
-		Libraries: approws.NewAllLibraries(catalog.store),
+		Libraries: appaccess.NewScopedLibraries(catalog.store),
 		Rows:      reader,
 		Summaries: reader,
 		Catalog:   catalog.libraries,

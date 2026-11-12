@@ -69,6 +69,8 @@ type memoryItemReader struct {
 	// requests and queries record every ListItems call.
 	queries  []library.ListingQuery
 	requests []listRequest
+	// detailRestrictions records the restriction of every GetItem call.
+	detailRestrictions []access.Restriction
 }
 
 // listRequest is one recorded ListItems call.
@@ -129,9 +131,11 @@ func parseIndexCursor(cursor string, itemCount int) (int, error) {
 	return start, nil
 }
 
-func (reader *memoryItemReader) GetItem(_ context.Context, itemID string, _ access.Restriction) (applibrary.ItemDetail, error) {
+func (reader *memoryItemReader) GetItem(_ context.Context, itemID string, restriction access.Restriction) (applibrary.ItemDetail, error) {
 	reader.mutex.Lock()
 	defer reader.mutex.Unlock()
+
+	reader.detailRestrictions = append(reader.detailRestrictions, restriction)
 
 	if reader.getErr != nil {
 		return applibrary.ItemDetail{}, reader.getErr
@@ -223,6 +227,8 @@ type memoryChildReader struct {
 	listErr error
 	// requests records every ListChildren call.
 	requests []childRequest
+	// restrictions records the restriction of every ListChildren call.
+	restrictions []access.Restriction
 }
 
 // childRequest is one recorded ListChildren call.
@@ -245,10 +251,12 @@ func (reader *memoryChildReader) put(summaries ...applibrary.ItemSummary) {
 }
 
 func (reader *memoryChildReader) ListChildren(_ context.Context, itemID string,
-	request applibrary.ChildPageRequest, _ access.Restriction,
+	request applibrary.ChildPageRequest, restriction access.Restriction,
 ) (applibrary.ItemPage, error) {
 	reader.mutex.Lock()
 	defer reader.mutex.Unlock()
+
+	reader.restrictions = append(reader.restrictions, restriction)
 
 	reader.requests = append(reader.requests, childRequest{itemID: itemID, request: request})
 

@@ -102,7 +102,7 @@ func TestFoldersOrderThePrimaryFileAndResolveTheirPaths(t *testing.T) {
 	}
 
 	for fileID, wantRoot := range map[string]string{testID('f', 1): moviesRoot, testID('f', 2): secondMoviesRoot} {
-		playable, err := fixture.reader.PlayableFile(t.Context(), fileID)
+		playable, err := fixture.reader.PlayableFile(t.Context(), fileID, access.Unrestricted())
 		if err != nil || playable.LibraryRoot != wantRoot {
 			t.Errorf("PlayableFile(%s) root = %q, %v; want %q", fileID, playable.LibraryRoot, err, wantRoot)
 		}

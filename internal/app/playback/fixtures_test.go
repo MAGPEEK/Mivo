@@ -17,6 +17,7 @@ import (
 
 const (
 	libraryRoot   = "/library"
+	libraryID     = "library-1"
 	fileDuration  = 60 * time.Second
 	maxTranscodes = 2
 	// cappedFFmpegSessions mirrors appplayback.MaxFFmpegSessions so a change of the cap is a
@@ -60,7 +61,7 @@ func catalogFile(id, relativePath string, container media.Container, streams ...
 	return appplayback.PlayableFile{
 		LibraryRoot: libraryRoot,
 		File: media.File{
-			ID: id, RelativePath: relativePath, Size: 1 << 20,
+			ID: id, LibraryID: libraryID, RelativePath: relativePath, Size: 1 << 20,
 			Description: media.Description{Container: container, Duration: fileDuration, Streams: streams},
 		},
 	}
@@ -198,7 +199,7 @@ func request(fileID string) appplayback.StartRequest {
 func mustStart(t *testing.T, service *appplayback.Service, startRequest appplayback.StartRequest) appplayback.Session {
 	t.Helper()
 
-	session, err := service.Start(t.Context(), startRequest)
+	session, err := service.Start(adminContext(t), startRequest)
 	if err != nil {
 		t.Fatalf("Start(%s) error = %v", startRequest.FileID, err)
 	}
@@ -210,7 +211,7 @@ func mustStart(t *testing.T, service *appplayback.Service, startRequest appplayb
 func contextWithCancel(t *testing.T) (context.Context, context.CancelFunc) {
 	t.Helper()
 
-	return context.WithCancel(t.Context())
+	return context.WithCancel(adminContext(t))
 }
 
 func assertWrappedError(t *testing.T, err, wantErr error, wantText string) {

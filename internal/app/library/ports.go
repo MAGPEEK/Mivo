@@ -94,6 +94,10 @@ type FolderItemReader interface {
 	// itself. Each item appears once, named after its first file there. Only items the
 	// restriction allows are returned; its zero value allows none.
 	ListFolderItems(ctx context.Context, rootID, directory string, restriction access.Restriction) ([]FolderItem, error)
+	// ListFolderDirectories returns the names of the directories directly in the directory
+	// that hold, at any depth, a file of an item the restriction allows. The zero restriction
+	// allows none.
+	ListFolderDirectories(ctx context.Context, rootID, directory string, restriction access.Restriction) ([]string, error)
 	// ItemSummaries returns the summaries of the given items as listings carry them; unknown
 	// IDs and items the restriction hides are left out. The zero restriction allows none.
 	ItemSummaries(ctx context.Context, itemIDs []string, restriction access.Restriction) ([]ItemSummary, error)

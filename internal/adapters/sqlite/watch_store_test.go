@@ -10,6 +10,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
@@ -303,7 +304,7 @@ func TestWatchEpisodeCountsCountTheEpisodesBelowShowsAndSeasons(t *testing.T) {
 	fixture.put(t, otherWatchProfileID, testID('e', 3), watch.State{Watched: true, PlayCount: 1, LastPlayed: watchNow()})
 
 	counts, err := fixture.store.EpisodeCounts(t.Context(), watchProfileID,
-		[]string{show.showID, show.season1ID, show.season2ID, testID('e', 1), unknownID})
+		[]string{show.showID, show.season1ID, show.season2ID, testID('e', 1), unknownID}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("EpisodeCounts error = %v", err)
 	}
@@ -322,7 +323,7 @@ func TestWatchStoreFailsWithACancelledContext(t *testing.T) {
 
 	fixture := newWatchFixture(t)
 	ctx := cancelledContext(t)
-	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, Limit: 1}
+	query := sqlite.WatchRowQuery{ProfileID: watchProfileID, Limit: 1, Restriction: access.Unrestricted()}
 
 	operations := map[string]func() error{
 		"UpdateStates": func() error {
@@ -331,8 +332,11 @@ func TestWatchStoreFailsWithACancelledContext(t *testing.T) {
 				Keys:      []appwatch.StateKey{{ItemID: "movie-1"}}, Change: markWatchedAt(watchNow()), Now: watchNow(),
 			})
 		},
-		"States":           func() error { _, err := fixture.store.States(ctx, watchProfileID, []string{"movie-1"}); return err },
-		"EpisodeCounts":    func() error { _, err := fixture.store.EpisodeCounts(ctx, watchProfileID, []string{"s"}); return err },
+		"States": func() error { _, err := fixture.store.States(ctx, watchProfileID, []string{"movie-1"}); return err },
+		"EpisodeCounts": func() error {
+			_, err := fixture.store.EpisodeCounts(ctx, watchProfileID, []string{"s"}, access.Unrestricted())
+			return err
+		},
 		"ContinueWatching": func() error { _, err := fixture.store.ContinueWatching(ctx, query); return err },
 		"UpNext":           func() error { _, err := fixture.store.UpNext(ctx, query); return err },
 	}

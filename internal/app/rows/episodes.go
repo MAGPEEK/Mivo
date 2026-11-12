@@ -20,7 +20,7 @@ const (
 func (service *Service) episodeCards(ctx context.Context, source target) ([]Item, error) {
 	groups, err := service.rows.ListEpisodeGroups(ctx, EpisodeRequest{
 		LibraryID: source.library.ID, OfflineRootIDs: source.offline, Limit: source.limit, Window: rows.RecentEpisodeWindow,
-		Restriction: access.Unrestricted(), // TODO(M7-14): the viewer's restriction.
+		Restriction: source.restriction,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("read episode groups: %w", err)
@@ -33,7 +33,7 @@ func (service *Service) episodeCards(ctx context.Context, source target) ([]Item
 		ids = append(ids, card.ItemID, card.ShowID)
 	}
 
-	summaries, err := service.summariesByID(ctx, ids)
+	summaries, err := service.summariesByID(ctx, source.restriction, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +62,13 @@ func (service *Service) episodeCards(ctx context.Context, source target) ([]Item
 
 // episodeItems reads the episode cards of "recentEpisodes": each episode with its season
 // number, its show's title and its show's poster.
-func (service *Service) episodeItems(ctx context.Context, refs []EpisodeRef) ([]Item, error) {
+func (service *Service) episodeItems(ctx context.Context, source target, refs []EpisodeRef) ([]Item, error) {
 	ids := make([]string, 0, idsPerEpisode*len(refs))
 	for _, ref := range refs {
 		ids = append(ids, ref.EpisodeID, ref.SeasonID, ref.ShowID)
 	}
 
-	summaries, err := service.summariesByID(ctx, ids)
+	summaries, err := service.summariesByID(ctx, source.restriction, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (service *Service) episodeItems(ctx context.Context, refs []EpisodeRef) ([]
 }
 
 // summariesByID reads the summaries of the items, each ID once.
-func (service *Service) summariesByID(ctx context.Context, ids []string) (map[string]applibrary.ItemSummary, error) {
+func (service *Service) summariesByID(ctx context.Context, restriction access.Restriction, ids []string) (map[string]applibrary.ItemSummary, error) {
 	unique := make([]string, 0, len(ids))
 	seen := make(map[string]bool, len(ids))
 
@@ -107,8 +107,7 @@ func (service *Service) summariesByID(ctx context.Context, ids []string) (map[st
 		return byID, nil
 	}
 
-	// TODO(M7-14): the viewer's restriction.
-	summaries, err := service.summaries.ItemSummaries(ctx, unique, access.Unrestricted())
+	summaries, err := service.summaries.ItemSummaries(ctx, unique, restriction)
 	if err != nil {
 		return nil, fmt.Errorf("read item summaries: %w", err)
 	}

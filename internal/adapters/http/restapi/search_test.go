@@ -106,11 +106,6 @@ func TestSearchAnswersHits(t *testing.T) {
 	if request.Query != "matr" || request.Type != appsearch.TypeMovies || request.Limit != 2 || request.Cursor != "page-2" {
 		t.Errorf("request = %+v", request)
 	}
-
-	// Until M7-14 passes the viewer's restriction, the handler must not deny everything.
-	if !request.Restriction.AllLibraries() {
-		t.Errorf("restriction = %+v, want unrestricted", request.Restriction)
-	}
 }
 
 func TestSearchDefaultsToTopWithoutLimit(t *testing.T) {

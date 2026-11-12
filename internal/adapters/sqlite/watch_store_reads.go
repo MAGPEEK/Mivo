@@ -8,6 +8,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	appwatch "github.com/magpeek/mivo/internal/app/watch"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
@@ -20,6 +21,10 @@ type WatchRowQuery struct {
 	PlayedSince time.Time
 	// Limit is the most item IDs returned; 0 or less returns none.
 	Limit int
+	// Restriction is what the viewer may see: Up next picks only the next episode among the
+	// episodes it allows. Its zero value allows nothing. Continue watching leaves the filter to
+	// the restricted summary reader.
+	Restriction access.Restriction
 }
 
 // States returns the profile's stored states of the items; an item without a row is absent
@@ -54,18 +59,26 @@ func (store *WatchStore) States(ctx context.Context, profileID string, itemIDs [
 // has not watched; a container without episodes, an unknown ID and an item of another kind
 // are absent.
 //
-// The store does not know the viewer's restrictions: it counts every episode of the
-// container. Library access needs nothing more, because a show's episodes are in its
-// library and the caller (M7-14) passes only containers the viewer can see. The content
-// limit can differ: an episode with its own stricter age rating (ADR 0032 §7) is hidden from
-// the viewer but still counted here, until the age rating column exists and the restriction
-// predicate is added to CountSeasonEpisodes and CountShowEpisodes (M7-14).
-func (store *WatchStore) EpisodeCounts(ctx context.Context, profileID string, containerIDs []string) (map[string]appwatch.EpisodeCount, error) {
+// Only episodes the restriction allows are counted: the content limit applies to the stored
+// visibility of each episode, so an episode hidden by its own or an ancestor's rating is neither
+// counted nor unwatched (ADR 0032 section 7). The library is the caller's check: it passes only
+// containers the viewer can see, and a restriction that allows no library counts nothing.
+func (store *WatchStore) EpisodeCounts(
+	ctx context.Context, profileID string, containerIDs []string, restriction access.Restriction,
+) (map[string]appwatch.EpisodeCount, error) {
 	counts := make(map[string]appwatch.EpisodeCount, len(containerIDs))
+
+	if restriction.DeniesAll() {
+		return counts, nil
+	}
+
+	content := contentLimitOf(restriction)
 
 	err := inReadTransaction(ctx, store.reader, func(queries *sqlcgen.Queries) error {
 		for batch := range slices.Chunk(containerIDs, watchBatchSize) {
-			params := sqlcgen.CountSeasonEpisodesParams{ProfileID: profileID, ContainerIds: batch}
+			params := sqlcgen.CountSeasonEpisodesParams{
+				ProfileID: profileID, ContainerIds: batch, MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
+			}
 			if err := countBatch(ctx, queries, params, counts); err != nil {
 				return err
 			}

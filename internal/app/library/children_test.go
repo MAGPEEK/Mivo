@@ -118,7 +118,7 @@ func TestListChildrenOrdersByTheContract(t *testing.T) {
 			environment := newTestEnvironment()
 			environment.putShow()
 
-			page, err := environment.service(t).ListChildren(t.Context(), test.itemID,
+			page, err := environment.service(t).ListChildren(adminContext(t), test.itemID,
 				applibrary.ChildPageRequest{Descending: test.descending})
 			if err != nil {
 				t.Fatalf("ListChildren error = %v", err)
@@ -145,7 +145,7 @@ func TestListChildrenFollowsTheCursorAndNormalisesTheLimit(t *testing.T) {
 	var listed []string
 
 	for pages := 1; ; pages++ {
-		page, err := service.ListChildren(t.Context(), seasonOneID, request)
+		page, err := service.ListChildren(adminContext(t), seasonOneID, request)
 		if err != nil {
 			t.Fatalf("ListChildren page %d error = %v", pages, err)
 		}
@@ -168,7 +168,7 @@ func TestListChildrenFollowsTheCursorAndNormalisesTheLimit(t *testing.T) {
 		t.Errorf("listed %v over all pages, want %v", listed, want)
 	}
 
-	_, err := service.ListChildren(t.Context(), seasonOneID, applibrary.ChildPageRequest{})
+	_, err := service.ListChildren(adminContext(t), seasonOneID, applibrary.ChildPageRequest{})
 	if err != nil {
 		t.Fatalf("ListChildren error = %v", err)
 	}
@@ -189,7 +189,7 @@ func TestListChildrenOfALeafOrAnEmptyContainerIsEmpty(t *testing.T) {
 			environment := newTestEnvironment()
 			environment.putShow()
 
-			page, err := environment.service(t).ListChildren(t.Context(), itemID, applibrary.ChildPageRequest{})
+			page, err := environment.service(t).ListChildren(adminContext(t), itemID, applibrary.ChildPageRequest{})
 			if err != nil {
 				t.Fatalf("ListChildren error = %v", err)
 			}
@@ -249,7 +249,7 @@ func TestListChildrenFailures(t *testing.T) {
 				test.configure(environment)
 			}
 
-			page, err := environment.service(t).ListChildren(t.Context(), test.itemID, test.request)
+			page, err := environment.service(t).ListChildren(adminContext(t), test.itemID, test.request)
 			assertWrappedError(t, err, test.wantErr, "list children of item")
 
 			if page.Items != nil || page.NextCursor != "" {
@@ -268,7 +268,7 @@ func TestListChildrenPassesAStoredRowFaultOnAsAPlainError(t *testing.T) {
 	environment.putShow()
 	environment.children.listErr = fmt.Errorf("read season row: %w", errBoom)
 
-	_, err := environment.service(t).ListChildren(t.Context(), showID, applibrary.ChildPageRequest{})
+	_, err := environment.service(t).ListChildren(adminContext(t), showID, applibrary.ChildPageRequest{})
 	if !errors.Is(err, errBoom) || errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("ListChildren error = %v, want the reader fault and not ErrInvalid", err)
 	}
@@ -284,7 +284,7 @@ func TestListChildrenRejectsALimitOutOfRangeWithoutReading(t *testing.T) {
 			environment := newTestEnvironment()
 			environment.putShow()
 
-			_, err := environment.service(t).ListChildren(t.Context(), showID,
+			_, err := environment.service(t).ListChildren(adminContext(t), showID,
 				applibrary.ChildPageRequest{Page: library.PageRequest{Limit: limit}})
 			assertWrappedError(t, err, domain.ErrInvalid, "list children of item")
 
@@ -319,7 +319,7 @@ func TestGetItemPassesTheV2DetailOn(t *testing.T) {
 	environment := newTestEnvironment()
 	environment.items.details[episodeOneID] = want
 
-	detail, err := environment.service(t).GetItem(t.Context(), episodeOneID)
+	detail, err := environment.service(t).GetItem(adminContext(t), episodeOneID)
 	if err != nil {
 		t.Fatalf("GetItem error = %v", err)
 	}

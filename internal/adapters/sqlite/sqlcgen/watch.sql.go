@@ -19,13 +19,17 @@ FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = ?1
                      AND watch_state.item_id = episodes.id
-WHERE seasons.id IN (/*SLICE:container_ids*/?)
-  AND seasons.kind = 'season'
+WHERE seasons.kind = 'season'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(?3 AS INTEGER)
+  AND seasons.id IN (/*SLICE:container_ids*/?)
 GROUP BY seasons.id
 `
 
 type CountSeasonEpisodesParams struct {
 	ProfileID    string
+	MaxAge       int64
+	AllowUnrated int64
 	ContainerIds []string
 }
 
@@ -35,12 +39,17 @@ type CountSeasonEpisodesRow struct {
 	Unwatched   int64
 }
 
-// CountSeasonEpisodes returns per season its episodes and how many of them the profile has
-// not watched. A season without episodes is absent.
+// CountSeasonEpisodes returns per season its episodes the content limit allows (max_age and
+// allow_unrated as in catalog_read.sql; an episode is a rated kind, and its stored visibility
+// covers its ancestors) and how many of them the profile has not watched. A season without
+// visible episodes is absent. The slice stays last in the WHERE clause: sqlc numbers the other
+// parameters (?3), which a slice expanded before them would shift.
 func (q *Queries) CountSeasonEpisodes(ctx context.Context, arg CountSeasonEpisodesParams) ([]CountSeasonEpisodesRow, error) {
 	query := countSeasonEpisodes
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.ProfileID)
+	queryParams = append(queryParams, arg.MaxAge)
+	queryParams = append(queryParams, arg.AllowUnrated)
 	if len(arg.ContainerIds) > 0 {
 		for _, v := range arg.ContainerIds {
 			queryParams = append(queryParams, v)
@@ -80,13 +89,17 @@ JOIN items AS seasons ON seasons.parent_id = shows.id AND seasons.kind = 'season
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = ?1
                      AND watch_state.item_id = episodes.id
-WHERE shows.id IN (/*SLICE:container_ids*/?)
-  AND shows.kind = 'show'
+WHERE shows.kind = 'show'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(?3 AS INTEGER)
+  AND shows.id IN (/*SLICE:container_ids*/?)
 GROUP BY shows.id
 `
 
 type CountShowEpisodesParams struct {
 	ProfileID    string
+	MaxAge       int64
+	AllowUnrated int64
 	ContainerIds []string
 }
 
@@ -102,6 +115,8 @@ func (q *Queries) CountShowEpisodes(ctx context.Context, arg CountShowEpisodesPa
 	query := countShowEpisodes
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.ProfileID)
+	queryParams = append(queryParams, arg.MaxAge)
+	queryParams = append(queryParams, arg.AllowUnrated)
 	if len(arg.ContainerIds) > 0 {
 		for _, v := range arg.ContainerIds {
 			queryParams = append(queryParams, v)
@@ -209,13 +224,17 @@ FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = ?1
                      AND watch_state.item_id = episodes.id
-WHERE seasons.parent_id IN (/*SLICE:show_ids*/?)
-  AND seasons.kind = 'season'
+WHERE seasons.kind = 'season'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(?3 AS INTEGER)
+  AND seasons.parent_id IN (/*SLICE:show_ids*/?)
 `
 
 type ListShowEpisodeStatesParams struct {
-	ProfileID string
-	ShowIds   []sql.NullString
+	ProfileID    string
+	MaxAge       int64
+	AllowUnrated int64
+	ShowIds      []sql.NullString
 }
 
 type ListShowEpisodeStatesRow struct {
@@ -227,12 +246,16 @@ type ListShowEpisodeStatesRow struct {
 	Watched       int64
 }
 
-// ListShowEpisodeStates returns every episode of the shows (specials included) with its
-// season and episode numbers (0 when missing) and whether the profile has watched it.
+// ListShowEpisodeStates returns every episode of the shows the content limit allows (see
+// CountSeasonEpisodes; specials included) with its season and episode numbers (0 when
+// missing) and whether the profile has watched it. The slice stays last: sqlc numbers the
+// other parameters and the slice expansion would shift them.
 func (q *Queries) ListShowEpisodeStates(ctx context.Context, arg ListShowEpisodeStatesParams) ([]ListShowEpisodeStatesRow, error) {
 	query := listShowEpisodeStates
 	var queryParams []interface{}
 	queryParams = append(queryParams, arg.ProfileID)
+	queryParams = append(queryParams, arg.MaxAge)
+	queryParams = append(queryParams, arg.AllowUnrated)
 	if len(arg.ShowIds) > 0 {
 		for _, v := range arg.ShowIds {
 			queryParams = append(queryParams, v)

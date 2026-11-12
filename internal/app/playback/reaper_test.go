@@ -34,7 +34,7 @@ func TestIdleTimingFollowsADR0024(t *testing.T) {
 func assertGone(t *testing.T, service *appplayback.Service, id string) {
 	t.Helper()
 
-	if _, err := service.Get(t.Context(), id); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), id); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get(%s) error = %v, want ErrNotFound (session stopped)", id, err)
 	}
 }
@@ -141,7 +141,7 @@ func TestTheReaperStopsAnEndedSession(t *testing.T) {
 func mustAccess(t *testing.T, service *appplayback.Service, id string) appplayback.StreamAccess {
 	t.Helper()
 
-	access, err := service.Access(t.Context(), id)
+	access, err := service.Access(adminContext(t), id)
 	if err != nil {
 		t.Fatalf("Access(%s) error = %v", id, err)
 	}
@@ -243,7 +243,7 @@ func TestReleaseRacingTheReaperAndStopTearsDownOnce(t *testing.T) {
 		group.Go(access.Release)
 		group.Go(func() { env.clock.advance(appplayback.IdleCheckInterval) })
 		group.Go(func() {
-			if err := service.Stop(t.Context(), started.ID); err != nil {
+			if err := service.Stop(adminContext(t), started.ID); err != nil {
 				t.Errorf("Stop error = %v", err)
 			}
 		})
@@ -294,7 +294,7 @@ func TestReleaseAfterTheSessionEndedIsHarmless(t *testing.T) {
 		closedAccess := mustAccess(t, service, closed.ID)
 
 		// Stop tears a session down even while a request still reads from it.
-		if err := service.Stop(t.Context(), stopped.ID); err != nil {
+		if err := service.Stop(adminContext(t), stopped.ID); err != nil {
 			t.Fatalf("Stop error = %v", err)
 		}
 

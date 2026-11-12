@@ -29,7 +29,7 @@ func TestConcurrentStartsNeverExceedTheTranscodeLimit(t *testing.T) {
 
 	for range callers {
 		go func() {
-			session, err := service.Start(t.Context(), request(transcodeFileID))
+			session, err := service.Start(adminContext(t), request(transcodeFileID))
 			results <- startResult{session: session, err: err}
 		}()
 	}
@@ -71,7 +71,7 @@ func TestConcurrentRemuxStartsStopAtTheFFmpegCap(t *testing.T) {
 	var group sync.WaitGroup
 	for caller := range callers {
 		group.Go(func() {
-			_, errs[caller] = service.Start(t.Context(), request(remuxFileID))
+			_, errs[caller] = service.Start(adminContext(t), request(remuxFileID))
 		})
 	}
 
@@ -104,26 +104,26 @@ func TestAStartingSessionIsInvisibleButHoldsItsSlot(t *testing.T) {
 	results := make(chan startResult, 1)
 
 	go func() {
-		session, err := service.Start(t.Context(), request(transcodeFileID))
+		session, err := service.Start(adminContext(t), request(transcodeFileID))
 		results <- startResult{session: session, err: err}
 	}()
 
 	<-env.producer.entered
 
 	pendingID := sessionID(1)
-	if _, err := service.Get(t.Context(), pendingID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), pendingID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get of a starting session error = %v, want ErrNotFound", err)
 	}
 
-	if _, err := service.Access(t.Context(), pendingID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Access(adminContext(t), pendingID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Access of a starting session error = %v, want ErrNotFound", err)
 	}
 
-	if err := service.Stop(t.Context(), pendingID); err != nil {
+	if err := service.Stop(adminContext(t), pendingID); err != nil {
 		t.Errorf("Stop of a starting session error = %v, want nil (unknown)", err)
 	}
 
-	if _, err := service.Start(t.Context(), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Errorf("second transcode while the first starts: error = %v, want ErrSessionLimitReached", err)
 	}
 
@@ -134,7 +134,7 @@ func TestAStartingSessionIsInvisibleButHoldsItsSlot(t *testing.T) {
 		t.Fatalf("Start = %+v, %v; want session %s", result.session, result.err, pendingID)
 	}
 
-	if _, err := service.Get(t.Context(), pendingID); err != nil {
+	if _, err := service.Get(adminContext(t), pendingID); err != nil {
 		t.Errorf("Get after the start error = %v", err)
 	}
 }
@@ -160,7 +160,7 @@ func startHeldAtTheGate(t *testing.T, env *environment, service *appplayback.Ser
 	results := make(chan startResult, 1)
 
 	go func() {
-		session, err := service.Start(t.Context(), startRequest)
+		session, err := service.Start(adminContext(t), startRequest)
 		results <- startResult{session: session, err: err}
 	}()
 
@@ -177,7 +177,7 @@ func TestAccessOfTheOldSessionDuringASwapServesItsWorkspace(t *testing.T) {
 	old := mustStart(t, service, request(remuxFileID))
 	results := startReplacementHeldAtTheGate(t, env, service, old.ID)
 
-	access, err := service.Access(t.Context(), old.ID)
+	access, err := service.Access(adminContext(t), old.ID)
 	if err != nil {
 		t.Fatalf("Access of the old session during the swap error = %v", err)
 	}
@@ -216,7 +216,7 @@ func TestALowerClassReplacementKeepsTheOldSessionsSlotCounted(t *testing.T) {
 		third := make(chan error, 1)
 
 		go func() {
-			_, err := service.Start(t.Context(), request(audioTranscodeFileID))
+			_, err := service.Start(adminContext(t), request(audioTranscodeFileID))
 			third <- err
 		}()
 
@@ -244,7 +244,7 @@ func TestALowerClassReplacementKeepsTheOldSessionsSlotCounted(t *testing.T) {
 
 		env.producer.err = nil
 
-		if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+		if _, err := service.Start(adminContext(t), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 			t.Errorf("transcode after the failed swap error = %v, want ErrSessionLimitReached", err)
 		}
 	})
@@ -279,7 +279,7 @@ func TestAReplacementHoldsTheSlotAtomicallyWhileItStarts(t *testing.T) {
 	results := startReplacementHeldAtTheGate(t, env, service, old.ID)
 
 	// The viewer keeps watching the old session until the new production runs.
-	if _, err := service.Get(t.Context(), old.ID); err != nil {
+	if _, err := service.Get(adminContext(t), old.ID); err != nil {
 		t.Errorf("Get of the old session while its replacement starts error = %v", err)
 	}
 
@@ -289,14 +289,14 @@ func TestAReplacementHoldsTheSlotAtomicallyWhileItStarts(t *testing.T) {
 
 	// A third client cannot take the slot of the seeking viewer, nor can a second
 	// replacement of the same session.
-	if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Errorf("third transcode during the seek error = %v, want ErrSessionLimitReached", err)
 	}
 
 	again := request(audioTranscodeFileID)
 	again.ReplacesSessionID = old.ID
 
-	if _, err := service.Start(t.Context(), again); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), again); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Errorf("second replacement of the same session error = %v, want ErrSessionLimitReached", err)
 	}
 
@@ -315,7 +315,7 @@ func TestAReplacementHoldsTheSlotAtomicallyWhileItStarts(t *testing.T) {
 		t.Errorf("removed workspaces = %v, want [%s]", removed, old.ID)
 	}
 
-	if _, err := service.Get(t.Context(), old.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := service.Get(adminContext(t), old.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get of the replaced session error = %v, want ErrNotFound", err)
 	}
 }
@@ -333,13 +333,13 @@ func TestASessionBeingReplacedCountsOnlyOnce(t *testing.T) {
 	// Old session plus its pending replacement occupy one of the two re-encoding slots, so
 	// another viewer still gets the second one.
 	go func() {
-		session, err := service.Start(t.Context(), request(audioTranscodeFileID))
+		session, err := service.Start(adminContext(t), request(audioTranscodeFileID))
 		other <- startResult{session: session, err: err}
 	}()
 
 	<-env.producer.entered
 
-	if _, err := service.Start(t.Context(), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), request(transcodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Errorf("third viewer error = %v, want ErrSessionLimitReached", err)
 	}
 
@@ -361,12 +361,12 @@ func TestStoppingTheOldSessionDuringItsReplacement(t *testing.T) {
 	old := mustStart(t, service, request(transcodeFileID))
 	results := startReplacementHeldAtTheGate(t, env, service, old.ID)
 
-	if err := service.Stop(t.Context(), old.ID); err != nil {
+	if err := service.Stop(adminContext(t), old.ID); err != nil {
 		t.Fatalf("Stop of the old session error = %v", err)
 	}
 
 	// The replacement still holds its own slot after the old session is gone.
-	if _, err := service.Start(t.Context(), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
+	if _, err := service.Start(adminContext(t), request(audioTranscodeFileID)); !errors.Is(err, appplayback.ErrSessionLimitReached) {
 		t.Errorf("third transcode error = %v, want ErrSessionLimitReached", err)
 	}
 
@@ -381,7 +381,7 @@ func TestStoppingTheOldSessionDuringItsReplacement(t *testing.T) {
 		t.Errorf("old production stops = %d, want exactly 1", stops)
 	}
 
-	if _, err := service.Get(t.Context(), result.session.ID); err != nil {
+	if _, err := service.Get(adminContext(t), result.session.ID); err != nil {
 		t.Errorf("Get of the replacement error = %v", err)
 	}
 }
@@ -399,7 +399,7 @@ func TestConcurrentStartAccessGetAndStop(t *testing.T) {
 	var group sync.WaitGroup
 	for round := range rounds {
 		group.Go(func() {
-			session, err := service.Start(t.Context(), request(fileIDs[round%len(fileIDs)]))
+			session, err := service.Start(adminContext(t), request(fileIDs[round%len(fileIDs)]))
 			if errors.Is(err, appplayback.ErrSessionLimitReached) {
 				return
 			}
@@ -417,7 +417,7 @@ func TestConcurrentStartAccessGetAndStop(t *testing.T) {
 			seek := request(fileIDs[(round+1)%len(fileIDs)])
 			seek.ReplacesSessionID = sessionID(round + 1)
 
-			session, err := service.Start(t.Context(), seek)
+			session, err := service.Start(adminContext(t), seek)
 			if errors.Is(err, appplayback.ErrSessionLimitReached) {
 				return
 			}
@@ -446,7 +446,7 @@ func exerciseSession(t *testing.T, service *appplayback.Service, id string) {
 	var group sync.WaitGroup
 
 	group.Go(func() {
-		access, err := service.Access(t.Context(), id)
+		access, err := service.Access(adminContext(t), id)
 		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("Access error = %v", err)
 		}
@@ -454,14 +454,14 @@ func exerciseSession(t *testing.T, service *appplayback.Service, id string) {
 		access.Release()
 	})
 	group.Go(func() {
-		if _, err := service.Get(t.Context(), id); err != nil && !errors.Is(err, domain.ErrNotFound) {
+		if _, err := service.Get(adminContext(t), id); err != nil && !errors.Is(err, domain.ErrNotFound) {
 			t.Errorf("Get error = %v", err)
 		}
 	})
 
 	for range 2 {
 		group.Go(func() {
-			if err := service.Stop(t.Context(), id); err != nil {
+			if err := service.Stop(adminContext(t), id); err != nil {
 				t.Errorf("Stop error = %v", err)
 			}
 		})

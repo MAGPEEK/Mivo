@@ -26,8 +26,11 @@ ON CONFLICT (profile_id, item_id) DO UPDATE SET
     attach_key           = excluded.attach_key,
     updated_at           = excluded.updated_at;
 
--- CountSeasonEpisodes returns per season its episodes and how many of them the profile has
--- not watched. A season without episodes is absent.
+-- CountSeasonEpisodes returns per season its episodes the content limit allows (max_age and
+-- allow_unrated as in catalog_read.sql; an episode is a rated kind, and its stored visibility
+-- covers its ancestors) and how many of them the profile has not watched. A season without
+-- visible episodes is absent. The slice stays last in the WHERE clause: sqlc numbers the other
+-- parameters (?3), which a slice expanded before them would shift.
 -- name: CountSeasonEpisodes :many
 SELECT seasons.id AS container_id,
        COUNT(*) AS total,
@@ -36,8 +39,10 @@ FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = sqlc.arg(profile_id)
                      AND watch_state.item_id = episodes.id
-WHERE seasons.id IN (sqlc.slice(container_ids))
-  AND seasons.kind = 'season'
+WHERE seasons.kind = 'season'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+  AND seasons.id IN (sqlc.slice(container_ids))
 GROUP BY seasons.id;
 
 -- CountShowEpisodes is CountSeasonEpisodes for shows: the episodes of all their seasons,
@@ -51,8 +56,10 @@ JOIN items AS seasons ON seasons.parent_id = shows.id AND seasons.kind = 'season
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = sqlc.arg(profile_id)
                      AND watch_state.item_id = episodes.id
-WHERE shows.id IN (sqlc.slice(container_ids))
-  AND shows.kind = 'show'
+WHERE shows.kind = 'show'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+  AND shows.id IN (sqlc.slice(container_ids))
 GROUP BY shows.id;
 
 -- ListContinueWatching returns the item IDs of Continue watching (HO-03): items in progress,
@@ -122,8 +129,10 @@ FROM active_shows
 WHERE show_id NOT IN (SELECT show_id FROM continuing_shows)
 ORDER BY last_activity DESC, show_id;
 
--- ListShowEpisodeStates returns every episode of the shows (specials included) with its
--- season and episode numbers (0 when missing) and whether the profile has watched it.
+-- ListShowEpisodeStates returns every episode of the shows the content limit allows (see
+-- CountSeasonEpisodes; specials included) with its season and episode numbers (0 when
+-- missing) and whether the profile has watched it. The slice stays last: sqlc numbers the
+-- other parameters and the slice expansion would shift them.
 -- name: ListShowEpisodeStates :many
 SELECT CAST(seasons.parent_id AS TEXT) AS show_id,
        episodes.id AS item_id,
@@ -135,5 +144,7 @@ FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
 LEFT JOIN watch_state ON watch_state.profile_id = sqlc.arg(profile_id)
                      AND watch_state.item_id = episodes.id
-WHERE seasons.parent_id IN (sqlc.slice(show_ids))
-  AND seasons.kind = 'season';
+WHERE seasons.kind = 'season'
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+  AND seasons.parent_id IN (sqlc.slice(show_ids));

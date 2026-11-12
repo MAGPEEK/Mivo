@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	appaccess "github.com/magpeek/mivo/internal/app/access"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/app/search"
 	"github.com/magpeek/mivo/internal/domain"
@@ -175,8 +176,8 @@ func TestSearchRoutesTypesToKinds(t *testing.T) {
 
 			fixture := newFixture(t, fakeLibraries{ids: []string{testLibraryID, "library-2"}}, 3)
 
-			page, err := fixture.service.Search(context.Background(), search.Request{
-				Query: "  matr  ", Type: test.searchType, Restriction: access.Unrestricted(),
+			page, err := fixture.service.Search(adminContext(), search.Request{
+				Query: "  matr  ", Type: test.searchType,
 			})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
@@ -221,8 +222,8 @@ func followCursors(t *testing.T, service *search.Service, limit, maxPages int) (
 	)
 
 	for {
-		page, err := service.Search(context.Background(), search.Request{
-			Query: "movie", Type: search.TypeMovies, Limit: limit, Cursor: cursor, Restriction: access.Unrestricted(),
+		page, err := service.Search(adminContext(), search.Request{
+			Query: "movie", Type: search.TypeMovies, Limit: limit, Cursor: cursor,
 		})
 		if err != nil {
 			t.Fatalf("Search page %d: %v", pages, err)
@@ -261,8 +262,8 @@ func TestSearchClampsLimit(t *testing.T) {
 
 			fixture := newFixture(t, oneLibrary(), search.MaxLimit)
 
-			page, err := fixture.service.Search(context.Background(), search.Request{
-				Query: "movie", Type: test.searchType, Limit: test.limit, Restriction: access.Unrestricted(),
+			page, err := fixture.service.Search(adminContext(), search.Request{
+				Query: "movie", Type: test.searchType, Limit: test.limit,
 			})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
@@ -352,9 +353,8 @@ func TestSearchRejectsBadRequests(t *testing.T) {
 			t.Parallel()
 
 			fixture := newFixture(t, oneLibrary(), 10)
-			test.request.Restriction = access.Unrestricted()
 
-			_, err := fixture.service.Search(context.Background(), test.request)
+			_, err := fixture.service.Search(adminContext(), test.request)
 			if !errors.Is(err, test.wantErr) || !errors.Is(err, domain.ErrInvalid) {
 				t.Errorf("err = %v, want %v wrapping ErrInvalid", err, test.wantErr)
 			}
@@ -372,8 +372,8 @@ func nextCursor(t *testing.T, searchType search.Type) string {
 
 	fixture := newFixture(t, oneLibrary(), 10)
 
-	page, err := fixture.service.Search(context.Background(), search.Request{
-		Query: "matr", Type: searchType, Limit: 2, Restriction: access.Unrestricted(),
+	page, err := fixture.service.Search(adminContext(), search.Request{
+		Query: "matr", Type: searchType, Limit: 2,
 	})
 	if err != nil || page.NextCursor == "" {
 		t.Fatalf("Search: cursor %q, err %v", page.NextCursor, err)
@@ -387,8 +387,8 @@ func TestSearchWithoutVisibleLibrariesFindsNothing(t *testing.T) {
 
 	fixture := newFixture(t, fakeLibraries{}, 10)
 
-	page, err := fixture.service.Search(context.Background(), search.Request{
-		Query: "matr", Type: search.TypeTop, Restriction: access.Unrestricted(),
+	page, err := fixture.service.Search(adminContext(), search.Request{
+		Query: "matr", Type: search.TypeTop,
 	})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -408,8 +408,8 @@ func TestSearchWithoutHitsAnswersEmptyList(t *testing.T) {
 
 	fixture := newFixture(t, oneLibrary(), 0)
 
-	page, err := fixture.service.Search(context.Background(), search.Request{
-		Query: "zzz", Type: search.TypeMovies, Restriction: access.Unrestricted(),
+	page, err := fixture.service.Search(adminContext(), search.Request{
+		Query: "zzz", Type: search.TypeMovies,
 	})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
@@ -441,10 +441,8 @@ func TestSearchPassesRestriction(t *testing.T) {
 			fixture := newFixture(t, oneLibrary(), 3)
 			fixture.summaries.hidden = test.hidden
 
-			restriction := access.Unrestricted()
-
-			page, err := fixture.service.Search(context.Background(), search.Request{
-				Query: "matr", Type: search.TypeTop, Restriction: restriction,
+			page, err := fixture.service.Search(adminContext(), search.Request{
+				Query: "matr", Type: search.TypeTop,
 			})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
@@ -473,18 +471,18 @@ func TestSearchHandsTheRestrictionToTheIndex(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		restriction access.Restriction
-		wantItems   int
+		name      string
+		viewer    access.Viewer
+		wantItems int
 	}{
 		{
-			name:        "restricted viewer with the library",
-			restriction: access.Viewer{Libraries: access.OnlyLibraries(testLibraryID), Limit: limit}.Restriction(),
-			wantItems:   3,
+			name:      "restricted viewer with the library",
+			viewer:    access.Viewer{AccountID: "a", Libraries: access.OnlyLibraries(testLibraryID), Limit: limit},
+			wantItems: 3,
 		},
-		{name: "another library only", restriction: access.Viewer{Libraries: access.OnlyLibraries("library-9")}.Restriction()},
-		{name: "no libraries", restriction: access.Viewer{Libraries: access.OnlyLibraries()}.Restriction()},
-		{name: "zero restriction"},
+		{name: "another library only", viewer: access.Viewer{AccountID: "a", Libraries: access.OnlyLibraries("library-9")}},
+		{name: "no libraries", viewer: access.Viewer{AccountID: "a", Libraries: access.OnlyLibraries()}},
+		{name: "zero viewer", viewer: access.Viewer{AccountID: "a"}},
 	}
 
 	for _, test := range tests {
@@ -493,8 +491,8 @@ func TestSearchHandsTheRestrictionToTheIndex(t *testing.T) {
 
 			fixture := newFixture(t, oneLibrary(), 3)
 
-			page, err := fixture.service.Search(context.Background(), search.Request{
-				Query: "matr", Type: search.TypeTop, Restriction: test.restriction,
+			page, err := fixture.service.Search(appaccess.WithViewer(context.Background(), test.viewer), search.Request{
+				Query: "matr", Type: search.TypeTop,
 			})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
@@ -508,8 +506,8 @@ func TestSearchHandsTheRestrictionToTheIndex(t *testing.T) {
 				t.Fatalf("index was searched %d times, want once", len(fixture.index.calls))
 			}
 
-			if got := fixture.index.calls[0].filter.Restriction; !sameRestriction(got, test.restriction) {
-				t.Errorf("index restriction = %+v, want the request's %+v", got, test.restriction)
+			if got := fixture.index.calls[0].filter.Restriction; !sameRestriction(got, test.viewer.Restriction()) {
+				t.Errorf("index restriction = %+v, want the request's %+v", got, test.viewer.Restriction())
 			}
 		})
 	}
@@ -555,8 +553,8 @@ func TestSearchReportsPortFailures(t *testing.T) {
 			fixture.index.err = test.indexErr
 			fixture.summaries.err = test.readErr
 
-			_, err := fixture.service.Search(context.Background(), search.Request{
-				Query: "matr", Type: search.TypeTop, Restriction: access.Unrestricted(),
+			_, err := fixture.service.Search(adminContext(), search.Request{
+				Query: "matr", Type: search.TypeTop,
 			})
 			if err == nil || !strings.Contains(err.Error(), test.wantText) {
 				t.Fatalf("err = %v, want one naming %q", err, test.wantText)
@@ -567,5 +565,30 @@ func TestSearchReportsPortFailures(t *testing.T) {
 				t.Errorf("err = %v wraps ErrInvalid", err)
 			}
 		})
+	}
+}
+
+// adminContext carries an unrestricted administrator.
+func adminContext() context.Context {
+	return appaccess.WithViewer(context.Background(), access.Viewer{
+		AccountID: "admin", Admin: true, Libraries: access.AllLibraries(), Limit: access.NoLimit(),
+	})
+}
+
+func TestSearchWithoutViewerFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	fixture := newFixture(t, oneLibrary(), 3)
+
+	// A too short query would be invalid; the missing viewer is reported first.
+	for _, query := range []string{"matr", "m"} {
+		_, err := fixture.service.Search(context.Background(), search.Request{Query: query, Type: search.TypeTop})
+		if !errors.Is(err, domain.ErrUnauthenticated) {
+			t.Errorf("Search(%q) error = %v, want ErrUnauthenticated", query, err)
+		}
+	}
+
+	if len(fixture.index.calls) != 0 || len(fixture.summaries.restrictions) != 0 {
+		t.Error("the index or the summaries were read without a viewer")
 	}
 }

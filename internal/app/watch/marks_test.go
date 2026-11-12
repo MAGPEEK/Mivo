@@ -1,11 +1,15 @@
 package watch_test
 
 import (
+	"context"
 	"errors"
+	"reflect"
 	"testing"
 
+	"github.com/magpeek/mivo/internal/app/access"
 	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain"
+	domainaccess "github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
@@ -203,5 +207,37 @@ func TestHideLeavesItemsThatAreNotInProgressUnchanged(t *testing.T) {
 
 	if got := fixture.store.state(profileID, "episode-2").state; !got.Hidden {
 		t.Fatalf("in-progress episode = %+v, want hidden", got)
+	}
+}
+
+func TestEpisodeReadsCarryTheViewersRestriction(t *testing.T) {
+	t.Parallel()
+
+	limit, err := domainaccess.MaxAgeLimit(domainaccess.Age6, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	viewer := domainaccess.Viewer{
+		AccountID: "account-1", ProfileID: profileID, Libraries: domainaccess.OnlyLibraries("lib-1"), Limit: limit,
+	}
+	ctx := access.WithViewer(context.Background(), viewer)
+	fixture := showFixture(t)
+
+	if err := fixture.service.MarkWatched(ctx, "show-1"); err != nil {
+		t.Fatalf("MarkWatched: %v", err)
+	}
+
+	if _, err := fixture.service.States(ctx, []appwatch.ItemRef{{ID: "show-1", Kind: library.ItemKindShow}}); err != nil {
+		t.Fatalf("States: %v", err)
+	}
+
+	want := viewer.Restriction()
+	for what, got := range map[string][]domainaccess.Restriction{
+		"ListEpisodes": fixture.catalog.listRestrictions, "EpisodeCounts": fixture.store.countRestrictions,
+	} {
+		if len(got) != 1 || !reflect.DeepEqual(got[0], want) {
+			t.Errorf("%s restrictions = %+v, want the viewer's %+v", what, got, want)
+		}
 	}
 }

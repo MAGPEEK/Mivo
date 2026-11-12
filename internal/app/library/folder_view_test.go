@@ -65,7 +65,7 @@ func TestListFolderListsTheLibraryFoldersAtTheTop(t *testing.T) {
 		},
 	})
 
-	listing, err := environment.service(t).ListFolder(t.Context(), unknownID, library.FolderPath{}, library.PageRequest{})
+	listing, err := environment.service(t).ListFolder(adminContext(t), unknownID, library.FolderPath{}, library.PageRequest{})
 	if err != nil {
 		t.Fatalf("ListFolder error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestListFolderListsDirectoriesThenItemsAndPages(t *testing.T) {
 	service := environment.service(t)
 	path := mustParseFolderPath(t, "movies-folder/Animation")
 
-	first, err := service.ListFolder(t.Context(), moviesID, path, library.PageRequest{Limit: 4})
+	first, err := service.ListFolder(adminContext(t), moviesID, path, library.PageRequest{Limit: 4})
 	if err != nil {
 		t.Fatalf("ListFolder error = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestListFolderListsDirectoriesThenItemsAndPages(t *testing.T) {
 		t.Fatalf("first page = %+v, want the full summary and a next cursor", first)
 	}
 
-	second, err := service.ListFolder(t.Context(), moviesID, path, library.PageRequest{Limit: 4, Cursor: first.NextCursor})
+	second, err := service.ListFolder(adminContext(t), moviesID, path, library.PageRequest{Limit: 4, Cursor: first.NextCursor})
 	if err != nil {
 		t.Fatalf("ListFolder second page error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestListFolderListsDirectoriesThenItemsAndPages(t *testing.T) {
 		t.Errorf("second page cursor = %q, want none", second.NextCursor)
 	}
 
-	_, err = service.ListFolder(t.Context(), moviesID, mustParseFolderPath(t, "movies-folder"),
+	_, err = service.ListFolder(adminContext(t), moviesID, mustParseFolderPath(t, "movies-folder"),
 		library.PageRequest{Cursor: first.NextCursor})
 	assertWrappedError(t, err, domain.ErrInvalid, "not issued for this folder")
 }
@@ -169,7 +169,7 @@ func TestListFolderReportsErrors(t *testing.T) {
 				test.configure(environment)
 			}
 
-			_, err := environment.service(t).ListFolder(t.Context(), test.libraryID, mustParseFolderPath(t, test.path), test.page)
+			_, err := environment.service(t).ListFolder(adminContext(t), test.libraryID, mustParseFolderPath(t, test.path), test.page)
 			assertWrappedError(t, err, test.wantErr, test.wantText)
 		})
 	}
@@ -183,7 +183,7 @@ func TestListFolderAnswersAHugeCursorOffsetWithAnEmptyPage(t *testing.T) {
 	environment := newBrowseEnvironment()
 	cursor := rawCursor("folders\x00\x00" + strconv.Itoa(math.MaxInt))
 
-	listing, err := environment.service(t).ListFolder(t.Context(), moviesID, library.FolderPath{}, library.PageRequest{Limit: library.MaxPageLimit, Cursor: cursor})
+	listing, err := environment.service(t).ListFolder(adminContext(t), moviesID, library.FolderPath{}, library.PageRequest{Limit: library.MaxPageLimit, Cursor: cursor})
 	if err != nil || len(listing.Entries) != 0 || listing.NextCursor != "" {
 		t.Errorf("ListFolder = %+v, %v; want an empty last page", listing, err)
 	}
@@ -196,12 +196,12 @@ func TestListFolderReportsSummaryFailuresAndMissingReaders(t *testing.T) {
 	environment.folderItems.items["movies-folder/"] = []applibrary.FolderItem{{ItemID: "item-1", Name: "a.mkv"}}
 	environment.folderItems.summaryErr = errBoom
 
-	_, err := environment.service(t).ListFolder(t.Context(), moviesID, mustParseFolderPath(t, "movies-folder"), library.PageRequest{})
+	_, err := environment.service(t).ListFolder(adminContext(t), moviesID, mustParseFolderPath(t, "movies-folder"), library.PageRequest{})
 	assertWrappedError(t, err, errBoom, "read item summaries")
 
 	bare := newTestEnvironment()
 	bare.storedMoviesAndShows()
 
-	_, err = bare.service(t).ListFolder(t.Context(), moviesID, library.FolderPath{}, library.PageRequest{})
+	_, err = bare.service(t).ListFolder(adminContext(t), moviesID, library.FolderPath{}, library.PageRequest{})
 	assertWrappedError(t, err, domain.ErrUnavailable, "no folder readers")
 }

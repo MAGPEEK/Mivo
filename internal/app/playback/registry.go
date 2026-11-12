@@ -55,6 +55,10 @@ type sessionEntry struct {
 	reencodes  bool
 	runsFFmpeg bool
 
+	// owner is the auth session that started the session; only it and administrators reach
+	// the session (ADR 0024, Notes M7-14).
+	owner string
+
 	libraryRoot  string
 	relativePath string
 	contentType  string

@@ -80,3 +80,34 @@ func TestViewerRestriction(t *testing.T) {
 		}
 	}
 }
+
+func TestRestrictionLibraryChecks(t *testing.T) {
+	t.Parallel()
+
+	limit, err := access.MaxAgeLimit(access.Age6, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		restriction   access.Restriction
+		allowsLibrary bool
+		unrestricted  bool
+	}{
+		{name: "zero", restriction: access.Restriction{}},
+		{name: "unrestricted", restriction: access.Unrestricted(), allowsLibrary: true, unrestricted: true},
+		{name: "one library", restriction: access.Viewer{Libraries: access.OnlyLibraries("lib")}.Restriction(), allowsLibrary: true},
+		{name: "age limit", restriction: access.Viewer{Libraries: access.AllLibraries(), Limit: limit}.Restriction(), allowsLibrary: true},
+		{name: "hide unrated", restriction: access.Viewer{Libraries: access.AllLibraries(), Limit: access.NoLimit().HidingUnrated(true)}.Restriction(), allowsLibrary: true},
+	}
+	for _, test := range tests {
+		if got := test.restriction.AllowsLibrary("lib"); got != test.allowsLibrary {
+			t.Errorf("%s: AllowsLibrary = %v, want %v", test.name, got, test.allowsLibrary)
+		}
+
+		if got := test.restriction.IsUnrestricted(); got != test.unrestricted {
+			t.Errorf("%s: IsUnrestricted = %v, want %v", test.name, got, test.unrestricted)
+		}
+	}
+}

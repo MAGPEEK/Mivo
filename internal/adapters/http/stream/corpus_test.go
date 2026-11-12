@@ -109,7 +109,7 @@ func requireCorpusTools(t *testing.T) (ffmpegPath, ffprobePath, libraryRoot stri
 func startCorpusSession(t *testing.T, service *appplayback.Service) appplayback.Session {
 	t.Helper()
 
-	session, err := service.Start(t.Context(), appplayback.StartRequest{
+	session, err := service.Start(adminContext(t), appplayback.StartRequest{
 		FileID: corpusFileID, Profile: playbacktest.ChromiumDesktop(),
 	})
 	if err != nil {
@@ -118,7 +118,7 @@ func startCorpusSession(t *testing.T, service *appplayback.Service) appplayback.
 
 	// Stop kills FFmpeg and removes the session directory before t.TempDir is cleaned up.
 	t.Cleanup(func() {
-		if err := service.Stop(context.WithoutCancel(t.Context()), session.ID); err != nil {
+		if err := service.Stop(context.WithoutCancel(adminContext(t)), session.ID); err != nil {
 			t.Errorf("Stop error = %v", err)
 		}
 	})

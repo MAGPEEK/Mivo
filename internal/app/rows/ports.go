@@ -6,7 +6,6 @@ package rows
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
@@ -16,8 +15,8 @@ import (
 	"github.com/magpeek/mivo/internal/domain/rows"
 )
 
-// LibrarySource lists the libraries the caller may see. Until profiles exist (M7) that is
-// every library (AllLibraries); access control plugs in here without changing the handlers.
+// LibrarySource lists the libraries the viewer of the context may see. Implemented by
+// app/access.ScopedLibraries: the viewer's effective access set (ADR 0032 section 7).
 type LibrarySource interface {
 	// VisibleLibraries returns the visible libraries in display order (by name).
 	VisibleLibraries(ctx context.Context) ([]library.ManagedLibrary, error)
@@ -93,34 +92,4 @@ type Catalog interface {
 type ScanStatus interface {
 	// Status returns the status of the current or last scan of the library.
 	Status(libraryID string) appscan.Status
-}
-
-// AllLibraries is the LibrarySource of a server without profiles: every library is visible.
-type AllLibraries struct {
-	reader applibrary.ManagedReader
-}
-
-// NewAllLibraries returns the LibrarySource that shows every library of reader.
-func NewAllLibraries(reader applibrary.ManagedReader) AllLibraries {
-	return AllLibraries{reader: reader}
-}
-
-// VisibleLibraries returns every library, ordered by name.
-func (source AllLibraries) VisibleLibraries(ctx context.Context) ([]library.ManagedLibrary, error) {
-	libraries, err := source.reader.ListManaged(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list visible libraries: %w", err)
-	}
-
-	return libraries, nil
-}
-
-// VisibleLibrary returns the library; an unknown ID wraps domain.ErrNotFound.
-func (source AllLibraries) VisibleLibrary(ctx context.Context, id string) (library.ManagedLibrary, error) {
-	managed, err := source.reader.GetManaged(ctx, id)
-	if err != nil {
-		return library.ManagedLibrary{}, fmt.Errorf("get visible library %q: %w", id, err)
-	}
-
-	return managed, nil
 }

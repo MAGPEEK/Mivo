@@ -32,6 +32,8 @@ type fakeCatalog struct {
 	hidden   map[string]bool
 	lookups  int
 	listErr  error
+	// listRestrictions records the restriction of every ListEpisodes call.
+	listRestrictions []domainaccess.Restriction
 }
 
 func newFakeCatalog() *fakeCatalog {
@@ -60,7 +62,9 @@ func (catalog *fakeCatalog) LookupWatchTarget(_ context.Context, itemID string) 
 	return target, nil
 }
 
-func (catalog *fakeCatalog) ListEpisodes(_ context.Context, containerID string) ([]appwatch.Target, error) {
+func (catalog *fakeCatalog) ListEpisodes(_ context.Context, containerID string, restriction domainaccess.Restriction) ([]appwatch.Target, error) {
+	catalog.listRestrictions = append(catalog.listRestrictions, restriction)
+
 	if catalog.listErr != nil {
 		return nil, catalog.listErr
 	}
@@ -83,16 +87,17 @@ type storedState struct {
 
 // fakeStore keeps states per profile and item in memory and counts its calls.
 type fakeStore struct {
-	mutex        sync.Mutex
-	rows         map[string]map[string]storedState
-	episodes     map[string][]string
-	updates      int
-	stateReads   int
-	countReads   int
-	readIDs      [][]string
-	countIDs     [][]string
-	failWith     error
-	lastUpdateAt time.Time
+	mutex             sync.Mutex
+	rows              map[string]map[string]storedState
+	episodes          map[string][]string
+	updates           int
+	stateReads        int
+	countReads        int
+	readIDs           [][]string
+	countIDs          [][]string
+	countRestrictions []domainaccess.Restriction
+	failWith          error
+	lastUpdateAt      time.Time
 }
 
 func newFakeStore(catalog *fakeCatalog) *fakeStore {
@@ -144,9 +149,11 @@ func (store *fakeStore) States(_ context.Context, profile string, itemIDs []stri
 	return states, nil
 }
 
-func (store *fakeStore) EpisodeCounts(_ context.Context, profile string, containerIDs []string) (map[string]appwatch.EpisodeCount, error) {
+func (store *fakeStore) EpisodeCounts(_ context.Context, profile string, containerIDs []string, restriction domainaccess.Restriction) (map[string]appwatch.EpisodeCount, error) {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
+
+	store.countRestrictions = append(store.countRestrictions, restriction)
 
 	store.countReads++
 	store.countIDs = append(store.countIDs, containerIDs)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
@@ -33,8 +34,10 @@ type ItemLookup interface {
 // through ItemLookup, so they need no scope check of their own.
 type EpisodeLister interface {
 	// ListEpisodes returns every episode of the show (all seasons, specials included) or the
-	// season, in any order; DurationSeconds may be left 0. A leaf yields none.
-	ListEpisodes(ctx context.Context, containerID string) ([]Target, error)
+	// season that the restriction allows, in any order; an episode it hides (its own or an
+	// ancestor.s rating) is left out, so a mark never reaches it. DurationSeconds may be left 0.
+	// A leaf yields none.
+	ListEpisodes(ctx context.Context, containerID string, restriction access.Restriction) ([]Target, error)
 }
 
 // StateKey names the stored state of one item of a profile and the attach key to store with
@@ -82,8 +85,8 @@ type StateReader interface {
 	// EpisodeCounts returns per show or season the episodes below it (as in
 	// app/library ItemSummary.LeafCount and ChildCount) and the number of them that are not
 	// watched by the profile; a container without episodes may be absent. containerIDs is
-	// never empty and has no duplicates.
-	EpisodeCounts(ctx context.Context, profileID string, containerIDs []string) (map[string]EpisodeCount, error)
+	// never empty and has no duplicates. Only episodes the restriction allows are counted.
+	EpisodeCounts(ctx context.Context, profileID string, containerIDs []string, restriction access.Restriction) (map[string]EpisodeCount, error)
 }
 
 // StateStore is the watch state store: writes and list reads.

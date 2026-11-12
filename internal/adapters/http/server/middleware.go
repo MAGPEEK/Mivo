@@ -89,7 +89,8 @@ func newChainSettings(options Options) (chainSettings, error) {
 // The guards run in the order LAN guard, authentication, management guard, setup gate
 // (ADR 0032): the management guard needs the viewer the authentication stores, and the
 // setup gate answers only peers the management guard admitted. Authentication and the setup
-// gate exist only when Options.Authentication is wired.
+// gate exist only when Options.Authentication is wired; without it every request carries the
+// administrator viewer of the pre-account mode (preAccountViewer).
 func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 	lan := newLANGuard(settings)
 	handler := next
@@ -102,6 +103,8 @@ func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 
 	if settings.authentication.enabled() {
 		handler = newAuthGuard(settings, lan).wrap(handler)
+	} else {
+		handler = withPreAccountViewer(handler)
 	}
 
 	if !settings.allowPublicClients {

@@ -379,3 +379,16 @@ deviate reports it instead of editing this section.
   keyboard focus on a control keeps the controls visible (Notes M2-30): after a keyboard Retry
   the controls therefore stay visible until focus leaves them, which is intended for keyboard
   and TV-remote users.
+
+## Notes (M7-14)
+
+- **Viewer and ownership.** Starting a session needs a viewer (`domain.ErrUnauthenticated`
+  without). The file is read with the viewer's restriction: a file of a hidden item (itself, an
+  ancestor or its library) answers `domain.ErrNotFound` before a slot is taken. A session
+  records the auth session id (`Viewer.AuthSessionID`) that started it. Get, Stop and the
+  stream requests (`Access`: file and HLS) of another auth session answer `ErrNotFound`, and the
+  session keeps running; administrators reach every session. A seek that names another auth
+  session's session in `replacesSessionId` leaves it alone, as for an unknown one. This refines
+  "the session ID is the only secret": it still is the stream URL's secret, and now also needs
+  the owner's sign-in (the stream routes sit behind the session middleware). The reaper and
+  Close do not depend on a viewer.

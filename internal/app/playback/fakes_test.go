@@ -11,6 +11,7 @@ import (
 
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
@@ -21,20 +22,25 @@ type memoryFiles struct {
 	// err, when set, is returned by every load.
 	err   error
 	loads int
+	// restrictions records the restriction of every load; hidden lists the file IDs the
+	// restriction hides (the sqlite adapter decides that from the item chain).
+	restrictions []access.Restriction
+	hidden       map[string]bool
 }
 
-func (source *memoryFiles) PlayableFile(_ context.Context, fileID string) (appplayback.PlayableFile, error) {
+func (source *memoryFiles) PlayableFile(_ context.Context, fileID string, restriction access.Restriction) (appplayback.PlayableFile, error) {
 	source.mutex.Lock()
 	defer source.mutex.Unlock()
 
 	source.loads++
+	source.restrictions = append(source.restrictions, restriction)
 
 	if source.err != nil {
 		return appplayback.PlayableFile{}, source.err
 	}
 
 	file, found := source.files[fileID]
-	if !found {
+	if !found || source.hidden[fileID] || !restriction.AllowsLibrary(file.File.LibraryID) {
 		return appplayback.PlayableFile{}, fmt.Errorf("media file %s: %w", fileID, domain.ErrNotFound)
 	}
 

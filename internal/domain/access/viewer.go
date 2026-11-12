@@ -73,3 +73,17 @@ func (r Restriction) HideUnrated() bool {
 func (r Restriction) Allows(libraryID string, bucket AgeBucket, known bool) bool {
 	return r.libraries.Allows(libraryID) && r.limit.Allows(bucket, known)
 }
+
+// AllowsLibrary reports whether the library may be browsed at all, whatever the content limit.
+func (r Restriction) AllowsLibrary(libraryID string) bool {
+	return r.libraries.Allows(libraryID)
+}
+
+// IsUnrestricted reports whether nothing is filtered: every library, no age limit and unrated
+// titles shown. Only then may a use case show what the catalog does not know, such as
+// file-system directories without items.
+func (r Restriction) IsUnrestricted() bool {
+	_, limited := r.limit.MaxAge()
+
+	return r.libraries.IsAll() && !limited && !r.limit.HideUnrated()
+}

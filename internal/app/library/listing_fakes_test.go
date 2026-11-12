@@ -44,15 +44,55 @@ func (reader *memoryListingReader) CountFirstCharacters(_ context.Context, _ str
 // memoryFolderItems is an in-memory FolderItemReader: items per "rootID/directory" and the
 // summaries it knows.
 type memoryFolderItems struct {
-	items     map[string][]applibrary.FolderItem
-	summaries map[string]applibrary.ItemSummary
+	items map[string][]applibrary.FolderItem
+	// files is the catalog behind ListFolderDirectories (per root ID); libraryID is the library
+	// the roots belong to.
+	files     map[string][]folderFile
+	libraryID string
+	// directoryCalls counts ListFolderDirectories calls.
+	directoryCalls int
+	summaries      map[string]applibrary.ItemSummary
 	// err fails ListFolderItems, summaryErr ItemSummaries.
 	err        error
 	summaryErr error
 }
 
-func (reader *memoryFolderItems) ListFolderItems(_ context.Context, rootID, directory string, _ access.Restriction) ([]applibrary.FolderItem, error) {
-	return reader.items[rootID+"/"+directory], reader.err
+func (reader *memoryFolderItems) ListFolderItems(_ context.Context, rootID, directory string, restriction access.Restriction) ([]applibrary.FolderItem, error) {
+	var visible []applibrary.FolderItem
+
+	for _, item := range reader.items[rootID+"/"+directory] {
+		if reader.itemVisible(rootID, item.ItemID, restriction) {
+			visible = append(visible, item)
+		}
+	}
+
+	return visible, reader.err
+}
+
+// itemVisible applies the restriction to the catalog files of the item; an item without
+// catalog files (older fixtures) is visible to everyone who may read the library.
+func (reader *memoryFolderItems) itemVisible(rootID, itemID string, restriction access.Restriction) bool {
+	known := false
+
+	for _, file := range reader.files[rootID] {
+		if file.itemID != itemID {
+			continue
+		}
+
+		known = true
+
+		if file.visibleTo(reader.libraryID, restriction) {
+			return true
+		}
+	}
+
+	return !known && restriction.AllowsLibrary(reader.libraryID)
+}
+
+func (reader *memoryFolderItems) ListFolderDirectories(_ context.Context, rootID, directory string, restriction access.Restriction) ([]string, error) {
+	reader.directoryCalls++
+
+	return directoriesBelow(reader.files[rootID], reader.libraryID, directory, restriction), reader.err
 }
 
 func (reader *memoryFolderItems) ItemSummaries(_ context.Context, itemIDs []string, _ access.Restriction) ([]applibrary.ItemSummary, error) {
@@ -96,7 +136,7 @@ func newBrowseEnvironment() *browseEnvironment {
 	environment := &browseEnvironment{
 		testEnvironment: newTestEnvironment(),
 		listings:        &memoryListingReader{},
-		folderItems:     &memoryFolderItems{items: map[string][]applibrary.FolderItem{}, summaries: map[string]applibrary.ItemSummary{}},
+		folderItems:     &memoryFolderItems{libraryID: moviesID, files: map[string][]folderFile{}, items: map[string][]applibrary.FolderItem{}, summaries: map[string]applibrary.ItemSummary{}},
 		directories:     &memoryDirectories{directories: map[string][]string{}},
 		seed:            4711,
 	}
@@ -108,11 +148,16 @@ func newBrowseEnvironment() *browseEnvironment {
 func (environment *browseEnvironment) service(t *testing.T) *applibrary.Service {
 	t.Helper()
 
-	service, err := applibrary.NewService(applibrary.Dependencies{
+	dependencies := applibrary.Dependencies{
 		Libraries: environment.store, Items: environment.items, Listings: environment.listings,
 		FolderItems: environment.folderItems, Directories: environment.directories, Roots: environment.roots,
 		RandomSeed: func() int64 { return environment.seed },
-	})
+	}
+	if environment.children != nil {
+		dependencies.Children = environment.children
+	}
+
+	service, err := applibrary.NewService(dependencies)
 	if err != nil {
 		t.Fatalf("NewService error = %v", err)
 	}

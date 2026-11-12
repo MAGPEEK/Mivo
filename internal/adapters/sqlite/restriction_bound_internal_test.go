@@ -223,8 +223,9 @@ func TestContentLimitOf(t *testing.T) {
 		{name: "unrestricted", restriction: access.Unrestricted(), want: contentLimit{maxAge: 18, allowUnrated: 1}},
 		{name: "up to 6, unrated hidden", restriction: restrictedTo(t, access.AllLibraries(), access.Age6, true), want: contentLimit{maxAge: 6}},
 		{name: "all ages, unrated shown", restriction: restrictedTo(t, access.AllLibraries(), access.AgeAll, false), want: contentLimit{allowUnrated: 1}},
-		// The zero restriction denies through its empty library set, not through the limit.
-		{name: "the zero restriction", want: contentLimit{maxAge: 18, allowUnrated: 1}},
+		// A restriction that allows no library is strict on the limit too (fail closed).
+		{name: "the zero restriction", want: contentLimit{}},
+		{name: "no library, no content limit", restriction: restrictedTo(t, access.OnlyLibraries(), access.Age18, false), want: contentLimit{}},
 	}
 	for _, test := range tests {
 		if got := contentLimitOf(test.restriction); got != test.want {

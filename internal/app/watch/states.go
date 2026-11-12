@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/app/access"
+	domainaccess "github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/watch"
 )
@@ -45,7 +46,7 @@ func (service *Service) States(ctx context.Context, items []ItemRef) (map[string
 		return nil, fmt.Errorf("watch states: %w", err)
 	}
 
-	if err := service.addContainerStates(ctx, viewer.ProfileID, containerIDs, result); err != nil {
+	if err := service.addContainerStates(ctx, viewer, containerIDs, result); err != nil {
 		return nil, fmt.Errorf("watch states: %w", err)
 	}
 
@@ -92,12 +93,12 @@ func (service *Service) addLeafStates(ctx context.Context, profileID string, ite
 	return nil
 }
 
-func (service *Service) addContainerStates(ctx context.Context, profileID string, containerIDs []string, result map[string]ItemState) error {
+func (service *Service) addContainerStates(ctx context.Context, viewer domainaccess.Viewer, containerIDs []string, result map[string]ItemState) error {
 	if len(containerIDs) == 0 {
 		return nil
 	}
 
-	counts, err := service.deps.Store.EpisodeCounts(ctx, profileID, containerIDs)
+	counts, err := service.deps.Store.EpisodeCounts(ctx, viewer.ProfileID, containerIDs, viewer.Restriction())
 	if err != nil {
 		return fmt.Errorf("count episodes of %d shows and seasons: %w", len(containerIDs), err)
 	}

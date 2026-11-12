@@ -1,7 +1,6 @@
 package rows_test
 
 import (
-	"context"
 	"slices"
 	"testing"
 
@@ -14,7 +13,7 @@ import (
 func TestLibraryRowsOfMovies(t *testing.T) {
 	t.Parallel()
 
-	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(context.Background(), moviesID, 0)
+	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(adminContext(), moviesID, 0)
 	if err != nil {
 		t.Fatalf("LibraryRows: %v", err)
 	}
@@ -96,7 +95,7 @@ func equalQuery(left, right library.ListingQuery) bool {
 func TestLibraryRowsLimit(t *testing.T) {
 	t.Parallel()
 
-	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(context.Background(), moviesID, 1)
+	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(adminContext(), moviesID, 1)
 	if err != nil {
 		t.Fatalf("LibraryRows: %v", err)
 	}
@@ -115,7 +114,7 @@ func TestLibraryRowsLimit(t *testing.T) {
 func TestLibraryRowsOfShows(t *testing.T) {
 	t.Parallel()
 
-	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(context.Background(), showsID, 0)
+	got, err := newTestService(t, newFixtureCatalog()).LibraryRows(adminContext(), showsID, 0)
 	if err != nil {
 		t.Fatalf("LibraryRows: %v", err)
 	}
