@@ -71,6 +71,11 @@ func (api *API) GetHomeRows(ctx context.Context, request apigen.GetHomeRowsReque
 		return nil, operationFailure(operationGetHomeRows, err)
 	}
 
+	err = api.applyViewerStates(ctx, operationGetHomeRows, rowSummaries(response.Rows))
+	if err != nil {
+		return nil, err
+	}
+
 	return apigen.GetHomeRows200JSONResponse(response), nil
 }
 
@@ -96,6 +101,11 @@ func (api *API) ListLibraryRows(ctx context.Context, request apigen.ListLibraryR
 	response, err := libraryRowsResponse(libraryRows)
 	if err != nil {
 		return nil, operationFailure(operationListLibraryRows, err)
+	}
+
+	err = api.applyViewerStates(ctx, operationListLibraryRows, rowSummaries(response.Rows))
+	if err != nil {
+		return nil, err
 	}
 
 	return apigen.ListLibraryRows200JSONResponse(response), nil

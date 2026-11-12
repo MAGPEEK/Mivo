@@ -54,6 +54,10 @@ type Options struct {
 	// Users serves the user administration endpoints (ADR 0032). Every service in it is
 	// optional; see UserServices.
 	Users UserServices
+	// Watch serves the watch state endpoints and adds viewerState to items (ADR 0032 section 8).
+	// It is optional: without it those endpoints answer 501 "not_implemented" and items carry
+	// no viewerState.
+	Watch WatchService
 }
 
 // Mount is one extra route of the API mux.

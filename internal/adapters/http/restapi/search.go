@@ -120,6 +120,11 @@ func (api *API) Search(ctx context.Context, request apigen.SearchRequestObject) 
 		return nil, operationFailure(operationSearch, err)
 	}
 
+	err = api.applyViewerStates(ctx, operationSearch, pointersTo(response.Items))
+	if err != nil {
+		return nil, err
+	}
+
 	return apigen.Search200JSONResponse(response), nil
 }
 

@@ -42,6 +42,7 @@ type API struct {
 	mounts    []Mount
 	auth      AuthService
 	users     UserServices
+	watch     WatchService
 }
 
 // Compile-time check that API serves every operation of the contract.
@@ -72,6 +73,7 @@ func NewAPI(options Options) (*API, error) {
 		mounts:    options.Mounts,
 		auth:      options.Auth,
 		users:     options.Users,
+		watch:     options.Watch,
 	}, nil
 }
 

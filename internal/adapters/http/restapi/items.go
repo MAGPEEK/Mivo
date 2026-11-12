@@ -55,6 +55,11 @@ func (api *API) ListLibraryItems(ctx context.Context, request apigen.ListLibrary
 
 	api.applySummaryMatches(ctx, response.Items)
 
+	err = api.applyViewerStates(ctx, operationListLibraryItems, pointersTo(response.Items))
+	if err != nil {
+		return nil, err
+	}
+
 	return apigen.ListLibraryItems200JSONResponse(response), nil
 }
 
@@ -72,6 +77,11 @@ func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject
 	}
 
 	api.applyDetailMatch(ctx, &response)
+
+	err = api.applyDetailViewerState(ctx, operationGetItem, &response)
+	if err != nil {
+		return nil, err
+	}
 
 	return apigen.GetItem200JSONResponse(response), nil
 }
@@ -102,6 +112,11 @@ func (api *API) ListItemChildren(ctx context.Context, request apigen.ListItemChi
 	}
 
 	api.applySummaryMatches(ctx, response.Items)
+
+	err = api.applyViewerStates(ctx, operationListItemChildren, pointersTo(response.Items))
+	if err != nil {
+		return nil, err
+	}
 
 	return apigen.ListItemChildren200JSONResponse(response), nil
 }

@@ -175,10 +175,27 @@ func rowItemsResponse(items []approws.Item) ([]apigen.ItemSummary, error) {
 		response.SeasonNumber = optionalNumber(item.SeasonNumber)
 		response.ShowTitle = optionalString(item.ShowTitle)
 		response.NewEpisodeCount = optionalInt32(item.NewEpisodeCount)
+
+		if item.ViewerState != nil {
+			response.ViewerState = viewerStateResponse(*item.ViewerState)
+		}
+
 		responses = append(responses, response)
 	}
 
 	return responses, nil
+}
+
+// rowSummaries lists the cards of all rows, so the viewer states of a response come from one
+// batch.
+func rowSummaries(rowList []apigen.Row) []*apigen.ItemSummary {
+	var summaries []*apigen.ItemSummary
+
+	for index := range rowList {
+		summaries = append(summaries, pointersTo(rowList[index].Items)...)
+	}
+
+	return summaries
 }
 
 func heroItemResponse(item approws.HeroItem) (apigen.HeroItem, error) {
