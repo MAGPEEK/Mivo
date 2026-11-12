@@ -96,7 +96,9 @@ export function EpisodeGrid({ rows, viewStyle, cardStep }: EpisodeGridProps) {
   if (viewStyle === "grid") {
     const size = cardSize(cardStep, "episode");
     return (
+      // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops the list role of a list without bullets
       <ul
+        role="list"
         className="grid gap-x-4 gap-y-6"
         style={{
           gridTemplateColumns: `repeat(auto-fill, minmax(${String(size.columnWidth)}px, 1fr))`,
@@ -111,7 +113,8 @@ export function EpisodeGrid({ rows, viewStyle, cardStep }: EpisodeGridProps) {
     );
   }
   return (
-    <ul className={viewStyle === "details" ? "flex flex-col gap-4" : undefined}>
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops the list role of a list without bullets
+    <ul role="list" className={viewStyle === "details" ? "flex flex-col gap-4" : undefined}>
       {rows.map((row) => (
         <li key={row.id}>
           {viewStyle === "details" ? <DetailsRow row={row} /> : <CompactRow row={row} />}
