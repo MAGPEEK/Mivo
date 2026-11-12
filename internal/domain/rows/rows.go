@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/domain/library"
+	"github.com/magpeek/mivo/internal/domain/watch"
 )
 
 // Kind is what a row shows (API RowKind).
@@ -21,6 +22,10 @@ const (
 	KindNewReleases    Kind = "newReleases"
 	KindMoreGenre      Kind = "moreGenre"
 	KindRecentEpisodes Kind = "recentEpisodes"
+	// KindContinueWatching and KindUpNext are the profile's watch rows (M7-19); they have no
+	// "See all".
+	KindContinueWatching Kind = "continueWatching"
+	KindUpNext           Kind = "upNext"
 )
 
 // CardFormat is the card shape of a row (API CardFormat).
@@ -47,18 +52,47 @@ const (
 
 // Translation keys of the row titles (API Row.titleKey) and their parameter names.
 const (
-	TitleRecentlyAdded   = "rows.recentlyAdded"
-	TitleRecentlyAddedIn = "rows.recentlyAddedIn"
-	TitleNewReleases     = "rows.newReleases"
-	TitleMoreGenre       = "rows.moreGenre"
-	TitleRecentEpisodes  = "rows.recentEpisodes"
-	ParamLibrary         = "library"
-	ParamGenre           = "genre"
+	TitleRecentlyAdded    = "rows.recentlyAdded"
+	TitleRecentlyAddedIn  = "rows.recentlyAddedIn"
+	TitleNewReleases      = "rows.newReleases"
+	TitleMoreGenre        = "rows.moreGenre"
+	TitleRecentEpisodes   = "rows.recentEpisodes"
+	TitleContinueWatching = "rows.continueWatching"
+	TitleUpNext           = "rows.upNext"
+	ParamLibrary          = "library"
+	ParamGenre            = "genre"
 )
 
 // DefaultItemLimit is the number of items per row when the client asks for none (API
 // RowItemLimit default).
 const DefaultItemLimit = 20
+
+// HomeLeadKinds returns the watch rows that open Home, in display order, before the
+// "recentlyAdded" rows of the libraries.
+func HomeLeadKinds() []Kind {
+	return []Kind{KindContinueWatching, KindUpNext}
+}
+
+// OverviewLeadKinds returns the watch rows that open a library's Overview, before the rows of
+// OverviewKinds: only "continueWatching"; "upNext" belongs to Home.
+func OverviewLeadKinds() []Kind {
+	return []Kind{KindContinueWatching}
+}
+
+// WatchRowLimit returns how many items a watch row asks for: the requested row limit, capped
+// at the row kind's maximum; zero for a kind that is no watch row.
+func WatchRowLimit(kind Kind, requested int) int {
+	switch kind {
+	case KindContinueWatching:
+		return min(requested, watch.ContinueWatchingLimit)
+	case KindUpNext:
+		return min(requested, watch.UpNextLimit)
+	case KindRecentlyAdded, KindNewReleases, KindMoreGenre, KindRecentEpisodes:
+		return 0
+	default:
+		return 0
+	}
+}
 
 // rowIDSeparator joins the parts of a row ID; the API pattern allows it.
 const rowIDSeparator = ":"
@@ -66,6 +100,16 @@ const rowIDSeparator = ":"
 // RowID returns the stable ID of a row of one library: "<kind>:<library ID>".
 func RowID(kind Kind, libraryID string) string {
 	return string(kind) + rowIDSeparator + libraryID
+}
+
+// WatchRowID returns the stable ID of a watch row: the bare kind on Home (libraryID empty),
+// else "<kind>:<library ID>".
+func WatchRowID(kind Kind, libraryID string) string {
+	if libraryID == "" {
+		return string(kind)
+	}
+
+	return RowID(kind, libraryID)
 }
 
 // GenreRowID returns the stable ID of a "moreGenre" row. A genre name may hold characters
@@ -122,6 +166,8 @@ func GroupsEpisodes(kind library.Kind) bool {
 // cards for albums and photos, posters for everything else.
 func CardFormatOf(rowKind Kind, libraryKind library.Kind) CardFormat {
 	switch {
+	case rowKind == KindContinueWatching || rowKind == KindUpNext:
+		return CardPoster // the API gives both watch rows poster cards
 	case rowKind == KindRecentEpisodes:
 		return CardEpisode
 	case libraryKind == library.KindMusic || libraryKind == library.KindPhotos:

@@ -68,7 +68,14 @@ func (service *Service) overview(ctx context.Context, source target) ([]Row, row
 		return nil, state, nil
 	}
 
-	built := []Row{recent}
+	built, err := service.watchRows(ctx, rows.OverviewLeadKinds(), watchScope{
+		libraryID: source.library.ID, restriction: source.restriction, limit: source.limit,
+	})
+	if err != nil {
+		return nil, rows.LibraryState{}, err
+	}
+
+	built = append(built, recent)
 
 	for _, kind := range rows.OverviewKinds(source.library.Kind)[1:] {
 		more, err := service.rowsOfKind(ctx, source, kind)
@@ -102,8 +109,8 @@ func (service *Service) rowsOfKind(ctx context.Context, source target, kind rows
 		return service.genreRows(ctx, source)
 	case rows.KindRecentEpisodes:
 		return service.recentEpisodes(ctx, source)
-	case rows.KindRecentlyAdded:
-		return nil, nil
+	case rows.KindRecentlyAdded, rows.KindContinueWatching, rows.KindUpNext:
+		return nil, nil // built before or ahead of the rest, see overview
 	default:
 		return nil, nil
 	}

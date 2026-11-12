@@ -10,6 +10,7 @@ import (
 	appaccess "github.com/magpeek/mivo/internal/app/access"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
@@ -30,18 +31,14 @@ const (
 // that many filled rows get no row.
 const MaxHomeRows = 100
 
-// Home returns the rows of the Home screen: one "recentlyAdded" row per visible library in
+// Home returns the rows of the Home screen: the profile's "continueWatching" and "upNext"
+// rows (M7-19; none without a profile or when empty), then one "recentlyAdded" row per visible library in
 // library order (the decision of task M5-12: "recentEpisodes" stays on the library
 // Overview), at most MaxHomeRows, the hero and the hint. Libraries without items have no
 // row. A row's title parameter is the library name, which library.MaxNameLength keeps within
 // the API's 200 characters. A limit as in LibraryRows.
 func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
-	restriction, err := appaccess.RestrictionFrom(ctx)
-	if err != nil {
-		return Home{}, fmt.Errorf("home rows: %w", err)
-	}
-
-	limit, err = itemLimit(limit)
+	restriction, limit, err := homeRequest(ctx, limit)
 	if err != nil {
 		return Home{}, fmt.Errorf("home rows: %w", err)
 	}
@@ -51,24 +48,29 @@ func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
 		return Home{}, fmt.Errorf("home rows: %w", err)
 	}
 
-	home := Home{Rows: []Row{}, Hero: []HeroItem{}}
+	lead, err := service.watchRows(ctx, rows.HomeLeadKinds(), watchScope{restriction: restriction, limit: limit})
+	if err != nil {
+		return Home{}, fmt.Errorf("home rows: %w", err)
+	}
+
+	home := Home{Rows: append([]Row{}, lead...), Hero: []HeroItem{}}
+
 	states := make([]rows.LibraryState, 0, len(libraries))
 
 	var filled []target
 
 	for _, managed := range libraries {
-		if len(home.Rows) == MaxHomeRows {
+		if len(home.Rows) >= MaxHomeRows {
 			break
 		}
 
 		source := service.targetOf(ctx, managed, limit, restriction)
 
-		row, err := service.recentlyAdded(ctx, source, rows.TitleRecentlyAddedIn, map[string]string{rows.ParamLibrary: managed.Name})
+		row, state, err := service.homeLibraryRow(ctx, source)
 		if err != nil {
-			return Home{}, fmt.Errorf("home rows: library %q: %w", managed.ID, err)
+			return Home{}, fmt.Errorf("home rows: %w", err)
 		}
 
-		state := service.stateOf(source, row)
 		states = append(states, state)
 
 		if state.HasItems {
@@ -77,7 +79,7 @@ func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
 		}
 	}
 
-	home.Hero, err = service.hero(ctx, filled)
+	home.Hero, err = service.hero(ctx, filled, resumable(lead))
 	if err != nil {
 		return Home{}, fmt.Errorf("home rows: %w", err)
 	}
@@ -87,11 +89,66 @@ func (service *Service) Home(ctx context.Context, limit int) (Home, error) {
 	return home, nil
 }
 
-// hero picks the most recently added movies and shows that have a backdrop.
-func (service *Service) hero(ctx context.Context, libraries []target) ([]HeroItem, error) {
-	candidates, err := service.heroCandidates(ctx, libraries)
+// homeRequest returns the viewer's restriction and the validated item limit.
+func homeRequest(ctx context.Context, limit int) (access.Restriction, int, error) {
+	restriction, err := appaccess.RestrictionFrom(ctx)
+	if err != nil {
+		return access.Restriction{}, 0, err
+	}
+
+	limit, err = itemLimit(limit)
+	if err != nil {
+		return access.Restriction{}, 0, err
+	}
+
+	return restriction, limit, nil
+}
+
+// homeLibraryRow builds a library's "recentlyAdded" row of Home and the library's state.
+func (service *Service) homeLibraryRow(ctx context.Context, source target) (Row, rows.LibraryState, error) {
+	params := map[string]string{rows.ParamLibrary: source.library.Name}
+
+	row, err := service.recentlyAdded(ctx, source, rows.TitleRecentlyAddedIn, params)
+	if err != nil {
+		return Row{}, rows.LibraryState{}, fmt.Errorf("library %q: %w", source.library.ID, err)
+	}
+
+	return row, service.stateOf(source, row), nil
+}
+
+// resumable returns the movies and shows of the "continueWatching" row among the lead rows;
+// the hero prefers them (HO-01). Episodes are not hero titles.
+func resumable(lead []Row) []applibrary.ItemSummary {
+	var preferred []applibrary.ItemSummary
+
+	for _, row := range lead {
+		if row.Kind != rows.KindContinueWatching {
+			continue
+		}
+
+		for _, item := range row.Items {
+			if kind := item.Summary.Item.Kind; kind == library.ItemKindMovie || kind == library.ItemKindShow {
+				preferred = append(preferred, item.Summary)
+			}
+		}
+	}
+
+	return preferred
+}
+
+// hero picks the titles the viewer is watching that have a backdrop, then the most recently
+// added movies and shows that have one.
+func (service *Service) hero(ctx context.Context, libraries []target, preferred []applibrary.ItemSummary) ([]HeroItem, error) {
+	recent, err := service.heroCandidates(ctx, libraries)
 	if err != nil {
 		return nil, err
+	}
+
+	candidates := slices.Clone(preferred)
+	for _, candidate := range recent {
+		if !slices.ContainsFunc(preferred, func(item applibrary.ItemSummary) bool { return item.Item.ID == candidate.Item.ID }) {
+			candidates = append(candidates, candidate)
+		}
 	}
 
 	hero := []HeroItem{}

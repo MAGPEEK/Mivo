@@ -10,6 +10,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/rows"
@@ -92,4 +93,32 @@ type Catalog interface {
 type ScanStatus interface {
 	// Status returns the status of the current or last scan of the library.
 	Status(libraryID string) appscan.Status
+}
+
+// WatchRowRequest asks for the item IDs of a watch row of one profile. LibraryID limits the
+// row to one library; empty means all. Limit is the most IDs wanted, already capped at the
+// row's maximum.
+type WatchRowRequest struct {
+	ProfileID string
+	LibraryID string
+	Limit     int
+}
+
+// WatchRows yields the IDs of the profile's watch rows in display order. Implemented by the
+// watch store (M7-10). The IDs are not filtered by what the viewer may see: the rows read their
+// summaries through the restricted SummaryReader, which leaves hidden items out.
+type WatchRows interface {
+	// ContinueWatching returns the in-progress items of the profile that are not hidden and
+	// were played within watch.ContinueWatchingWindow, most recently played first, per show
+	// only the most recently played episode.
+	ContinueWatching(ctx context.Context, request WatchRowRequest) ([]string, error)
+	// UpNext returns the next unwatched episode of each show the profile is watching.
+	UpNext(ctx context.Context, request WatchRowRequest) ([]string, error)
+}
+
+// ItemStates decorates the cards of the watch rows with the profile's viewer state.
+// Implemented by app/watch.Service.
+type ItemStates interface {
+	// States returns the viewer's watch state of the listed items, keyed by item ID.
+	States(ctx context.Context, items []appwatch.ItemRef) (map[string]appwatch.ItemState, error)
 }

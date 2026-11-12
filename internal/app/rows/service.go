@@ -6,6 +6,7 @@ import (
 	"time"
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
@@ -24,6 +25,8 @@ type Item struct {
 	SeasonNumber    library.OptionalNumber
 	ShowTitle       string
 	NewEpisodeCount int
+	// ViewerState is the profile's watch state; set on the cards of the watch rows only.
+	ViewerState *appwatch.ItemState
 }
 
 // Row is one row with its first items. SeeAll is the Browse pivot query of the row's library
@@ -78,6 +81,11 @@ type Dependencies struct {
 	Scans     ScanStatus
 	// Clock tells the date that seeds the genre rotation; the server's local time.
 	Clock func() time.Time
+	// Watch and States feed the "continueWatching" and "upNext" rows (M7-19). Both are
+	// optional; without Watch the watch rows are not produced, without States their cards
+	// carry no viewer state.
+	Watch  WatchRows
+	States ItemStates
 }
 
 // Service generates the rows. It is safe for concurrent use.
@@ -88,6 +96,8 @@ type Service struct {
 	catalog   Catalog
 	scans     ScanStatus
 	clock     func() time.Time
+	watch     WatchRows
+	states    ItemStates
 }
 
 // NewService validates the dependencies and returns a Service. A missing dependency is a
@@ -100,6 +110,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 	return &Service{
 		libraries: dependencies.Libraries, rows: dependencies.Rows, summaries: dependencies.Summaries,
 		catalog: dependencies.Catalog, scans: dependencies.Scans, clock: dependencies.Clock,
+		watch: dependencies.Watch, states: dependencies.States,
 	}, nil
 }
 
