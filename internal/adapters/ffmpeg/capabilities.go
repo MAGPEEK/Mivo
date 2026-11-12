@@ -191,6 +191,11 @@ func (o capabilityOutputs) parse() (playback.ServerCapabilities, error) {
 		capabilities.AACEncoder = playback.EncoderAAC
 	}
 
+	// The lossless target of DSD and hi-res audio (ADR 0030 section 4).
+	if hasCodec(encoders, playback.EncoderFLAC, encoderKindAudio) {
+		capabilities.FLACEncoder = playback.EncoderFLAC
+	}
+
 	return capabilities, nil
 }
 

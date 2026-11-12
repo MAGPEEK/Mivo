@@ -36,6 +36,7 @@ func TestCapabilityOutputsParseFixtures(t *testing.T) {
 				HLSMuxing:     true,
 				H264Encoder:   playback.EncoderLibx264,
 				AACEncoder:    playback.EncoderAAC,
+				FLACEncoder:   playback.EncoderFLAC,
 			},
 		},
 		{
@@ -45,6 +46,7 @@ func TestCapabilityOutputsParseFixtures(t *testing.T) {
 				HLSMuxing:     true,
 				H264Encoder:   playback.EncoderLibx264,
 				AACEncoder:    playback.EncoderAAC,
+				FLACEncoder:   playback.EncoderFLAC,
 			},
 		},
 	}

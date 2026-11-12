@@ -100,6 +100,9 @@ type HLSJob struct {
 	Preset string
 	// Threads caps the encoder threads of a video transcode; 0 leaves the count to FFmpeg.
 	Threads int
+	// SoxResampler resamples audio with soxr instead of FFmpeg's default resampler; set it
+	// from HasSoxResampler, because FFmpeg builds without libsoxr reject the option.
+	SoxResampler bool
 }
 
 // isX264Preset reports whether name is a preset HLSJob.Preset accepts: the ones config allows
@@ -117,13 +120,15 @@ func isX264Preset(name string) bool {
 type encoderSettings struct {
 	preset  string
 	threads int
+	// soxResampler selects the soxr resampler for audio sample-rate changes.
+	soxResampler bool
 	// audioBitRate is what the audio of the plan takes from a bit-rate cap, in bits per second.
 	audioBitRate int64
 }
 
 // settings validates the tuning options of job and fills in the default preset.
 func (job HLSJob) settings() (encoderSettings, error) {
-	settings := encoderSettings{preset: job.Preset, threads: job.Threads}
+	settings := encoderSettings{preset: job.Preset, threads: job.Threads, soxResampler: job.SoxResampler}
 
 	if settings.preset == "" {
 		settings.preset = x264Preset
@@ -330,7 +335,7 @@ func (streams hlsStreams) encodingArguments(settings encoderSettings) ([]string,
 	}
 
 	if streams.audio != nil {
-		audio, err := audioArguments(*streams.audio)
+		audio, err := audioArguments(*streams.audio, settings)
 		if err != nil {
 			return nil, err
 		}
@@ -403,41 +408,4 @@ func scaleDimension(dimension int) string {
 	}
 
 	return strconv.Itoa(dimension)
-}
-
-// audioArguments copies the audio or encodes it to AAC with the planned channel count.
-func audioArguments(decision playback.StreamDecision) ([]string, error) {
-	if decision.Action == playback.ActionCopy {
-		if decision.TargetCodec == aacCodec {
-			return []string{"-c:a", copyCodec, "-bsf:a", adtsToMP4Bitstream}, nil
-		}
-
-		return []string{"-c:a", copyCodec}, nil
-	}
-
-	if decision.Encoder != playback.EncoderAAC || decision.TargetCodec != playback.TranscodeAudioCodec {
-		return nil, fmt.Errorf("audio: no arguments for encoder %q to %q: %w",
-			decision.Encoder, decision.TargetCodec, domain.ErrUnsupported)
-	}
-
-	if decision.TargetChannels <= 0 {
-		return nil, fmt.Errorf("audio: invalid channel count %d: %w", decision.TargetChannels, domain.ErrInvalid)
-	}
-
-	return []string{
-		"-c:a", playback.EncoderAAC, "-ac", strconv.Itoa(decision.TargetChannels), "-b:a", aacBitRate(decision.TargetChannels),
-	}, nil
-}
-
-// aacBitRate scales with the layout: 5.1 at the stereo rate would starve every channel.
-func aacBitRate(channels int) string {
-	return strconv.FormatInt(aacBitsPerSecond(channels)/bitsPerKilobit, 10) + "k"
-}
-
-func aacBitsPerSecond(channels int) int64 {
-	if channels > playback.TranscodeStereoChannels {
-		return aacSurroundBitsPerSecond
-	}
-
-	return aacStereoBitsPerSecond
 }
