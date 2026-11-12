@@ -29,6 +29,12 @@ export const transcoderSessionsQueryKey = ["playback", "sessions"] as const;
 /** How often status and session list ask again while the page is visible. */
 export const transcoderPollMilliseconds = 5000;
 
+/**
+ * How long the page waits for a new test result. A failed detection keeps the old
+ * `lastTestedAt`, so without a limit the page would wait for ever.
+ */
+export const testWatchMilliseconds = 60_000;
+
 /** How often the status is read while a hardware test runs. */
 export const testPollMilliseconds = 1000;
 

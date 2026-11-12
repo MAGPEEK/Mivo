@@ -251,6 +251,15 @@
     "devices": {
       "label": "Getestete Encoder",
       "none": "Keine gefunden – es wird per Software transcodiert.",
+      "message": {
+        "device_not_found": "Das Encoder-Gerät wurde nicht gefunden.",
+        "permission_denied": "Der Server darf das Encoder-Gerät nicht verwenden.",
+        "driver_failed": "Der Grafiktreiber konnte den Encoder nicht starten.",
+        "unsupported": "Der Encoder unterstützt diese Art von Test nicht.",
+        "timeout": "Der Test-Encode hat zu lange gedauert.",
+        "failed": "Der Test-Encode ist fehlgeschlagen.",
+        "no_render_node": "Es ist kein Render-Gerät verfügbar."
+      },
       "noneUsable": "Keiner davon ist nutzbar – es wird per Software transcodiert.",
       "result": {
         "usable": "Nutzbar",
@@ -262,6 +271,8 @@
       "button": "Hardwarebeschleunigung testen",
       "running": "Test läuft …",
       "runningStatus": "Der Hardwaretest läuft.",
+      "alreadyRunning": "Ein Test läuft bereits. Diese Seite wartet auf sein Ergebnis.",
+      "noResult": "Der Test endete ohne neues Ergebnis. Prüfen Sie das Server-Protokoll und versuchen Sie es erneut.",
       "finished": "Der Hardwaretest ist abgeschlossen. Die Ergebnisse oben sind aktuell.",
       "failed": "Der Hardwaretest konnte nicht gestartet werden."
     },
@@ -299,7 +310,11 @@
       "unknownValue": "–",
       "stop": "Beenden",
       "stopLabel": "{{title}} beenden",
-      "stopping": "Wird beendet …"
+      "stopDialog": {
+        "title": "„{{title}}“ beenden?",
+        "description": "Das beendet die Wiedergabe auf {{client}}. Der Zuschauer muss sie neu starten.",
+        "cancel": "Abbrechen"
+      }
     }
   }
 }

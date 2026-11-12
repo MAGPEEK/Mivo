@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useApiClient } from "../../../../shared/api";
 import {
@@ -7,6 +7,7 @@ import {
   isTestRunning,
   startHardwareTest,
   testPollMilliseconds,
+  testWatchMilliseconds,
   transcoderPollMilliseconds,
   transcoderStatusQueryKey,
   transcoderStatusQueryOptions,
@@ -18,10 +19,14 @@ export type TestFailure = "forbidden" | "failed" | null;
 
 /** State and action of the "Test hardware acceleration" button. */
 export interface HardwareTest {
-  /** True from the click until the status carries a new `lastTestedAt`. */
+  /** True from the click until the status carries a new `lastTestedAt` or the watch expires. */
   readonly running: boolean;
-  /** True once a run that this page watched has finished. */
+  /** True once a run that this page watched has finished with a new result. */
   readonly finished: boolean;
+  /** True when the watch expired without a new result, for example because detection failed. */
+  readonly stalled: boolean;
+  /** True while the page waits for a run that was active already (409). */
+  readonly alreadyRunning: boolean;
   readonly failure: TestFailure;
   readonly start: () => void;
 }
@@ -33,14 +38,19 @@ export type TranscoderLoad =
   | { readonly state: "error"; readonly retry: () => void }
   | { readonly state: "ready"; readonly status: TranscoderStatus; readonly test: HardwareTest };
 
-// The server reports a finished run only by a new lastTestedAt, so the value before the run is
-// what later statuses are compared with. `undefined` inside means "never tested before".
-interface Baseline {
+// The server reports a finished run only by a new lastTestedAt, and keeps the old one when
+// detection fails; so the watch ends by a new value or by a time limit (`expired`).
+interface Watch {
   readonly lastTestedAt: string | undefined;
+  readonly expired: boolean;
 }
 
-function isWatchedRunActive(baseline: Baseline | null, status: TranscoderStatus | undefined) {
-  return baseline !== null && status !== undefined && status.lastTestedAt === baseline.lastTestedAt;
+function isUnchanged(watch: Watch | null, status: TranscoderStatus | undefined): boolean {
+  return watch !== null && status !== undefined && status.lastTestedAt === watch.lastTestedAt;
+}
+
+function isWatchedRunActive(watch: Watch | null, status: TranscoderStatus | undefined): boolean {
+  return watch !== null && !watch.expired && isUnchanged(watch, status);
 }
 
 function failureOf(error: Error | null): TestFailure {
@@ -50,10 +60,24 @@ function failureOf(error: Error | null): TestFailure {
   return isForbidden(error) ? "forbidden" : "failed";
 }
 
+function useWatchExpiry(watch: Watch | null, setWatch: (watch: Watch) => void) {
+  useEffect(() => {
+    if (watch === null || watch.expired) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      setWatch({ ...watch, expired: true });
+    }, testWatchMilliseconds);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [watch, setWatch]);
+}
+
 function useHardwareTest(
   status: TranscoderStatus | undefined,
-  baseline: Baseline | null,
-  watch: (baseline: Baseline) => void,
+  watch: Watch | null,
+  setWatch: (watch: Watch) => void,
 ): HardwareTest {
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -61,20 +85,23 @@ function useHardwareTest(
     mutationFn: () => startHardwareTest(client),
     onSuccess: (before) => {
       queryClient.setQueryData(transcoderStatusQueryKey, before);
-      watch({ lastTestedAt: before.lastTestedAt });
+      setWatch({ lastTestedAt: before.lastTestedAt, expired: false });
     },
     onError: (error: Error) => {
       // A run is active already (409): wait for that one instead of reporting a failure.
       if (isTestRunning(error) && status !== undefined) {
-        watch({ lastTestedAt: status.lastTestedAt });
+        setWatch({ lastTestedAt: status.lastTestedAt, expired: false });
       }
     },
   });
-  const running = mutation.isPending || isWatchedRunActive(baseline, status);
+  const running = mutation.isPending || isWatchedRunActive(watch, status);
   const failure = failureOf(mutation.error);
+  const stalled = watch !== null && watch.expired && isUnchanged(watch, status);
   return {
     running,
-    finished: baseline !== null && !running && failure === null,
+    finished: watch !== null && !running && !stalled && failure === null,
+    stalled,
+    alreadyRunning: running && isTestRunning(mutation.error),
     failure,
     start: () => {
       mutation.mutate();
@@ -88,13 +115,14 @@ function useHardwareTest(
  */
 export function useTranscoderStatus(): TranscoderLoad {
   const client = useApiClient();
-  const [baseline, setBaseline] = useState<Baseline | null>(null);
+  const [watch, setWatch] = useState<Watch | null>(null);
+  useWatchExpiry(watch, setWatch);
   const query = useQuery(
     transcoderStatusQueryOptions(client, (status) =>
-      isWatchedRunActive(baseline, status) ? testPollMilliseconds : transcoderPollMilliseconds,
+      isWatchedRunActive(watch, status) ? testPollMilliseconds : transcoderPollMilliseconds,
     ),
   );
-  const test = useHardwareTest(query.data, baseline, setBaseline);
+  const test = useHardwareTest(query.data, watch, setWatch);
   if (query.data !== undefined) {
     return { state: "ready", status: query.data, test };
   }

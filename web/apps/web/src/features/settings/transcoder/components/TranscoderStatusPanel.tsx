@@ -1,3 +1,4 @@
+import type { TFunction } from "i18next";
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -24,6 +25,24 @@ const resultKeys = {
   unavailable: "transcoder.devices.result.unavailable",
   degraded: "transcoder.devices.result.degraded",
 } as const;
+
+// The server sends path-free tokens (ADR 0030); known ones are translated.
+const messageKeys = {
+  device_not_found: "transcoder.devices.message.device_not_found",
+  permission_denied: "transcoder.devices.message.permission_denied",
+  driver_failed: "transcoder.devices.message.driver_failed",
+  unsupported: "transcoder.devices.message.unsupported",
+  timeout: "transcoder.devices.message.timeout",
+  failed: "transcoder.devices.message.failed",
+  no_render_node: "transcoder.devices.message.no_render_node",
+} as const;
+
+// An unknown token (a newer server) is shown as it is, as plain text.
+function messageText(message: string, t: TFunction<typeof settingsNamespace>): string {
+  return Object.hasOwn(messageKeys, message)
+    ? t(messageKeys[message as keyof typeof messageKeys])
+    : message;
+}
 
 // The dot repeats the result for sighted users; the text carries it for everyone.
 const resultDotClasses: Readonly<Record<DeviceResult, string>> = {
@@ -81,8 +100,9 @@ function DeviceRow({ device }: { readonly device: TranscoderDevice }) {
           {t(resultKeys[result])}
         </span>
       </div>
-      {/* Server text, English only and free of paths; shown as plain text. */}
-      {device.message !== undefined && <p className="text-text-muted">{device.message}</p>}
+      {device.message !== undefined && (
+        <p className="text-text-muted">{messageText(device.message, t)}</p>
+      )}
     </li>
   );
 }

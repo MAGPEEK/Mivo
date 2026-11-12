@@ -1,10 +1,14 @@
 import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Skeleton, secondaryButtonClass } from "../../../../shared/ui";
+import { ConfirmDialog, Skeleton, secondaryButtonClass } from "../../../../shared/ui";
 import { settingsNamespace } from "../../locales";
 import type { SessionSummary } from "../api/transcoderApi";
-import { useTranscodeSessions, type SessionsLoad } from "../hooks/useTranscodeSessions";
+import {
+  useTranscodeSessions,
+  type SessionStop,
+  type SessionsLoad,
+} from "../hooks/useTranscodeSessions";
 import { bitRateParts, isTooSlow, speedValue } from "../lib/transcoderView";
 
 // Literal keys, so a misspelled one fails type checking; values not listed read "Unknown".
@@ -67,11 +71,10 @@ function SpeedText({ session }: { readonly session: SessionSummary }) {
 
 interface SessionRowProps {
   readonly session: SessionSummary;
-  readonly stopping: boolean;
-  readonly onStop: (sessionId: string) => void;
+  readonly onStop: (session: SessionSummary) => void;
 }
 
-function SessionRow({ session, stopping, onStop }: SessionRowProps) {
+function SessionRow({ session, onStop }: SessionRowProps) {
   const { t } = useTranslation(settingsNamespace);
   const modeKey = Object.hasOwn(modeKeys, session.mode)
     ? modeKeys[session.mode]
@@ -96,16 +99,13 @@ function SessionRow({ session, stopping, onStop }: SessionRowProps) {
       <td className={cellClass}>
         <button
           type="button"
-          aria-disabled={stopping}
           aria-label={t("transcoder.sessions.stopLabel", { title: session.title })}
           onClick={() => {
-            if (!stopping) {
-              onStop(session.id);
-            }
+            onStop(session);
           }}
           className={secondaryButtonClass}
         >
-          {stopping ? t("transcoder.sessions.stopping") : t("transcoder.sessions.stop")}
+          {t("transcoder.sessions.stop")}
         </button>
       </td>
     </tr>
@@ -122,10 +122,42 @@ const columns = [
   { key: "actions", label: "transcoder.sessions.column.actions" },
 ] as const;
 
+function StopDialog({ stop }: { readonly stop: SessionStop }) {
+  const { t } = useTranslation(settingsNamespace);
+  if (stop.target === null) {
+    return null;
+  }
+  let error: string | undefined;
+  if (stop.failure === "forbidden") {
+    error = t("transcoder.forbidden");
+  } else if (stop.failure === "failed") {
+    error = t("transcoder.sessions.stopFailed");
+  }
+  return (
+    <ConfirmDialog
+      title={t("transcoder.sessions.stopDialog.title", { title: stop.target.title })}
+      description={t("transcoder.sessions.stopDialog.description", {
+        client: stop.target.clientName,
+      })}
+      confirmLabel={t("transcoder.sessions.stop")}
+      cancelLabel={t("transcoder.sessions.stopDialog.cancel")}
+      onConfirm={stop.confirm}
+      onCancel={stop.cancel}
+      pending={stop.pending}
+      error={error}
+    />
+  );
+}
+
 function SessionTable({ load }: { readonly load: Extract<SessionsLoad, { state: "ready" }> }) {
   const { t } = useTranslation(settingsNamespace);
   if (load.sessions.length === 0) {
-    return <p className="text-text-muted">{t("transcoder.sessions.empty")}</p>;
+    return (
+      <>
+        <p className="text-text-muted">{t("transcoder.sessions.empty")}</p>
+        <StopDialog stop={load.stop} />
+      </>
+    );
   }
   return (
     <div className="overflow-x-auto">
@@ -141,20 +173,11 @@ function SessionTable({ load }: { readonly load: Extract<SessionsLoad, { state: 
         </thead>
         <tbody>
           {load.sessions.map((session) => (
-            <SessionRow
-              key={session.id}
-              session={session}
-              stopping={load.stoppingId === session.id}
-              onStop={load.stop}
-            />
+            <SessionRow key={session.id} session={session} onStop={load.stop.ask} />
           ))}
         </tbody>
       </table>
-      {load.stopFailed && (
-        <p role="alert" className="mt-3">
-          {t("transcoder.sessions.stopFailed")}
-        </p>
-      )}
+      <StopDialog stop={load.stop} />
     </div>
   );
 }

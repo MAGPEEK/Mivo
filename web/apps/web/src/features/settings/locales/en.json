@@ -251,6 +251,15 @@
     "devices": {
       "label": "Tested encoders",
       "none": "None found – software transcoding is used.",
+      "message": {
+        "device_not_found": "The encoder device was not found.",
+        "permission_denied": "The server may not use the encoder device.",
+        "driver_failed": "The graphics driver failed to start the encoder.",
+        "unsupported": "The encoder does not support this kind of test.",
+        "timeout": "The test encode timed out.",
+        "failed": "The test encode failed.",
+        "no_render_node": "No render device is available."
+      },
       "noneUsable": "None of them is usable – software transcoding is used.",
       "result": {
         "usable": "Usable",
@@ -262,6 +271,8 @@
       "button": "Test hardware acceleration",
       "running": "Testing…",
       "runningStatus": "The hardware test is running.",
+      "alreadyRunning": "A test is already running. This page waits for its result.",
+      "noResult": "The test ended without a new result. Check the server log and try again.",
       "finished": "The hardware test finished. The results above are up to date.",
       "failed": "The hardware test could not be started."
     },
@@ -299,7 +310,11 @@
       "unknownValue": "–",
       "stop": "Stop",
       "stopLabel": "Stop {{title}}",
-      "stopping": "Stopping…"
+      "stopDialog": {
+        "title": "Stop “{{title}}”?",
+        "description": "This ends the playback on {{client}}. The viewer has to start it again.",
+        "cancel": "Cancel"
+      }
     }
   }
 }

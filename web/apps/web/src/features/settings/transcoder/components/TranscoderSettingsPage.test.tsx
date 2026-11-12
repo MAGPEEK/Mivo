@@ -10,6 +10,8 @@ import {
 } from "../../../../test/fakeApi";
 import { renderApp } from "../../../../test/renderApp";
 import {
+  testPollMilliseconds,
+  testWatchMilliseconds,
   transcoderPollMilliseconds,
   type SessionSummary,
   type TranscoderDevice,
@@ -46,7 +48,7 @@ const testedStatus: TranscoderStatus = {
       codec: "h264",
       usable: false,
       degraded: false,
-      message: "The test encode timed out.",
+      message: "timeout",
     },
     {
       api: "qsv",
@@ -89,6 +91,7 @@ interface ServerOptions {
   readonly status?: () => Response;
   readonly sessions?: () => Response;
   readonly test?: () => Response | undefined;
+  readonly stop?: () => Response | undefined;
 }
 
 function transcoderServer(options: ServerOptions = {}) {
@@ -114,6 +117,10 @@ function transcoderServer(options: ServerOptions = {}) {
       method: "DELETE",
       path: `${sessionsPath}/:sessionId`,
       respond: ({ params }) => {
+        const override = options.stop?.();
+        if (override !== undefined) {
+          return override;
+        }
         stopped.push(params["sessionId"] ?? "");
         sessions = sessions.filter((session) => session.id !== params["sessionId"]);
         return new Response(null, { status: 204 });
@@ -246,6 +253,42 @@ describe("TranscoderSettingsPage", () => {
       true,
     );
     expect(screen.queryByText("The hardware test could not be started.")).toBeNull();
+    expect(
+      screen.getByText("A test is already running. This page waits for its result."),
+    ).toBeTruthy();
+  });
+
+  it("gives up waiting after a minute when a run brings no new result", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // The status keeps its lastTestedAt, as the server does when detection fails.
+      const { server } = transcoderServer();
+      renderApp(transcoderPath, { fetch: server.fetch });
+      await findPage();
+      fireEvent.click(screen.getByRole("button", { name: "Test hardware acceleration" }));
+      expect(await screen.findByRole("button", { name: "Testing…" })).toHaveProperty(
+        "disabled",
+        true,
+      );
+
+      await vi.advanceTimersByTimeAsync(testWatchMilliseconds);
+
+      expect(
+        await screen.findByText(
+          "The test ended without a new result. Check the server log and try again.",
+        ),
+      ).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Test hardware acceleration" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+      const polls = server.countRequests("GET", statusPath);
+      await vi.advanceTimersByTimeAsync(testPollMilliseconds * 3);
+      // Back to the 5 s poll: at most one request in 3 s, not one per second.
+      expect(server.countRequests("GET", statusPath)).toBeLessThanOrEqual(polls + 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reports a test that could not be started", async () => {
@@ -272,12 +315,55 @@ describe("TranscoderSettingsPage", () => {
     await findPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Stop Big Buck Bunny" }));
+    const dialog = await screen.findByRole("dialog", { name: "Stop “Big Buck Bunny”?" });
+    expect(stopped).toEqual([]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stop" }));
 
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Stop Big Buck Bunny" })).toBeNull();
     });
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(stopped).toEqual([transcodeSession.id]);
     expect(screen.getByRole("button", { name: "Stop Sintel" })).toBeTruthy();
+  });
+
+  it("keeps the session when the confirmation is cancelled", async () => {
+    const { server, stopped } = transcoderServer();
+    renderApp(transcoderPath, { fetch: server.fetch });
+    await findPage();
+
+    const opener = await screen.findByRole("button", { name: "Stop Big Buck Bunny" });
+    fireEvent.click(opener);
+    fireEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Cancel" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(stopped).toEqual([]);
+    expect(screen.getByRole("button", { name: "Stop Big Buck Bunny" })).toBe(opener);
+  });
+
+  it.each([
+    [forbiddenStatus, "forbidden", "The transcoder can only be managed by an admin"],
+    [serverErrorStatus, "internal_error", "The session could not be stopped."],
+  ])("reports a failed stop (%s) inside the dialog", async (status, code, text) => {
+    const { server } = transcoderServer({ stop: () => problemResponse(status, code) });
+    renderApp(transcoderPath, { fetch: server.fetch });
+    await findPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Stop Big Buck Bunny" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stop" }));
+
+    await waitFor(() => {
+      expect(within(dialog).getByRole("alert").textContent).toContain(text);
+    });
+    // Cancelling clears the failure; asking again starts clean.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop Big Buck Bunny" }));
+    expect((await screen.findByRole("dialog")).querySelector("[role=alert]")?.textContent).toBe("");
   });
 
   it("says no stream runs when the list is empty", async () => {
@@ -376,5 +462,14 @@ describe("TranscoderSettingsPage", () => {
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Aktive Sitzungen" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "Big Buck Bunny beenden" })).toBeTruthy();
+  });
+
+  it("translates known device tokens and shows unknown ones as they are", async () => {
+    const { server } = transcoderServer();
+    renderApp(transcoderPath, { fetch: server.fetch, languages: ["de"] });
+
+    expect(await screen.findByText("Der Test-Encode hat zu lange gedauert.")).toBeTruthy();
+    // A token of a newer server has no key; it stays plain text.
+    expect(screen.getByText("<b>No device</b>")).toBeTruthy();
   });
 });

@@ -17,11 +17,20 @@ function Outcome({ test }: { readonly test: HardwareTest }) {
       </p>
     );
   }
-  // The live region stays mounted so a screen reader hears both texts when they change.
+  // The live region stays mounted so a screen reader hears the texts when they change.
+  let text = "";
+  if (test.running) {
+    text = test.alreadyRunning
+      ? t("transcoder.test.alreadyRunning")
+      : t("transcoder.test.runningStatus");
+  } else if (test.stalled) {
+    text = t("transcoder.test.noResult");
+  } else if (test.finished) {
+    text = t("transcoder.test.finished");
+  }
   return (
     <p role="status" className="text-sm text-text-muted">
-      {test.running && t("transcoder.test.runningStatus")}
-      {test.finished && t("transcoder.test.finished")}
+      {text}
     </p>
   );
 }
