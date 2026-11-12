@@ -8,6 +8,7 @@ A plan whose video encoder is hardware produces the matching FFmpeg arguments pe
 software without the viewer noticing more than a delay (ADR 0030 §5).
 
 ## Acceptance criteria
+- [ ] With a bit-rate cap (Job.MaxBitrate) each hardware builder applies the cap through the shared `bitrateArguments`/`videoBudget` of M4-11 (nvenc `-b:v`/`-maxrate`/`-bufsize`, qsv, vaapi, amf per API) with golden arguments per API; an uncapped job is unchanged (moved from M4-11 by the orchestrator 2026-11-12).
 - [ ] Per API an argument builder: VAAPI (`-vaapi_device`, `format=nv12,hwupload`, `h264_vaapi -qp`), QSV (`-init_hw_device qsv`,
       `h264_qsv`), NVENC (`h264_nvenc -preset p4 -rc vbr -cq`), AMF (`h264_amf -quality speed`); all keep `-g`/`-keyint` forced-keyframe
       behaviour of M2 (segment boundaries), 8-bit 4:2:0 output and the same scaling target.

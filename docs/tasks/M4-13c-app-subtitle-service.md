@@ -8,7 +8,7 @@ The web player fetches a WebVTT for any text track of a file; conversion happens
 
 ## Acceptance criteria
 - [ ] `Service.WebVTT(ctx, fileID, trackID) (ReadSeekCloser-like handle, modTime, error)` resolves the track (embedded or external), converts
-      through port `SubtitleConverter`, stores under `<cache>/subtitles/<fileID>/<trackID>-<sourceStamp>.vtt`, serves the cached file on repeat.
+      through port `Converter` (named so in the code), stores under `<cache>/subtitles/<fileID>/<sha1(trackID)[:16]>-<sha256(sourceStamp)[:16]>.vtt` (digest names: track ids like `s:2`/`x:...` and stamps are not valid Windows file names; amended by the orchestrator 2026-11-12), serves the cached file on repeat.
 - [ ] `sourceStamp` = media file size+mtime (+ external file size+mtime): a changed source misses the cache.
 - [ ] Concurrent requests for the same track convert once (singleflight); at most 2 conversions at a time (weak NAS).
 - [ ] Image formats → `domain.ErrInvalid`; unknown track → `ErrNotFound`.
