@@ -23,6 +23,9 @@ type ServerCapabilities struct {
 	// FFmpeg lacks them, for example a minimal build on a weak NAS.
 	H264Encoder string
 	AACEncoder  string
+	// BurnInText reports that FFmpeg has the subtitles filter (libass), which burning in a
+	// text subtitle needs. Image subtitles need only the overlay filter every build has.
+	BurnInText bool
 	// HardwareEncoders are the hardware encoders the FFmpeg build lists, each with the result
 	// of its test encode (ADR 0030 §5). Empty on a server without a GPU, which is a normal
 	// result and not a fault.

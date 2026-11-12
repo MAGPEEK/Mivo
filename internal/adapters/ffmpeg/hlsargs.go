@@ -103,6 +103,9 @@ type HLSJob struct {
 	// SoxResampler resamples audio with soxr instead of FFmpeg's default resampler; set it
 	// from HasSoxResampler, because FFmpeg builds without libsoxr reject the option.
 	SoxResampler bool
+	// BurnIn is the subtitle drawn into the video (burnin.go); nil when the plan shows none
+	// that way. A plan that burns in requires it.
+	BurnIn *BurnIn
 }
 
 // isX264Preset reports whether name is a preset HLSJob.Preset accepts: the ones config allows
@@ -163,6 +166,11 @@ func HLSArguments(job HLSJob) ([]string, error) {
 		return nil, fmt.Errorf("hls arguments: %w", err)
 	}
 
+	burnInArguments, err := streams.applyBurnIn(job.Plan, job.BurnIn)
+	if err != nil {
+		return nil, fmt.Errorf("hls arguments: %w", err)
+	}
+
 	encoding, err := streams.encodingArguments(settings)
 	if err != nil {
 		return nil, fmt.Errorf("hls arguments: %w", err)
@@ -189,8 +197,7 @@ func HLSArguments(job HLSJob) ([]string, error) {
 		arguments = append(arguments, "-ss", formatSeconds(job.StartPosition))
 	}
 
-	arguments = append(arguments, input...)
-	arguments = append(arguments, streams.mapArguments()...)
+	arguments = slices.Concat(arguments, input, burnInArguments, streams.mapArguments())
 	arguments = append(arguments, "-sn", "-dn", "-map_metadata", disabledMapping, "-map_chapters", disabledMapping)
 	arguments = append(arguments, encoding...)
 
@@ -247,6 +254,8 @@ func hlsOutputArguments(directory string) ([]string, error) {
 type hlsStreams struct {
 	video *playback.StreamDecision
 	audio *playback.StreamDecision
+	// videoMap replaces the -map of the video, "[label]" of a filter graph (applyBurnIn).
+	videoMap string
 }
 
 // selectHLSStreams checks that plan is an HLS plan whose mode matches its stream actions
@@ -311,7 +320,9 @@ func (streams hlsStreams) mapArguments() []string {
 	var arguments []string
 
 	for _, decision := range []*playback.StreamDecision{streams.video, streams.audio} {
-		if decision != nil {
+		if decision == streams.video && streams.videoMap != "" {
+			arguments = append(arguments, "-map", streams.videoMap)
+		} else if decision != nil {
 			arguments = append(arguments, "-map", "0:"+strconv.Itoa(decision.SourceIndex))
 		}
 	}

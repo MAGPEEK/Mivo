@@ -204,9 +204,14 @@ func (p *Producer) prepare(ctx context.Context, job appplayback.Job) (preparedRu
 		inputPath = inheritedInputPath
 	}
 
+	burnIn, err := burnInFor(job.BurnInSubtitle)
+	if err != nil {
+		return preparedRun{}, err
+	}
+
 	arguments, err := HLSArguments(HLSJob{
 		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
-		Preset: p.preset, Threads: p.threads,
+		Preset: p.preset, Threads: p.threads, BurnIn: burnIn,
 	})
 	if err != nil {
 		return preparedRun{}, err

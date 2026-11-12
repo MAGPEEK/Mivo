@@ -88,6 +88,10 @@ func DetectCapabilities(ctx context.Context, ffmpegPath string, logger *slog.Log
 		logDetectionFailure(ctx, logger, err)
 	}
 
+	if err == nil {
+		capabilities.BurnInText = detectBurnInText(ctx, ffmpeg.output)
+	}
+
 	return capabilities, err
 }
 

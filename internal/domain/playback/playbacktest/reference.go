@@ -57,6 +57,7 @@ func FullCapabilities() playback.ServerCapabilities {
 		HLSMuxing:     true,
 		H264Encoder:   playback.EncoderLibx264,
 		AACEncoder:    playback.EncoderAAC,
+		BurnInText:    true,
 	}
 }
 
