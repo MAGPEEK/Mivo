@@ -76,6 +76,7 @@ func TestMediaCatalogForeignKeysCascadeAndAreIndexed(t *testing.T) {
 		{table: "auth_sessions", column: "profile_id", parent: "profiles", onDelete: "SET NULL"},
 		{table: "auth_sessions", column: "user_id", parent: "users", onDelete: "CASCADE"},
 		{table: "enrichment_queue", column: "item_id", parent: "items", onDelete: "CASCADE"},
+		{table: "external_subtitles", column: "media_file_id", parent: "media_files", onDelete: "CASCADE"},
 		{table: "item_field_locks", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_local_records", column: "item_id", parent: "items", onDelete: "CASCADE"},
 		{table: "item_match", column: "item_id", parent: "items", onDelete: "CASCADE"},

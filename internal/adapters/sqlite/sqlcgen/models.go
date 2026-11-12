@@ -54,6 +54,19 @@ type EnrichmentQueue struct {
 	ClaimedUntil sql.NullInt64
 }
 
+type ExternalSubtitle struct {
+	MediaFileID  string
+	TrackID      string
+	Ordinal      int64
+	RelativePath string
+	Format       string
+	Language     string
+	Title        string
+	Forced       int64
+	Sdh          int64
+	IsDefault    int64
+}
+
 type Item struct {
 	ID                  string
 	LibraryID           string
