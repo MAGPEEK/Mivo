@@ -57,6 +57,9 @@ type HardwareEncoder struct {
 	Device string
 	// Usable reports that the test encode completed.
 	Usable bool
+	// Decode reports that the test run also decoded H.264 on the device with this encoder, so
+	// sessions may decode in hardware too; otherwise the decode stays in software.
+	Decode bool
 	// Degraded reports that a session failed with this encoder before its first segment; it
 	// stays set until the process restarts.
 	Degraded bool

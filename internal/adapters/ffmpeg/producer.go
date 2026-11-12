@@ -16,6 +16,7 @@ import (
 
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
 const (
@@ -78,6 +79,9 @@ type ProducerOptions struct {
 	Threads int
 	// LowPriority runs FFmpeg below normal OS priority, so the web app and the scan keep CPU.
 	LowPriority bool
+	// HardwareEncoders are the tested hardware encoders (DetectHardware). A job whose plan
+	// names one is encoded with it, and falls back to software when that fails (hwfallback.go).
+	HardwareEncoders []playback.HardwareEncoder
 }
 
 // Producer runs the FFmpeg process of an HLS session (ADR 0015, ADR 0024). It implements
@@ -94,6 +98,7 @@ type Producer struct {
 	preset       string
 	threads      int
 	lowPriority  bool
+	hardware     []playback.HardwareEncoder
 }
 
 // NewProducer returns a producer that runs the ffmpeg executable of options. Errors wrap
@@ -118,6 +123,7 @@ func NewProducer(options ProducerOptions) (*Producer, error) {
 		preset:       options.Preset,
 		threads:      options.Threads,
 		lowPriority:  options.LowPriority,
+		hardware:     options.HardwareEncoders,
 	}, nil
 }
 
@@ -159,6 +165,14 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		progress:    newProgressTracker(),
 	}
 
+	if prepared.fallback != nil {
+		production.fallbackStart = func() (*process, error) {
+			return p.ffmpeg.start(processContext, withProgressArguments(prepared.fallback.arguments), processFiles{
+				stdout: production.progress, inherited: prepared.fallback.inherited, lowPriority: p.lowPriority,
+			})
+		}
+	}
+
 	if pauseSupported {
 		production.pause.signal = signalProcess
 	}
@@ -191,10 +205,13 @@ type preparedRun struct {
 	// nil when nothing does. The production calls it once the process has ended or failed
 	// to start.
 	release func()
+	// fallback is the software run that replaces a hardware run failing before its first
+	// segment; nil for every other job. Its inherited files and release are owned by release.
+	fallback *preparedRun
 }
 
-// prepare builds the run of job: from a single file, or from the clips of a disc folder or image.
-func (p *Producer) prepare(ctx context.Context, job appplayback.Job) (preparedRun, error) {
+// prepareRun builds the run of job: from a single file, or from the clips of a disc folder or image.
+func (p *Producer) prepareRun(ctx context.Context, job appplayback.Job) (preparedRun, error) {
 	if job.Layout.IsDisc() {
 		return p.prepareDisc(ctx, job)
 	}
@@ -211,7 +228,7 @@ func (p *Producer) prepare(ctx context.Context, job appplayback.Job) (preparedRu
 
 	arguments, err := HLSArguments(HLSJob{
 		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
-		Preset: p.preset, Threads: p.threads, BurnIn: burnIn,
+		Preset: p.preset, Threads: p.threads, BurnIn: burnIn, HardwareEncoders: p.hardware,
 	})
 	if err != nil {
 		return preparedRun{}, err
@@ -268,6 +285,11 @@ type production struct {
 	progress *progressTracker
 	// pause freezes and continues the process (pause.go).
 	pause pauseControl
+	// fallbackStart starts the software run after a hardware run failed (hwfallback.go); nil
+	// when the job is not a hardware transcode.
+	fallbackStart func() (*process, error)
+	// fellBack is set once the software run replaced a failed hardware run.
+	fellBack atomic.Bool
 }
 
 // Progress implements appplayback.ProgressReporter: the latest progress FFmpeg reported, at
@@ -381,6 +403,7 @@ func (p *production) run(ctx context.Context, start func() (*process, error), st
 // under, used for logging only.
 func (p *production) supervise(ctx context.Context, started *process) {
 	waitErr := started.wait()
+	started, waitErr = p.fallBack(ctx, started, waitErr)
 	p.result = p.outcome(ctx, started, waitErr)
 	p.cancel()
 	p.releaseInput()

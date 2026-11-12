@@ -27,6 +27,9 @@ const (
 	qsvName   = "h264_qsv"
 	vaapiName = "h264_vaapi"
 	amfName   = "h264_amf"
+
+	// fakeDecodeSuffix selects the outcome of an encoder's decode test.
+	fakeDecodeSuffix = "+decode"
 )
 
 // fakeHardwareConfig is what the fake prints and how each encoder's test encode ends.
@@ -89,7 +92,29 @@ func fakeHardwareEncode(arguments []string, config fakeHardwareConfig) int {
 		return 1
 	}
 
-	outcome := config.Outcomes[arguments[position+1]]
+	name := arguments[position+1]
+
+	// The sample of the decode tests: some bytes on standard output.
+	if name == "libx264" {
+		if outcome, found := config.Outcomes[name]; found && outcome.Exit != 0 {
+			fmt.Fprint(os.Stderr, outcome.Stderr)
+
+			return outcome.Exit
+		}
+
+		if _, err := io.WriteString(os.Stdout, "sample"); err != nil {
+			return 1
+		}
+
+		return 0
+	}
+
+	// A decode test names its outcome name+fakeDecodeSuffix.
+	if slices.Contains(arguments, "-hwaccel") {
+		name += fakeDecodeSuffix
+	}
+
+	outcome := config.Outcomes[name]
 	if outcome.Hang {
 		time.Sleep(fakeHangDuration)
 	}
@@ -289,7 +314,7 @@ func TestDetectHardwareReportsSuccessAndFailure(t *testing.T) {
 	want := []HardwareResult{
 		{Encoder: playback.HardwareEncoder{API: playback.HardwareAPINVENC, Name: nvencName, Codec: "h264"}, Message: HardwareMessageDriverFailed},
 		{Encoder: playback.HardwareEncoder{API: playback.HardwareAPIQSV, Name: qsvName, Codec: "h264", Device: node}, Message: HardwareMessageDeviceNotFound},
-		{Encoder: playback.HardwareEncoder{API: playback.HardwareAPIVAAPI, Name: vaapiName, Codec: "h264", Device: node, Usable: true}},
+		{Encoder: playback.HardwareEncoder{API: playback.HardwareAPIVAAPI, Name: vaapiName, Codec: "h264", Device: node, Usable: true, Decode: true}},
 		{Encoder: playback.HardwareEncoder{API: playback.HardwareAPIAMF, Name: amfName, Codec: "h264"}, Message: HardwareMessageFailed},
 	}
 
@@ -297,10 +322,10 @@ func TestDetectHardwareReportsSuccessAndFailure(t *testing.T) {
 		t.Fatalf("results = %+v, want %+v", results, want)
 	}
 
-	// Two listings, then one test encode per candidate, in order.
+	// Two listings, one test encode per candidate, in order, plus the decode sample and the decode test of VAAPI.
 	recorded := calls()
-	if len(recorded) != 2+len(want) {
-		t.Fatalf("calls = %d, want %d: %v", len(recorded), 2+len(want), recorded)
+	if len(recorded) != 2+len(want)+2 {
+		t.Fatalf("calls = %d, want %d: %v", len(recorded), 2+len(want)+2, recorded)
 	}
 }
 
@@ -389,9 +414,9 @@ func TestDetectHardwareSkipsRenderNodeEncodersWithoutDRM(t *testing.T) {
 		}
 	}
 
-	// Listings plus the single NVENC test encode.
-	if got := len(calls()); got != 3 {
-		t.Fatalf("calls = %d, want 3: %v", got, calls())
+	// Listings plus the single NVENC test encode, the decode sample and the NVENC decode test.
+	if got := len(calls()); got != 5 {
+		t.Fatalf("calls = %d, want 5: %v", got, calls())
 	}
 }
 

@@ -31,12 +31,14 @@ func (c *pauseControl) supported() bool {
 	return c.signal != nil
 }
 
-// bind sets the process to signal once it started.
+// bind sets the process to signal once it started. A new process runs, even when the one it
+// replaces (the software retry of a failed hardware run) was frozen.
 func (c *pauseControl) bind(process *os.Process) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	c.process = process
+	c.paused = false
 }
 
 // set freezes (paused true) or continues the process; repeating the current state does

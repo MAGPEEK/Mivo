@@ -26,6 +26,11 @@ const (
 	// temporary name, and exits cleanly: FFmpeg on Windows when a reader held the playlist
 	// during its last rename.
 	fakeModeHLSLostFinalRename = "hls-lost-final-rename"
+	// fakeModeHLSFailHardware fails like a broken GPU driver, before any segment, when the
+	// arguments name a hardware encoder, and runs like fakeModeHLSLive otherwise.
+	fakeModeHLSFailHardware = "hls-fail-hardware"
+	// fakeModeHLSFailAlways fails before any segment whatever the arguments say.
+	fakeModeHLSFailAlways = "hls-fail-always"
 
 	// fakeSegmentDelay holds the first segment back, so Ready has to poll for it.
 	fakeSegmentDelay = 300 * time.Millisecond
@@ -45,7 +50,7 @@ const (
 func isFakeHLSMode(mode string) bool {
 	return slices.Contains([]string{
 		fakeModeHLSLive, fakeModeHLSComplete, fakeModeHLSFailAfterSegment, fakeModeHLSHeaderOnly,
-		fakeModeHLSLostFinalRename,
+		fakeModeHLSLostFinalRename, fakeModeHLSFailHardware, fakeModeHLSFailAlways,
 	}, mode)
 }
 
@@ -56,6 +61,12 @@ func fakeHLS(mode string, arguments []string) int {
 		fmt.Fprintln(os.Stderr, err)
 
 		return 1
+	}
+
+	if mode == fakeModeHLSFailAlways || (mode == fakeModeHLSFailHardware && slices.Contains(arguments, "h264_nvenc")) {
+		fmt.Fprint(os.Stderr, fakeFailStderr)
+
+		return fakeFailExitCode
 	}
 
 	if err := writeFakeHLS(mode, arguments); err != nil {

@@ -106,6 +106,9 @@ type HLSJob struct {
 	// BurnIn is the subtitle drawn into the video (burnin.go); nil when the plan shows none
 	// that way. A plan that burns in requires it.
 	BurnIn *BurnIn
+	// HardwareEncoders are the tested hardware encoders (DetectHardware); a plan whose video
+	// names one of them (StreamDecision.Hardware) is encoded with it.
+	HardwareEncoders []playback.HardwareEncoder
 }
 
 // isX264Preset reports whether name is a preset HLSJob.Preset accepts: the ones config allows
@@ -127,10 +130,12 @@ type encoderSettings struct {
 	soxResampler bool
 	// audioBitRate is what the audio of the plan takes from a bit-rate cap, in bits per second.
 	audioBitRate int64
+	// hardware is the encoder of a hardware video transcode; nil for software and copies.
+	hardware *hardwareVideo
 }
 
 // settings validates the tuning options of job and fills in the default preset.
-func (job HLSJob) settings() (encoderSettings, error) {
+func (job HLSJob) settings(streams hlsStreams) (encoderSettings, error) {
 	settings := encoderSettings{preset: job.Preset, threads: job.Threads, soxResampler: job.SoxResampler}
 
 	if settings.preset == "" {
@@ -145,6 +150,12 @@ func (job HLSJob) settings() (encoderSettings, error) {
 		return encoderSettings{}, fmt.Errorf("negative thread count %d: %w", settings.threads, domain.ErrInvalid)
 	}
 
+	var err error
+
+	if settings.hardware, err = job.hardwareVideo(streams); err != nil {
+		return encoderSettings{}, err
+	}
+
 	return settings, nil
 }
 
@@ -156,38 +167,48 @@ func (job HLSJob) settings() (encoderSettings, error) {
 // plan, empty or relative paths, a negative start) and domain.ErrUnsupported for a
 // transcode target or encoder this adapter does not produce.
 func HLSArguments(job HLSJob) ([]string, error) {
+	arguments, err := job.assemble()
+	if err != nil {
+		return nil, fmt.Errorf("hls arguments: %w", err)
+	}
+
+	return arguments, nil
+}
+
+// assemble builds the argument list of HLSArguments; its errors carry no context yet.
+func (job HLSJob) assemble() ([]string, error) {
 	streams, err := selectHLSStreams(job.Plan)
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
-	settings, err := job.settings()
+	settings, err := job.settings(streams)
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
-	burnInArguments, err := streams.applyBurnIn(job.Plan, job.BurnIn)
+	burnInArguments, err := streams.applyBurnIn(job.Plan, job.BurnIn, &settings)
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
 	encoding, err := streams.encodingArguments(settings)
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
 	if job.StartPosition < 0 {
-		return nil, fmt.Errorf("hls arguments: negative start position %s: %w", job.StartPosition, domain.ErrInvalid)
+		return nil, fmt.Errorf("negative start position %s: %w", job.StartPosition, domain.ErrInvalid)
 	}
 
 	input, err := job.inputArguments()
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
 	output, err := hlsOutputArguments(job.OutputDirectory)
 	if err != nil {
-		return nil, fmt.Errorf("hls arguments: %w", err)
+		return nil, err
 	}
 
 	arguments := []string{"-hide_banner", "-nostdin", "-loglevel", "error", "-y"}
@@ -197,7 +218,7 @@ func HLSArguments(job HLSJob) ([]string, error) {
 		arguments = append(arguments, "-ss", formatSeconds(job.StartPosition))
 	}
 
-	arguments = slices.Concat(arguments, input, burnInArguments, streams.mapArguments())
+	arguments = slices.Concat(arguments, settings.hardwareInputArguments(), input, burnInArguments, streams.mapArguments())
 	arguments = append(arguments, "-sn", "-dn", "-map_metadata", disabledMapping, "-map_chapters", disabledMapping)
 	arguments = append(arguments, encoding...)
 
@@ -366,6 +387,10 @@ func videoArguments(decision playback.StreamDecision, settings encoderSettings) 
 		}
 
 		return []string{"-c:v", copyCodec}, nil
+	}
+
+	if settings.hardware != nil {
+		return settings.hardware.arguments(decision, settings.audioBitRate)
 	}
 
 	if decision.Encoder != playback.EncoderLibx264 || decision.TargetCodec != playback.TranscodeVideoCodec {

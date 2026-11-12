@@ -162,6 +162,10 @@ func DetectHardwareResults(ctx context.Context, options HardwareDetectionOptions
 		return nil, fmt.Errorf("detect hardware encoders: %w: %w", domain.ErrInvalid, errMissingExecutable)
 	}
 
+	if err := validateHardwareDevice(options.Device); err != nil {
+		return nil, fmt.Errorf("detect hardware encoders: %w", err)
+	}
+
 	ffmpeg := tool{name: ffmpegToolName, executable: options.Executable}
 
 	candidates, err := listHardwareCandidates(ctx, ffmpeg)
@@ -252,6 +256,7 @@ func testCandidates(ctx context.Context, ffmpeg tool, candidates []hardwareCandi
 ) ([]HardwareResult, error) {
 	results := make([]HardwareResult, 0, len(candidates))
 	renderNode := options.Device
+	decoder := &decodeTester{ffmpeg: ffmpeg, options: options}
 
 	if renderNode == "" {
 		renderNode = firstRenderNode(options.RenderNodePattern)
@@ -275,6 +280,10 @@ func testCandidates(ctx context.Context, ffmpeg tool, candidates []hardwareCandi
 
 		result, err := testCandidate(ctx, candidateTest{ffmpeg: ffmpeg, candidate: candidate, encoder: encoder}, options)
 		if err != nil {
+			return nil, err
+		}
+
+		if result, err = decoder.withDecode(ctx, result); err != nil {
 			return nil, err
 		}
 

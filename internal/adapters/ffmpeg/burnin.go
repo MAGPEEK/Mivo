@@ -116,7 +116,11 @@ func (burnIn BurnIn) validateText() error {
 // already contains the scaling the plan asks for. A plan that burns in without a BurnIn, or
 // a BurnIn without a re-encoded video, is a caller error: copied video cannot carry an overlay,
 // and dropping the subtitle silently would show the user something else than they chose.
-func (streams *hlsStreams) applyBurnIn(plan playback.Plan, burnIn *BurnIn) ([]string, error) {
+//
+// A hardware encoder reads device frames, so its upload tail ends the graph and the encoder
+// arguments add no -vf of their own (settings.hardware.uploadedInGraph); the software path and
+// the software fallback get the graph without the upload.
+func (streams *hlsStreams) applyBurnIn(plan playback.Plan, burnIn *BurnIn, settings *encoderSettings) ([]string, error) {
 	if burnIn == nil {
 		if plan.Subtitle.Mode == playback.SubtitleBurnIn {
 			return nil, fmt.Errorf("plan burns subtitle %s in, but the job carries none: %w", plan.Subtitle.TrackID, domain.ErrInvalid)
@@ -135,9 +139,13 @@ func (streams *hlsStreams) applyBurnIn(plan playback.Plan, burnIn *BurnIn) ([]st
 
 	video := *streams.video
 
-	graph, err := burnInGraph(*burnIn, video, "")
+	graph, err := burnInGraph(*burnIn, video, settings.hardware.uploadTail())
 	if err != nil {
 		return nil, err
+	}
+
+	if settings.hardware != nil {
+		settings.hardware.uploadedInGraph = true
 	}
 
 	// The graph scales; the encoder arguments must not add a second -vf.
