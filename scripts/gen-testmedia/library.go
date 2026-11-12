@@ -78,7 +78,8 @@ type itemFiles struct {
 
 // libraryCases returns every case of the library tree: the artwork images first, then the
 // clips of each item in catalog order, then the music and audiobook covers and files, then
-// the disc sources, then the photo sources (WebP, AVIF, video, HEVC).
+// the disc sources, then the photo sources (WebP, AVIF, video, HEVC), then the movie with
+// sidecar subtitles.
 func libraryCases() []mediaCase {
 	var (
 		items   []itemFiles
@@ -100,7 +101,8 @@ func libraryCases() []mediaCase {
 		cases = append(cases, itemCases(item, cover)...)
 	}
 
-	return slices.Concat(cases, musicCases(), libraryAudiobookCases(), discSourceCases(), libraryPhotoCases())
+	return slices.Concat(cases, musicCases(), libraryAudiobookCases(), discSourceCases(), libraryPhotoCases(),
+		subtitleLibraryCases())
 }
 
 // posterOutput is the built poster image, the cover art source of embedded-artwork cases.
@@ -414,6 +416,7 @@ func writeLibrarySummary(output io.Writer, m libraryManifest, manifestPath strin
 	writeAudiobookSummary(&text, m.Audiobooks)
 	writeDiscSummary(&text, m.Discs)
 	writePhotoSummary(&text, m.Photos)
+	writeSubtitleSummary(&text, m.Subtitles)
 
 	fmt.Fprintf(&text, "manifest: %s\n", manifestPath)
 

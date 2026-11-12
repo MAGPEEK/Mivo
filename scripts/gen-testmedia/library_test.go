@@ -40,6 +40,14 @@ func catalogFiles(catalog libraryManifest) []string {
 		files = append(files, path.Join(photos.Path, photo.File))
 	}
 
+	for _, movie := range catalog.Subtitles.Movies {
+		files = append(files, path.Join(catalog.Subtitles.Path, movie.File))
+
+		for _, sidecar := range movie.Sidecars {
+			files = append(files, path.Join(catalog.Subtitles.Path, sidecar.File))
+		}
+	}
+
 	return files
 }
 
@@ -187,7 +195,7 @@ func TestLibraryCasesHaveUniqueNamesAndPaths(t *testing.T) {
 			t.Errorf("%s: library cases need the prefix, a muxer and encoders and are never gaps", c.Name)
 		}
 
-		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryAudiobooks, categoryDiscs, categoryPhotos}, c.Category) {
+		if !slices.Contains([]string{categoryArtwork, libraryKindMovies, libraryKindShows, categoryMusic, categoryAudiobooks, categoryDiscs, categoryPhotos, categorySubtitles}, c.Category) {
 			t.Errorf("%s: unexpected category %q", c.Name, c.Category)
 		}
 
@@ -208,7 +216,7 @@ func checkLibraryPath(t *testing.T, name, file string) {
 
 	roots := []string{
 		moviesLibraryPath, showsLibraryPath, musicLibraryPath, audiobooksLibraryPath, discsLibraryPath, discSourcesPath,
-		photosLibraryPath, photoSourcesPath,
+		photosLibraryPath, photoSourcesPath, subtitlesLibraryPath,
 	}
 	inLibrary := slices.ContainsFunc(roots, func(root string) bool {
 		return strings.HasPrefix(file, root+"/")
@@ -236,7 +244,7 @@ func TestLibraryCatalogIsBackedByCases(t *testing.T) {
 
 	for _, file := range catalogFiles(libraryManifest{
 		Libraries: libraryCatalog(), Music: musicCatalog(), Discs: discCatalog(), Audiobooks: audiobookCatalog(),
-		Photos: photoCatalog(),
+		Photos: photoCatalog(), Subtitles: subtitleCatalog(),
 	}) {
 		if described[file] {
 			t.Errorf("the catalog names %s twice", file)
@@ -284,8 +292,9 @@ func TestLibraryCopiesShareOneFFmpegRunPerItem(t *testing.T) {
 	// audiobook tree one for the book cover (and its copy) and one per part (6). The
 	// discs are assembled from five source runs (two DVD title sets, three Blu-ray clips).
 	// The photo tree adds WebP, the video, AVIF (three encoder alternatives, one of them
-	// runs) and two HEVC sources; its other files are written in Go.
-	const wantRuns, wantFiles = 54, 200
+	// runs) and two HEVC sources; its other files are written in Go. The sidecar subtitle
+	// library adds one run for its movie.
+	const wantRuns, wantFiles = 55, 201
 	if len(cases) != wantRuns || files != wantFiles {
 		t.Errorf("%d FFmpeg runs for %d media files, want %d runs for %d files", len(cases), files, wantRuns, wantFiles)
 	}
@@ -680,6 +689,11 @@ func TestLibraryNFOFilesYieldTheirManifestFields(t *testing.T) {
 	rendered := 0
 
 	for _, c := range libraryCases() {
+		// The sidecars of the subtitle library are subtitles, not NFO files.
+		if c.Category == categorySubtitles {
+			continue
+		}
+
 		for _, sidecar := range c.Sidecars {
 			want, found := nfos[sidecar.Output]
 			if !found {

@@ -9,6 +9,22 @@
 //	go run ./scripts/gen-testmedia [-out testdata/media] [-library testdata/library]
 //	                               [-ffmpeg ffmpeg] [-force] [-only <glob>[,<glob>...]] [-jobs N]
 //
+// # Feature tags and the milestone-4 inputs
+//
+// A manifest entry may carry "tags" (task M4-03) that name what the case is an input for, so
+// tests select by tag instead of by file name: "textsub", "styledsub", "imagesub",
+// "multiaudio", "commentary", "surround", "hires", "dsd", "tonemap" and "long". Known gaps
+// are tagged as well (both "dsd" cases and the raw PGS, VobSub and DVB cases are gaps), so
+// check the status of an entry. The track of a stream may carry a "title".
+//
+// The categories "tracks" and "hdr" hold the clips M4-03 added: Matroska files with a styled
+// ASS track before plain SRT, with English stereo, German 5.1 and an English "Commentary"
+// audio track, with a PGS and with a dvd_subtitle track, and a 20 s HDR10 clip. The bitmap
+// subtitles come from the PGS stream the generator writes itself (see the disc corpus
+// below). The playback matrix of ADR 0025 (internal/adapters/corpustest) covers the
+// categories "video", "subtitle" and "multitrack" only; the tasks that implement subtitle
+// and track selection add these clips to it.
+//
 // # Library tree
 //
 // Unless -library is "", it also writes a library tree for the milestone-3 scan (task
@@ -55,6 +71,9 @@
 // wraps libx265 streams from <library>/.photo-sources in HEIF) and an AVIF. Cameras and
 // names are invented. Photo cases start with "library-photos-"; "library-photos-source-*" are
 // the HEVC runs.
+// <library>/subs (task M4-03) holds "Movie (2020).mkv" with external subtitles for the
+// sidecar discovery: ".en.srt", ".de.forced.srt" and ".fr.sdh.ass" next to it and
+// "Subs/Movie (2020).es.srt". Its case is "library-subs-movie-2020".
 //
 // <library>/manifest.json describes the expected catalog (what a scan must produce) and the
 // build result. Paths are relative to the library root (Path of the library) unless noted,
@@ -135,8 +154,15 @@
 //	  thumbnailState "ready"|"unsupported" as a scan stores it
 //	  renders        whether the photo renderer produces a thumbnail; displayWidth and
 //	                 displayHeight are the upright size of a still (orientations 5-8 swap)
+//	subtitles      path (below <library>), movies[] (added in M4-03 without a version bump,
+//	               kept out of libraries[] like music):
+//	  title, year    expected catalog values of the loose movie
+//	  file           the movie file, a plain clip without embedded subtitles
+//	  sidecars[]     file (next to the movie or in "Subs/"), language (the ISO 639-1 code of
+//	                 the file name), forced (".forced"), hearingImpaired (".sdh"), format
+//	                 ("srt"|"ass")
 //	cases[]        name, category ("artwork"|"movies"|"shows"|"music"|"audiobooks"|"discs"|
-//	               "photos"), status
+//	               "photos"|"subs"), status
 //	               ("generated"|"skipped"|"failed"), skipKind, reason, files[] (relative to
 //	               <library>); "library-discs-source-*" cases are the FFmpeg runs, the other
 //	               "library-discs-*" cases the assembled discs

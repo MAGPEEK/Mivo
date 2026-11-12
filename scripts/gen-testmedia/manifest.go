@@ -18,7 +18,9 @@ const (
 	manifestFileName = "manifest.json"
 	// manifestSchemaVersion changes when consumers have to adapt to the JSON shape.
 	// Version 2: audio is a list of streams, subtitles, chapters, tags, sidecars, skipKind
-	// and the encoders used were added.
+	// and the encoders used were added. The feature tags of an entry and the title of a
+	// track are optional additions (M4-03) that left the version unchanged: consumers decode
+	// the manifest leniently, so they read it as before.
 	manifestSchemaVersion = 2
 	// outputFilePermissions keeps corpus files readable for the owner and group, matching
 	// outputDirPermissions.
@@ -72,7 +74,11 @@ type manifestEntry struct {
 	// keeps the encoders of the run that built it, taken from the previous manifest, because
 	// this run might choose another alternative. They are empty for cases without a file and
 	// for kept files the previous manifest does not describe.
-	Encoders []string    `json:"encoders,omitempty"`
+	Encoders []string `json:"encoders,omitempty"`
+	// Tags name the features the case is an input for, e.g. "imagesub" or "tonemap", so tests
+	// select their inputs by tag instead of by file name. They are not Expected.Tags, the
+	// metadata tags of the container.
+	Tags     []string    `json:"tags,omitempty"`
 	Expected expectation `json:"expected"`
 
 	// kept marks a generated entry whose file an earlier run built. It only labels progress
@@ -90,6 +96,7 @@ func newEntry(c mediaCase, status entryStatus, reason string) manifestEntry {
 		File:     c.Output,
 		Status:   status,
 		Reason:   reason,
+		Tags:     slices.Clone(c.Tags),
 		Expected: c.expected(),
 	}
 }

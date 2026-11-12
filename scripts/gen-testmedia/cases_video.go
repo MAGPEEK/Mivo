@@ -1,6 +1,10 @@
 package main
 
-import "slices"
+import (
+	"path"
+	"slices"
+	"time"
+)
 
 // ffprobe reports these format names for whole container families.
 const (
@@ -70,22 +74,39 @@ func matroskaCases() []mediaCase {
 }
 
 func hdrCases() []mediaCase {
+	return []mediaCase{
+		hdr10Case("video-mkv-hevc10-hdr10-ac3", "video/hevc_main10_hdr10_ac3.mkv", standardSource()),
+	}
+}
+
+// toneMappingClipDuration is long enough to watch a tone-mapped session settle and to seek
+// in it (task M4-03).
+const toneMappingClipDuration = 20 * time.Second
+
+// toneMappingCases returns the long HDR10 clip of the tone-mapping tests.
+func toneMappingCases() []mediaCase {
+	return []mediaCase{
+		hdr10Case(caseToneMapping, "hdr/hevc_main10_hdr10_ac3_20s.mkv",
+			standardSource().withDuration(toneMappingClipDuration)),
+	}
+}
+
+// hdr10Case is an HEVC Main 10 clip tagged BT.2020/PQ with HDR10 static metadata and AC-3
+// audio in Matroska; the category is the directory of output.
+func hdr10Case(name, output string, source sourceSpec) mediaCase {
 	video := hevcMain10Video()
 	video.ColorPrimaries = "bt2020"
 	video.ColorTransfer = "smpte2084"
 	video.ColorSpace = "bt2020nc"
 	video.HDR = "hdr10"
 
-	return []mediaCase{
-		{
-			Name: "video-mkv-hevc10-hdr10-ac3", Category: categoryVideo,
-			Output: "video/hevc_main10_hdr10_ac3.mkv",
-			Source: standardSource(), Muxer: "matroska", Encoders: []string{"libx265", "ac3"},
-			Args: slices.Concat(
-				[]string{"-vf", hdr10ColorTags},
-				x265Main10Args(hdr10X265Params), audioArgs("ac3")),
-			Expect: expect("mkv", probeMatroska, video, audioOf("ac3")),
-		},
+	return mediaCase{
+		Name: name, Category: path.Dir(output), Output: output,
+		Source: source, Muxer: matroskaMuxer, Encoders: []string{"libx265", "ac3"},
+		Args: slices.Concat(
+			[]string{"-vf", hdr10ColorTags},
+			x265Main10Args(hdr10X265Params), audioArgs("ac3")),
+		Expect: expect("mkv", probeMatroska, video, audioOf("ac3")),
 	}
 }
 

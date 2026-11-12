@@ -344,6 +344,11 @@ func TestTrackArgsDispositions(t *testing.T) {
 	if got := trackArgs("v:0", trackExpectation{Default: true}); !slices.Equal(got, want) {
 		t.Errorf("trackArgs without language = %q, want %q", got, want)
 	}
+
+	want = []string{"-metadata:s:a:2", "language=eng", "-metadata:s:a:2", "title=Commentary", "-disposition:a:2", "0"}
+	if got := trackArgs("a:2", trackExpectation{Language: "eng", Title: "Commentary"}); !slices.Equal(got, want) {
+		t.Errorf("trackArgs with title = %q, want %q", got, want)
+	}
 }
 
 func TestSourceArgs(t *testing.T) {
@@ -467,6 +472,7 @@ func checkSourceShape(t *testing.T, c mediaCase) {
 	wantDuration := map[string]time.Duration{
 		categoryVideo: clipDuration, categoryAudio: audioDuration, categoryImage: imageSourceDuration,
 		categorySubtitle: clipDuration, categoryMultiTrack: clipDuration,
+		categoryTracks: clipDuration, categoryHDR: toneMappingClipDuration,
 	}[c.Category]
 	// Seek cases are the only long clips; their names say so.
 	if strings.HasSuffix(c.Name, seekCaseSuffix) {

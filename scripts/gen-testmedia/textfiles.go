@@ -87,6 +87,45 @@ func formatASS(cues []cue, width, height int) string {
 	return text.String()
 }
 
+// assSignStyle is a second style that differs from Default in everything a WebVTT conversion
+// drops: font, size, yellow text with a blue outline, bold, italic and top-centre alignment.
+const assSignStyle = "Style: Sign,Courier New,28,&H0000FFFF,&H000000FF,&H00FF0000,&H80000000," +
+	"-1,-1,0,0,100,100,0,0,1,2,1,8,10,10,10,1\n"
+
+const (
+	// assFadeMilliseconds is the fade-in and fade-out time of positioned events.
+	assFadeMilliseconds = 100
+	// assSignRow places positioned events a quarter of the frame height below the top.
+	assSignRow = 4
+)
+
+// formatStyledASS writes cues as an ASS script that uses what plain text subtitles cannot
+// express: every even event has inline override tags (italic, a colour change) in the
+// Default style, every odd event uses the Sign style, positioned and faded.
+func formatStyledASS(cues []cue, width, height int) string {
+	var text strings.Builder
+
+	header := strings.Replace(assHeader, "\n[Events]", assSignStyle+"\n[Events]", 1)
+	fmt.Fprintf(&text, header, width, height)
+
+	for index, event := range cues {
+		line := strings.ReplaceAll(event.Text, "\n", `\N`)
+		style := "Default"
+		overrides := `{\i1\c&H00FF00&}`
+
+		if index%2 == 1 {
+			style = "Sign"
+			overrides = fmt.Sprintf(`{\pos(%d,%d)\fad(%d,%d)}`,
+				width/halve, height/assSignRow, assFadeMilliseconds, assFadeMilliseconds)
+		}
+
+		fmt.Fprintf(&text, "Dialogue: 0,%s,%s,%s,,0,0,0,,%s%s\n",
+			assTime(event.Start), assTime(event.End), style, overrides, line)
+	}
+
+	return text.String()
+}
+
 // formatFFMetadata writes chapters in FFmpeg's metadata text format, read with -f ffmetadata.
 func formatFFMetadata(chapters []chapter) string {
 	var text strings.Builder

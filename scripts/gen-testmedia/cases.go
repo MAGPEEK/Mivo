@@ -17,6 +17,13 @@ const (
 	categoryImage      = "image"
 	categorySubtitle   = "subtitle"
 	categoryMultiTrack = "multitrack"
+	// categoryTracks holds the track-selection inputs of milestone 4 (task M4-03): styled and
+	// bitmap subtitles and an audio commentary. They are a category of their own because the
+	// playback matrix of ADR 0025 covers "video", "subtitle" and "multitrack" case by case;
+	// the tasks that implement the behaviour add these clips to it.
+	categoryTracks = "tracks"
+	// categoryHDR holds the longer HDR clip of the tone-mapping tests, for the same reason.
+	categoryHDR = "hdr"
 )
 
 // Source defaults shared by every clip (ADR 0021: short, rights-free lavfi sources).
@@ -69,6 +76,9 @@ type mediaCase struct {
 	// Gap, when set, marks a format FFmpeg cannot produce at all (ADR 0021). The case is never
 	// built and is listed as skipped with this reason, so the corpus shows what is missing.
 	Gap string
+	// Tags name the features the case is an input for, e.g. "imagesub" (see caseTags). They
+	// are set from one table when the registry is built, not by the case itself.
+	Tags []string
 }
 
 // sourceSpec describes the lavfi inputs of a case. A zero Width means no video input and a
@@ -103,7 +113,9 @@ type textInput struct {
 	// FileName is the base name inside the temporary input directory.
 	FileName string
 	// Format is the FFmpeg demuxer passed to -f, e.g. "srt", "ass" or "ffmetadata".
-	Format  string
+	Format string
+	// Options are FFmpeg input options placed before -f, e.g. "-fix_sub_duration".
+	Options []string
 	Role    inputRole
 	Content string
 }
@@ -178,8 +190,10 @@ type trackExpectation struct {
 	// Language is an ISO 639-2 code such as "eng" or "deu", as Matroska and players expect.
 	// Empty means the stream has no language tag, which ffprobe reports as none.
 	Language string `json:"language,omitempty"`
-	Default  bool   `json:"default"`
-	Forced   bool   `json:"forced"`
+	// Title is the track name players show, e.g. "Commentary"; empty means the stream has none.
+	Title   string `json:"title,omitempty"`
+	Default bool   `json:"default"`
+	Forced  bool   `json:"forced"`
 }
 
 // chapterExpectation describes one expected chapter.
@@ -196,15 +210,18 @@ type sidecarExpectation struct {
 	Codec       string `json:"codec"`
 }
 
-// allCases is the registry of every case category. A new category adds one line here.
+// allCases is the registry of every case category, with the feature tags of each case. A
+// new category adds one line here.
 func allCases() []mediaCase {
-	return slices.Concat(
+	return withTags(slices.Concat(
 		videoCases(),
 		audioCases(),
 		imageCases(),
 		subtitleCases(),
 		multiTrackCases(),
-	)
+		trackSelectionCases(),
+		toneMappingCases(),
+	))
 }
 
 // standardSource is the default 2 s, 320x240, 25 fps clip with a 48 kHz stereo sine tone.
@@ -464,6 +481,7 @@ func sourceArgs(source sourceSpec) (inputs, outputs []string) {
 func textInputArgs(textInputs []textInput, inputDir string, firstIndex int) (inputs, outputs []string) {
 	for offset, input := range textInputs {
 		index := strconv.Itoa(firstIndex + offset)
+		inputs = append(inputs, input.Options...)
 		inputs = append(inputs, "-f", input.Format, "-i", filepath.Join(inputDir, input.FileName))
 
 		switch input.Role {
@@ -477,9 +495,9 @@ func textInputArgs(textInputs []textInput, inputDir string, firstIndex int) (inp
 	return inputs, outputs
 }
 
-// trackArgs returns the options that set the language and dispositions of one output
-// stream; stream is a stream specifier such as "a:0" or "s:1". Without a language only the
-// dispositions are set.
+// trackArgs returns the options that set the language, the title and the dispositions of
+// one output stream; stream is a stream specifier such as "a:0" or "s:1". Without a language
+// or a title only the dispositions are set.
 func trackArgs(stream string, track trackExpectation) []string {
 	disposition := "0"
 
@@ -492,12 +510,17 @@ func trackArgs(stream string, track trackExpectation) []string {
 		disposition = "forced"
 	}
 
-	dispositionArgs := []string{"-disposition:" + stream, disposition}
-	if track.Language == "" {
-		return dispositionArgs
+	var args []string
+
+	if track.Language != "" {
+		args = append(args, "-metadata:s:"+stream, "language="+track.Language)
 	}
 
-	return append([]string{"-metadata:s:" + stream, "language=" + track.Language}, dispositionArgs...)
+	if track.Title != "" {
+		args = append(args, "-metadata:s:"+stream, "title="+track.Title)
+	}
+
+	return append(args, "-disposition:"+stream, disposition)
 }
 
 // defaultTrack marks a stream without a language tag as the default one. FFmpeg's Matroska
