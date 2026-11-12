@@ -136,6 +136,7 @@
     "label": "Settings pages",
     "libraries": "Libraries",
     "metadata": "Metadata",
+    "transcoder": "Transcoder",
     "about": "About",
     "devices": "Devices",
     "users": "Users"
@@ -220,5 +221,85 @@
     "unknown": "Unknown",
     "privacy": "{{productName}} sends no telemetry. Online metadata contacts providers only while it is switched on in Settings › Metadata.",
     "attributionHeading": "Data sources"
+  },
+  "transcoder": {
+    "heading": "Transcoder",
+    "intro": "Hardware acceleration and the streams the server prepares right now.",
+    "forbidden": "The transcoder can only be managed by an admin on the server's local network.",
+    "loading": "Loading transcoder status",
+    "loadFailed": "The transcoder status could not be loaded.",
+    "retry": "Try again",
+    "status": {
+      "heading": "Hardware acceleration",
+      "setting": "Acceleration setting",
+      "settingValue": {
+        "auto": "Automatic",
+        "off": "Off (software only)",
+        "vaapi": "VAAPI",
+        "qsv": "QSV",
+        "nvenc": "NVENC",
+        "amf": "AMF",
+        "unknown": "Unknown"
+      },
+      "settingHint": "Change transcode.hwaccel in the server configuration.",
+      "throttle": "Throttling",
+      "throttleYes": "Supported",
+      "throttleNo": "Not supported",
+      "lastTested": "Last test",
+      "neverTested": "Not tested yet"
+    },
+    "devices": {
+      "label": "Tested encoders",
+      "none": "None found – software transcoding is used.",
+      "noneUsable": "None of them is usable – software transcoding is used.",
+      "result": {
+        "usable": "Usable",
+        "unavailable": "Not available",
+        "degraded": "Degraded"
+      }
+    },
+    "test": {
+      "button": "Test hardware acceleration",
+      "running": "Testing…",
+      "runningStatus": "The hardware test is running.",
+      "finished": "The hardware test finished. The results above are up to date.",
+      "failed": "The hardware test could not be started."
+    },
+    "sessions": {
+      "heading": "Active sessions",
+      "loading": "Loading sessions",
+      "loadFailed": "The sessions could not be loaded.",
+      "empty": "No stream is running.",
+      "stopFailed": "The session could not be stopped.",
+      "column": {
+        "title": "Title",
+        "client": "Client",
+        "mode": "Mode",
+        "encoder": "Encoder",
+        "bitRate": "Bit rate",
+        "speed": "Speed",
+        "actions": "Actions"
+      },
+      "mode": {
+        "direct_play": "Direct play",
+        "remux": "Direct stream",
+        "transcode": "Transcode",
+        "unknown": "Unknown"
+      },
+      "encoderCopy": "Copied",
+      "encoderHardware": "{{encoder}} (hardware)",
+      "encoderSoftware": "{{encoder}} (software)",
+      "bitRate": {
+        "mbit": "{{value, number}} Mbit/s",
+        "kbit": "{{value, number}} kbit/s"
+      },
+      "speed": "{{value, number}}×",
+      "tooSlow": "Slower than playback",
+      "paused": "Paused",
+      "unknownValue": "–",
+      "stop": "Stop",
+      "stopLabel": "Stop {{title}}",
+      "stopping": "Stopping…"
+    }
   }
 }

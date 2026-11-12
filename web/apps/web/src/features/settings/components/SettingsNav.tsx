@@ -29,6 +29,14 @@ export function SettingsNav() {
             {t("nav.metadata")}
           </Link>
         </li>
+        {/* Admin only: the transcoder is a management API (ADR 0028). */}
+        {admin && (
+          <li>
+            <Link to="/admin/settings/transcoder" className={linkClass}>
+              {t("nav.transcoder")}
+            </Link>
+          </li>
+        )}
         <li>
           <Link to="/admin/settings/about" className={linkClass}>
             {t("nav.about")}

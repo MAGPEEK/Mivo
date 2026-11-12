@@ -136,6 +136,7 @@
     "label": "Einstellungsseiten",
     "libraries": "Bibliotheken",
     "metadata": "Metadaten",
+    "transcoder": "Transcoder",
     "about": "Info",
     "devices": "Geräte",
     "users": "Benutzer"
@@ -220,5 +221,85 @@
     "unknown": "Unbekannt",
     "privacy": "{{productName}} sendet keine Telemetrie. Online-Metadaten kontaktieren Anbieter nur, solange sie unter Einstellungen › Metadaten eingeschaltet sind.",
     "attributionHeading": "Datenquellen"
+  },
+  "transcoder": {
+    "heading": "Transcoder",
+    "intro": "Hardwarebeschleunigung und die Streams, die der Server gerade aufbereitet.",
+    "forbidden": "Der Transcoder kann nur von einem Admin im lokalen Netzwerk des Servers verwaltet werden.",
+    "loading": "Transcoder-Status wird geladen",
+    "loadFailed": "Der Transcoder-Status konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "status": {
+      "heading": "Hardwarebeschleunigung",
+      "setting": "Einstellung der Beschleunigung",
+      "settingValue": {
+        "auto": "Automatisch",
+        "off": "Aus (nur Software)",
+        "vaapi": "VAAPI",
+        "qsv": "QSV",
+        "nvenc": "NVENC",
+        "amf": "AMF",
+        "unknown": "Unbekannt"
+      },
+      "settingHint": "transcode.hwaccel ändern Sie in der Serverkonfiguration.",
+      "throttle": "Drosselung",
+      "throttleYes": "Unterstützt",
+      "throttleNo": "Nicht unterstützt",
+      "lastTested": "Letzter Test",
+      "neverTested": "Noch nicht getestet"
+    },
+    "devices": {
+      "label": "Getestete Encoder",
+      "none": "Keine gefunden – es wird per Software transcodiert.",
+      "noneUsable": "Keiner davon ist nutzbar – es wird per Software transcodiert.",
+      "result": {
+        "usable": "Nutzbar",
+        "unavailable": "Nicht verfügbar",
+        "degraded": "Eingeschränkt"
+      }
+    },
+    "test": {
+      "button": "Hardwarebeschleunigung testen",
+      "running": "Test läuft …",
+      "runningStatus": "Der Hardwaretest läuft.",
+      "finished": "Der Hardwaretest ist abgeschlossen. Die Ergebnisse oben sind aktuell.",
+      "failed": "Der Hardwaretest konnte nicht gestartet werden."
+    },
+    "sessions": {
+      "heading": "Aktive Sitzungen",
+      "loading": "Sitzungen werden geladen",
+      "loadFailed": "Die Sitzungen konnten nicht geladen werden.",
+      "empty": "Es läuft kein Stream.",
+      "stopFailed": "Die Sitzung konnte nicht beendet werden.",
+      "column": {
+        "title": "Titel",
+        "client": "Client",
+        "mode": "Modus",
+        "encoder": "Encoder",
+        "bitRate": "Bitrate",
+        "speed": "Tempo",
+        "actions": "Aktionen"
+      },
+      "mode": {
+        "direct_play": "Direkt abspielen",
+        "remux": "Direkt streamen",
+        "transcode": "Transcodieren",
+        "unknown": "Unbekannt"
+      },
+      "encoderCopy": "Kopiert",
+      "encoderHardware": "{{encoder}} (Hardware)",
+      "encoderSoftware": "{{encoder}} (Software)",
+      "bitRate": {
+        "mbit": "{{value, number}} Mbit/s",
+        "kbit": "{{value, number}} kbit/s"
+      },
+      "speed": "{{value, number}}×",
+      "tooSlow": "Langsamer als die Wiedergabe",
+      "paused": "Pausiert",
+      "unknownValue": "–",
+      "stop": "Beenden",
+      "stopLabel": "{{title}} beenden",
+      "stopping": "Wird beendet …"
+    }
   }
 }

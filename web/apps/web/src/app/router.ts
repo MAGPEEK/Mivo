@@ -46,6 +46,7 @@ import {
   AboutSettingsPage,
   LibrariesSettingsPage,
   MetadataSettingsPage,
+  TranscoderSettingsPage,
   validateSettingsSearch,
 } from "../features/settings";
 import {
@@ -200,6 +201,11 @@ function adminPages<Parent extends AnyRoute>(parent: Parent) {
       getParentRoute: () => parent,
       path: "/admin/settings/metadata",
       component: MetadataSettingsPage,
+    }),
+    createRoute({
+      getParentRoute: () => parent,
+      path: "/admin/settings/transcoder",
+      component: TranscoderSettingsPage,
     }),
     createRoute({
       getParentRoute: () => parent,
