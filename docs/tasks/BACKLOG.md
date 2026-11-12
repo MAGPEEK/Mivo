@@ -308,3 +308,11 @@ rescan and prune keep it (later user data such as ratings follows the same rule)
 - en/de parity test for the new overlay.* keys.
 - Speed 0.996 rounds to 1.00 without the slow warning (pinned by test, judgement call).
 - Smoke gap: transcodeSpeed never appeared for a 5 s HLS transcode; check on a longer clip whether the backend reports progress for short transcodes.
+
+## m4-16d review minors (2026-11-12)
+- trickplayLoader.ts: `catch {}` swallows all errors; rethrow non-Abort/ApiError or log at debug level.
+- trickplayLoader.ts: one transient network error on the first GET ends the preview for the file; treat a fetch TypeError like a 404 and keep polling.
+- useTrickplay.ts: redundant `loaded?.layout` after the fileId check; the loaded-sheet set is never reset on file change.
+- SeekPreviewBubble: Escape should dismiss the hover/keyboard preview (WCAG 1.4.13).
+- e2e/trickplay.spec.ts: `toBeLessThanOrEqual(1)` POSTs also passes with no POST.
+- Vite build warns about chunks > 500 kB (non-blocking); consider code-splitting.
