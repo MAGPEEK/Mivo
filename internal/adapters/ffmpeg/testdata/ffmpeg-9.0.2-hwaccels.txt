@@ -1,0 +1,11 @@
+# Captured from FFmpeg 9.0.2 (gyan.dev full build, Windows): ffmpeg -hide_banner -hwaccels
+Hardware acceleration methods:
+cuda
+vaapi
+dxva2
+qsv
+d3d11va
+opencl
+vulkan
+d3d12va
+amf

@@ -1,0 +1,18 @@
+# Jellyfin-FFmpeg 7.1 (shortened to the relevant encoders): ffmpeg -hide_banner -encoders
+Encoders:
+ V..... = Video
+ A..... = Audio
+ S..... = Subtitle
+ .F.... = Frame-level multithreading
+ ..S... = Slice-level multithreading
+ ...X.. = Codec is experimental
+ ....B. = Supports draw_horiz_band
+ .....D = Supports direct rendering method 1
+ ------
+ A....D aac                  AAC (Advanced Audio Coding) (codec aac)
+ V....D h264_amf             AMD AMF H.264 Encoder (codec h264)
+ V....D h264_nvenc           NVIDIA NVENC H.264 encoder (codec h264)
+ V..... h264_qsv             H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (Intel Quick Sync Video acceleration) (codec h264)
+ V....D h264_vaapi           H.264/AVC (VAAPI) (codec h264)
+ V....D hevc_nvenc           NVIDIA NVENC hevc encoder (codec hevc)
+ V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)

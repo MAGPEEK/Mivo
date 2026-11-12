@@ -1,0 +1,8 @@
+# Jellyfin-FFmpeg 7.1 (shortened to the relevant encoders): ffmpeg -hide_banner -hwaccels
+Hardware acceleration methods:
+cuda
+vaapi
+qsv
+drm
+opencl
+vulkan

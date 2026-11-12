@@ -1,0 +1,9 @@
+# Docker image (Debian FFmpeg 7.1.5): ffmpeg -hide_banner -hwaccels
+Hardware acceleration methods:
+vdpau
+cuda
+vaapi
+qsv
+drm
+opencl
+vulkan

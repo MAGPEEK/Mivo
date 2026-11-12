@@ -28,8 +28,11 @@ const (
 	fakeArgumentsVariable = "MIVO_FFMPEG_FAKE_ARGUMENTS"
 	fakeDefaultResponse   = "default"
 
-	fakeModeRespond     = "respond"
-	fakeModeFail        = "fail"
+	fakeModeRespond = "respond"
+	fakeModeFail    = "fail"
+	// fakeModeHardware answers the listings and test encodes of hardware detection; see
+	// fakeHardware in hwdetect_internal_test.go.
+	fakeModeHardware    = "hardware"
 	fakeModeHang        = "hang"
 	fakeModeFloodStdout = "flood-stdout"
 	fakeModeFloodStderr = "flood-stderr"
@@ -68,6 +71,8 @@ func runFakeTool(mode string, arguments []string) int {
 	switch mode {
 	case fakeModeRespond:
 		return fakeRespond(arguments)
+	case fakeModeHardware:
+		return fakeHardware(arguments)
 	case fakeModeFail:
 		fmt.Fprint(os.Stderr, fakeFailStderr)
 
