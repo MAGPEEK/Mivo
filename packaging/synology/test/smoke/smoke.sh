@@ -56,6 +56,8 @@ readonly STARTUP_SCAN_WAIT_SECONDS=900
 # Seconds to wait for the API on the published port after start.
 readonly PORT_WAIT_SECONDS=180
 readonly CORPUS_MANIFEST=testdata/media/manifest.json
+# Throwaway administrator of the package under test (sign-in is on since M7-25).
+readonly SMOKE_ACCOUNT=smoke
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_dir
@@ -70,6 +72,9 @@ slow_timeout="${SMOKE_SLOW_CASE_TIMEOUT:-$DEFAULT_SLOW_TIMEOUT}"
 ffprobe=ffprobe
 work="${SMOKE_WORK:-}"
 keep=no
+# 128 random bits per run, hex; held in memory only and never logged.
+smoke_password=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+session_token=""
 results=()
 failed=0
 
@@ -260,14 +265,50 @@ step() {
 	fi
 }
 
-api() { curl -fsS --max-time 30 "http://127.0.0.1:$host_port/api/v1/$1"; }
+# open_api calls a route that needs no sign-in (system/info, setup state).
+open_api() { curl -fsS --max-time 30 "http://127.0.0.1:$host_port/api/v1/$1"; }
+
+# api calls a protected route with the session token of authenticate. The token goes to curl
+# through a config on stdin, so it shows up neither in the process list nor on disk.
+api() {
+	printf 'header = "Authorization: Bearer %s"\n' "$session_token" |
+		curl -fsS --max-time 30 -K - "http://127.0.0.1:$host_port/api/v1/$1"
+}
+
+# json_post <path> <json on stdin> posts a body that may hold the password without putting it
+# into an argument.
+json_post() {
+	curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- \
+		"http://127.0.0.1:$host_port/api/v1/$1"
+}
+
+# authenticate gets a bearer token (client cli) for the throwaway account: the first-run setup
+# while the server has no account (LAN-only, ADR 0032 section 6), else a sign-in, which is what
+# a restart on a kept data directory needs. The password is generated per run and exists only in
+# this shell and the environment of playback-smoke; neither it nor the token is ever printed.
+authenticate() {
+	local state body response path=auth/session what="sign-in"
+	state=$(open_api setup) || { record FAIL "$label GET /api/v1/setup failed"; return 1; }
+	if [[ "$state" == *'"required":true'* ]]; then path=setup what="first-run setup"; fi
+	body=$(printf '{"name":"%s","password":"%s","client":"cli","deviceName":"smoke.sh"}' "$SMOKE_ACCOUNT" "$smoke_password")
+	if ! response=$(printf '%s' "$body" | json_post "$path" 2>/dev/null); then
+		record FAIL "$label $what as $SMOKE_ACCOUNT through POST /api/v1/$path failed"
+		return 1
+	fi
+	session_token=$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' <<<"$response")
+	if [ -z "$session_token" ]; then
+		record FAIL "$label $what answered without a bearer token"
+		return 1
+	fi
+	record PASS "$label $what as $SMOKE_ACCOUNT, bearer token obtained"
+}
 
 # check_published_port waits until the server answers on the published port: start counts a
 # server that is alive but not yet healthy after its 30 s budget as started, which is likely
-# under emulation.
+# under emulation. It ends with authenticate, as every later API call needs the session.
 check_published_port() {
 	local info deadline=$((SECONDS + PORT_WAIT_SECONDS))
-	until info=$(api system/info 2>/dev/null); do
+	until info=$(open_api system/info 2>/dev/null); do
 		if [ "$SECONDS" -ge "$deadline" ]; then
 			record FAIL "$label port $admin_port is not reachable as 127.0.0.1:$host_port after $PORT_WAIT_SECONDS s"
 			return 1
@@ -275,6 +316,7 @@ check_published_port() {
 		sleep 1
 	done
 	record PASS "$label port $admin_port published as 127.0.0.1:$host_port: $info"
+	authenticate
 }
 
 # non_timeout_failures prints the FAIL lines of the playback-smoke log $1 that are not timeouts
@@ -316,7 +358,10 @@ timeouts_only() {
 run_playback() {
 	local profile=$1
 	shift
-	(cd "$repo" && "$smoke_binary" -base "http://127.0.0.1:$host_port" -manifest "$CORPUS_MANIFEST" \
+	# playback-smoke signs in as the throwaway account itself; the password reaches it only
+	# through the environment variable.
+	(cd "$repo" && MIVO_SMOKE_PASSWORD="$smoke_password" "$smoke_binary" -user "$SMOKE_ACCOUNT" \
+		-password-env MIVO_SMOKE_PASSWORD -base "http://127.0.0.1:$host_port" -manifest "$CORPUS_MANIFEST" \
 		-profile "$profile" -ffprobe "$ffprobe" "$@") 2>&1 | tee "$playback_log"
 	return "${PIPESTATUS[0]}"
 }
@@ -353,6 +398,8 @@ smoke_profile() {
 # every file unchanged: the database of the previous installation was used.
 check_kept_catalogue() {
 	local what=$1 deadline=$((SECONDS + STARTUP_SCAN_WAIT_SECONDS)) libraries=""
+	# The data directory was kept, so the account exists: this signs in instead of setting up.
+	authenticate || return 1
 	while [ "$SECONDS" -lt "$deadline" ]; do
 		libraries=$(api libraries || :)
 		if [[ "$libraries" == *'"state":"failed"'* ]]; then
@@ -392,7 +439,10 @@ install_and_start() {
 		check_published_port
 }
 
-api_post() { curl -fsS --max-time 30 -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$host_port/api/v1/$1"; }
+api_post() {
+	printf 'header = "Authorization: Bearer %s"\n' "$session_token" |
+		curl -fsS --max-time 30 -K - -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$host_port/api/v1/$1"
+}
 
 # check_first_start_state passes when a fresh installation has zero libraries and the folder
 # browser starts at the volume (install kind synology, browse root /volume1): the state in which

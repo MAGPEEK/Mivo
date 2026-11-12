@@ -86,6 +86,14 @@ QEMU the first time).
    - **versions**: `bin/<id> --version`, `bin/ffmpeg -version`, `bin/ffprobe -version`;
    - `prestart`, **`start`** (`SYNOPKG_PKG_STATUS=INSTALL`), **`status`** exits 0, the API
      answers on the published port;
+   - **sign-in** (on since M7-25): the server starts in setup state, so the script runs the
+     first-run setup (`POST /api/v1/setup`, client `cli`, LAN peer) for the throwaway admin
+     `smoke` with a random password generated per run, and keeps the bearer token for every
+     later `curl`; after a restart on a kept data directory it signs in instead
+     (`POST /api/v1/auth/session`). The password lives in the script's memory and reaches
+     `playback-smoke` only through `MIVO_SMOKE_PASSWORD` (`-user smoke -password-env`); it and
+     the token are never printed or written to disk. Only `system/info` and the setup state are
+     called without a token;
    - **first start state**: `GET /api/v1/libraries` is `{"libraries":[]}`, `GET
      /api/v1/folder-roots` lists `/volume1` and `installKind` `synology` (from the
      `start-stop-status` environment); then the corpus library is created through `POST
