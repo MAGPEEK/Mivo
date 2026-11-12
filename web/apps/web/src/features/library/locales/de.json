@@ -197,6 +197,14 @@
     "markUnwatched": "Als ungesehen markieren",
     "markWatchedTitled": "{{title}} als gesehen markieren",
     "markUnwatchedTitled": "{{title}} als ungesehen markieren",
-    "failed": "Der Gesehen-Status konnte nicht gespeichert werden."
+    "failed": "Der Gesehen-Status konnte nicht gespeichert werden.",
+    "removeFromContinue": "Aus Weiterschauen entfernen",
+    "removeFromContinueTitled": "{{title}} aus Weiterschauen entfernen",
+    "moreActions": "Weitere Aktionen für {{title}}",
+    "actionFailed": "Die Aktion konnte nicht ausgeführt werden.",
+    "confirmUnmarkTitle": "{{title}} als ungesehen markieren?",
+    "confirmUnmarkDescription": "Alle Folgen werden ungesehen und alle gespeicherten Wiedergabepositionen gelöscht. Das lässt sich nicht rückgängig machen.",
+    "confirmUnmark": "Als ungesehen markieren",
+    "cancel": "Abbrechen"
   }
 }

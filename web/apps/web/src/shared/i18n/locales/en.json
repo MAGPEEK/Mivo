@@ -68,6 +68,8 @@
     "next": "Scroll {{title}} forward"
   },
   "rows": {
+    "continueWatching": "Continue watching",
+    "upNext": "Up next",
     "recentlyAdded": "Recently added",
     "recentlyAddedIn": "Recently added in {{library}}",
     "newReleases": "New releases",

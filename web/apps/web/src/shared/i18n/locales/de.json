@@ -68,6 +68,8 @@
     "next": "{{title}} weiterblättern"
   },
   "rows": {
+    "continueWatching": "Weiterschauen",
+    "upNext": "Als Nächstes",
     "recentlyAdded": "Kürzlich hinzugefügt",
     "recentlyAddedIn": "Kürzlich hinzugefügt in {{library}}",
     "newReleases": "Neuerscheinungen",

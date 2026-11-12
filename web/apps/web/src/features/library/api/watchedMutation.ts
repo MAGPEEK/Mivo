@@ -32,6 +32,16 @@ export async function setItemWatched(client: ApiClient, request: WatchedRequest)
   );
 }
 
+/**
+ * Hides a movie, episode or audiobook from Continue watching; its resume position stays and the
+ * next progress report shows it again. Failures arrive as `ApiError`.
+ */
+export async function hideFromContinueWatching(client: ApiClient, itemId: string): Promise<void> {
+  await requestData(
+    client.DELETE("/api/v1/items/{itemId}/continue-watching", { params: { path: { itemId } } }),
+  );
+}
+
 /** Whether a failed watch operation means the server cannot store watch state at all. */
 export function isWatchStateUnsupported(error: unknown): boolean {
   return error instanceof ApiError && error.status === notImplementedStatus;

@@ -61,6 +61,21 @@ function renderToggle(respond: Respond, item: WatchedToggleItem = movie) {
 }
 
 describe("useWatchedToggle", () => {
+  it.each([
+    ["a watched show", "show", true, true],
+    ["a watched season", "season", true, true],
+    ["an unwatched show", "show", false, false],
+    ["a watched movie", "movie", true, false],
+  ])("needs a confirmation to unmark: %s -> %s", (_name, kind, watched, expected) => {
+    const { result } = renderToggle(noContent, {
+      id: itemId,
+      kind,
+      viewerState: { watched, positionSeconds: 0, playCount: 1 },
+    });
+
+    expect(result.current.confirmUnmark).toBe(expected);
+  });
+
   it("shows the expected state at once and reloads lists, rows and items after the answer", async () => {
     const answer = deferredAnswer();
     const { result, server, queryClient, cachedState } = renderToggle(answer.respond);

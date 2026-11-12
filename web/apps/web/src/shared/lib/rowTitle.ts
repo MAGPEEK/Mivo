@@ -6,7 +6,12 @@ export type RowTitleSource = Pick<Row, "kind" | "titleKey" | "titleParams" | "ge
 /** Translation key and values of a row title in the shared namespace. */
 export type RowTitleMessage =
   | {
-      readonly key: "rows.recentlyAdded" | "rows.newReleases" | "rows.recentEpisodes";
+      readonly key:
+        | "rows.recentlyAdded"
+        | "rows.newReleases"
+        | "rows.recentEpisodes"
+        | "rows.continueWatching"
+        | "rows.upNext";
     }
   | { readonly key: "rows.fallback" }
   | { readonly key: "rows.recentlyAddedIn"; readonly values: { readonly library: string } }
@@ -16,6 +21,8 @@ const plainTitleKeys: Readonly<Record<string, RowTitleMessage>> = {
   "rows.recentlyAdded": { key: "rows.recentlyAdded" },
   "rows.newReleases": { key: "rows.newReleases" },
   "rows.recentEpisodes": { key: "rows.recentEpisodes" },
+  "rows.continueWatching": { key: "rows.continueWatching" },
+  "rows.upNext": { key: "rows.upNext" },
 };
 
 // Titles by kind for a key this client has no translation for (a newer server) or a key whose
@@ -24,6 +31,8 @@ const kindTitleKeys: Readonly<Record<string, RowTitleMessage>> = {
   recentlyAdded: { key: "rows.recentlyAdded" },
   newReleases: { key: "rows.newReleases" },
   recentEpisodes: { key: "rows.recentEpisodes" },
+  continueWatching: { key: "rows.continueWatching" },
+  upNext: { key: "rows.upNext" },
 };
 
 function nonEmpty(value: string | undefined): string | undefined {

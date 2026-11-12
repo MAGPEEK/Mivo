@@ -197,6 +197,14 @@
     "markUnwatched": "Mark as unwatched",
     "markWatchedTitled": "Mark {{title}} as watched",
     "markUnwatchedTitled": "Mark {{title}} as unwatched",
-    "failed": "The watched state could not be saved."
+    "failed": "The watched state could not be saved.",
+    "removeFromContinue": "Remove from continue watching",
+    "removeFromContinueTitled": "Remove {{title}} from continue watching",
+    "moreActions": "More actions for {{title}}",
+    "actionFailed": "The action could not be completed.",
+    "confirmUnmarkTitle": "Mark {{title}} as unwatched?",
+    "confirmUnmarkDescription": "Every episode becomes unwatched and all saved resume positions are cleared. This cannot be undone.",
+    "confirmUnmark": "Mark as unwatched",
+    "cancel": "Cancel"
   }
 }

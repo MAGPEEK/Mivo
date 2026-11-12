@@ -41,6 +41,11 @@ export function canMarkWatched(kind: string): boolean {
   return markableKinds.has(kind);
 }
 
+/** Whether the kind is a show or season: its watched state applies to many episodes. */
+export function isWatchContainer(kind: string): boolean {
+  return containerKinds.has(kind);
+}
+
 /** The resume position in seconds, or `undefined` when playback starts at the beginning. */
 export function resumeSeconds(viewerState: ViewerState | undefined): number | undefined {
   const position = viewerState?.positionSeconds;

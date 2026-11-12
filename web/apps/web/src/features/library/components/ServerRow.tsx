@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 
 import { MediaRow, useRowTitle, type SeeAllLinkProps } from "../../../shared/ui";
 import { rowCardFormat, seeAllTarget } from "../lib/serverRows";
+import { ContinueWatchingCard } from "./ContinueWatchingCard";
 import { RowItemCard } from "./RowItemCard";
 
 /** Props of {@link ServerRow}. */
@@ -37,7 +38,13 @@ export function ServerRow({ row }: ServerRowProps) {
       items={row.items}
       format={format}
       getKey={(item) => item.id}
-      renderCard={(item, card) => <RowItemCard item={item} format={format} rowCard={card} />}
+      renderCard={(item, card) =>
+        row.kind === "continueWatching" ? (
+          <ContinueWatchingCard item={item} format={format} rowCard={card} />
+        ) : (
+          <RowItemCard item={item} format={format} rowCard={card} />
+        )
+      }
       {...seeAll}
     />
   );

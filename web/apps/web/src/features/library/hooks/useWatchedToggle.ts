@@ -2,7 +2,11 @@ import type { ItemDetail, ViewerState } from "@mivo/api-client";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { itemQueryKey, useApiClient } from "../../../shared/api";
-import { canMarkWatched, expectedViewerState } from "../../../shared/lib/watchState";
+import {
+  canMarkWatched,
+  expectedViewerState,
+  isWatchContainer,
+} from "../../../shared/lib/watchState";
 import {
   invalidateWatchState,
   isWatchStateUnsupported,
@@ -32,6 +36,11 @@ export interface WatchedToggle {
   /** Like `watched`, for badges and the resume position; `undefined` without any state. */
   readonly viewerState: ViewerState | undefined;
   readonly pending: boolean;
+  /**
+   * True when unmarking needs the user's confirmation first: it applies to every episode of a
+   * show or season and clears all their resume positions for good.
+   */
+  readonly confirmUnmark: boolean;
   readonly failure: WatchedToggleFailure;
   /** Marks the item the other way; ignored while a request runs or when unsupported. */
   readonly toggle: () => void;
@@ -106,6 +115,7 @@ export function useWatchedToggle(item: WatchedToggleItem): WatchedToggle {
     watched,
     viewerState,
     pending: mutation.isPending,
+    confirmUnmark: watched && isWatchContainer(item.kind),
     failure: failureOf(supported, mutation.isError),
     toggle: () => {
       if (supported && !mutation.isPending) {

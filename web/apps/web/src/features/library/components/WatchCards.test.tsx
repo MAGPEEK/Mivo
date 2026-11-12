@@ -5,7 +5,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { I18nextProvider } from "react-i18next";
 import { describe, expect, it, vi } from "vitest";
@@ -30,6 +30,7 @@ function fakeToggle(fields: Partial<WatchedToggle> = {}): WatchedToggle {
     watched: false,
     viewerState: undefined,
     pending: false,
+    confirmUnmark: false,
     failure: "none",
     toggle: () => undefined,
     ...fields,
@@ -189,5 +190,44 @@ describe("watched toggle on a card", () => {
     expect(
       screen.getByRole("button", { name: "Big Buck Bunny als gesehen markieren" }),
     ).toBeTruthy();
+  });
+});
+
+describe("unmarking a show or season from a card", () => {
+  const watchedShow = fakeToggle({ watched: true, confirmUnmark: true });
+
+  it("asks first and unmarks only after the confirmation", async () => {
+    const toggle = vi.fn();
+    await renderInRouter(<ItemCard item={fakeItem()} watchedToggle={{ ...watchedShow, toggle }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark Big Buck Bunny as unwatched" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Mark Big Buck Bunny as unwatched?" });
+    expect(dialog.textContent).toContain("resume positions are cleared");
+    expect(toggle).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Mark as unwatched" }));
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps everything as it was on cancel", async () => {
+    const toggle = vi.fn();
+    await renderInRouter(<ItemCard item={fakeItem()} watchedToggle={{ ...watchedShow, toggle }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark Big Buck Bunny as unwatched" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(toggle).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("marking watched needs no confirmation", async () => {
+    const toggle = vi.fn();
+    await renderInRouter(<ItemCard item={fakeItem()} watchedToggle={fakeToggle({ toggle })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark Big Buck Bunny as watched" }));
+
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

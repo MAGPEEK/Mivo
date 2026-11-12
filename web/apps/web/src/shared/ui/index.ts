@@ -38,6 +38,7 @@ export {
   InfoIcon,
   LibraryIcon,
   LockIcon,
+  MoreIcon,
   MutedIcon,
   PauseIcon,
   PlayIcon,
