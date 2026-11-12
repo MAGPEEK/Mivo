@@ -40,8 +40,12 @@ export function playChoiceState(
 }
 
 function isAudioStreamIndex(value: unknown): value is number {
+  // Negative zero passes the range check but is no index a client writes.
   return (
-    Number.isInteger(value) && (value as number) >= 0 && (value as number) <= maxAudioStreamIndex
+    Number.isInteger(value) &&
+    (value as number) >= 0 &&
+    (value as number) <= maxAudioStreamIndex &&
+    !Object.is(value, -0)
   );
 }
 

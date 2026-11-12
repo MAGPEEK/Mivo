@@ -42,6 +42,16 @@ describe("useInitialPlayChoice", () => {
     expect(result.current).toBe(first);
   });
 
+  it("reads the state again on a fresh mount, as after a reload", () => {
+    historyState = playChoiceState("a", { audioStreamIndex: 2, subtitleTrackId: "" });
+    const first = renderHook(() => useInitialPlayChoice("a"));
+    first.unmount();
+
+    const second = renderHook(() => useInitialPlayChoice("a"));
+
+    expect(second.result.current).toEqual({ audioStreamIndex: 2, subtitleTrackId: "" });
+  });
+
   it("does not apply the choice to the next item of a queue", () => {
     historyState = playChoiceState("a", { audioStreamIndex: 2 });
     const { result, rerender } = renderHook(({ itemId }) => useInitialPlayChoice(itemId), {

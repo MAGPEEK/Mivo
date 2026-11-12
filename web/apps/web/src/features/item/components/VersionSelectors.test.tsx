@@ -107,7 +107,7 @@ describe("detail selectors", () => {
     expect(within(main).queryByRole("group", { name: "Choose what to play" })).toBeNull();
   });
 
-  it("offers the versions with label, resolution and bit rate, the first one preselected", async () => {
+  it("offers the versions with label, resolution and bit rate", async () => {
     renderItemPage("/items/item-1", { fetch: itemServer([twoVersions]) });
     const main = await findMain();
 
@@ -119,6 +119,42 @@ describe("detail selectors", () => {
       "4K · 4K · 58 Mbit/s",
     ]);
     expect(version.value).toBe("file-1");
+  });
+
+  it("preselects the first version in the server's order and does not rank them itself", async () => {
+    // The server lists the best version first (ADR 0022); here the lower quality comes first.
+    const lowerFirst = movie([...twoVersions.files].reverse());
+    const higherFirst = movie([...twoVersions.files]);
+    const wanted = [
+      { item: lowerFirst, first: "file-2" },
+      { item: higherFirst, first: "file-1" },
+    ];
+    for (const { item, first } of wanted) {
+      renderItemPage("/items/item-1", { fetch: itemServer([item]) });
+      const main = await findMain();
+      const version = await within(main).findByRole<HTMLSelectElement>("combobox", {
+        name: "Version",
+      });
+
+      expect(version.value).toBe(first);
+      expect(item.files[0]?.id).toBe(first);
+      cleanup();
+    }
+  });
+
+  it("shows no selectors for an item that cannot be played", async () => {
+    // Play follows the primary file; a playable second file with tracks must not bring the
+    // selectors back.
+    const unavailable = movie([
+      file("file-1", { available: false, errorCode: "probe_failed" }),
+      file("file-2"),
+    ]);
+    renderItemPage("/items/item-1", { fetch: itemServer([unavailable]) });
+    const main = await findMain();
+
+    expect(await within(main).findByText(/could not read it/)).toBeTruthy();
+    expect(within(main).queryByRole("group", { name: "Choose what to play" })).toBeNull();
+    expect(within(main).queryByRole("combobox")).toBeNull();
   });
 
   it("updates chips, tracks and the Play link with the selected version", async () => {

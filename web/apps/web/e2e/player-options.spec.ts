@@ -61,7 +61,11 @@ test("starts the first session with the audio picked on the detail page (M4-16c)
 
   const answer = await response;
   expect(answer.status(), await answer.text()).toBe(createdStatus);
-  expect(answer.request().postDataJSON()).toMatchObject({ audioStreamIndex: germanStreamIndex });
+  const body = answer.request().postDataJSON() as PlaybackRequest;
+  expect(body.audioStreamIndex).toBe(germanStreamIndex);
+  // The subtitle default follows the shown audio, so the pick is sent with an explicit
+  // subtitle choice (the clip has no subtitles: Off).
+  expect(body.subtitleTrackId).toBeDefined();
   expect(new URL(page.url()).search).not.toContain("audio");
   await leavePlayer(page, ((await answer.json()) as PlaybackSession).id);
 });

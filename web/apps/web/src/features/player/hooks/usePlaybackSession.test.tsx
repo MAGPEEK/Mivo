@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientProvider } from "../../../shared/api";
 import { createFakeApiClient, problemResponse } from "../../../test/fakeApi";
 import type { HlsFactory } from "../lib/hlsPlayer";
+import { playerItemQueryKey } from "../api/playerQueries";
 import type { PlayChoice } from "../lib/playChoiceHandoff";
 import { createPlaybackServer, type PlaybackServer } from "../test/fakePlaybackServer";
 import { createManualTimers } from "../test/fakeMedia";
@@ -105,6 +106,49 @@ describe("usePlaybackSession", () => {
 
     it("asks for no subtitle when the viewer picked Off", async () => {
       expect(await firstRequest({ subtitleTrackId: "" })).toMatchObject({ subtitleTrackId: "" });
+    });
+
+    it("applies the choice again on a fresh mount of the same item, as after a reload", async () => {
+      const choice: PlayChoice = { audioStreamIndex: 2 };
+      const server = createPlaybackServer({ item: multiTrackItem() });
+      const first = renderPlayback({ ...target, choice }, { server });
+      await waitFor(() => {
+        expect(server.sessionRequests).toHaveLength(1);
+      });
+      first.unmount();
+
+      renderPlayback({ ...target, choice }, { server });
+
+      await waitFor(() => {
+        expect(server.sessionRequests).toHaveLength(2);
+      });
+      expect(server.sessionRequests[1]).toMatchObject({ audioStreamIndex: 2 });
+    });
+
+    it("does not put the choice over later picks when a refetch changes the tracks", async () => {
+      const server = createPlaybackServer({ item: multiTrackItem() });
+      const queryClient = new QueryClient();
+      const { result } = renderPlayback(
+        { ...target, choice: { audioStreamIndex: 2 } },
+        { server, queryClient },
+      );
+      await waitFor(() => {
+        expect(result.current.session).toBeDefined();
+      });
+      expect(server.sessionRequests[0]).toMatchObject({ audioStreamIndex: 2 });
+
+      // A refetched item: a new object, so the file's tracks are new ones too.
+      act(() => {
+        queryClient.setQueryData(playerItemQueryKey(playerItemId), {
+          ...multiTrackItem(),
+          title: "Renamed",
+        });
+      });
+
+      await waitFor(() => {
+        expect(server.sessionRequests).toHaveLength(2);
+      });
+      expect(server.sessionRequests[1]).not.toHaveProperty("audioStreamIndex");
     });
 
     it("leaves tracks the file does not have to the policy", async () => {

@@ -36,6 +36,7 @@ describe("play choice hand-over", () => {
     ["a null handoff", { mivoPlayChoice: null }],
     ["a fractional index", { mivoPlayChoice: { itemId: "item-1", audioStreamIndex: 1.5 } }],
     ["a negative index", { mivoPlayChoice: { itemId: "item-1", audioStreamIndex: -1 } }],
+    ["negative zero", { mivoPlayChoice: { itemId: "item-1", audioStreamIndex: -0 } }],
     ["a huge index", { mivoPlayChoice: { itemId: "item-1", audioStreamIndex: 1000 } }],
     ["a string index", { mivoPlayChoice: { itemId: "item-1", audioStreamIndex: "2" } }],
     ["a bad track id", { mivoPlayChoice: { itemId: "item-1", subtitleTrackId: "../x" } }],

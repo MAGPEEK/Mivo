@@ -1,6 +1,6 @@
 import type { ClientProfile, StartTimer, SwitchPlan } from "@mivo/player-core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useApiClient } from "../../../shared/api";
 import { browserLocalStorage } from "../../../shared/lib/persistentFlag";
@@ -163,7 +163,8 @@ interface PlaybackOpening {
   readonly profile: ClientProfile | undefined;
   readonly start: PlaybackStart | undefined;
   readonly tracks: PlayerTracks | undefined;
-  readonly choice: PlayChoice | undefined;
+  /** Names the item and carries the choice the detail page handed over. */
+  readonly target: PlaybackTarget;
 }
 
 /**
@@ -172,7 +173,9 @@ interface PlaybackOpening {
  * in the options panel switches the running session itself.
  */
 function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: PlaybackOpening): void {
-  const { media, profile, tracks, choice } = opening;
+  const { media, profile, tracks } = opening;
+  const { choice, itemId } = opening.target;
+  const appliedChoice = useRef<{ itemId: string; tracks: PlayerTracks | undefined }>(undefined);
   const fileId = opening.start?.fileId;
   const startPositionSeconds = opening.start?.startPositionSeconds ?? 0;
   useEffect(() => {
@@ -184,12 +187,20 @@ function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: Play
       tracks?.quality ?? [],
     );
     const maxBitRate = startingMaxBitRate(quality);
+    // The handed-over choice starts the item; a later reopen (the item's tracks changed after
+    // a refetch) must not put it over what the viewer picked in the player since. The same
+    // tracks again (React's double effect run in development) still count as the first open.
+    const previous = appliedChoice.current;
+    const first = previous?.itemId !== itemId || previous.tracks === tracks;
+    if (first) {
+      appliedChoice.current = { itemId, tracks };
+    }
     engine.open({
       media,
       profile,
       fileId,
       startPositionSeconds,
-      selection: { ...choiceSelection(choice, tracks), maxBitRate },
+      selection: { ...(first ? choiceSelection(choice, tracks) : {}), maxBitRate },
       ...(tracks === undefined
         ? {}
         : { subtitleTracks: tracks.subtitles, qualityOptions: tracks.quality }),
@@ -198,7 +209,7 @@ function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: Play
     return () => {
       engine.close();
     };
-  }, [engine, media, profile, fileId, startPositionSeconds, tracks, choice]);
+  }, [engine, media, profile, fileId, startPositionSeconds, tracks, choice, itemId]);
 }
 
 /**
@@ -226,7 +237,7 @@ export function usePlaybackSession(
     offsetSeconds: progressOffsetSeconds,
     startTimer,
   });
-  useOpenPlayback(engine, { media, profile, start, tracks, choice: target.choice });
+  useOpenPlayback(engine, { media, profile, start, tracks, target });
   usePageLifecycle(engine);
 
   const controls = {
