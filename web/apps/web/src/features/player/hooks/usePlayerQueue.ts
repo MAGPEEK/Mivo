@@ -15,10 +15,12 @@ import {
   hasQueue,
   isShuffled,
   nextRepeatMode,
+  queueFromHandoff,
   singleItemQueue,
   type PlayerQueueItem,
   type PlayerQueueState,
 } from "../lib/playerQueue";
+import { readQueueHandoff } from "../lib/queueHandoff";
 
 /** Which queue setting changed last; the controls announce it in a live region. */
 export type QueueAnnouncement = "repeat" | "shuffle";
@@ -61,6 +63,14 @@ function randomSeed(): number {
   return Math.floor(Math.random() * shuffleSeedRange);
 }
 
+/** The queue a page handed over in the history state (an album), else the item alone. */
+function initialQueue(itemId: string, historyState: unknown): PlayerQueueState {
+  const handoff = readQueueHandoff(historyState, itemId);
+  return handoff === undefined
+    ? singleItemQueue(itemId)
+    : queueFromHandoff(handoff, itemId, randomSeed());
+}
+
 /**
  * Keeps the queue in sync with the route: when the route changes to another item than the
  * queue's current one (a link, the browser's history), the queue starts over with that item
@@ -69,7 +79,8 @@ function randomSeed(): number {
  * State derived during rendering, as React recommends instead of an effect.
  */
 function useRouteSyncedQueue(itemId: string) {
-  const [state, setState] = useState(() => singleItemQueue(itemId));
+  const router = useRouter();
+  const [state, setState] = useState(() => initialQueue(itemId, router.state.location.state));
   const [routeItemId, setRouteItemId] = useState(itemId);
   if (routeItemId !== itemId) {
     setRouteItemId(itemId);

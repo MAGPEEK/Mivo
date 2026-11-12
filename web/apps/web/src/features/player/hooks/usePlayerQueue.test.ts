@@ -2,12 +2,14 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlayerQueueItem } from "../lib/playerQueue";
+import { queueHandoffState } from "../lib/queueHandoff";
 import { usePlayerQueue, type PlayerQueueOptions } from "./usePlayerQueue";
 
 const navigate = vi.fn<(options: unknown) => Promise<void>>();
+let historyState: unknown = {};
 
 vi.mock("@tanstack/react-router", () => ({
-  useRouter: () => ({ navigate }),
+  useRouter: () => ({ navigate, state: { location: { state: historyState } } }),
 }));
 
 const items: readonly PlayerQueueItem[] = [
@@ -39,9 +41,18 @@ beforeEach(() => {
 
 afterEach(() => {
   navigate.mockReset();
+  historyState = {};
 });
 
 describe("usePlayerQueue", () => {
+  it("starts with the queue a page handed over in the history state", () => {
+    historyState = queueHandoffState({ ids: ["a", "b", "c"], shuffle: false });
+
+    const { result } = renderQueue({ itemId: "b" });
+
+    expect(result.current.view).toMatchObject({ canGoPrevious: true, canGoNext: true });
+  });
+
   it("offers neither previous nor next for the opened item alone", () => {
     const { result } = renderQueue();
 

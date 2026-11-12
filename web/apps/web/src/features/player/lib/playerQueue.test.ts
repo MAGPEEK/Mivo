@@ -7,8 +7,30 @@ import {
   hasQueue,
   isShuffled,
   nextRepeatMode,
+  queueFromHandoff,
   singleItemQueue,
 } from "./playerQueue";
+
+describe("queueFromHandoff", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("starts at the opened item and keeps the order", () => {
+    const queue = queueFromHandoff({ ids, shuffle: false }, "c", 1);
+
+    expect(queue.items.map((entry) => entry.id)).toEqual(ids);
+    expect(currentItemId(queue)).toBe("c");
+    expect(isShuffled(queue)).toBe(false);
+  });
+
+  it("plays the opened item first and every item once when shuffled", () => {
+    const queue = queueFromHandoff({ ids, shuffle: true }, "b", 7);
+
+    expect(currentItemId(queue)).toBe("b");
+    expect(queue.currentIndex).toBe(0);
+    expect(isShuffled(queue)).toBe(true);
+    expect(queue.items.map((entry) => entry.id).sort()).toEqual(ids);
+  });
+});
 
 const threeItems = setQueue(singleItemQueue("a"), [
   { id: "a", meta: {} },

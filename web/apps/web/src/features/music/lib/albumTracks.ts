@@ -33,14 +33,36 @@ export function toTrackRowModel(track: ItemSummary): TrackRowModel {
   };
 }
 
+// Missing numbers sort after every real one.
+function numberOrLast(value: number | undefined): number {
+  return value ?? Number.POSITIVE_INFINITY;
+}
+
 /**
- * Groups the tracks of an album by disc. The server already orders them by disc and track
- * number (`listItemChildren`), so consecutive tracks of the same disc form one group and the
- * order stays the server's.
+ * The tracks in album order: by disc, then track number; tracks without a disc or number come
+ * last. The server's children order is by track number only, so discs would interleave.
+ * Array sort is stable, so equal tracks keep the server's order.
+ */
+export function sortTracks(tracks: readonly ItemSummary[]): ItemSummary[] {
+  return [...tracks].sort(
+    (a, b) =>
+      compareNumbers(numberOrLast(a.discNumber), numberOrLast(b.discNumber)) ||
+      compareNumbers(numberOrLast(a.number), numberOrLast(b.number)),
+  );
+}
+
+// Subtraction would yield NaN for two infinities.
+function compareNumbers(a: number, b: number): number {
+  return a === b ? 0 : a < b ? -1 : 1;
+}
+
+/**
+ * Groups the tracks of an album by disc, in {@link sortTracks} order: consecutive tracks of the
+ * same disc form one group.
  */
 export function groupByDisc(tracks: readonly ItemSummary[]): DiscGroup[] {
   const groups: { disc: number | undefined; tracks: TrackRowModel[] }[] = [];
-  for (const track of tracks) {
+  for (const track of sortTracks(tracks)) {
     const last = groups.at(-1);
     if (last !== undefined && last.disc === track.discNumber) {
       last.tracks.push(toTrackRowModel(track));
@@ -58,5 +80,17 @@ export function hasSeveralDiscs(groups: readonly DiscGroup[]): boolean {
 
 /** The first track of the album that can be played: what the album's Play starts. */
 export function firstPlayableTrackId(tracks: readonly ItemSummary[]): string | undefined {
-  return tracks.find((track) => track.media?.available === true)?.id;
+  return playQueueIds(tracks)[0];
+}
+
+/** The IDs of the playable tracks in album order: the queue Play and Shuffle hand to the player. */
+export function playQueueIds(tracks: readonly ItemSummary[]): string[] {
+  return sortTracks(tracks)
+    .filter((track) => track.media?.available === true)
+    .map((track) => track.id);
+}
+
+/** The track a shuffle starts with, picked by `fraction` in [0, 1); none for an empty queue. */
+export function shuffleStartId(ids: readonly string[], fraction: number): string | undefined {
+  return ids[Math.floor(fraction * ids.length)];
 }

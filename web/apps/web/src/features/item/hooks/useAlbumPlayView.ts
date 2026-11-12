@@ -19,5 +19,5 @@ export function useAlbumPlayView(albumId: string): PlayView {
   }
   return track.trackId === undefined
     ? { kind: "unavailable", explanation: t("play.unavailable.noTracks") }
-    : { kind: "playable", itemId: track.trackId };
+    : { kind: "playable", itemId: track.trackId, queue: track.queueIds };
 }

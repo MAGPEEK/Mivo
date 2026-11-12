@@ -1,3 +1,5 @@
+export { AlbumShuffleButton, type AlbumShuffleButtonProps } from "./components/AlbumShuffleButton";
+export { ArtistAlbums, type ArtistAlbumsProps } from "./components/ArtistAlbums";
 export { AlbumTrackList, type AlbumTrackListProps } from "./components/AlbumTrackList";
 export { MusicLibraryGrid, type MusicLibraryGridProps } from "./components/MusicLibraryGrid";
 export { useAlbumPlayTrack, type AlbumPlayTrack } from "./hooks/useAlbumTracks";

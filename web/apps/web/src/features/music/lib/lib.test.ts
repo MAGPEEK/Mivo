@@ -2,7 +2,16 @@ import type { ItemSummary } from "@mivo/api-client";
 import { describe, expect, it } from "vitest";
 
 import { toAlbumCardModel } from "./albumCard";
-import { firstPlayableTrackId, groupByDisc, hasSeveralDiscs, toTrackRowModel } from "./albumTracks";
+import { sortAlbumsByYear } from "./artistAlbums";
+import {
+  firstPlayableTrackId,
+  groupByDisc,
+  hasSeveralDiscs,
+  playQueueIds,
+  shuffleStartId,
+  sortTracks,
+  toTrackRowModel,
+} from "./albumTracks";
 
 function track(fields: Partial<ItemSummary> & { readonly id: string }): ItemSummary {
   return {
@@ -78,6 +87,74 @@ describe("toTrackRowModel", () => {
     },
   ])("maps $name", ({ source, expected }) => {
     expect(toTrackRowModel(source)).toMatchObject(expected);
+  });
+});
+
+describe("sortAlbumsByYear", () => {
+  function album(id: string, year?: number): ItemSummary {
+    return {
+      id,
+      libraryId: "library-1",
+      kind: "album",
+      title: id,
+      ...(year === undefined ? {} : { year }),
+    };
+  }
+
+  it("lists the oldest first, undated albums last, equal years in server order", () => {
+    const sorted = sortAlbumsByYear([
+      album("undated"),
+      album("new", 2021),
+      album("b", 2005),
+      album("a", 2005),
+    ]);
+
+    expect(sorted.map((item) => item.id)).toEqual(["b", "a", "new", "undated"]);
+  });
+
+  it("keeps only albums", () => {
+    const other: ItemSummary = { id: "t", libraryId: "library-1", kind: "track", title: "t" };
+
+    expect(sortAlbumsByYear([other, album("a", 2000)]).map((item) => item.id)).toEqual(["a"]);
+  });
+});
+
+describe("sortTracks", () => {
+  it("orders by disc, then number, with untagged discs and unnumbered tracks last", () => {
+    const sorted = sortTracks([
+      track({ id: "unnumbered", discNumber: 1 }),
+      track({ id: "d2t1", discNumber: 2, number: 1 }),
+      track({ id: "loose", number: 1 }),
+      track({ id: "d1t2", discNumber: 1, number: 2 }),
+      track({ id: "d1t1", discNumber: 1, number: 1 }),
+    ]);
+
+    expect(sorted.map((row) => row.id)).toEqual(["d1t1", "d1t2", "unnumbered", "d2t1", "loose"]);
+  });
+
+  it("keeps the server order of equal tracks and leaves its input alone", () => {
+    const input = [track({ id: "b", number: 1 }), track({ id: "a", number: 1 })];
+
+    expect(sortTracks(input).map((row) => row.id)).toEqual(["b", "a"]);
+    expect(input.map((row) => row.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("playQueueFrom", () => {
+  const tracks = [
+    track({ id: "a", discNumber: 1, number: 1 }),
+    track({ id: "gone", discNumber: 1, number: 2, media: { available: false } }),
+    track({ id: "b", discNumber: 2, number: 1 }),
+  ];
+
+  it("lists the playable tracks in album order", () => {
+    expect(playQueueIds(tracks)).toEqual(["a", "b"]);
+  });
+
+  it("starts the shuffle at a track the random fraction picks", () => {
+    expect(shuffleStartId(["a", "b", "c"], 0)).toBe("a");
+    expect(shuffleStartId(["a", "b", "c"], 0.99)).toBe("c");
+    expect(shuffleStartId([], 0.5)).toBeUndefined();
   });
 });
 

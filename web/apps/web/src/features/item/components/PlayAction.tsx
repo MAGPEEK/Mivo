@@ -3,6 +3,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChevronDownIcon, Menu } from "../../../shared/ui";
+import { queueHandoffState } from "../../player";
 import { usePlayFromStart } from "../hooks/usePlayFromStart";
 import type { PlayView, ResumeView } from "../lib/itemView";
 import { itemNamespace } from "../locales";
@@ -31,12 +32,18 @@ const splitMenuClass = `inline-flex items-center rounded-r-md border-l border-on
 export function PlayAction({ play }: PlayActionProps) {
   const { t } = useTranslation(itemNamespace);
   const explanationId = useId();
+  if (play.kind === "none") {
+    return null;
+  }
   if (play.kind === "playable") {
     return play.resume === undefined ? (
       <Link
         to="/items/$itemId/play"
         params={{ itemId: play.itemId }}
         search={{ fileId: play.fileId }}
+        {...(play.queue === undefined
+          ? {}
+          : { state: queueHandoffState({ ids: play.queue, shuffle: false }) })}
         className={`${playButtonClass} self-start rounded-md ${accentClass}`}
       >
         <PlayIcon />

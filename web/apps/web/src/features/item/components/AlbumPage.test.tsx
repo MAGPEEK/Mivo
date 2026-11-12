@@ -98,6 +98,71 @@ describe("Album page", () => {
     });
   });
 
+  it("orders by disc and number whatever order the server lists, unnumbered tracks last", async () => {
+    renderAlbum([
+      trackSummary("bonus", { title: "Bonus", discNumber: 1 }),
+      trackSummary("adagio", { title: "Adagio", discNumber: 2, number: 1 }),
+      trackSummary("allegro", { title: "Allegro", discNumber: 1, number: 2 }),
+      trackSummary("overture", { title: "Overture", discNumber: 1, number: 1 }),
+    ]);
+
+    const discOne = await screen.findByRole("list", { name: "Disc 1" });
+    expect(
+      within(discOne)
+        .getAllByRole("listitem")
+        .map((row) => row.textContent),
+    ).toEqual(["1Overture0:02", "2Allegro0:02", "Bonus0:02"]);
+  });
+
+  it("plays the album from a clicked track and queues the playable tracks", async () => {
+    const { router } = renderAlbum(twoDiscTracks);
+
+    fireEvent.click(await screen.findByRole("link", { name: "Play Allegro" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/items/allegro/play");
+    });
+    expect(router.state.location.state).toMatchObject({
+      mivoQueue: { ids: ["overture", "allegro", "adagio"], shuffle: false },
+    });
+  });
+
+  it("hands the queue to the player from Play", async () => {
+    const { router } = renderAlbum(twoDiscTracks);
+
+    fireEvent.click(await screen.findByRole("link", { name: "Play" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/items/overture/play");
+    });
+    expect(router.state.location.state).toMatchObject({
+      mivoQueue: { ids: ["overture", "allegro", "adagio"], shuffle: false },
+    });
+  });
+
+  it("shuffles the playable tracks from Shuffle", async () => {
+    const { router } = renderAlbum(twoDiscTracks);
+    await screen.findByRole("link", { name: "Play Overture" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Shuffle" }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toMatch(/^\/items\/(overture|allegro|adagio)\/play$/);
+    });
+    expect(router.state.location.state).toMatchObject({
+      mivoQueue: { ids: ["overture", "allegro", "adagio"], shuffle: true },
+    });
+  });
+
+  it("keeps Shuffle off for an album without tracks", async () => {
+    renderAlbum([]);
+    await screen.findByText("This album has no tracks yet.");
+
+    expect(screen.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled")).toBe(
+      "true",
+    );
+  });
+
   it("lists a one-disc album without disc headings", async () => {
     renderAlbum([trackSummary("only", { title: "Only", discNumber: 1, number: 1 })]);
 

@@ -6,10 +6,13 @@ import {
   emptyQueue,
   nextInQueue,
   setQueue,
+  setShuffle,
   type QueueItem,
   type QueueState,
   type RepeatMode,
 } from "@mivo/player-core";
+
+import type { QueueHandoff } from "./queueHandoff";
 
 /** What the player keeps per queued item; the item page and the route need only the id. */
 export type PlayerQueueMeta = Readonly<Record<string, never>>;
@@ -32,6 +35,20 @@ export function nextRepeatMode(repeat: RepeatMode): RepeatMode {
 /** A queue that holds only the item the player opened: no previous, no next. */
 export function singleItemQueue(itemId: string, from: PlayerQueueState = emptyQueue()) {
   return setQueue(from, [{ id: itemId, meta: {} }]);
+}
+
+/**
+ * The queue a page handed over (an album's tracks), positioned at `itemId`. With shuffle on,
+ * `itemId` plays first and the rest follows in the seeded order.
+ */
+export function queueFromHandoff(
+  handoff: QueueHandoff,
+  itemId: string,
+  seed: number,
+): PlayerQueueState {
+  const items = handoff.ids.map((id): PlayerQueueItem => ({ id, meta: {} }));
+  const queue = setQueue(emptyQueue<PlayerQueueMeta>(), items, handoff.ids.indexOf(itemId));
+  return handoff.shuffle ? setShuffle(queue, true, seed) : queue;
 }
 
 /** Whether the queue holds more than the playing item, so previous and next mean something. */

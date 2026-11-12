@@ -14,6 +14,16 @@
       "hint": "Every album of this library is matched with a provider entry."
     }
   },
+  "album": {
+    "shuffle": "Shuffle"
+  },
+  "artist": {
+    "albums": "Albums",
+    "loading": "Loading albums",
+    "loadFailed": "The albums could not be loaded.",
+    "retry": "Try again",
+    "empty": "This artist has no albums yet."
+  },
   "tracks": {
     "label": "Tracks",
     "loading": "Loading tracks",

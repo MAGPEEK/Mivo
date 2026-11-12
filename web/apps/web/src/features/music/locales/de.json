@@ -14,6 +14,16 @@
       "hint": "Jedes Album dieser Mediathek ist einem Eintrag eines Anbieters zugeordnet."
     }
   },
+  "album": {
+    "shuffle": "Zufällig"
+  },
+  "artist": {
+    "albums": "Alben",
+    "loading": "Alben werden geladen",
+    "loadFailed": "Die Alben konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "Dieser Künstler hat noch keine Alben."
+  },
   "tracks": {
     "label": "Titel",
     "loading": "Titel werden geladen",

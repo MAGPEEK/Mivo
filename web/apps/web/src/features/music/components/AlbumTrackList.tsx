@@ -9,6 +9,7 @@ import {
   Skeleton,
   stretchedLinkClass,
 } from "../../../shared/ui";
+import { queueHandoffState } from "../../player";
 import { useAlbumTracks, type AlbumTracks } from "../hooks/useAlbumTracks";
 import type { DiscGroup, TrackRowModel } from "../lib/albumTracks";
 import { musicNamespace } from "../locales";
@@ -69,6 +70,7 @@ function TrackListBody({ tracks }: { readonly tracks: AlbumTracks }) {
           key={`${String(group.disc)}-${String(position)}`}
           group={group}
           titled={tracks.showDiscHeadings}
+          queueIds={tracks.queueIds}
         />
       ))}
       {tracks.hasMore && (
@@ -90,9 +92,11 @@ interface DiscProps {
   readonly group: DiscGroup;
   /** Whether the disc gets a heading: only when the album has several. */
   readonly titled: boolean;
+  /** The album's playable tracks: the queue a click on a row plays from there. */
+  readonly queueIds: readonly string[];
 }
 
-function Disc({ group, titled }: DiscProps) {
+function Disc({ group, titled, queueIds }: DiscProps) {
   const { t } = useTranslation(musicNamespace);
   const headingId = useId();
   const name =
@@ -110,7 +114,7 @@ function Disc({ group, titled }: DiscProps) {
       <ol aria-labelledby={titled ? headingId : undefined} className="flex flex-col">
         {group.tracks.map((track) => (
           <li key={track.id}>
-            <TrackRow track={track} />
+            <TrackRow track={track} queueIds={queueIds} />
           </li>
         ))}
       </ol>
@@ -118,7 +122,13 @@ function Disc({ group, titled }: DiscProps) {
   );
 }
 
-function TrackRow({ track }: { readonly track: TrackRowModel }) {
+function TrackRow({
+  track,
+  queueIds,
+}: {
+  readonly track: TrackRowModel;
+  readonly queueIds: readonly string[];
+}) {
   const { t } = useTranslation(musicNamespace);
   return (
     <div className="group relative grid grid-cols-[2.75rem_1fr_auto] items-center gap-3 rounded-sm border-b border-divider px-2 py-2 hover:bg-surface focus-within:bg-surface">
@@ -137,6 +147,7 @@ function TrackRow({ track }: { readonly track: TrackRowModel }) {
           <Link
             to="/items/$itemId/play"
             params={{ itemId: track.id }}
+            state={queueHandoffState({ ids: queueIds, shuffle: false })}
             aria-label={t("tracks.play", { title: track.title })}
             className={`truncate font-medium ${stretchedLinkClass}`}
           >

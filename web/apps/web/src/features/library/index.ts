@@ -11,7 +11,7 @@ export { ListView, DetailsView, type ItemRowsProps } from "./components/ItemRows
 export { ViewControls, type ViewControlsProps } from "./components/ViewControls";
 export { useViewPreference, type ViewPreference } from "./hooks/useViewPreference";
 export { cardSize, type CardSize, type ViewStyle } from "./lib/viewStyle";
-export { itemPosterSizes } from "./components/gridLayout";
+export { itemGridClass, itemPosterSizes } from "./components/gridLayout";
 export { useFocusOnMount } from "./hooks/useFocusOnMount";
 export type { LibraryItems } from "./hooks/useLibraryItems";
 export { validateBrowseSearch, type BrowseSearch, type LibraryItemFilter } from "./lib/browseQuery";

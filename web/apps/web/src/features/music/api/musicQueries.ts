@@ -29,15 +29,19 @@ export function albumTracksQueryKey(albumId: string) {
   return [...itemQueryKey(albumId), "tracks"] as const;
 }
 
-/** Infinite query options for the tracks of an album, in disc and track order. */
-export function albumTracksQueryOptions(client: ApiClient, albumId: string) {
+// The pages of an item's children; tracks and albums differ only in the cache key.
+function childrenQueryOptions<Key extends readonly string[]>(
+  client: ApiClient,
+  parentId: string,
+  queryKey: Key,
+) {
   return infiniteQueryOptions({
-    queryKey: albumTracksQueryKey(albumId),
+    queryKey,
     queryFn: ({ pageParam, signal }) =>
       requestData(
         client.GET("/api/v1/items/{itemId}/children", {
           params: {
-            path: { itemId: albumId },
+            path: { itemId: parentId },
             query: {
               limit: tracksPageSize,
               ...(pageParam === undefined ? {} : { cursor: pageParam }),
@@ -50,6 +54,21 @@ export function albumTracksQueryOptions(client: ApiClient, albumId: string) {
     getNextPageParam: (page) => page.nextCursor,
     retry: shouldRetryMusicQuery,
   });
+}
+
+/** Infinite query options for the tracks of an album. */
+export function albumTracksQueryOptions(client: ApiClient, albumId: string) {
+  return childrenQueryOptions(client, albumId, albumTracksQueryKey(albumId));
+}
+
+/** Cache key of the album pages of an artist, below the artist's item key. */
+export function artistAlbumsQueryKey(artistId: string) {
+  return [...itemQueryKey(artistId), "albums"] as const;
+}
+
+/** Infinite query options for the albums (children) of an artist. */
+export function artistAlbumsQueryOptions(client: ApiClient, artistId: string) {
+  return childrenQueryOptions(client, artistId, artistAlbumsQueryKey(artistId));
 }
 
 /**

@@ -12,7 +12,7 @@ import { EpisodePage } from "./EpisodePage";
 import { ShowPage, SeasonPage } from "./ContainerPages";
 import { ItemDetails } from "./ItemDetails";
 import { ItemLoadError, ItemLoading, ItemNotFound } from "./ItemStates";
-import { AlbumPage } from "./MusicPages";
+import { AlbumPage, ArtistPage } from "./MusicPages";
 import { AudiobookPage } from "./AudiobookPage";
 import { PhotoAlbumPage, PhotoPage } from "./PhotoPages";
 import { WatchedAction } from "./WatchedAction";
@@ -138,11 +138,11 @@ function ItemByKind({ headingRef, itemId, item, search }: ItemByKindProps) {
       return <PhotoAlbumPage headingRef={headingRef} itemId={itemId} item={item} />;
     case "photo":
       return <PhotoPage headingRef={headingRef} itemId={itemId} item={item} />;
-    // Artists get their own page with the full music view (M5); until then the generic
-    // detail view shows them, tracks and kinds added in later API versions (default).
+    case "artist":
+      return <ArtistPage headingRef={headingRef} itemId={itemId} item={item} actions={matchMenu} />;
+    // The generic detail view shows the rest, tracks and kinds added in later API versions.
     case "movie":
     case "extra":
-    case "artist":
     case "track":
     default:
       return <ItemDetails headingRef={headingRef} item={item} actions={videoActions} />;

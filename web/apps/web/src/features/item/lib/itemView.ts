@@ -62,8 +62,12 @@ export type PlayView =
       readonly itemId: string;
       readonly fileId?: string;
       readonly resume?: ResumeView;
+      /** Item IDs the player queues with `itemId` first, e.g. an album's tracks. */
+      readonly queue?: readonly string[];
     }
-  | { readonly kind: "unavailable"; readonly explanation: string };
+  | { readonly kind: "unavailable"; readonly explanation: string }
+  /** Nothing to play on this page (an artist): no Play button at all. */
+  | { readonly kind: "none" };
 
 /** Everything the detail page shows of a loaded item, as display text. */
 export interface ItemView {
