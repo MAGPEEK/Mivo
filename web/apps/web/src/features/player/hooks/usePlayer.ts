@@ -1,6 +1,8 @@
-import { knownDuration, streamInfo, type StreamInfo } from "@mivo/player-core";
+import { knownDuration, streamInfo, type AudioTrack, type StreamInfo } from "@mivo/player-core";
 import { useCallback, useRef, useState, type RefObject } from "react";
 
+import { currentAudioIndex } from "../lib/optionRows";
+import { alternativeAudioTracks } from "../lib/reasonHints";
 import type { MediaState } from "../lib/mediaState";
 import type { PlaybackSnapshot } from "../lib/playbackEngine";
 import { playbackNotice, type PlaybackNotice } from "../lib/playbackStatusText";
@@ -35,6 +37,8 @@ export interface PlayerView {
   readonly streamInfo: StreamInfo | undefined;
   /** Buffer ahead and throughput for the overlay; sampled only while it is open. */
   readonly networkStats: NetworkStats;
+  /** Audio tracks other than the one that plays; the overlay's hints to switch need one. */
+  readonly alternativeAudio: readonly AudioTrack[];
   /** Displayed file position in seconds. */
   readonly position: number;
   /** Probed duration of the file in seconds; `undefined` until known. */
@@ -127,6 +131,16 @@ function useAutoHidingControls(playingFreely: boolean): boolean {
   return useControlsVisibility(playingFreely && !keyboardFocusInControls);
 }
 
+/** The audio tracks of the file other than the one that plays. */
+function otherAudioTracks(
+  playback: Pick<PlaybackOptionsInput, "tracks" | "selection" | "session">,
+): AudioTrack[] {
+  return alternativeAudioTracks(
+    playback.tracks?.audio ?? [],
+    currentAudioIndex(playback.selection, playback.session),
+  );
+}
+
 /** What the full-screen button and the stream-info overlay do. */
 function panelActions(
   fullscreen: Fullscreen,
@@ -211,6 +225,7 @@ export function usePlayer(target: PlaybackTarget): Player {
       notice: playbackNotice(playback),
       streamInfo: session === undefined ? undefined : streamInfo(session),
       networkStats,
+      alternativeAudio: otherAudioTracks(playback),
       position: playback.position,
       duration,
       media,

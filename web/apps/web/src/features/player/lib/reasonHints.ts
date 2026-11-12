@@ -1,4 +1,4 @@
-import type { KnownReasonCode, KnownWarningCode } from "@mivo/player-core";
+import type { AudioTrack, KnownReasonCode, KnownWarningCode } from "@mivo/player-core";
 
 /** Key (in the player namespace) of the one-line action hint of a reason or warning. */
 export type ReasonHintKey =
@@ -42,7 +42,39 @@ const hintLookup: ReadonlyMap<string, ReasonHintKey | undefined> = new Map(
   Object.entries(reasonHintKeys),
 );
 
-/** The hint key for a code as the server sent it; unknown codes have none. */
-export function reasonHintKey(code: string): ReasonHintKey | undefined {
-  return hintLookup.get(code);
+const aacCodec = "aac";
+/** Most channels a browser plays in an HLS stream without conversion (5.1). */
+const maxPlayableChannels = 6;
+
+/** Whether the file has an audio track that would answer the reason behind `code`. */
+function actionExists(code: string, alternatives: readonly AudioTrack[]): boolean {
+  if (code === "audio_codec_not_supported") {
+    return alternatives.some((track) => track.codec?.toLowerCase() === aacCodec);
+  }
+  if (code === "audio_channels_not_supported") {
+    return alternatives.some(
+      (track) => track.channels !== undefined && track.channels <= maxPlayableChannels,
+    );
+  }
+  return true;
+}
+
+/**
+ * The hint key for a code as the server sent it; unknown codes have none. A hint that tells the
+ * viewer to choose an audio track appears only when the file has such a track other than the
+ * one that plays (`alternativeAudio`).
+ */
+export function reasonHintKey(
+  code: string,
+  alternativeAudio: readonly AudioTrack[] = [],
+): ReasonHintKey | undefined {
+  return actionExists(code, alternativeAudio) ? hintLookup.get(code) : undefined;
+}
+
+/** The audio tracks of the file other than the one that plays. */
+export function alternativeAudioTracks(
+  tracks: readonly AudioTrack[],
+  currentIndex: number | undefined,
+): AudioTrack[] {
+  return tracks.filter((track) => track.index !== currentIndex);
 }

@@ -82,7 +82,8 @@ describe("PlayerPage stream-info overlay", () => {
     expect(listItems("Why")).toEqual([
       "MKV not supported → MP4",
       "Video HEVC not supported → H.264",
-      "Audio AC-3 not supported → AAC Choose an AAC track to avoid converting.",
+      // No AAC alternative in the fixture file, so no hint (StreamInfoOverlay.test covers it).
+      "Audio AC-3 not supported → AAC",
     ]);
     expect(overlayRows()).toEqual([
       ["Container", "MKV → MP4"],

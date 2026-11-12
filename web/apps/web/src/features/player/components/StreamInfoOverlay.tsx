@@ -1,4 +1,4 @@
-import type { ReasonText, StreamInfo, StreamInfoColorToken } from "@mivo/player-core";
+import type { AudioTrack, ReasonText, StreamInfo, StreamInfoColorToken } from "@mivo/player-core";
 import { useId, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -15,6 +15,8 @@ export interface StreamInfoOverlayProps {
   readonly info: StreamInfo | undefined;
   /** Buffer ahead and throughput; unknown values read "unknown". */
   readonly networkStats: NetworkStats;
+  /** Audio tracks of the file other than the one that plays; hints to switch need one. */
+  readonly alternativeAudio: readonly AudioTrack[];
   readonly regionRef: RefObject<HTMLElement | null>;
   readonly headingRef: RefObject<HTMLHeadingElement | null>;
   readonly onClose: () => void;
@@ -38,6 +40,7 @@ export const modeBadgeClasses: Readonly<Record<StreamInfoColorToken, string>> = 
 export function StreamInfoOverlay({
   info,
   networkStats,
+  alternativeAudio,
   regionRef,
   headingRef,
   onClose,
@@ -66,7 +69,11 @@ export function StreamInfoOverlay({
       {info === undefined ? (
         <p className="text-text-muted">{t("overlay.noSession")}</p>
       ) : (
-        <StreamInfoDetails info={info} networkStats={networkStats} />
+        <StreamInfoDetails
+          info={info}
+          networkStats={networkStats}
+          alternativeAudio={alternativeAudio}
+        />
       )}
     </section>
   );
@@ -75,12 +82,14 @@ export function StreamInfoOverlay({
 function StreamInfoDetails({
   info,
   networkStats,
+  alternativeAudio,
 }: {
   readonly info: StreamInfo;
   readonly networkStats: NetworkStats;
+  readonly alternativeAudio: readonly AudioTrack[];
 }) {
   const { t } = useTranslation(playerNamespace);
-  const { mode, container, encoder, sourceBitRate } = info;
+  const { mode } = info;
   return (
     <div className="flex flex-col gap-4 text-sm">
       <p>
@@ -90,35 +99,21 @@ function StreamInfoDetails({
           {t(mode.key)}
         </span>
       </p>
-      <ReasonList heading={t("overlay.reasons")} reasons={info.reasons} />
+      <ReasonList
+        heading={t("overlay.reasons")}
+        reasons={info.reasons}
+        alternativeAudio={alternativeAudio}
+      />
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-        <InfoRow
-          label={t("overlay.container")}
-          value={
-            container.changed
-              ? t("overlay.containerChange", { source: container.source, target: container.target })
-              : container.target
-          }
-        />
-        {info.streams.map((line) => (
-          <InfoRow
-            key={`${line.kind}-${String(line.sourceIndex)}`}
-            label={t(line.kindKey)}
-            value={[...streamLineParts(line), t(line.actionKey)].join(" · ")}
-          />
-        ))}
-        {encoder === undefined ? null : (
-          <InfoRow label={t("overlay.encoder")} value={t(encoder.key, encoder.params)} />
-        )}
-        {sourceBitRate === undefined ? null : (
-          <InfoRow
-            label={t("overlay.sourceBitRate")}
-            value={t(sourceBitRate.key, sourceBitRate.params)}
-          />
-        )}
+        <FactRows info={info} />
         <NetworkRows stats={networkStats} />
       </dl>
-      <ReasonList heading={t("overlay.warnings")} reasons={info.warnings} warning />
+      <ReasonList
+        heading={t("overlay.warnings")}
+        reasons={info.warnings}
+        alternativeAudio={alternativeAudio}
+        warning
+      />
     </div>
   );
 }
@@ -148,6 +143,40 @@ function NetworkRows({ stats }: { readonly stats: NetworkStats }) {
   return rows.map((row) => <InfoRow key={row.key} label={row.label} value={row.value} />);
 }
 
+/** Container, one row per stream, encoder and source bit rate. */
+function FactRows({ info }: { readonly info: StreamInfo }) {
+  const { t } = useTranslation(playerNamespace);
+  const { container, encoder, sourceBitRate } = info;
+  return (
+    <>
+      <InfoRow
+        label={t("overlay.container")}
+        value={
+          container.changed
+            ? t("overlay.containerChange", { source: container.source, target: container.target })
+            : container.target
+        }
+      />
+      {info.streams.map((line) => (
+        <InfoRow
+          key={`${line.kind}-${String(line.sourceIndex)}`}
+          label={t(line.kindKey)}
+          value={[...streamLineParts(line), t(line.actionKey)].join(" · ")}
+        />
+      ))}
+      {encoder === undefined ? null : (
+        <InfoRow label={t("overlay.encoder")} value={t(encoder.key, encoder.params)} />
+      )}
+      {sourceBitRate === undefined ? null : (
+        <InfoRow
+          label={t("overlay.sourceBitRate")}
+          value={t(sourceBitRate.key, sourceBitRate.params)}
+        />
+      )}
+    </>
+  );
+}
+
 function InfoRow({ label, value }: { readonly label: string; readonly value: string }) {
   return (
     <div className="contents">
@@ -160,11 +189,12 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 interface ReasonListProps {
   readonly heading: string;
   readonly reasons: readonly ReasonText[];
+  readonly alternativeAudio: readonly AudioTrack[];
   /** Marks each entry with an alert icon in the transcode colour. */
   readonly warning?: boolean;
 }
 
-function ReasonList({ heading, reasons, warning = false }: ReasonListProps) {
+function ReasonList({ heading, reasons, alternativeAudio, warning = false }: ReasonListProps) {
   const { t } = useTranslation(playerNamespace);
   const headingId = useId();
   if (reasons.length === 0) {
@@ -183,7 +213,7 @@ function ReasonList({ heading, reasons, warning = false }: ReasonListProps) {
                 key's underscores as a context suffix. */}
             <span>
               {t(reason.key, { replace: reason.params })}
-              <ReasonHint code={reason.code} />
+              <ReasonHint code={reason.code} alternativeAudio={alternativeAudio} />
             </span>
           </li>
         ))}
@@ -192,9 +222,15 @@ function ReasonList({ heading, reasons, warning = false }: ReasonListProps) {
   );
 }
 
-function ReasonHint({ code }: { readonly code: string }) {
+function ReasonHint({
+  code,
+  alternativeAudio,
+}: {
+  readonly code: string;
+  readonly alternativeAudio: readonly AudioTrack[];
+}) {
   const { t } = useTranslation(playerNamespace);
-  const key = reasonHintKey(code);
+  const key = reasonHintKey(code, alternativeAudio);
   if (key === undefined) {
     return null;
   }

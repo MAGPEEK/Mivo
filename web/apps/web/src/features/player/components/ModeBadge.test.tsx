@@ -78,8 +78,29 @@ describe("ModeBadge", () => {
     const tooltip = screen.getByRole("tooltip", { hidden: true });
     expect(badge.getAttribute("aria-describedby")).toBe(tooltip.id);
     expect(tooltip.textContent).toContain("Video HEVC not supported → H.264");
-    expect(tooltip.className).toContain("group-hover:block");
-    expect(tooltip.className).toContain("group-focus-within:block");
+    expect(tooltip.getAttribute("data-state")).toBe("closed");
+    fireEvent.focus(badge);
+    expect(tooltip.getAttribute("data-state")).toBe("open");
+    fireEvent.blur(badge);
+    fireEvent.mouseEnter(badge);
+    expect(tooltip.getAttribute("data-state")).toBe("open");
+  });
+
+  it("hides the tooltip on Escape without the key reaching the player", () => {
+    renderBadge(transcodeSession);
+    const reached = vi.fn();
+    document.addEventListener("keydown", reached);
+    const badge = screen.getByRole("button", { name: /^Stream info/ });
+    const tooltip = screen.getByRole("tooltip", { hidden: true });
+
+    // Nothing to dismiss yet: the key goes on to the player.
+    fireEvent.keyDown(badge, { key: "Escape" });
+    expect(reached).toHaveBeenCalledTimes(1);
+    fireEvent.focus(badge);
+    fireEvent.keyDown(badge, { key: "Escape" });
+    expect(reached).toHaveBeenCalledTimes(1);
+    expect(tooltip.getAttribute("data-state")).toBe("closed");
+    document.removeEventListener("keydown", reached);
   });
 
   it("says nothing needs converting when there is no reason", () => {

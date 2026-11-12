@@ -1,5 +1,5 @@
 import type { StreamInfo, StreamInfoColorToken } from "@mivo/player-core";
-import { useId, type ComponentType, type RefObject } from "react";
+import { useId, useState, type ComponentType, type KeyboardEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChevronRightIcon, InfoIcon, PlayIcon, ResetIcon } from "../../../shared/ui";
@@ -40,15 +40,34 @@ const badgeIcons: Readonly<Record<StreamInfoColorToken, ComponentType<{ classNam
 export function ModeBadge({ info, open, onToggle, buttonRef }: ModeBadgeProps) {
   const { t } = useTranslation(playerNamespace);
   const tooltipId = useId();
+  const [tooltipShown, setTooltipShown] = useState(false);
+  // Esc hides the tooltip without closing the overlay or leaving full screen (WCAG 1.4.13).
+  const dismissOnEscape = (event: KeyboardEvent) => {
+    if (event.key === "Escape" && tooltipShown) {
+      event.stopPropagation();
+      setTooltipShown(false);
+    }
+  };
+  const show = () => {
+    setTooltipShown(true);
+  };
+  const hide = () => {
+    setTooltipShown(false);
+  };
   const Icon = badgeIcons[info.mode.colorToken];
   const mode = t(info.mode.key);
   const reasons = info.reasons.map((reason) => t(reason.key, { replace: reason.params }));
   return (
-    <span className="group relative inline-flex">
+    <span className="relative inline-flex">
       <button
         ref={buttonRef}
         type="button"
         onClick={onToggle}
+        onFocus={show}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onBlur={hide}
+        onKeyDown={dismissOnEscape}
         aria-expanded={open}
         aria-describedby={tooltipId}
         aria-label={t("overlay.badge.label", { mode })}
@@ -60,7 +79,8 @@ export function ModeBadge({ info, open, onToggle, buttonRef }: ModeBadgeProps) {
       <span
         id={tooltipId}
         role="tooltip"
-        className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 hidden w-72 max-w-[80vw] rounded-md bg-surface-raised p-2 text-start text-xs font-normal text-text shadow-overlay group-focus-within:block group-hover:block"
+        data-state={tooltipShown ? "open" : "closed"}
+        className="pointer-events-none absolute right-0 bottom-full z-10 mb-2 w-72 max-w-[80vw] rounded-md bg-surface-raised p-2 text-start text-xs font-normal text-text shadow-overlay data-[state=closed]:hidden"
       >
         {reasons.length === 0 ? t("overlay.badge.allCopied") : reasons.join(" · ")}
       </span>

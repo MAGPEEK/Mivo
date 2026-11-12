@@ -5,7 +5,11 @@ import openApiText from "../../../../../../../api/openapi.yaml?raw";
 import { createAppI18n } from "../../../app/i18n";
 import { supportedLanguages } from "../../../shared/i18n";
 import { playerNamespace } from "../locales";
-import { reasonHintKey, reasonHintKeys } from "./reasonHints";
+import { alternativeAudioTracks, reasonHintKey, reasonHintKeys } from "./reasonHints";
+
+const aacStereo = { index: 2, codec: "aac", channels: 2, default: false, commentary: false };
+const ac3Surround = { index: 1, codec: "ac3", channels: 6, default: true, commentary: false };
+const dtsEight = { index: 3, codec: "dts", channels: 8, default: false, commentary: false };
 
 /**
  * The codes the API documents for `PlaybackReason.code`: the quoted words of that property's
@@ -34,7 +38,7 @@ describe("reasonHints", () => {
     expect(known, `${code} is unknown to player-core`).toContain(code);
     for (const language of supportedLanguages) {
       const i18n = createAppI18n([language]);
-      const hint = reasonHintKey(code);
+      const hint = reasonHintKeys[code as keyof typeof reasonHintKeys];
       if (hint !== undefined) {
         expect(i18n.getResource(language, playerNamespace, hint), `${hint} in ${language}`).toEqual(
           expect.any(String),
@@ -50,5 +54,24 @@ describe("reasonHints", () => {
   it("knows no hint for an unknown code", () => {
     expect(reasonHintKey("constructor")).toBeUndefined();
     expect(reasonHintKey("from_the_future")).toBeUndefined();
+  });
+
+  describe("audio hints need an alternative track", () => {
+    it.each([
+      { code: "audio_codec_not_supported", tracks: [aacStereo], shown: true },
+      { code: "audio_codec_not_supported", tracks: [ac3Surround], shown: false },
+      { code: "audio_codec_not_supported", tracks: [], shown: false },
+      { code: "audio_channels_not_supported", tracks: [ac3Surround], shown: true },
+      { code: "audio_channels_not_supported", tracks: [dtsEight], shown: false },
+      { code: "audio_channels_not_supported", tracks: [], shown: false },
+      { code: "subtitle_burn_in", tracks: [], shown: true },
+    ])(" with .length alternatives: shown ", ({ code, tracks, shown }) => {
+      expect(reasonHintKey(code, tracks) !== undefined).toBe(shown);
+    });
+
+    it("leaves out the track that plays", () => {
+      expect(alternativeAudioTracks([ac3Surround, aacStereo], 2)).toEqual([ac3Surround]);
+      expect(alternativeAudioTracks([ac3Surround], undefined)).toEqual([ac3Surround]);
+    });
   });
 });

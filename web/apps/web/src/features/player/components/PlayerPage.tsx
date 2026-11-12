@@ -13,7 +13,7 @@ export interface PlayerPageProps {
   readonly itemId: string;
   /** The validated search: file to play and start position (`t`); both untrusted. */
   readonly search: PlayerSearch;
-  /** Controls later tasks add to the control bar (mode indicator, More, queue). */
+  /** Controls later tasks add to the control bar (More, queue). */
   readonly slots?: PlayerSlots;
 }
 
@@ -57,6 +57,7 @@ export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
         <StreamInfoOverlay
           info={view.streamInfo}
           networkStats={view.networkStats}
+          alternativeAudio={view.alternativeAudio}
           regionRef={streamInfoRegionRef}
           headingRef={streamInfoHeadingRef}
           onClose={actions.closeStreamInfo}
