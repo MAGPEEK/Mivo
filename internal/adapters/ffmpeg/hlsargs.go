@@ -45,10 +45,10 @@ const (
 	// disabledSceneCutThreshold stops libx264 from inserting extra keyframes at scene cuts,
 	// so the forced keyframes alone decide where segments start.
 	disabledSceneCutThreshold = "0"
-	// aacStereoBitRate is the bit rate of mono and stereo AAC; surround AAC (5.1) gets
-	// aacSurroundBitRate, twice as much, so each channel pair keeps the stereo quality.
-	aacStereoBitRate   = "192k"
-	aacSurroundBitRate = "384k"
+	// aacStereoBitsPerSecond is the bit rate of mono and stereo AAC; surround AAC (5.1) gets
+	// aacSurroundBitsPerSecond, twice as much, so each channel pair keeps the stereo quality.
+	aacStereoBitsPerSecond   = 192000
+	aacSurroundBitsPerSecond = 384000
 	// scaleKeepAspect makes FFmpeg derive an unknown dimension from the other one, keeping
 	// the aspect ratio and rounding to an even number. A 0 would mean "the input size".
 	scaleKeepAspect = -2
@@ -117,6 +117,8 @@ func isX264Preset(name string) bool {
 type encoderSettings struct {
 	preset  string
 	threads int
+	// audioBitRate is what the audio of the plan takes from a bit-rate cap, in bits per second.
+	audioBitRate int64
 }
 
 // settings validates the tuning options of job and fills in the default preset.
@@ -317,6 +319,8 @@ func (streams hlsStreams) encodingArguments(settings encoderSettings) ([]string,
 	var arguments []string
 
 	if streams.video != nil {
+		settings.audioBitRate = streams.audioBitsPerSecond()
+
 		video, err := videoArguments(*streams.video, settings)
 		if err != nil {
 			return nil, err
@@ -363,6 +367,13 @@ func videoArguments(decision playback.StreamDecision, settings encoderSettings) 
 	if settings.threads > 0 {
 		arguments = append(arguments, "-threads", strconv.Itoa(settings.threads))
 	}
+
+	capped, err := bitrateArguments(decision.MaxBitrate, settings.audioBitRate)
+	if err != nil {
+		return nil, err
+	}
+
+	arguments = append(arguments, capped...)
 
 	if !decision.ScaleRequired {
 		return arguments, nil
@@ -420,9 +431,13 @@ func audioArguments(decision playback.StreamDecision) ([]string, error) {
 
 // aacBitRate scales with the layout: 5.1 at the stereo rate would starve every channel.
 func aacBitRate(channels int) string {
+	return strconv.FormatInt(aacBitsPerSecond(channels)/bitsPerKilobit, 10) + "k"
+}
+
+func aacBitsPerSecond(channels int) int64 {
 	if channels > playback.TranscodeStereoChannels {
-		return aacSurroundBitRate
+		return aacSurroundBitsPerSecond
 	}
 
-	return aacStereoBitRate
+	return aacStereoBitsPerSecond
 }
