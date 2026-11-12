@@ -93,7 +93,9 @@ QEMU the first time).
      (`POST /api/v1/auth/session`). The password lives in the script's memory and reaches
      `playback-smoke` only through `MIVO_SMOKE_PASSWORD` (`-user smoke -password-env`); it and
      the token are never printed or written to disk. Only `system/info` and the setup state are
-     called without a token;
+     called without a token. A failed sign-in is reported with the HTTP status and problem code
+     only. SPKs of pre-M7 servers (no accounts, `GET /api/v1/setup` answers 404) are not
+     supported by this smoke. Do not run the script under `bash -x`;
    - **first start state**: `GET /api/v1/libraries` is `{"libraries":[]}`, `GET
      /api/v1/folder-roots` lists `/volume1` and `installKind` `synology` (from the
      `start-stop-status` environment); then the corpus library is created through `POST

@@ -268,18 +268,36 @@ step() {
 # open_api calls a route that needs no sign-in (system/info, setup state).
 open_api() { curl -fsS --max-time 30 "http://127.0.0.1:$host_port/api/v1/$1"; }
 
-# api calls a protected route with the session token of authenticate. The token goes to curl
-# through a config on stdin, so it shows up neither in the process list nor on disk.
+# Do not run this script under xtrace (bash -x): the functions below handle the password and the
+# token, which xtrace would print; they switch it off for themselves.
+
+# bearer_config prints a curl config with the session token; it goes to curl on stdin (-K -), so
+# the token shows up neither in the process list nor on disk.
+bearer_config() {
+	set +x
+	printf 'header = "Authorization: Bearer %s"\n' "$session_token"
+}
+
+# api calls a protected route with the session token of authenticate.
 api() {
-	printf 'header = "Authorization: Bearer %s"\n' "$session_token" |
-		curl -fsS --max-time 30 -K - "http://127.0.0.1:$host_port/api/v1/$1"
+	set +x
+	bearer_config | curl -fsS --max-time 30 -K - "http://127.0.0.1:$host_port/api/v1/$1"
+}
+
+# api_post <path> <json> posts a body without secrets to a protected route.
+api_post() {
+	set +x
+	bearer_config | curl -fsS --max-time 30 -K - -H 'Content-Type: application/json' -d "$2" \
+		"http://127.0.0.1:$host_port/api/v1/$1"
 }
 
 # json_post <path> <json on stdin> posts a body that may hold the password without putting it
-# into an argument.
+# into an argument. It prints the response body and, on the last line, the HTTP status (000 when
+# the connection failed). No -f: the problem body of an error answer is needed for its code.
 json_post() {
-	curl -fsS --max-time 30 -H 'Content-Type: application/json' --data-binary @- \
-		"http://127.0.0.1:$host_port/api/v1/$1"
+	set +x
+	curl -sS --max-time 30 -H 'Content-Type: application/json' --data-binary @- \
+		-w '\n%{http_code}' "http://127.0.0.1:$host_port/api/v1/$1" 2>/dev/null || printf '\n000'
 }
 
 # authenticate gets a bearer token (client cli) for the throwaway account: the first-run setup
@@ -287,15 +305,23 @@ json_post() {
 # a restart on a kept data directory needs. The password is generated per run and exists only in
 # this shell and the environment of playback-smoke; neither it nor the token is ever printed.
 authenticate() {
-	local state body response path=auth/session what="sign-in"
+	set +x
+	local state body answer response status code path=auth/session what="sign-in"
 	state=$(open_api setup) || { record FAIL "$label GET /api/v1/setup failed"; return 1; }
 	if [[ "$state" == *'"required":true'* ]]; then path=setup what="first-run setup"; fi
 	body=$(printf '{"name":"%s","password":"%s","client":"cli","deviceName":"smoke.sh"}' "$SMOKE_ACCOUNT" "$smoke_password")
-	if ! response=$(printf '%s' "$body" | json_post "$path" 2>/dev/null); then
-		record FAIL "$label $what as $SMOKE_ACCOUNT through POST /api/v1/$path failed"
+	answer=$(printf '%s' "$body" | json_post "$path")
+	status=${answer##*$'\n'}
+	response=${answer%$'\n'*}
+	if [ "$status" != 200 ] && [ "$status" != 201 ]; then
+		# Only the problem code, never the body: 403 LAN-only, 409 account exists, 401
+		# invalid_credentials, 429 rate limit.
+		code=$(printf '%s' "$response" | sed -n 's/.*"code":"\([^"]*\)".*/\1/p')
+		record FAIL "$label $what as $SMOKE_ACCOUNT through POST /api/v1/$path failed: HTTP $status${code:+, code $code}"
 		return 1
 	fi
-	session_token=$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' <<<"$response")
+	# Relies on the server's compact JSON ("token":"..." without spaces).
+	session_token=$(printf '%s' "$response" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
 	if [ -z "$session_token" ]; then
 		record FAIL "$label $what answered without a bearer token"
 		return 1
@@ -398,8 +424,9 @@ smoke_profile() {
 # every file unchanged: the database of the previous installation was used.
 check_kept_catalogue() {
 	local what=$1 deadline=$((SECONDS + STARTUP_SCAN_WAIT_SECONDS)) libraries=""
-	# The data directory was kept, so the account exists: this signs in instead of setting up.
-	authenticate || return 1
+	# start may return while the server is alive but not yet healthy (likely under QEMU): wait
+	# for the port, then sign in (the data was kept, so the account exists).
+	check_published_port || return 1
 	while [ "$SECONDS" -lt "$deadline" ]; do
 		libraries=$(api libraries || :)
 		if [[ "$libraries" == *'"state":"failed"'* ]]; then
@@ -437,11 +464,6 @@ install_and_start() {
 		step "start" control INSTALL start &&
 		step "status exits 0" control START status &&
 		check_published_port
-}
-
-api_post() {
-	printf 'header = "Authorization: Bearer %s"\n' "$session_token" |
-		curl -fsS --max-time 30 -K - -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$host_port/api/v1/$1"
 }
 
 # check_first_start_state passes when a fresh installation has zero libraries and the folder
