@@ -30,6 +30,7 @@ type API struct {
 	libraries LibraryCatalog
 	items     ItemCatalog
 	rows      RowsService
+	search    SearchService
 	scan      ScanService
 	playback  PlaybackService
 	manager   LibraryManager
@@ -59,6 +60,7 @@ func NewAPI(options Options) (*API, error) {
 		libraries: options.Libraries,
 		items:     options.Items,
 		rows:      options.Rows,
+		search:    options.Search,
 		scan:      options.Scan,
 		playback:  options.Playback,
 		manager:   options.Manager,

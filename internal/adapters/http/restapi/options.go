@@ -11,7 +11,7 @@ import (
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
-// Options are the dependencies of the REST API. The logger and every service except Rows and
+// Options are the dependencies of the REST API. The logger and every service except Rows, Search and
 // Metadata are required.
 type Options struct {
 	// System serves the health and system info endpoints.
@@ -20,10 +20,13 @@ type Options struct {
 	Libraries LibraryCatalog
 	// Items serves the item endpoints.
 	Items ItemCatalog
-	// Rows generates the Home and Overview rows. It is the one optional service: without it
+	// Rows generates the Home and Overview rows. It is optional: without it
 	// the rows endpoints answer 501 "not_implemented", which their contract allows, so test
 	// servers that never ask for rows need not wire it.
 	Rows RowsService
+	// Search searches the catalog. Optional like Rows: without it the search endpoint answers
+	// 501 "not_implemented".
+	Search SearchService
 	// Scan starts library scans and reports their status.
 	Scan ScanService
 	// Playback creates, reads and stops playback sessions.

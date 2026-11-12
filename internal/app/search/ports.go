@@ -1,6 +1,6 @@
-// Package search contains the search use cases (SR-01 to SR-03). Task M5-14 declares the port
-// of the full-text index here; the use case and its endpoint follow with task M5-15, and
-// cmd/mivo wires the adapter (ADR 0003).
+// Package search contains the search use cases (SR-01 to SR-03): the port of the full-text
+// index (task M5-14) and the Service that answers the search dropdown and the pivots of the
+// results page (task M5-15). cmd/mivo wires the adapters (ADR 0003).
 package search
 
 import (

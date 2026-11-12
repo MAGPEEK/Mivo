@@ -272,6 +272,13 @@ func TestLibraryManagementCreatesEditsAndDeletesALibrary(t *testing.T) {
 
 	awaitLibraryItems(t, baseURL, created.ID.String(), []string{"Alpha", "Beta"})
 
+	// The scan filled the search index: a prefix finds its movie in the dropdown and the pivot.
+	for _, searchType := range []string{"top", "movies"} {
+		if titles := searchTitles(t, baseURL, url.Values{"q": {"alph"}, "type": {searchType}}); !slices.Equal(titles, []string{"Alpha"}) {
+			t.Errorf("search %q for \"alph\" = %v, want [Alpha]", searchType, titles)
+		}
+	}
+
 	// Keep the first folder only: the items of the second leave with the rescan.
 	patch := fmt.Sprintf(`{"folders":[{"folderId":%q}]}`, created.Folders[0].ID.String())
 	libraryURL := baseURL + "/api/v1/libraries/" + created.ID.String()

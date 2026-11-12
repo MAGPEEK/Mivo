@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.16.0"
+  version: "1.17.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -1311,6 +1311,74 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HomeRows"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/search:
+    get:
+      operationId: search
+      summary: Search the catalog
+      description: >-
+        Finds items by text (SR-01 to SR-03): every word of q matches as a prefix, case- and
+        accent-insensitively, in a title, original title, sort title, person or genre of the
+        item, and all words must match. Hits come best match first from all libraries the
+        selected profile may see. type "top" (the default) answers the search dropdown: at
+        most 8 hits mixed across all types, never paged. The other types are the pivots of
+        the results page and are paged: follow nextCursor until it is absent and repeat the
+        same q and type on every page; cursors stay opaque. A pivot pages through at most
+        its 100 best hits. Every hit is an ItemSummary: kind is its type, libraryId its
+        library, poster, thumb or square its thumbnail. A q shorter than 2 characters
+        (surrounding spaces do not count) or longer than 200 answers 400 with the problem
+        code "invalid" and field "q"; a limit outside 1–50, an unknown type, a cursor this
+        server did not issue and a cursor together with type "top" answer 400 "invalid"
+        with field naming the parameter. A server that cannot search yet answers 501 with
+        the problem code "not_implemented".
+      tags:
+        - items
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: >-
+            Search text, at least 2 characters. Punctuation separates words; a text without
+            a letter or digit finds nothing.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 200
+          example: matr
+        - name: type
+          in: query
+          required: false
+          description: What to search; omitted means "top".
+          schema:
+            $ref: "#/components/schemas/SearchType"
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Maximum number of hits in the page. Omitted means 8 for type "top" and 24 for
+            the pivots; type "top" never answers more than 8.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 50
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            Opaque position from nextCursor of the previous page of a pivot. Omit it for the
+            first page. Clients must not parse or build it.
+          schema:
+            type: string
+            maxLength: 2048
+      responses:
+        "200":
+          description: The hits, best match first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/items/{itemId}:
@@ -5137,6 +5205,40 @@ components:
             $ref: "#/components/schemas/Row"
         hint:
           $ref: "#/components/schemas/RowsHint"
+    SearchType:
+      type: string
+      description: >-
+        What a search returns: "top" (the best hits across all types, for the search
+        dropdown), "movies", "shows", "episodes", "music" (artists, albums and tracks),
+        "photos" (photo albums and photos) or "audiobooks". Clients must tolerate values
+        added in later versions.
+      enum:
+        - top
+        - movies
+        - shows
+        - episodes
+        - music
+        - photos
+        - audiobooks
+      example: top
+    SearchResults:
+      type: object
+      description: One page of search hits.
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          description: The hits of this page, best match first.
+          items:
+            $ref: "#/components/schemas/ItemSummary"
+        nextCursor:
+          type: string
+          maxLength: 2048
+          description: >-
+            Opaque cursor for the next page of a pivot; omitted on the last page and for
+            type "top". Pass it unchanged as the cursor query parameter.
+          example: eyJvZmZzZXQiOjI0fQ
     ItemDetail:
       type: object
       description: >-

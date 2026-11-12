@@ -20,6 +20,7 @@ import (
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	approws "github.com/magpeek/mivo/internal/app/rows"
 	appscan "github.com/magpeek/mivo/internal/app/scan"
+	appsearch "github.com/magpeek/mivo/internal/app/search"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
 )
 
@@ -39,9 +40,10 @@ type catalogServices struct {
 	// management creates, changes and removes libraries and browses folders.
 	management management
 	// store is the one library store (newLibraryStore); rows serves the Home and Overview
-	// rows and is built from the others by serveWithPlayback.
-	store *sqlite.ManagedLibraryStore
-	rows  *approws.Service
+	// rows and search the catalog search; both are built from the others by serveWithPlayback.
+	store  *sqlite.ManagedLibraryStore
+	rows   *approws.Service
+	search *appsearch.Service
 	// online is the online metadata feature: its API services, the enrichment worker and
 	// the periodic refresh.
 	online onlineMetadata
@@ -130,6 +132,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Libraries: services.managed,
 		Items:     services.libraries,
 		Rows:      services.rowsService(),
+		Search:    services.searchService(),
 		Scan:      services.scans,
 		Playback:  services.playback,
 		// The manager also serves the folder browser: it marks the folders that cannot be chosen.
@@ -161,6 +164,15 @@ func (services wiredServices) rowsService() restapi.RowsService {
 	}
 
 	return services.rows
+}
+
+// searchService returns the search service as the API option; nil stays nil like rowsService.
+func (services wiredServices) searchService() restapi.SearchService {
+	if services.search == nil {
+		return nil
+	}
+
+	return services.search
 }
 
 // newWebUIHandler serves the web app embedded with the webui build tag, or the page that

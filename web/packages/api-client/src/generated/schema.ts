@@ -712,6 +712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the catalog
+         * @description Finds items by text (SR-01 to SR-03): every word of q matches as a prefix, case- and accent-insensitively, in a title, original title, sort title, person or genre of the item, and all words must match. Hits come best match first from all libraries the selected profile may see. type "top" (the default) answers the search dropdown: at most 8 hits mixed across all types, never paged. The other types are the pivots of the results page and are paged: follow nextCursor until it is absent and repeat the same q and type on every page; cursors stay opaque. A pivot pages through at most its 100 best hits. Every hit is an ItemSummary: kind is its type, libraryId its library, poster, thumb or square its thumbnail. A q shorter than 2 characters (surrounding spaces do not count) or longer than 200 answers 400 with the problem code "invalid" and field "q"; a limit outside 1–50, an unknown type, a cursor this server did not issue and a cursor together with type "top" answer 400 "invalid" with field naming the parameter. A server that cannot search yet answers 501 with the problem code "not_implemented".
+         */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{itemId}": {
         parameters: {
             query?: never;
@@ -2824,6 +2844,22 @@ export interface components {
             /** @description The rows in display order; empty for a library without items. */
             rows: components["schemas"]["Row"][];
             hint?: components["schemas"]["RowsHint"];
+        };
+        /**
+         * @description What a search returns: "top" (the best hits across all types, for the search dropdown), "movies", "shows", "episodes", "music" (artists, albums and tracks), "photos" (photo albums and photos) or "audiobooks". Clients must tolerate values added in later versions.
+         * @example top
+         * @enum {string}
+         */
+        SearchType: "top" | "movies" | "shows" | "episodes" | "music" | "photos" | "audiobooks";
+        /** @description One page of search hits. */
+        SearchResults: {
+            /** @description The hits of this page, best match first. */
+            items: components["schemas"]["ItemSummary"][];
+            /**
+             * @description Opaque cursor for the next page of a pivot; omitted on the last page and for type "top". Pass it unchanged as the cursor query parameter.
+             * @example eyJvZmZzZXQiOjI0fQ
+             */
+            nextCursor?: string;
         };
         /** @description An item with its local metadata, artwork, place in the hierarchy, extras, media files and their technical streams. Fields that do not apply to the item's kind, or that are unknown, are omitted. artwork holds one image per kind; a season without its own poster carries its show's poster, an audiobook carries its 2:3 cover in artwork.poster, an album and an artist carry their image in artwork.square, a photo carries itself and a photo album its newest "ready" photo in artwork.square (ImageRef.id is the photo's item ID, the image keeps the photo's aspect ratio). files is empty for containers (show, season, artist, album, photo album). chapters lists the chapters of an audiobook. photo and thumbnailState describe a photo: its EXIF block and whether the server can render it (ADR 0029). The lightbox reads the file name and size from files[0]; for a RAW+JPEG pair the JPEG is files[0] and the RAW an alternative file. A video in a photos library is a photo with media files and a playItemId, played through the normal playback path. */
         ItemDetail: {
@@ -5324,6 +5360,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HomeRows"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                /**
+                 * @description Search text, at least 2 characters. Punctuation separates words; a text without a letter or digit finds nothing.
+                 * @example matr
+                 */
+                q: string;
+                /** @description What to search; omitted means "top". */
+                type?: components["schemas"]["SearchType"];
+                /** @description Maximum number of hits in the page. Omitted means 8 for type "top" and 24 for the pivots; type "top" never answers more than 8. */
+                limit?: number;
+                /** @description Opaque position from nextCursor of the previous page of a pivot. Omit it for the first page. Clients must not parse or build it. */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The hits, best match first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
                 };
             };
             default: components["responses"]["Problem"];

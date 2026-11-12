@@ -911,6 +911,39 @@ func (e ScanState) Valid() bool {
 	}
 }
 
+// Defines values for SearchType.
+const (
+	SearchTypeAudiobooks SearchType = "audiobooks"
+	SearchTypeEpisodes   SearchType = "episodes"
+	SearchTypeMovies     SearchType = "movies"
+	SearchTypeMusic      SearchType = "music"
+	SearchTypePhotos     SearchType = "photos"
+	SearchTypeShows      SearchType = "shows"
+	SearchTypeTop        SearchType = "top"
+)
+
+// Valid indicates whether the value is a known member of the SearchType enum.
+func (e SearchType) Valid() bool {
+	switch e {
+	case SearchTypeAudiobooks:
+		return true
+	case SearchTypeEpisodes:
+		return true
+	case SearchTypeMovies:
+		return true
+	case SearchTypeMusic:
+		return true
+	case SearchTypePhotos:
+		return true
+	case SearchTypeShows:
+		return true
+	case SearchTypeTop:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SortOrder.
 const (
 	SortOrderAsc  SortOrder = "asc"
@@ -3405,6 +3438,22 @@ type ScanStatus struct {
 	UnavailableFolderCount int32 `json:"unavailableFolderCount"`
 }
 
+// SearchResults One page of search hits.
+type SearchResults struct {
+	// Items The hits of this page, best match first.
+	Items []ItemSummary `json:"items"`
+
+	// NextCursor Opaque cursor for the next page of a pivot; omitted on the last page and for type "top". Pass it unchanged as the cursor query parameter.
+	//
+	// Example: eyJvZmZzZXQiOjI0fQ
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// SearchType What a search returns: "top" (the best hits across all types, for the search dropdown), "movies", "shows", "episodes", "music" (artists, albums and tracks), "photos" (photo albums and photos) or "audiobooks". Clients must tolerate values added in later versions.
+//
+// Example: top
+type SearchType string
+
 // Session A new session (ADR 0032 section 3). For client "web" the session cookie carries it and token is omitted.
 type Session struct {
 	// Me The signed-in account, its selected profile and its profiles. It never contains the session token.
@@ -4122,6 +4171,21 @@ type ListLibraryRowsParams struct {
 	Limit *RowItemLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// SearchParams defines parameters for Search.
+type SearchParams struct {
+	// Q Search text, at least 2 characters. Punctuation separates words; a text without a letter or digit finds nothing.
+	Q string `form:"q" json:"q"`
+
+	// Type What to search; omitted means "top".
+	Type *SearchType `form:"type,omitempty" json:"type,omitempty"`
+
+	// Limit Maximum number of hits in the page. Omitted means 8 for type "top" and 24 for the pivots; type "top" never answers more than 8.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque position from nextCursor of the previous page of a pivot. Omit it for the first page. Clients must not parse or build it.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // CreateSessionJSONRequestBody defines body for CreateSession for application/json ContentType.
 type CreateSessionJSONRequestBody = SignInRequest
 
@@ -4307,6 +4371,9 @@ type ServerInterface interface {
 	// UpdateProfile Change a profile
 	// (PATCH /api/v1/profiles/{profileId})
 	UpdateProfile(w http.ResponseWriter, r *http.Request, profileID ProfileID)
+	// Search Search the catalog
+	// (GET /api/v1/search)
+	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
 	// GetMetadataSettings Read the online metadata settings
 	// (GET /api/v1/settings/metadata)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -6057,6 +6124,78 @@ func (siw *ServerInterfaceWrapper) UpdateProfile(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// Search operation middleware
+func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "type" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "type", r.URL.Query(), &params.Type, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "type"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "type", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Search(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -6499,6 +6638,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/folders", wrapper.ListLibraryFolders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/libraries/{libraryId}/rows", wrapper.ListLibraryRows)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/home/rows", wrapper.GetHomeRows)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/search", wrapper.Search)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}", wrapper.GetItem)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/items/{itemId}/children", wrapper.ListItemChildren)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/items/{itemId}/identify/search", wrapper.SearchIdentifyCandidates)
@@ -8522,6 +8662,45 @@ func (response UpdateProfiledefaultApplicationProblemPlusJSONResponse) VisitUpda
 	return err
 }
 
+type SearchRequestObject struct {
+	Params SearchParams
+}
+
+type SearchResponseObject interface {
+	VisitSearchResponse(w http.ResponseWriter) error
+}
+
+type Search200JSONResponse SearchResults
+
+func (response Search200JSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SearchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SearchdefaultApplicationProblemPlusJSONResponse) VisitSearchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMetadataSettingsRequestObject struct {
 }
 
@@ -9361,6 +9540,9 @@ type StrictServerInterface interface {
 	// UpdateProfile Change a profile
 	// (PATCH /api/v1/profiles/{profileId})
 	UpdateProfile(ctx context.Context, request UpdateProfileRequestObject) (UpdateProfileResponseObject, error)
+	// Search Search the catalog
+	// (GET /api/v1/search)
+	Search(ctx context.Context, request SearchRequestObject) (SearchResponseObject, error)
 	// GetMetadataSettings Read the online metadata settings
 	// (GET /api/v1/settings/metadata)
 	GetMetadataSettings(ctx context.Context, request GetMetadataSettingsRequestObject) (GetMetadataSettingsResponseObject, error)
@@ -10657,6 +10839,32 @@ func (sh *strictHandler) UpdateProfile(w http.ResponseWriter, r *http.Request, p
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProfileResponseObject); ok {
 		if err := validResponse.VisitUpdateProfileResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Search operation middleware
+func (sh *strictHandler) Search(w http.ResponseWriter, r *http.Request, params SearchParams) {
+	var request SearchRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Search(ctx, request.(SearchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Search")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SearchResponseObject); ok {
+		if err := validResponse.VisitSearchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

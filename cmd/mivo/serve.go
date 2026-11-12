@@ -246,15 +246,13 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 }
 
 // serveWithPlayback starts the playback service and serves; the playback sessions are stopped
-// after the HTTP server, so no request can start one meanwhile. The rows service is built
-// here, where the catalog services it reads are complete.
+// after the HTTP server, so no request can start one meanwhile. The rows and search services
+// are built here, where the catalog services they read are complete.
 func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, catalog catalogServices, adapters playbackAdapters) error {
-	rows, err := newRowsService(db, catalog)
+	catalog, err := withCatalogReaders(db, catalog)
 	if err != nil {
 		return err
 	}
-
-	catalog.rows = rows
 
 	workspace, err := app.newWorkspace()
 	if err != nil {
