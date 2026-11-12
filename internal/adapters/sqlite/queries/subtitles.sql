@@ -18,3 +18,11 @@ FROM external_subtitles
 JOIN media_files ON media_files.id = external_subtitles.media_file_id
 WHERE media_files.library_id = ?
 ORDER BY external_subtitles.media_file_id, external_subtitles.ordinal;
+
+-- name: ListFileExternalSubtitles :many
+SELECT external_subtitles.media_file_id, external_subtitles.relative_path, external_subtitles.format,
+       external_subtitles.language, external_subtitles.title, external_subtitles.forced,
+       external_subtitles.sdh, external_subtitles.is_default
+FROM external_subtitles
+WHERE external_subtitles.media_file_id = ?
+ORDER BY external_subtitles.ordinal;

@@ -93,7 +93,7 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 	}
 
 	if started.production != nil {
-		s.follow(id, started.production, s.encoderFor(prepared.plan))
+		s.follow(id, started.production, s.encoderFor(prepared.plan, prepared.input.Capabilities))
 	}
 
 	return session, nil
@@ -182,12 +182,12 @@ func (s *Service) prepare(ctx context.Context, request StartRequest, restriction
 
 // encoderFor is the video encoder of the plan's transcode; the zero value when no video is
 // re-encoded.
-func (s *Service) encoderFor(plan playback.Plan) playback.Encoder {
+func (s *Service) encoderFor(plan playback.Plan, capabilities playback.ServerCapabilities) playback.Encoder {
 	if video, found := plan.Video(); !found || video.Action != playback.ActionTranscode {
 		return playback.Encoder{}
 	}
 
-	return playback.ChooseVideoEncoder(s.capabilities, s.policy.HardwareAcceleration)
+	return playback.ChooseVideoEncoder(capabilities, s.policy.HardwareAcceleration)
 }
 
 // resolveFailure reports a file that cannot be resolved. A file that leaves its library
@@ -223,7 +223,7 @@ func (s *Service) decide(ctx context.Context, request StartRequest, restriction 
 			playable.File.ProbeError, domain.ErrUnsupported)
 	}
 
-	builder := inputBuilder{capabilities: s.capabilities, policy: s.policy, subtitles: s.subtitles}
+	builder := inputBuilder{capabilities: s.currentCapabilities(), policy: s.policy, subtitles: s.subtitles}
 
 	input, err := builder.build(ctx, playable, request)
 	if err != nil {
@@ -263,7 +263,7 @@ func (s *Service) newEntry(prepared preparedStart, replaces string) (*sessionEnt
 		owner:        prepared.owner,
 		clientName:   prepared.clientName,
 		local:        prepared.local,
-		encoder:      s.encoderFor(plan),
+		encoder:      s.encoderFor(plan, prepared.input.Capabilities),
 		reencodes:    plan.Mode == playback.ModeTranscode,
 		runsFFmpeg:   hls,
 		libraryRoot:  prepared.playable.LibraryRoot,
@@ -327,7 +327,7 @@ func (s *Service) produce(ctx context.Context, request productionRequest) (activ
 		LibraryRoot: prepared.playable.LibraryRoot, RelativePath: prepared.playable.File.RelativePath,
 		InputPath: prepared.inputPath, StartPosition: start, OutputDir: directory,
 		BurnInSubtitle: burnInTrack(prepared.input, prepared.plan),
-		Encoder:        s.encoderFor(prepared.plan),
+		Encoder:        s.encoderFor(prepared.plan, prepared.input.Capabilities),
 	}
 
 	if video, found := prepared.plan.Video(); found {

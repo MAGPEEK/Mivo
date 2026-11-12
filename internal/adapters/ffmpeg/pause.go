@@ -15,6 +15,12 @@ import (
 var ErrPauseUnsupported = fmt.Errorf("pausing a production is not supported on %s: %w",
 	runtime.GOOS, domain.ErrUnavailable)
 
+// PauseSupported reports that productions of this build can be paused (Linux only), for the
+// transcoder status the settings screen shows.
+func PauseSupported() bool {
+	return pauseSupported
+}
+
 // pauseControl freezes and continues the process of a production (ADR 0030 §2). signal is
 // nil where the system cannot do it.
 type pauseControl struct {

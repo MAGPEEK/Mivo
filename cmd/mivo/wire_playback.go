@@ -15,6 +15,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
+	"github.com/magpeek/mivo/internal/app/transcoder"
 	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
@@ -47,6 +48,8 @@ type playbackAdapters struct {
 	prober    *ffmpeg.Prober
 	workspace *transcodedir.Workspace
 	tools     externalTools
+	// transcoder tracks the hardware encoders; built by serveWithPlayback.
+	transcoder *transcoder.Service
 }
 
 // newWorkspace manages <transcode>/sessions. A transcode path with "%" is refused here,
@@ -69,32 +72,47 @@ func (app application) newWorkspace() (*transcodedir.Workspace, error) {
 // newPlaybackService builds the playback use case and purges the session directories a
 // previous run left behind, before the HTTP server accepts the first session (ADR 0024).
 func (app application) newPlaybackService(ctx context.Context, db *sqlite.DB, adapters playbackAdapters) (*appplayback.Service, error) {
-	producer, err := ffmpeg.NewProducer(ffmpeg.ProducerOptions{
-		FFmpegPath: adapters.tools.ffmpeg, Inputs: adapters.files, Logger: app.logger,
-	})
+	producer, err := ffmpeg.NewProducer(app.producerOptions(adapters.tools, adapters.files, transcoderEncoders{service: adapters.transcoder}))
 	if err != nil {
 		return nil, fmt.Errorf("create stream producer: %w", err)
 	}
 
 	service, err := appplayback.NewService(appplayback.Dependencies{
 		Files: sqlite.NewCatalogReader(db), Paths: adapters.files, Keyframes: adapters.prober,
-		Producer: producer, Workspace: adapters.workspace, URLs: stream.NewURLBuilder(),
-		Discs: playbackDiscPorts(adapters.files, adapters.prober),
-		IDs:   uuidgen.New(), Clock: time.Now, After: time.After, Logger: app.logger,
-	}, appplayback.Options{
-		Capabilities:         adapters.tools.capabilities,
-		Policy:               playback.Policy{MaxTranscodeHeight: maxTranscodeHeight},
-		MaxTranscodeSessions: app.config.Transcode.MaxSessions,
-	})
+		Producer:  hardwareStartGuard{inner: producer, acquire: adapters.transcoder.AcquireHardwareStart},
+		Workspace: adapters.workspace, URLs: stream.NewURLBuilder(),
+		Discs:     playbackDiscPorts(adapters.files, adapters.prober),
+		Subtitles: externalSubtitleLookup{reader: sqlite.NewCatalogReader(db)},
+		// The detection ends after the listener started: every session start reads the
+		// capabilities again, and a failed hardware session marks its encoder degraded.
+		Hardware: adapters.transcoder, CapabilitySource: adapters.transcoder,
+		IDs: uuidgen.New(), Clock: time.Now, After: time.After, Logger: app.logger,
+	}, app.playbackOptions(adapters.tools))
 	if err != nil {
 		return nil, fmt.Errorf("create playback service: %w", err)
 	}
 
 	if err := app.purgeWorkspace(ctx, service); err != nil {
-		return nil, withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, service))
+		return nil, withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, service, streamingServices{}))
 	}
 
 	return service, nil
+}
+
+// playbackOptions maps the configuration into the playback options. The capabilities are the
+// base the transcoder service adds the tested hardware encoders to.
+func (app application) playbackOptions(tools externalTools) appplayback.Options {
+	settings := app.config.Transcode
+
+	return appplayback.Options{
+		Capabilities: tools.capabilities,
+		Policy: playback.Policy{
+			MaxTranscodeHeight:   maxTranscodeHeight,
+			HardwareAcceleration: playback.HardwareAcceleration(settings.HWAccel),
+		},
+		MaxTranscodeSessions: settings.MaxSessions,
+		ThrottleAhead:        throttleAhead(settings),
+	}
 }
 
 // purgeWorkspace deletes the leftovers of the previous run. A sessions entry that is no
@@ -122,22 +140,42 @@ func (app application) purgeWorkspace(ctx context.Context, service *appplayback.
 }
 
 // closePlayback stops every session (FFmpeg killed, directories removed) and the reaper,
-// bounded by playbackCloseTimeout. It runs detached from ctx, which is done at shutdown.
-func (app application) closePlayback(ctx context.Context, service *appplayback.Service) error {
+// bounded by playbackCloseTimeout. It runs detached from ctx, which is done at shutdown. The
+// streaming services stop in parallel and inside the same bound: their work is cancelled with
+// the server context already, so they add no time of their own to the shutdown budget.
+func (app application) closePlayback(ctx context.Context, service *appplayback.Service, streaming streamingServices) error {
 	closeContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), playbackCloseTimeout)
 	defer cancel()
 
-	if err := service.Close(closeContext); err != nil {
+	streamingStopped := make(chan struct{})
+
+	go func() {
+		defer close(streamingStopped)
+
+		streaming.close()
+	}()
+
+	err := service.Close(closeContext)
+
+	select {
+	case <-streamingStopped:
+	case <-closeContext.Done():
+		app.logger.WarnContext(ctx, "streaming services did not stop within the shutdown bound")
+	}
+
+	if err != nil {
 		return fmt.Errorf("stop playback sessions: %w", err)
 	}
 
 	return nil
 }
 
-// newStreamHandlers serves the files of playback sessions on the API mux (ADR 0024).
-func (app application) newStreamHandlers(service *appplayback.Service, adapters playbackAdapters) (*stream.Handlers, error) {
+// newStreamHandlers serves the files of playback sessions on the API mux (ADR 0024), the
+// WebVTT subtitles and the trickplay sheets.
+func (app application) newStreamHandlers(service *appplayback.Service, adapters playbackAdapters, streaming streamingServices) (*stream.Handlers, error) {
 	handlers, err := stream.New(stream.Options{
 		Sessions: service, Library: adapters.files, Output: adapters.workspace, Logger: app.logger,
+		Subtitles: streaming.subtitles, Trickplay: streaming.trickplay,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create stream handlers: %w", err)

@@ -24,7 +24,10 @@ const (
 	modeWidth  = 11
 )
 
-var errCasesFailed = errors.New("at least one case did not play as expected")
+var (
+	errCasesFailed     = errors.New("at least one case did not play as expected")
+	errNoSubtitleTrack = errors.New("no text subtitle track to select")
+)
 
 // smokeRunner plays the cases one after another against the server. Cases run sequentially
 // so that no case waits for the transcode limit and every timing in the output is the time
@@ -34,7 +37,9 @@ type smokeRunner struct {
 	prober  prober
 	profile apigen.ClientProfile
 	files   fileIndex
-	poll    pollSettings
+	// tracks names the text subtitle track of the files that have one.
+	tracks trackIndex
+	poll   pollSettings
 	// caseTimeout bounds one case from the session's creation to the end of the probe.
 	caseTimeout time.Duration
 	// workDir receives the temporary downloads.
@@ -71,7 +76,14 @@ func (runner *smokeRunner) runCase(ctx context.Context, smoke smokeCase) (outcom
 	caseContext, cancel := context.WithTimeout(ctx, runner.caseTimeout)
 	defer cancel()
 
-	session, err := createSession(caseContext, runner.client, runner.request(fileID, smoke), runner.poll)
+	request, err := runner.request(fileID, smoke)
+	if err != nil {
+		outcome.fail("%v", err)
+
+		return outcome
+	}
+
+	session, err := createSession(caseContext, runner.client, request, runner.poll)
 	if err != nil {
 		outcome.fail("%v", err)
 
@@ -86,7 +98,7 @@ func (runner *smokeRunner) runCase(ctx context.Context, smoke smokeCase) (outcom
 	return outcome
 }
 
-func (runner *smokeRunner) request(fileID uuid.UUID, smoke smokeCase) apigen.PlaybackRequest {
+func (runner *smokeRunner) request(fileID uuid.UUID, smoke smokeCase) (apigen.PlaybackRequest, error) {
 	request := apigen.PlaybackRequest{FileID: fileID, Profile: runner.profile}
 
 	if smoke.start > 0 {
@@ -94,7 +106,15 @@ func (runner *smokeRunner) request(fileID uuid.UUID, smoke smokeCase) apigen.Pla
 		request.StartPositionSeconds = &start
 	}
 
-	return request
+	if smoke.maxBitRate > 0 {
+		request.MaxBitRate = &smoke.maxBitRate
+	}
+
+	if smoke.sidecarSubtitle {
+		return runner.subtitleRequest(request)
+	}
+
+	return request, nil
 }
 
 // stop deletes the session with its own deadline, so a case that ran out of time still
@@ -130,6 +150,8 @@ func (runner *smokeRunner) verify(ctx context.Context, smoke smokeCase, session 
 	start := seconds(session.StartPositionSeconds)
 	outcome.failures = append(outcome.failures, outputMismatches(smoke, start, output)...)
 	outcome.detail = describeOutput(session, start, output)
+
+	runner.verifyStreaming(ctx, smoke, session, outcome)
 }
 
 // download writes the stream into a temporary file, probes it and removes the file.

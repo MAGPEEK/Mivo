@@ -44,6 +44,9 @@ type tool struct {
 	// name identifies the tool in errors and logs.
 	name       string
 	executable string
+	// lowPriority runs the output-collecting runs (pipedOutput) below normal OS priority, for
+	// background work such as subtitle conversion and trickplay that must not slow playback.
+	lowPriority bool
 }
 
 // process is a started tool. wait must be called exactly once, on the goroutine that called
@@ -117,7 +120,7 @@ func (t tool) pipedOutput(ctx context.Context, arguments []string, input []byte,
 
 	stdout := &limitedBuffer{limit: limit, exceeded: cancel}
 
-	files := processFiles{stdout: stdout}
+	files := processFiles{stdout: stdout, lowPriority: t.lowPriority}
 	if input != nil {
 		files.stdin = bytes.NewReader(input)
 	}

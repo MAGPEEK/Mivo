@@ -40,6 +40,7 @@ func smoke(ctx context.Context, opts options, dependencies smokeDependencies, ou
 	}
 
 	cases = append(cases, discs...)
+	cases = append(cases, streamingCases(cases, opts.profile)...)
 	client := newAPIClient(opts.base, dependencies.httpClient)
 
 	// Registered before the sign-in, so a session whose profile selection fails is ended too;
@@ -104,10 +105,12 @@ func (runner *smokeRunner) scanAndIndex(ctx context.Context, timeout time.Durati
 		return fmt.Errorf("scan: %w", err)
 	}
 
-	files, err := indexFiles(scanContext, runner.client, libraries)
+	files, tracks, err := indexFiles(scanContext, runner.client, libraries)
 	if err != nil {
 		return fmt.Errorf("index the catalogued files: %w", err)
 	}
+
+	runner.tracks = tracks
 
 	printf(out, "scanned %d libraries, %d file names catalogued (%s)\n",
 		len(libraries), len(files), time.Since(began).Round(time.Millisecond))

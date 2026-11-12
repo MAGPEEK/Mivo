@@ -64,6 +64,9 @@ type wiredServices struct {
 	streams  *stream.Handlers
 	// activity joins the running scans and sessions for the administrator's activity view.
 	activity *appactivity.Service
+	// streaming are the hardware status, subtitle and trickplay services of the streaming
+	// extension; the session list, transcoder and trickplay endpoints answer through them.
+	streaming streamingServices
 }
 
 // httpHandlers are the handlers the HTTP server routes between: the REST API below /api/ and
@@ -167,6 +170,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Auth:         services.accounts.auth,
 		Users:        services.accounts.userServices(),
 		Watch:        services.watch,
+		Streaming:    services.streaming.api(),
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

@@ -118,6 +118,14 @@ type HardwareStatus interface {
 	MarkDegraded(api playback.HardwareAPI)
 }
 
+// CapabilitySource supplies the server capabilities of each session start. It is optional:
+// without it the service uses Options.Capabilities for ever. Implemented by app/transcoder,
+// whose hardware detection finishes in the background after the server started.
+type CapabilitySource interface {
+	// Capabilities returns the current capabilities; it never blocks on a running detection.
+	Capabilities() playback.ServerCapabilities
+}
+
 // FallbackReporter is implemented by a Production that retried in software because its
 // hardware encoder failed before the first segment. It is optional.
 type FallbackReporter interface {

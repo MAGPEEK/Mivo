@@ -305,6 +305,9 @@ func TestDecideSubtitleBurnInUnavailable(t *testing.T) {
 	vp9Only := playbacktest.ChromiumDesktop()
 	vp9Only.HLS.VideoCodecs = []string{"vp9"}
 
+	noLibass := playbacktest.FullCapabilities()
+	noLibass.BurnInText = false
+
 	pgsFile := mp4With(subtitle(2, pgsCodec))
 	audioOnly := clip(media.ContainerMP4, audio(0, "aac"))
 	externalText := []playback.SubtitleTrack{{ID: "x:aa", Format: "subrip", External: true, TextBased: true}}
@@ -368,6 +371,32 @@ func TestDecideSubtitleBurnInUnavailable(t *testing.T) {
 				warnings: []playback.Warning{burnInUnavailableWarning()},
 			},
 			subtitle: subtitlesOff(),
+		},
+		{
+			name:        "text burn-in without the subtitles filter refuses",
+			description: mp4With(), external: externalText, capabilities: &noLibass,
+			options: subtitleOptions{}, request: trackRequest("x:aa"),
+			want: failure(playback.ErrTranscodeUnavailable),
+		},
+		{
+			name:        "text burn-in without the subtitles filter degrades when allowed",
+			description: mp4With(), external: externalText, capabilities: &noLibass,
+			options: degradable(subtitleOptions{}), request: trackRequest("x:aa"),
+			want: degraded, subtitle: subtitlesOff(),
+		},
+		{
+			name:        "image burn-in does not need the subtitles filter",
+			description: pgsFile, capabilities: &noLibass,
+			options: webVTT(), request: trackRequest("s:2"),
+			want:     transcode(transcoded, copied, burnInReason()),
+			subtitle: burnIn("s:2", pgsCodec),
+		},
+		{
+			name:        "text burn-in works with the subtitles filter",
+			description: mp4With(), external: externalText,
+			options: subtitleOptions{}, request: trackRequest("x:aa"),
+			want:     transcode(transcoded, copied, burnInReason()),
+			subtitle: burnIn("x:aa", "subrip"),
 		},
 		{
 			name:        "degrading is not used while burn-in works",

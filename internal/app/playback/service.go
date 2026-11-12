@@ -27,14 +27,16 @@ type Dependencies struct {
 	// Subtitles lists external subtitle tracks; without it only embedded tracks exist.
 	Subtitles SubtitleTracks
 	// Hardware learns about failed hardware encoders; optional.
-	Hardware  HardwareStatus
-	Files     FileSource
-	Paths     PathResolver
-	Keyframes KeyframeLocator
-	Producer  StreamProducer
-	Workspace Workspace
-	URLs      StreamURLBuilder
-	IDs       IDGenerator
+	Hardware HardwareStatus
+	// CapabilitySource replaces Options.Capabilities at every session start; optional.
+	CapabilitySource CapabilitySource
+	Files            FileSource
+	Paths            PathResolver
+	Keyframes        KeyframeLocator
+	Producer         StreamProducer
+	Workspace        Workspace
+	URLs             StreamURLBuilder
+	IDs              IDGenerator
 	// Clock returns the current time; injected so tests control access times.
 	Clock func() time.Time
 	// After waits like time.After; injected so tests drive the idle reaper without sleeping.
@@ -64,6 +66,7 @@ type Service struct {
 	discs        DiscPorts
 	subtitles    SubtitleTracks
 	hardware     HardwareStatus
+	capSource    CapabilitySource
 	producer     StreamProducer
 	workspace    Workspace
 	urls         StreamURLBuilder
@@ -101,6 +104,7 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 		discs:         dependencies.Discs,
 		subtitles:     dependencies.Subtitles,
 		hardware:      dependencies.Hardware,
+		capSource:     dependencies.CapabilitySource,
 		producer:      dependencies.Producer,
 		workspace:     dependencies.Workspace,
 		urls:          dependencies.URLs,
@@ -124,6 +128,15 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 	service.startThrottle()
 
 	return service, nil
+}
+
+// currentCapabilities is what the server can do now: the source's answer when there is one.
+func (s *Service) currentCapabilities() playback.ServerCapabilities {
+	if s.capSource != nil {
+		return s.capSource.Capabilities()
+	}
+
+	return s.capabilities
 }
 
 func (dependencies Dependencies) validate() error {

@@ -64,6 +64,10 @@ type externalTools struct {
 	ffmpeg       string
 	ffprobe      string
 	capabilities playback.ServerCapabilities
+	// ffmpegUsable is false when ffmpeg is missing or could not answer the capability query.
+	ffmpegUsable bool
+	// soxResampler says whether ffmpeg was built with libsoxr (HLSJob.SoxResampler).
+	soxResampler bool
 	// photoDecoders says whether ffmpeg decodes HEIC and AVIF photos itself.
 	photoDecoders ffmpeg.PhotoDecoders
 }
@@ -98,8 +102,21 @@ func (app application) prepareTools(ctx context.Context) (externalTools, error) 
 	}
 
 	return externalTools{
-		ffmpeg: ffmpegPath, ffprobe: ffprobe, capabilities: capabilities, photoDecoders: photoDecoders,
+		ffmpeg: ffmpegPath, ffprobe: ffprobe, capabilities: withSafeBurnIn(capabilities), photoDecoders: photoDecoders,
+		ffmpegUsable: ffmpegFound && capabilities.FFmpegVersion != "",
+		soxResampler: app.detectSoxResampler(ctx, ffmpegPath, ffmpegFound),
 	}, nil
+}
+
+// withSafeBurnIn reports that the server cannot burn in text subtitles. The producer draws
+// only picture subtitles into the video (M4-08b): a text track would be read from the media
+// file by libass, which needs the hardened extraction of the embedded track into a session
+// file first, and the seek offset fixed. Until that path exists the decision engine must not
+// plan a text burn-in, so it answers transcode_unavailable or degrades (M4-15).
+func withSafeBurnIn(capabilities playback.ServerCapabilities) playback.ServerCapabilities {
+	capabilities.BurnInText = false
+
+	return capabilities
 }
 
 // detectPhotoDecoders asks ffmpeg whether it decodes HEIC and AVIF photos. Without a usable

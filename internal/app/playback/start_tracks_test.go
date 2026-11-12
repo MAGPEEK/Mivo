@@ -378,6 +378,63 @@ func TestStartHardwareFallbackMarksTheEncoderDegraded(t *testing.T) {
 	})
 }
 
+// switchableCapabilities is the capability source of a transcoder service whose background
+// detection finishes after the first sessions started.
+type switchableCapabilities struct {
+	mutex        sync.Mutex
+	capabilities playback.ServerCapabilities
+}
+
+func (source *switchableCapabilities) Capabilities() playback.ServerCapabilities {
+	source.mutex.Lock()
+	defer source.mutex.Unlock()
+
+	return source.capabilities
+}
+
+func (source *switchableCapabilities) set(capabilities playback.ServerCapabilities) {
+	source.mutex.Lock()
+	defer source.mutex.Unlock()
+
+	source.capabilities = capabilities
+}
+
+// TestStartReadsTheCapabilitiesOfEachSession: hardware detection runs in the background after
+// the server started, so a session that starts after it must already use the encoder it found.
+func TestStartReadsTheCapabilitiesOfEachSession(t *testing.T) {
+	t.Parallel()
+
+	inBubble(t, func(t *testing.T, _ *environment) {
+		env, _ := hardwareEnvironment()
+		withHardware := env.options.Capabilities
+		env.options.Capabilities.HardwareEncoders = nil
+
+		source := &switchableCapabilities{capabilities: env.options.Capabilities}
+		env.capabilitySource = source
+		service := env.service(t)
+
+		startRequest := subtitleRequest(ptr(""))
+		startRequest.MaxBitrate = twoMegabits
+
+		mustStart(t, service, startRequest)
+		env.passTime(0)
+
+		if job := env.producer.jobs()[0].job; job.Encoder.Hardware {
+			t.Errorf("first job encoder = %+v, want software before the detection ended", job.Encoder)
+		}
+
+		source.set(withHardware)
+
+		startRequest.ReplacesSessionID = ""
+		mustStart(t, service, startRequest)
+		env.passTime(0)
+
+		if job := env.producer.jobs()[1].job; !job.Encoder.Hardware {
+			t.Errorf("second job encoder = %+v, want the hardware encoder after the detection", job.Encoder)
+		}
+	})
+}
+
 func TestStartHardwareWithoutFallbackStaysClean(t *testing.T) {
 	t.Parallel()
 

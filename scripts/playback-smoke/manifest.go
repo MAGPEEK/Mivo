@@ -121,6 +121,11 @@ type smokeCase struct {
 	// both are 0 for a run from the beginning.
 	start     time.Duration
 	wantStart time.Duration
+	// sidecarSubtitle selects the file's first text subtitle track: the session must deliver
+	// it as a sidecar and the server must serve it as WebVTT (streamingCases).
+	sidecarSubtitle bool
+	// maxBitRate is the bit rate cap of the request in bits per second; 0 sends none.
+	maxBitRate int64
 }
 
 // smokeCases returns a case for every generated video of the manifest and every seek

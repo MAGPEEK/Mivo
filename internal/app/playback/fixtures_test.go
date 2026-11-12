@@ -104,6 +104,8 @@ type environment struct {
 	// subtitles and hardware are the optional ports; nil leaves them unconfigured.
 	subtitles appplayback.SubtitleTracks
 	hardware  appplayback.HardwareStatus
+	// capabilitySource replaces options.Capabilities per session start when set.
+	capabilitySource appplayback.CapabilitySource
 }
 
 func newEnvironment() *environment {
@@ -140,6 +142,8 @@ func (env *environment) dependencies() appplayback.Dependencies {
 		Discs:     env.discs,
 		Subtitles: env.subtitles,
 		Hardware:  env.hardware,
+
+		CapabilitySource: env.capabilitySource,
 	}
 }
 

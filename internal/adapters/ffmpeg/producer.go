@@ -79,9 +79,21 @@ type ProducerOptions struct {
 	Threads int
 	// LowPriority runs FFmpeg below normal OS priority, so the web app and the scan keep CPU.
 	LowPriority bool
+	// SoxResampler resamples audio with libsoxr (HLSJob.SoxResampler); the composition root
+	// sets it from HasSoxResampler, because builds without libsoxr reject the option.
+	SoxResampler bool
 	// HardwareEncoders are the tested hardware encoders (DetectHardware). A job whose plan
 	// names one is encoded with it, and falls back to software when that fails (hwfallback.go).
 	HardwareEncoders []playback.HardwareEncoder
+	// HardwareSource, when set, lists the hardware encoders at the start of every job instead
+	// of the fixed HardwareEncoders: the detection runs in the background after startup.
+	HardwareSource HardwareEncoderSource
+}
+
+// HardwareEncoderSource lists the tested hardware encoders as they are now. Implemented in
+// cmd/mivo on top of the transcoder service.
+type HardwareEncoderSource interface {
+	HardwareEncoders() []playback.HardwareEncoder
 }
 
 // Producer runs the FFmpeg process of an HLS session (ADR 0015, ADR 0024). It implements
@@ -98,7 +110,19 @@ type Producer struct {
 	preset       string
 	threads      int
 	lowPriority  bool
+	soxResampler bool
 	hardware     []playback.HardwareEncoder
+	hardwareFrom HardwareEncoderSource
+}
+
+// hardwareEncoders are the tested encoders a job may name: the source's current list, or the
+// fixed one.
+func (p *Producer) hardwareEncoders() []playback.HardwareEncoder {
+	if p.hardwareFrom != nil {
+		return p.hardwareFrom.HardwareEncoders()
+	}
+
+	return p.hardware
 }
 
 // NewProducer returns a producer that runs the ffmpeg executable of options. Errors wrap
@@ -123,7 +147,9 @@ func NewProducer(options ProducerOptions) (*Producer, error) {
 		preset:       options.Preset,
 		threads:      options.Threads,
 		lowPriority:  options.LowPriority,
+		soxResampler: options.SoxResampler,
 		hardware:     options.HardwareEncoders,
+		hardwareFrom: options.HardwareSource,
 	}, nil
 }
 
@@ -228,7 +254,7 @@ func (p *Producer) prepareRun(ctx context.Context, job appplayback.Job) (prepare
 
 	arguments, err := HLSArguments(HLSJob{
 		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
-		Preset: p.preset, Threads: p.threads, BurnIn: burnIn, HardwareEncoders: p.hardware,
+		Preset: p.preset, Threads: p.threads, SoxResampler: p.soxResampler, BurnIn: burnIn, HardwareEncoders: p.hardwareEncoders(),
 	})
 	if err != nil {
 		return preparedRun{}, err

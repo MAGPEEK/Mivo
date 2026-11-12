@@ -149,14 +149,34 @@ func (index fileIndex) add(name string, id uuid.UUID) {
 	index[name] = id
 }
 
-// indexFiles pages through the items of every library and reads each item's files.
-func indexFiles(ctx context.Context, client *apiClient, libraries []apigen.Library) (fileIndex, error) {
-	index := fileIndex{}
+// trackIndex names, per file, the first text subtitle track the server lists: the track the
+// subtitle case selects (M4-15).
+type trackIndex map[uuid.UUID]string
+
+// firstTextTrack returns the first subtitle track that is converted to WebVTT, "" when none.
+func firstTextTrack(file apigen.MediaFile) string {
+	if file.SubtitleTracks == nil {
+		return ""
+	}
+
+	for _, track := range *file.SubtitleTracks {
+		if track.TextBased {
+			return track.ID
+		}
+	}
+
+	return ""
+}
+
+// indexFiles pages through the items of every library and reads each item's files; it also
+// records each file's first text subtitle track.
+func indexFiles(ctx context.Context, client *apiClient, libraries []apigen.Library) (fileIndex, trackIndex, error) {
+	index, tracks := fileIndex{}, trackIndex{}
 
 	for _, library := range libraries {
 		items, err := libraryItems(ctx, client, library.ID)
 		if err != nil {
-			return nil, fmt.Errorf("list the items of library %s: %w", library.Name, err)
+			return nil, nil, fmt.Errorf("list the items of library %s: %w", library.Name, err)
 		}
 
 		for _, item := range items {
@@ -164,16 +184,20 @@ func indexFiles(ctx context.Context, client *apiClient, libraries []apigen.Libra
 
 			reference := itemsPath + item.ID.String()
 			if err := client.call(ctx, apiCall{method: http.MethodGet, reference: reference, want: http.StatusOK, out: &detail}); err != nil {
-				return nil, fmt.Errorf("read item %q: %w", item.Title, err)
+				return nil, nil, fmt.Errorf("read item %q: %w", item.Title, err)
 			}
 
 			for _, file := range detail.Files {
 				index.add(file.FileName, file.ID)
+
+				if track := firstTextTrack(file); track != "" {
+					tracks[file.ID] = track
+				}
 			}
 		}
 	}
 
-	return index, nil
+	return index, tracks, nil
 }
 
 func libraryItems(ctx context.Context, client *apiClient, id uuid.UUID) ([]apigen.ItemSummary, error) {

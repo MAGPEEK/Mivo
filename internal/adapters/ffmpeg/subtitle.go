@@ -36,6 +36,8 @@ type SubtitleExtractorOptions struct {
 	FFmpegPath string
 	// Logger receives one debug record with ffmpeg's error output per failed run.
 	Logger *slog.Logger
+	// LowPriority runs ffmpeg below normal OS priority, so a conversion never slows playback.
+	LowPriority bool
 }
 
 // SubtitleTrack names the subtitle to extract.
@@ -68,7 +70,7 @@ func NewSubtitleExtractor(options SubtitleExtractorOptions) (*SubtitleExtractor,
 	}
 
 	return &SubtitleExtractor{
-		ffmpeg:  tool{name: ffmpegToolName, executable: options.FFmpegPath},
+		ffmpeg:  tool{name: ffmpegToolName, executable: options.FFmpegPath, lowPriority: options.LowPriority},
 		logger:  options.Logger,
 		timeout: subtitleTimeout,
 	}, nil

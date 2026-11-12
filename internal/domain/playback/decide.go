@@ -146,6 +146,12 @@ func hlsPlan(input Input, chosen selection, cause hlsCause) (Plan, error) {
 		return Plan{}, err
 	}
 
+	if cause.subtitles.burnsIn() {
+		if err := missingTextBurnIn(input.Capabilities, chosen.subtitle); err != nil {
+			return Plan{}, err
+		}
+	}
+
 	plan.Warnings = append(hlsWarnings(plan, chosen), cause.subtitles.warnings...)
 
 	return plan, nil

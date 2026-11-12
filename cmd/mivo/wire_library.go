@@ -142,6 +142,9 @@ func (app application) newScanService(db *sqlite.DB, store *sqlite.ManagedLibrar
 		// ffprobe also reads the chapter markers; the catalog stores them per part file.
 		Audiobooks: appscan.AudiobookPorts{Tags: adapters.prober, Chapters: adapters.prober, Catalog: catalog},
 		Discs:      scanDiscPorts(adapters.files, adapters.prober),
+		// External subtitle files next to a video are listed by the file system and stored by
+		// the catalog (ADR 0030 §3).
+		Subtitles: appscan.SubtitlePorts{Lister: adapters.files, Catalog: catalog},
 		// A photo without EXIF time sorts by its modification time on the server's wall clock.
 		Photos: appscan.PhotoPorts{Metadata: photometa.NewReader(), Catalog: catalog, Zone: time.Local},
 		Finished: func(ctx context.Context, _ string) {

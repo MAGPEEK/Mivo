@@ -57,6 +57,58 @@ func (q *Queries) InsertExternalSubtitle(ctx context.Context, arg InsertExternal
 	return err
 }
 
+const listFileExternalSubtitles = `-- name: ListFileExternalSubtitles :many
+SELECT external_subtitles.media_file_id, external_subtitles.relative_path, external_subtitles.format,
+       external_subtitles.language, external_subtitles.title, external_subtitles.forced,
+       external_subtitles.sdh, external_subtitles.is_default
+FROM external_subtitles
+WHERE external_subtitles.media_file_id = ?
+ORDER BY external_subtitles.ordinal
+`
+
+type ListFileExternalSubtitlesRow struct {
+	MediaFileID  string
+	RelativePath string
+	Format       string
+	Language     string
+	Title        string
+	Forced       int64
+	Sdh          int64
+	IsDefault    int64
+}
+
+func (q *Queries) ListFileExternalSubtitles(ctx context.Context, mediaFileID string) ([]ListFileExternalSubtitlesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFileExternalSubtitles, mediaFileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFileExternalSubtitlesRow{}
+	for rows.Next() {
+		var i ListFileExternalSubtitlesRow
+		if err := rows.Scan(
+			&i.MediaFileID,
+			&i.RelativePath,
+			&i.Format,
+			&i.Language,
+			&i.Title,
+			&i.Forced,
+			&i.Sdh,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listLibraryExternalSubtitles = `-- name: ListLibraryExternalSubtitles :many
 SELECT external_subtitles.media_file_id, external_subtitles.relative_path, external_subtitles.format,
        external_subtitles.language, external_subtitles.title, external_subtitles.forced,

@@ -62,6 +62,8 @@ type TrickplayGeneratorOptions struct {
 	Prober TrickplayProber
 	// Logger receives one debug record with ffmpeg's error output per failed run.
 	Logger *slog.Logger
+	// LowPriority runs ffmpeg below normal OS priority, so generation never slows playback.
+	LowPriority bool
 }
 
 // TrickplayGenerator writes the seek-bar preview sheets of a video with one ffmpeg pass.
@@ -84,7 +86,7 @@ func NewTrickplayGenerator(options TrickplayGeneratorOptions) (*TrickplayGenerat
 	}
 
 	return &TrickplayGenerator{
-		ffmpeg: tool{name: ffmpegToolName, executable: options.FFmpegPath},
+		ffmpeg: tool{name: ffmpegToolName, executable: options.FFmpegPath, lowPriority: options.LowPriority},
 		prober: options.Prober,
 		logger: options.Logger,
 	}, nil

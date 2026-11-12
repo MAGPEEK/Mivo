@@ -119,8 +119,20 @@ func burnInObstacle(input Input, chosen selection) error {
 		return fmt.Errorf("subtitle %s needs burn-in, but the server cannot encode video: %w",
 			chosen.subtitle.ID, ErrTranscodeUnavailable)
 	default:
-		return nil
+		return missingTextBurnIn(input.Capabilities, chosen.subtitle)
 	}
+}
+
+// missingTextBurnIn is the server limit of drawing a text subtitle: it needs libass, while
+// picture subtitles only need the overlay filter every build has. The HLS plan checks it with
+// the other server limits, after the client limits.
+func missingTextBurnIn(capabilities ServerCapabilities, track SubtitleTrack) error {
+	if track.TextBased && !capabilities.BurnInText {
+		return fmt.Errorf("subtitle %s needs text burn-in, but the server cannot draw text: %w",
+			track.ID, ErrTranscodeUnavailable)
+	}
+
+	return nil
 }
 
 // planBurnInVideo is planVideo for a video that gets a subtitle drawn in: a video the client

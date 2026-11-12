@@ -61,9 +61,11 @@ type application struct {
 //
 // Startup order: config → logger → directories → data directory lock → database and
 // migrations → server identity → accounts and their startup backfills → FFmpeg tools and
-// capabilities → configured library import → scan service → playback service and workspace
-// purge → HTTP listener → startup scan → serve. Shutdown runs
-// backwards: HTTP server → playback sessions → scans → database → lock. Every step closes
+// capabilities → configured library import → scan service → transcoder service → playback
+// service and workspace purge → subtitle and trickplay services, hardware detection in the
+// background → HTTP listener → startup scan → serve. Shutdown runs
+// backwards: HTTP server → playback sessions and streaming services (in parallel) → scans →
+// database → lock. Every step closes
 // what it opened when a later one fails, and every shutdown step is bounded.
 func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error {
 	cfg, err := config.Load(config.Options{
@@ -264,26 +266,48 @@ func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, cat
 
 	adapters.workspace = workspace
 
+	adapters.transcoder, err = app.newTranscoderService(adapters.tools, adapters.tools.ffmpegUsable)
+	if err != nil {
+		return err
+	}
+
 	playback, err := app.newPlaybackService(ctx, db, adapters)
 	if err != nil {
 		return err
 	}
 
-	streams, err := app.newStreamHandlers(playback, adapters)
+	streaming, err := app.newStreamingServices(ctx, db, adapters, playback)
 	if err != nil {
-		return withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, playback))
+		return withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, playback, streamingServices{}))
+	}
+
+	services, err := app.newWiredServices(db, catalog, adapters, streaming)
+	if err != nil {
+		return withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, playback, streaming))
+	}
+
+	serveErr := app.serveHTTP(ctx, services)
+
+	return withCleanupError(ctx, serveErr, closePlaybackStep, app.closePlayback(ctx, playback, streaming))
+}
+
+// newWiredServices adds the stream handlers and the activity view to the catalog services.
+func (app application) newWiredServices(db *sqlite.DB, catalog catalogServices, adapters playbackAdapters, streaming streamingServices) (wiredServices, error) {
+	playback := streaming.sessions
+
+	streams, err := app.newStreamHandlers(playback, adapters, streaming)
+	if err != nil {
+		return wiredServices{}, err
 	}
 
 	activity, err := appactivity.NewService(appactivity.Dependencies{
 		Scans: catalog.scans, Sessions: playback, Items: sqlite.NewCatalogReader(db), Logger: app.logger,
 	})
 	if err != nil {
-		return withCleanupError(ctx, fmt.Errorf("create activity service: %w", err), closePlaybackStep, app.closePlayback(ctx, playback))
+		return wiredServices{}, fmt.Errorf("create activity service: %w", err)
 	}
 
-	serveErr := app.serveHTTP(ctx, wiredServices{catalogServices: catalog, playback: playback, streams: streams, activity: activity})
-
-	return withCleanupError(ctx, serveErr, closePlaybackStep, app.closePlayback(ctx, playback))
+	return wiredServices{catalogServices: catalog, playback: playback, streams: streams, activity: activity, streaming: streaming}, nil
 }
 
 // prepareServerState creates what the rest of the startup reads and nothing serves without:
