@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,13 +102,15 @@ func TestRunLocksBeforeOpeningTheDatabase(t *testing.T) {
 func TestRunGuardsTheLANByDefault(t *testing.T) {
 	t.Parallel()
 
+	// lan_only=false admits the public peer to the sign-in, which answers 401 (setup_required
+	// on this fresh server); it opens no data without a session.
 	tests := []struct {
 		name       string
 		lanOnly    string
 		wantStatus int
 	}{
 		{name: "default", wantStatus: http.StatusForbidden},
-		{name: "lan_only=false", lanOnly: "false", wantStatus: http.StatusOK},
+		{name: "lan_only=false", lanOnly: "false", wantStatus: http.StatusUnauthorized},
 	}
 
 	for _, test := range tests {
@@ -119,7 +122,7 @@ func TestRunGuardsTheLANByDefault(t *testing.T) {
 				environment[envServerLANOnly] = test.lanOnly
 			}
 
-			server := startTestServer(t, environment, runHooks{wrapListener: asPublicPeers})
+			server := startUnsetServer(t, environment, runHooks{wrapListener: asPublicPeers})
 
 			if status, _ := fetchStatus(t, server.baseURL+"/api/v1/libraries"); status != test.wantStatus {
 				t.Errorf("GET /api/v1/libraries from a public peer = %d, want %d", status, test.wantStatus)
@@ -188,8 +191,21 @@ type testServer struct {
 	cancel    context.CancelFunc
 }
 
-// startTestServer runs the server until stop or the end of the test.
+// startTestServer runs the server until stop or the end of the test and signs
+// http.DefaultClient in as the administrator it creates through the first-run setup (or, on a
+// restart with the same data directory, signs in as the existing one). The setup needs a local
+// peer, so a test that presents public peers uses peerSwitch or startUnsetServer.
 func startTestServer(t *testing.T, environment map[string]string, hooks runHooks) testServer {
+	t.Helper()
+
+	server := startUnsetServer(t, environment, hooks)
+	signInTestServer(t, server.baseURL)
+
+	return server
+}
+
+// startUnsetServer runs the server like startTestServer but leaves it in setup state.
+func startUnsetServer(t *testing.T, environment map[string]string, hooks runHooks) testServer {
 	t.Helper()
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -220,8 +236,31 @@ func asPublicPeers(listener net.Listener) net.Listener {
 	return publicPeerListener{Listener: listener}
 }
 
+// peerSwitch presents connections as coming from a public address once goPublic was called,
+// so a test can set the server up from the real local peer first.
+type peerSwitch struct {
+	public atomic.Bool
+}
+
+func (peers *peerSwitch) wrap(listener net.Listener) net.Listener {
+	return publicPeerListener{Listener: listener, peers: peers}
+}
+
+// goPublic makes every new connection public and drops the kept-alive ones of the test
+// client, which were accepted as local.
+func (peers *peerSwitch) goPublic() {
+	peers.public.Store(true)
+
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport.CloseIdleConnections()
+	}
+}
+
+// publicPeerListener marks its connections public; without a switch always.
 type publicPeerListener struct {
 	net.Listener
+
+	peers *peerSwitch
 }
 
 func (listener publicPeerListener) Accept() (net.Conn, error) {
@@ -230,14 +269,20 @@ func (listener publicPeerListener) Accept() (net.Conn, error) {
 		return nil, err //nolint:wrapcheck // net/http inspects the listener's errors
 	}
 
-	return publicPeerConn{Conn: conn}, nil
+	return publicPeerConn{Conn: conn, peers: listener.peers}, nil
 }
 
 type publicPeerConn struct {
 	net.Conn
+
+	peers *peerSwitch
 }
 
-func (publicPeerConn) RemoteAddr() net.Addr {
+func (conn publicPeerConn) RemoteAddr() net.Addr {
+	if conn.peers != nil && !conn.peers.public.Load() {
+		return conn.Conn.RemoteAddr()
+	}
+
 	return &net.TCPAddr{IP: net.ParseIP(publicPeerAddress), Port: publicPeerPort}
 }
 

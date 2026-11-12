@@ -204,7 +204,12 @@ func TestLibraryManagementRefusesPublicPeers(t *testing.T) {
 
 	fixture := newManagementEnvironment(t, nil)
 	fixture.environment[envServerLANOnly] = "false"
-	fixture.start(t, runHooks{wrapListener: asPublicPeers})
+
+	// Signed in as the administrator over the loopback first; then every new connection
+	// comes from a public address, which must not reach the administration.
+	peers := &peerSwitch{}
+	fixture.start(t, runHooks{wrapListener: peers.wrap})
+	peers.goPublic()
 
 	for _, target := range []string{"/api/v1/folder-roots"} {
 		if status, _ := call(t, http.MethodGet, fixture.server.baseURL+target, ""); status != http.StatusForbidden {

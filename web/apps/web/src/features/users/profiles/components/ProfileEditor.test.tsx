@@ -60,7 +60,7 @@ async function openFromUsers(server: FakeUsersServer, button: string): Promise<H
 describe("managed profiles in Admin › Users", () => {
   it("creates a profile with PIN, colour, limit and a subset of the account's libraries", async () => {
     const server = createFakeUsersServer();
-    const form = await openFromUsers(server, "Add a profile to Jonas");
+    const form = await openFromUsers(server, "Add profile for Jonas");
 
     expect(
       within(form).getByRole("heading", { name: "Create managed profile for Jonas" }),
@@ -109,7 +109,7 @@ describe("managed profiles in Admin › Users", () => {
   it("shows the profile limit and a taken name of the server", async () => {
     let code = "profile_limit";
     const server = createFakeUsersServer({ createProfile: () => problemResponse(409, code) });
-    const form = await openFromUsers(server, "Add a profile to Anna");
+    const form = await openFromUsers(server, "Add profile for Anna");
     fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "Max" } });
 
     save(form);
@@ -234,7 +234,7 @@ describe("library load guard", () => {
     });
     renderApp(usersPath, { fetch: server.fetch });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Add a profile to Jonas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add profile for Jonas" }));
     const form = dialog();
     await within(form).findByRole("button", { name: "Try again" });
     fireEvent.change(within(form).getByLabelText("Name"), { target: { value: "Mia" } });

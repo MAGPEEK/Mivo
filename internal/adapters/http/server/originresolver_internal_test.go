@@ -319,7 +319,7 @@ func TestProxyOptionsRefuseUnsafePrefixes(t *testing.T) {
 			logger, _ := newDebugLogger()
 
 			_, err := New(Options{
-				Address: "127.0.0.1:0", Logger: logger, APIHandler: textHandler(http.StatusOK, "api"),
+				Address: "127.0.0.1:0", Logger: logger, APIHandler: textHandler(http.StatusOK, "api"), Authentication: wiredAuthentication(),
 				TrustedProxies: []netip.Prefix{prefix},
 			})
 			if !errors.Is(err, domain.ErrInvalid) {

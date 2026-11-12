@@ -119,8 +119,9 @@ type ProfileWriter interface {
 	CreateProfile(ctx context.Context, profile ProfileWrite, check ManagedProfileCheck) error
 	// UpdateProfile stores the profile's fields, library access, limit and PIN action.
 	UpdateProfile(ctx context.Context, profile ProfileWrite) error
-	// DeleteProfile removes a profile; the caller has checked it is not the primary.
-	DeleteProfile(ctx context.Context, profileID string) error
+	// DeleteProfile removes a profile of the account; the caller has checked it is not the
+	// primary. A profile of another account is domain.ErrNotFound.
+	DeleteProfile(ctx context.Context, accountID, profileID string) error
 }
 
 // Hasher hashes passwords and PINs (argon2id, adapters/credentials).

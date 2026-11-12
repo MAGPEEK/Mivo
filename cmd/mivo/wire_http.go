@@ -23,6 +23,7 @@ import (
 	appscan "github.com/magpeek/mivo/internal/app/scan"
 	appsearch "github.com/magpeek/mivo/internal/app/search"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
+	appwatch "github.com/magpeek/mivo/internal/app/watch"
 )
 
 // listenNetwork is the network of the HTTP listener.
@@ -48,6 +49,11 @@ type catalogServices struct {
 	// online is the online metadata feature: its API services, the enrichment worker and
 	// the periodic refresh.
 	online onlineMetadata
+	// watch is the watch state; the rows and the item responses read it (built by
+	// withCatalogReaders).
+	watch *appwatch.Service
+	// accounts are sign-in and user administration; every request goes through them.
+	accounts accountServices
 }
 
 // wiredServices is everything the HTTP adapter serves.
@@ -87,7 +93,7 @@ func (app application) serveHTTP(ctx context.Context, services wiredServices) er
 		return err
 	}
 
-	httpServer, err := server.New(app.serverOptions(listener, handlers))
+	httpServer, err := server.New(app.serverOptions(listener, handlers, services.accounts))
 	if err != nil {
 		return errors.Join(fmt.Errorf("create http server: %w", err), listener.Close())
 	}
@@ -96,16 +102,21 @@ func (app application) serveHTTP(ctx context.Context, services wiredServices) er
 	app.startLibraryScans(ctx, services.scans)
 
 	// The trigger starts scans, so it stops before the caller closes the scan service; the
-	// enrichment worker and the periodic refresh stop before the database closes. A stopped
-	// worker gives its running jobs back to the queue, so a restart resumes them.
+	// enrichment worker, the periodic refresh and the session purge stop before the database
+	// closes. A stopped worker gives its running jobs back to the queue, so a restart resumes
+	// them.
 	stopTrigger := startBackground(ctx, services.trigger)
 	stopWorker := startBackground(ctx, services.online.worker)
 	stopPeriodic := startBackground(ctx, services.online.periodic)
+	stopSessionPurge := startBackground(ctx, sessionPurger{
+		purge: services.accounts.auth.PurgeExpired, interval: sessionPurgeInterval, logger: app.logger,
+	})
 	runErr := httpServer.Run(ctx)
 
 	stopTrigger()
 	stopPeriodic()
 	stopWorker()
+	stopSessionPurge()
 
 	if runErr != nil {
 		return fmt.Errorf("run http server: %w", runErr)
@@ -117,8 +128,10 @@ func (app application) serveHTTP(ctx context.Context, services wiredServices) er
 // serverOptions quiets the stream delivery routes, whose segment polling would flood the info
 // log, but not the session resource itself: a DELETE of a session stays at info. The LAN-only
 // guard is an opt-out, so the zero value keeps it on (OD-10); nil interface prefixes mean
-// this host's interfaces.
-func (app application) serverOptions(listener net.Listener, handlers httpHandlers) server.Options {
+// this host's interfaces. Every request goes through the session middleware of accounts, and
+// forwarding headers count only from the configured trusted proxies (ADR 0032 §3, §9); the
+// default trusts nobody.
+func (app application) serverOptions(listener net.Listener, handlers httpHandlers, accounts accountServices) server.Options {
 	return server.Options{
 		Listener:           listener,
 		Logger:             app.logger,
@@ -126,6 +139,8 @@ func (app application) serverOptions(listener net.Listener, handlers httpHandler
 		Fallback:           handlers.webUI,
 		QuietPatterns:      slices.Concat(stream.QuietPatterns(), imagehttp.QuietPatterns(), posterproxy.QuietPatterns()),
 		AllowPublicClients: !app.config.Server.LANOnly,
+		Authentication:     accounts.authentication(),
+		TrustedProxies:     app.config.Server.TrustedProxies,
 	}
 }
 
@@ -149,6 +164,9 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Mounts:       services.mounts(),
 		Metadata:     services.online.apiServices(),
 		Activity:     services.activity,
+		Auth:         services.accounts.auth,
+		Users:        services.accounts.userServices(),
+		Watch:        services.watch,
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

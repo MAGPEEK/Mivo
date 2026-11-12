@@ -8,22 +8,14 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	"github.com/magpeek/mivo/internal/app/users"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
 )
 
 // AccountSummary is one row of the users list (US-20).
-type AccountSummary struct {
-	AccountRecord
-
-	// CreatedAt is when the account was created.
-	CreatedAt time.Time
-	// ProfileCount counts the primary and the managed profiles.
-	ProfileCount int
-	// LastActiveAt is the newest session activity; the zero time means never.
-	LastActiveAt time.Time
-}
+type AccountSummary = users.AccountSummary
 
 // AccountCredentials is an account with its password hash, for sign-in and password changes.
 type AccountCredentials struct {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 	"github.com/magpeek/mivo/internal/adapters/http/server"
+	"github.com/magpeek/mivo/internal/app/auth"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/system"
 )
@@ -109,13 +110,14 @@ func TestRunServesAPIAndShutsDownOnCancel(t *testing.T) {
 	listener := openListener(t)
 
 	cancel, result := startServer(t, server.Options{
-		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t),
+		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t), Authentication: testAuthentication(),
 	})
 
 	baseURL := "http://" + listener.Addr().String()
 	assertGet(t, baseURL+"/api/v1/health", http.StatusOK, `"status":"ok"`)
 	assertGet(t, baseURL+"/api/v1/system/info", http.StatusOK, `"serverId":"0b8c6d4e-3f2a-4c1b-9d8e-7f6a5b4c3d2e"`)
-	assertGet(t, baseURL+"/api/v1/nope", http.StatusNotFound, `"code":"not_found"`)
+	// Unknown API paths need a session like every other protected path.
+	assertGet(t, baseURL+"/api/v1/nope", http.StatusUnauthorized, `"code":"unauthenticated"`)
 
 	cancel()
 
@@ -140,7 +142,7 @@ func TestRunNeverHandsAPIPathsToTheFallback(t *testing.T) {
 	})
 
 	cancel, result := startServer(t, server.Options{
-		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t), Fallback: fallback,
+		Listener: listener, Logger: discardLogger(), APIHandler: newAPIHandler(t), Authentication: testAuthentication(), Fallback: fallback,
 	})
 
 	baseURL := "http://" + listener.Addr().String()
@@ -150,13 +152,13 @@ func TestRunNeverHandsAPIPathsToTheFallback(t *testing.T) {
 		wantStatus int
 	}{
 		{path: "/api/v1/health", wantStatus: http.StatusOK},
-		{path: "/api/v1/x", wantStatus: http.StatusNotFound},
-		{path: "/api/", wantStatus: http.StatusNotFound},
-		// ServeMux redirects the subtree root without its slash into the API.
-		{path: "/api", wantStatus: http.StatusTemporaryRedirect},
+		{path: "/api/v1/x", wantStatus: http.StatusUnauthorized},
+		{path: "/api/", wantStatus: http.StatusUnauthorized},
+		// The authentication answers before ServeMux could redirect the subtree root.
+		{path: "/api", wantStatus: http.StatusUnauthorized},
 		// ServeMux matches the escaped path, so these two miss the /api/ pattern.
-		{path: "/api%2Fv1%2Fx", wantStatus: http.StatusNotFound},
-		{path: "/%2e%2e/api/v1/x", wantStatus: http.StatusNotFound},
+		{path: "/api%2Fv1%2Fx", wantStatus: http.StatusUnauthorized},
+		{path: "/%2e%2e/api/v1/x", wantStatus: http.StatusUnauthorized},
 	}
 
 	for _, test := range tests {
@@ -247,7 +249,7 @@ func TestRunListensOnAddress(t *testing.T) {
 	t.Parallel()
 
 	cancel, result := startServer(t, server.Options{
-		Address: "127.0.0.1:0", Logger: discardLogger(), APIHandler: newAPIHandler(t),
+		Address: "127.0.0.1:0", Logger: discardLogger(), APIHandler: newAPIHandler(t), Authentication: testAuthentication(),
 	})
 
 	cancel()
@@ -261,7 +263,7 @@ func TestRunReportsListenFailure(t *testing.T) {
 	t.Parallel()
 
 	httpServer, err := server.New(server.Options{
-		Address: "127.0.0.1:not-a-port", Logger: discardLogger(), APIHandler: newAPIHandler(t),
+		Address: "127.0.0.1:not-a-port", Logger: discardLogger(), APIHandler: newAPIHandler(t), Authentication: testAuthentication(),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -278,7 +280,7 @@ func TestRunReportsServeFailure(t *testing.T) {
 
 	// A closed listener makes Serve fail at once, before the context ends.
 	_, result := startServer(t, server.Options{
-		Listener: closedListener(t), Logger: discardLogger(), APIHandler: newAPIHandler(t),
+		Listener: closedListener(t), Logger: discardLogger(), APIHandler: newAPIHandler(t), Authentication: testAuthentication(),
 	})
 
 	if err := waitForRun(t, result); err == nil || !strings.Contains(err.Error(), "serve http") {
@@ -296,20 +298,20 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 		name    string
 		options server.Options
 	}{
-		{name: "neither address nor listener", options: server.Options{Logger: discardLogger(), APIHandler: apiHandler}},
+		{name: "neither address nor listener", options: server.Options{Logger: discardLogger(), APIHandler: apiHandler, Authentication: testAuthentication()}},
 		{
 			name:    "both address and listener",
-			options: server.Options{Address: ":0", Listener: listener, Logger: discardLogger(), APIHandler: apiHandler},
+			options: server.Options{Address: ":0", Listener: listener, Logger: discardLogger(), APIHandler: apiHandler, Authentication: testAuthentication()},
 		},
-		{name: "missing logger", options: server.Options{Address: ":0", APIHandler: apiHandler}},
-		{name: "missing api handler", options: server.Options{Address: ":0", Logger: discardLogger()}},
+		{name: "missing logger", options: server.Options{Address: ":0", APIHandler: apiHandler, Authentication: testAuthentication()}},
+		{name: "missing api handler", options: server.Options{Address: ":0", Logger: discardLogger(), Authentication: testAuthentication()}},
 		{
 			name:    "empty quiet pattern",
-			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, QuietPatterns: []string{""}},
+			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, Authentication: testAuthentication(), QuietPatterns: []string{""}},
 		},
 		{
 			name:    "conflicting quiet patterns",
-			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, QuietPatterns: []string{"GET /a/{x}", "GET /a/{y}"}},
+			options: server.Options{Address: ":0", Logger: discardLogger(), APIHandler: apiHandler, Authentication: testAuthentication(), QuietPatterns: []string{"GET /a/{x}", "GET /a/{y}"}},
 		},
 	}
 
@@ -322,6 +324,32 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				t.Errorf("New = %v, %v, want nil server and ErrInvalid", httpServer, err)
 			}
 		})
+	}
+}
+
+// openResolver and openSetup are the authentication of tests that only call the open routes
+// (health, system info): they resolve nothing and report no setup state.
+type openResolver struct{}
+
+func (openResolver) Resolve(context.Context, string, auth.Peer) (auth.Resolution, error) {
+	return auth.Resolution{}, domain.ErrUnauthenticated
+}
+
+type openSetup struct{}
+
+func (openSetup) SetupRequired(context.Context) (bool, error) { return false, nil }
+
+func testAuthentication() server.Authentication {
+	return server.Authentication{Sessions: openResolver{}, Setup: openSetup{}}
+}
+
+func TestNewRefusesAMissingAuthentication(t *testing.T) {
+	t.Parallel()
+
+	options := server.Options{Address: ":0", Logger: discardLogger(), APIHandler: http.NotFoundHandler()}
+
+	if _, err := server.New(options); !errors.Is(err, domain.ErrInvalid) {
+		t.Errorf("New without authentication = %v, want ErrInvalid", err)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	"github.com/magpeek/mivo/internal/app/users"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
@@ -18,36 +19,28 @@ import (
 // ProfileRecord is a profile as stored: the domain profile (HasPIN tells whether a PIN hash is
 // stored; the hash itself is read only through ProfilePINHash), its own library access (all =
 // the account's set) and its own content limit.
-type ProfileRecord struct {
-	Profile   account.Profile
-	Libraries access.LibraryAccess
-	Limit     access.ContentLimit
-}
+type ProfileRecord = users.ProfileRecord
 
 // PINAction says what a ProfileWrite does with the PIN hash.
-type PINAction int
+type PINAction = users.PINAction
 
 // PIN actions of a ProfileWrite.
 const (
 	// PINKeep leaves the stored PIN hash as it is; on create it means no PIN.
-	PINKeep PINAction = iota
+	PINKeep = users.PINKeep
 	// PINSet replaces the PIN hash with ProfileWrite.PINHash.
-	PINSet
+	PINSet = users.PINSet
 	// PINClear removes the PIN.
-	PINClear
+	PINClear = users.PINClear
 )
 
 // ProfileWrite is a profile to create or update. PINHash is used only with PINSet.
 // Profile.HasPIN is ignored.
-type ProfileWrite struct {
-	Record    ProfileRecord
-	PINAction PINAction
-	PINHash   string
-}
+type ProfileWrite = users.ProfileWrite
 
 // ManagedProfileCheck decides inside the create transaction whether one more managed profile
 // fits, given the managed profiles the account has in that transaction.
-type ManagedProfileCheck func(existingManaged int) error
+type ManagedProfileCheck = users.ManagedProfileCheck
 
 // CreateProfile adds a managed profile when check (nil allows) agrees inside the transaction;
 // independent of check, account.CheckManagedProfileLimit applies (domain.ErrConflict). A

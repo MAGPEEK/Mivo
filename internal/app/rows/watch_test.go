@@ -200,7 +200,7 @@ func TestWatchRowsNeedAProfile(t *testing.T) {
 	fake := &fakeWatch{continueIDs: []string{"m-old"}, upNextIDs: []string{"a1e2"}}
 	service := watchService(t, newFixtureCatalog(), fake)
 
-	// An administrator before any account (pre-account mode) has a restriction but no profile.
+	// A viewer without a selected profile has a restriction but no profile.
 	ctx := appaccess.WithViewer(context.Background(), access.Viewer{
 		AccountID: "admin", Admin: true, Libraries: access.AllLibraries(), Limit: access.NoLimit(),
 	})

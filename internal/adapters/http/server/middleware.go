@@ -47,8 +47,8 @@ type chainSettings struct {
 	interfacePrefixes InterfacePrefixProvider
 	// now is the clock of the interface prefix cache, time.Now outside tests.
 	now func() time.Time
-	// authentication is Options.Authentication; its zero value leaves the session
-	// middleware off.
+	// authentication is Options.Authentication; New requires it, only the tests of single
+	// guards leave it zero.
 	authentication Authentication
 	// origins resolves the client address and scheme from Options.TrustedProxies.
 	origins originResolver
@@ -88,9 +88,10 @@ func newChainSettings(options Options) (chainSettings, error) {
 // guard stays on when the LAN guard is off: server.lan_only never opens the administration.
 // The guards run in the order LAN guard, authentication, management guard, setup gate
 // (ADR 0032): the management guard needs the viewer the authentication stores, and the
-// setup gate answers only peers the management guard admitted. Authentication and the setup
-// gate exist only when Options.Authentication is wired; without it every request carries the
-// administrator viewer of the pre-account mode (preAccountViewer).
+// setup gate answers only peers the management guard admitted. New refuses options without
+// Authentication, so a served chain always has the authentication and the setup gate. A chain
+// built without them (only the internal tests of single guards do that) stores no viewer at
+// all, so a use case that reads the catalog fails closed.
 func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 	lan := newLANGuard(settings)
 	handler := next
@@ -103,8 +104,6 @@ func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 
 	if settings.authentication.enabled() {
 		handler = newAuthGuard(settings, lan).wrap(handler)
-	} else {
-		handler = withPreAccountViewer(handler)
 	}
 
 	if !settings.allowPublicClients {

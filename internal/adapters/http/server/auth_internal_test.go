@@ -492,19 +492,17 @@ func TestAuthCrossSiteCookieWriteCostsNoLookup(t *testing.T) {
 	}
 }
 
-func TestAuthIsOffWithoutWiring(t *testing.T) {
+// TestAGuardChainWithoutAuthenticationStoresNoViewer covers the internal tests of single
+// guards: New never builds such a chain, but even then no request gets a viewer.
+func TestAGuardChainWithoutAuthenticationStoresNoViewer(t *testing.T) {
 	t.Parallel()
 
 	logger, _ := newDebugLogger()
 	options := Options{Logger: logger, APIHandler: viewerEcho()}
 
-	if recorder := serveChain(t, options, newRequest(t, http.MethodGet, itemsPath)); recorder.Code != http.StatusOK {
-		t.Errorf("GET items without authentication wired = %d, want 200", recorder.Code)
-	}
-
-	request := newGuardedRequest(t, guardedRequest{method: http.MethodPost, target: "/api/v1/setup"})
-	if recorder := serveChain(t, options, request); recorder.Code != http.StatusOK {
-		t.Errorf("POST setup without authentication wired = %d, want 200 (no setup gate)", recorder.Code)
+	recorder := serveChain(t, options, newRequest(t, http.MethodGet, itemsPath))
+	if recorder.Code != http.StatusOK || recorder.Header().Get(viewerHeader) != "" {
+		t.Errorf("GET items = %d with viewer %q, want 200 and no viewer", recorder.Code, recorder.Header().Get(viewerHeader))
 	}
 }
 

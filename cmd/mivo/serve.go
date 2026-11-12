@@ -60,8 +60,9 @@ type application struct {
 // serve loads the configuration, builds the logger and runs the server until ctx is done.
 //
 // Startup order: config → logger → directories → data directory lock → database and
-// migrations → server identity → FFmpeg tools and capabilities → configured library import → scan service →
-// playback service and workspace purge → HTTP listener → startup scan → serve. Shutdown runs
+// migrations → server identity → accounts and their startup backfills → FFmpeg tools and
+// capabilities → configured library import → scan service → playback service and workspace
+// purge → HTTP listener → startup scan → serve. Shutdown runs
 // backwards: HTTP server → playback sessions → scans → database → lock. Every step closes
 // what it opened when a later one fails, and every shutdown step is bounded.
 func serve(ctx context.Context, opts options, env runEnv, hooks runHooks) error {
@@ -195,7 +196,7 @@ func withCleanupError(ctx context.Context, result error, step string, cleanupErr
 // serveWith wires the use cases on the open database and serves until ctx is done. The scan
 // service is closed after everything that serves requests or plays has stopped.
 func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
-	system, err := app.newSystemService(ctx, db)
+	system, accounts, err := app.prepareServerState(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -236,6 +237,7 @@ func (app application) serveWith(ctx context.Context, db *sqlite.DB) error {
 	catalog := catalogServices{
 		system: system, libraries: libraries, managed: managed, scans: scanning.scans, images: images,
 		trigger: scanning.trigger, management: scanning.management, store: store, online: scanning.online,
+		accounts: accounts,
 	}
 	serveErr := app.serveWithPlayback(ctx, db, catalog, playbackAdapters{files: files, prober: prober, tools: tools})
 	serveErr = withCleanupError(ctx, serveErr, closeScansStep, app.closeScans(ctx, scanning.scans))
@@ -282,6 +284,22 @@ func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, cat
 	serveErr := app.serveHTTP(ctx, wiredServices{catalogServices: catalog, playback: playback, streams: streams, activity: activity})
 
 	return withCleanupError(ctx, serveErr, closePlaybackStep, app.closePlayback(ctx, playback))
+}
+
+// prepareServerState creates what the rest of the startup reads and nothing serves without:
+// the server identity and the accounts with their backfills.
+func (app application) prepareServerState(ctx context.Context, db *sqlite.DB) (*appsystem.Service, accountServices, error) {
+	system, err := app.newSystemService(ctx, db)
+	if err != nil {
+		return nil, accountServices{}, err
+	}
+
+	accounts, err := app.prepareAccounts(ctx, db)
+	if err != nil {
+		return nil, accountServices{}, err
+	}
+
+	return system, accounts, nil
 }
 
 // newSystemService builds the system use cases and ensures the server identity, so the

@@ -101,8 +101,9 @@ docker build -f packaging/docker/Dockerfile -t mivo:dev .   # [docker][net]; run
 
 # Release gate: playback smoke against the image [docker]
 docker run -d --name mivo-smoke -p 127.0.0.1:8460:8460 -v "${PWD}/testdata/media:/media:ro" mivo:dev
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -profile firefox-desktop
+$env:MIVO_SMOKE_PASSWORD = [guid]::NewGuid().ToString()   # the account of the smoke runs (sign-in is on)
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD -profile firefox-desktop
 docker rm -f -v mivo-smoke
 
 # Git hooks (lefthook v2.2.2), once per clone; bypass: git commit --no-verify or $env:LEFTHOOK = '0'

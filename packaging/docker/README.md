@@ -138,8 +138,9 @@ creates one over `/media` through `POST /api/v1/libraries`:
 ```
 go run ./scripts/gen-testmedia
 docker run -d --name mivo-smoke -p 127.0.0.1:8460:8460 -v "$PWD/testdata/media:/media:ro" mivo:dev
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -profile firefox-desktop
+export MIVO_SMOKE_PASSWORD="$(openssl rand -hex 16)"   # the smoke account; sign-in is on (PowerShell: see docs/development.md)
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD -profile firefox-desktop
 docker exec mivo-smoke ls /transcode/sessions    # empty: every session was removed
 docker rm -f -v mivo-smoke
 ```
@@ -150,7 +151,7 @@ mount both trees below `/media` and pass the library manifest:
 
 ```
 docker run -d --name mivo-smoke -p 127.0.0.1:8460:8460 -v "$PWD/testdata/media:/media/corpus:ro" -v "$PWD/testdata/library/discs:/media/discs:ro" mivo:dev
-go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -disc-manifest testdata/library/manifest.json
+go run ./scripts/playback-smoke -base http://127.0.0.1:8460 -user smoke -password-env MIVO_SMOKE_PASSWORD -disc-manifest testdata/library/manifest.json
 ```
 
 On a Linux host, `gen-testmedia` writes the corpus with mode `0640`, which user

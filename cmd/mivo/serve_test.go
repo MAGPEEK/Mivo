@@ -97,9 +97,11 @@ func TestRunRoutesAPIAndWebUI(t *testing.T) {
 		{name: "client route", path: "/library/x", wantStatus: http.StatusOK, wantContentType: "text/html; charset=utf-8"},
 		{name: "missing web file", path: "/missing.js", wantStatus: http.StatusNotFound, wantContentType: "text/plain; charset=utf-8"},
 		{name: "api route", path: "/api/v1/health", wantStatus: http.StatusOK, wantContentType: "application/json"},
-		{name: "unknown api route", path: "/api/v1/does-not-exist", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
-		{name: "unknown api route without extension", path: "/api/library/x", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
-		{name: "api route with encoded slashes", path: "/api%2Fv1%2Fx", wantStatus: http.StatusNotFound, wantContentType: "application/problem+json"},
+		// Every API path but the open ones needs a session, also an unknown one: it answers
+		// the problem (never the web app) and 401 until signed in (setup_required here).
+		{name: "unknown api route", path: "/api/v1/does-not-exist", wantStatus: http.StatusUnauthorized, wantContentType: "application/problem+json"},
+		{name: "unknown api route without extension", path: "/api/library/x", wantStatus: http.StatusUnauthorized, wantContentType: "application/problem+json"},
+		{name: "api route with encoded slashes", path: "/api%2Fv1%2Fx", wantStatus: http.StatusUnauthorized, wantContentType: "application/problem+json"},
 	}
 
 	for _, test := range tests {
@@ -109,6 +111,15 @@ func TestRunRoutesAPIAndWebUI(t *testing.T) {
 				t.Errorf("GET %s = %d %q, want %d %q", test.path, status, contentType, test.wantStatus, test.wantContentType)
 			}
 		})
+	}
+
+	// Signed in, the same paths reach the API router and answer its 404 problem.
+	signInTestServer(t, baseURL)
+
+	for _, path := range []string{"/api/v1/does-not-exist", "/api/library/x", "/api%2Fv1%2Fx"} {
+		if status := sendRequest(t, http.MethodGet, baseURL+path); status != http.StatusNotFound {
+			t.Errorf("signed in GET %s = %d, want 404", path, status)
+		}
 	}
 
 	cancel()

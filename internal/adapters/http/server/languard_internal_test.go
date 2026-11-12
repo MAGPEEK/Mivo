@@ -368,7 +368,7 @@ func TestRunLogsTheClientAccessMode(t *testing.T) {
 			logger, logs := newTestLogger()
 
 			httpServer, err := New(Options{
-				Listener: openTestListener(t), Logger: logger, APIHandler: textHandler(http.StatusOK, ""),
+				Listener: openTestListener(t), Logger: logger, APIHandler: textHandler(http.StatusOK, ""), Authentication: wiredAuthentication(),
 				AllowPublicClients: test.allowPublicClients,
 			})
 			if err != nil {
@@ -412,7 +412,7 @@ func TestGeneralOptionsRequestGoesThroughTheChain(t *testing.T) {
 	logger, logs := newTestLogger()
 	listener := openTestListener(t)
 
-	httpServer, err := New(Options{Listener: listener, Logger: logger, APIHandler: textHandler(http.StatusOK, "api")})
+	httpServer, err := New(Options{Listener: listener, Logger: logger, APIHandler: textHandler(http.StatusOK, "api"), Authentication: wiredAuthentication()})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

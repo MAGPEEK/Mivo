@@ -57,6 +57,12 @@ FROM auth_sessions
 WHERE user_id = ?
 ORDER BY last_seen_at DESC, id;
 
+-- name: GetSessionByID :one
+SELECT id, token_hash, user_id, profile_id, remember, device_name, client, platform, address_class,
+       created_at, last_seen_at
+FROM auth_sessions
+WHERE id = ?;
+
 -- name: ListAllSessions :many
 SELECT auth_sessions.id, auth_sessions.token_hash, auth_sessions.user_id, auth_sessions.profile_id,
        auth_sessions.remember, auth_sessions.device_name, auth_sessions.client, auth_sessions.platform,

@@ -46,10 +46,7 @@ type SessionDetails struct {
 }
 
 // AccountSession is a session listed across accounts, with the account's display name.
-type AccountSession struct {
-	Session     auth.Session
-	AccountName string
-}
+type AccountSession = auth.AccountSession
 
 // CreateSession stores a new session. An unknown account, or a selected profile that is
 // missing or belongs to another account, returns an error wrapping domain.ErrNotFound; a
@@ -124,6 +121,21 @@ func (store *SessionStore) SessionByTokenHash(ctx context.Context, tokenHash str
 	return details.Session, err
 }
 
+// SessionByID returns the session (device) with sessionID, or an error wrapping
+// domain.ErrNotFound.
+func (store *SessionStore) SessionByID(ctx context.Context, sessionID string) (auth.Session, error) {
+	row, err := sqlcgen.New(store.reader).GetSessionByID(ctx, sessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return auth.Session{}, fmt.Errorf("session %s: %w", sessionID, domain.ErrNotFound)
+	}
+
+	if err != nil {
+		return auth.Session{}, fmt.Errorf("read session %s: %w", sessionID, err)
+	}
+
+	return sessionFromRow(row), nil
+}
+
 // SessionDetailsByTokenHash resolves tokenHash to the session, its account and its selected
 // profile in one query. An unknown hash returns an error wrapping domain.ErrNotFound.
 func (store *SessionStore) SessionDetailsByTokenHash(ctx context.Context, tokenHash string) (SessionDetails, error) {
@@ -154,6 +166,16 @@ func (store *SessionStore) TouchSession(ctx context.Context, sessionID string, s
 	}
 
 	return nil
+}
+
+// SetSessionProfile is the auth.ProfileSelector port: an empty profileID drops the selection
+// (ClearProfile), any other selects it (SelectProfile).
+func (store *SessionStore) SetSessionProfile(ctx context.Context, sessionID, profileID string, remember bool) error {
+	if profileID == "" {
+		return store.ClearProfile(ctx, sessionID)
+	}
+
+	return store.SelectProfile(ctx, sessionID, profileID, remember)
 }
 
 // SelectProfile selects profileID for the session; remember keeps the selection beyond the

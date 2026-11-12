@@ -278,7 +278,7 @@ func (s *Service) DeleteProfile(ctx context.Context, profileID string) error {
 		return fmt.Errorf("delete profile: %w", err)
 	}
 
-	if err := s.options.Profile.DeleteProfile(ctx, profileID); err != nil {
+	if err := s.options.Profile.DeleteProfile(ctx, current.Profile.AccountID, profileID); err != nil {
 		return fmt.Errorf("delete profile %s: %w", profileID, err)
 	}
 

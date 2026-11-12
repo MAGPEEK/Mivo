@@ -283,7 +283,7 @@ func (store *fakeStore) UpdateProfile(_ context.Context, write users.ProfileWrit
 	return nil
 }
 
-func (store *fakeStore) DeleteProfile(_ context.Context, profileID string) error {
+func (store *fakeStore) DeleteProfile(_ context.Context, _, profileID string) error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
 

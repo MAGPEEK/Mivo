@@ -218,12 +218,11 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   intersected with the catalog's directories that hold a visible item; an administrator without
   a content limit still sees every directory, also empty ones, and a directory with no visible
   item opened by path answers `ErrNotFound`.
-- **Pre-account mode (until M7-25).** While `server.Options.Authentication` is unset, the HTTP
-  chain stores an unrestricted administrator viewer (no auth session id) in every request
-  context (`preAccountViewer`), so the server is open by design exactly as before accounts
-  existed: same exposure as today, and the use cases above stay fail-closed. With
-  Authentication wired, a request without a valid session is answered by the middleware and
-  carries no viewer at all. M7-25 deletes the pre-account viewer (`TODO(M7-25)`).
+- **No pre-account mode (M7-25).** The pre-account viewer is gone: `server.New` refuses options
+  without `Authentication`, and a request without a valid session is answered by the middleware
+  (`401 setup_required` or `401 unauthenticated`) and never carries a viewer, so the use cases
+  above fail closed everywhere. A fresh data directory starts in setup state (ADR §6); an
+  alpha catalog keeps its libraries and items and is shown to the first administrator.
 
 ### 8 Watch state
 - Table `watch_state` (migration `00013`): `profile_id` (FK, `ON DELETE CASCADE`), `item_id`

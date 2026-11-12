@@ -9,8 +9,15 @@ import (
 )
 
 // withCatalogReaders returns catalog with the services that read the finished catalog: the
-// rows and the search.
+// watch state, which the rows decorate their cards with, the rows and the search.
 func withCatalogReaders(db *sqlite.DB, catalog catalogServices) (catalogServices, error) {
+	watching, err := newWatchService(db, catalog.libraries)
+	if err != nil {
+		return catalogServices{}, err
+	}
+
+	catalog.watch = watching
+
 	rows, err := newRowsService(db, catalog)
 	if err != nil {
 		return catalogServices{}, err

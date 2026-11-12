@@ -29,9 +29,8 @@ type SetupStateReader interface {
 	SetupRequired(ctx context.Context) (bool, error)
 }
 
-// Authentication switches the session middleware of ADR 0032 on. The zero value leaves it
-// off, so the server keeps its pre-account behaviour until the composition root wires both
-// ports (task M7-25); setting only one of them is invalid.
+// Authentication is the session middleware of ADR 0032: the composition root wires both
+// ports, and New refuses a server without them.
 type Authentication struct {
 	// Sessions resolves the session cookie or bearer token of every protected request.
 	Sessions SessionResolver

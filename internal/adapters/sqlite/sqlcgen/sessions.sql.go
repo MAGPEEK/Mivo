@@ -157,6 +157,32 @@ func (q *Queries) DeleteUserSessionsExcept(ctx context.Context, arg DeleteUserSe
 	return items, nil
 }
 
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT id, token_hash, user_id, profile_id, remember, device_name, client, platform, address_class,
+       created_at, last_seen_at
+FROM auth_sessions
+WHERE id = ?
+`
+
+func (q *Queries) GetSessionByID(ctx context.Context, id string) (AuthSession, error) {
+	row := q.db.QueryRowContext(ctx, getSessionByID, id)
+	var i AuthSession
+	err := row.Scan(
+		&i.ID,
+		&i.TokenHash,
+		&i.UserID,
+		&i.ProfileID,
+		&i.Remember,
+		&i.DeviceName,
+		&i.Client,
+		&i.Platform,
+		&i.AddressClass,
+		&i.CreatedAt,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
 SELECT auth_sessions.id, auth_sessions.token_hash, auth_sessions.user_id, auth_sessions.remember,
        auth_sessions.device_name, auth_sessions.client, auth_sessions.platform, auth_sessions.address_class,

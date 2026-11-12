@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
+	"github.com/magpeek/mivo/internal/app/users"
 	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/account"
@@ -18,9 +19,8 @@ import (
 // admin, managed-profile limit) cannot race with another writer. Hashes pass through the
 // store unchanged and are never logged or put into error messages.
 //
-// The record and callback types mirror the ports of app/users (M7-17) field for field; this
-// package cannot import app/users yet, so M7-25 adds a thin adapter from the store to those
-// ports (type conversions for the records, wrapping closures for the callbacks).
+// The record and callback types are the types of the ports of app/users (aliases), so the
+// store satisfies those ports without conversions.
 type AccountStore struct {
 	writer *sql.DB
 	reader *sql.DB
@@ -39,28 +39,20 @@ func NewAccountStore(db *DB, clock func() time.Time) *AccountStore {
 
 // AccountRecord is an account as stored: the identity, its library access and the content
 // limit of its primary profile.
-type AccountRecord struct {
-	Account      account.Account
-	Libraries    access.LibraryAccess
-	PrimaryLimit access.ContentLimit
-}
+type AccountRecord = users.AccountRecord
 
 // NewAccountRecord is everything a new account is stored with in one transaction: the account,
 // its primary profile (name and avatar; the store forces the account id and the primary flag,
 // gives it all of the account's libraries and the account's PrimaryLimit) and the password
 // hash (an argon2id PHC string).
-type NewAccountRecord struct {
-	Account      AccountRecord
-	Primary      account.Profile
-	PasswordHash string
-}
+type NewAccountRecord = users.NewAccountRecord
 
 // AccountChange computes the new state of an account from the current one. The store calls it
 // inside the write transaction with the number of enabled admins counted in that transaction.
-type AccountChange func(current AccountRecord, enabledAdmins int) (AccountRecord, error)
+type AccountChange = users.AccountChange
 
 // AccountDeletionCheck decides inside the delete transaction whether the account may go.
-type AccountDeletionCheck func(current account.Account, enabledAdmins int) error
+type AccountDeletionCheck = users.AccountDeletionCheck
 
 // HasAccounts reports whether at least one account exists; without one the server is in
 // setup state (ADR 0032 §6).

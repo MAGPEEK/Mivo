@@ -76,10 +76,10 @@ type Options struct {
 	// the last known ones for about two minutes and then refuses such peers. Nil means the
 	// interfaces of this host.
 	InterfacePrefixes InterfacePrefixProvider
-	// Authentication switches the session middleware of ADR 0032 on: every API path but
-	// health, system info, the setup pair and sign-in then needs the session cookie or a
-	// bearer token, cookie writes must keep the same-origin rule, and the management guard
-	// also demands an admin viewer. The zero value leaves it off (until task M7-25 wires it).
+	// Authentication is the session middleware of ADR 0032. It is required: every API path
+	// but health, system info, the setup pair and sign-in needs the session cookie or a bearer
+	// token, cookie writes must keep the same-origin rule, and the management guard also
+	// demands an admin viewer. A server without it would be open, so New refuses to build.
 	Authentication Authentication
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For and X-Forwarded-Proto
 	// headers are believed (config server.trusted_proxies, ADR 0032 §3): when the socket
@@ -147,7 +147,8 @@ func (options Options) validate() (chainSettings, error) {
 		problems = append(problems, errors.New("missing api handler"))
 	}
 
-	if !options.Authentication.valid() {
+	// Fail closed: without authentication every route would be served without a sign-in.
+	if !options.Authentication.valid() || !options.Authentication.enabled() {
 		problems = append(problems, errors.New("authentication needs both a session resolver and a setup state reader"))
 	}
 

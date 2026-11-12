@@ -134,7 +134,7 @@
   },
   "profiles": {
     "add": "Add profile",
-    "addLabel": "Add a profile to {{name}}",
+    "addLabel": "Add profile for {{name}}",
     "loadFailedFor": "The profiles of {{name}} could not be loaded.",
     "page": {
       "heading": "Your profiles",

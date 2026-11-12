@@ -59,18 +59,18 @@ func TestSessionListOfAccountAndOfAllAccounts(t *testing.T) {
 	fixture.createAged(t, "ben-new", "Ben", sessionAge{time.Hour, time.Minute})
 	fixture.createAged(t, "anna", "Anna", sessionAge{time.Hour, 2 * time.Minute})
 
-	own, err := fixture.sessions.ListSessions(t.Context(), "account-Ben")
+	own, err := fixture.sessions.AccountSessions(t.Context(), "account-Ben")
 	if err != nil {
-		t.Fatalf("ListSessions error = %v", err)
+		t.Fatalf("AccountSessions error = %v", err)
 	}
 
 	if got, want := sessionIDs(own), []string{"ben-new", "ben-old"}; !slices.Equal(got, want) {
 		t.Errorf("Ben's sessions = %v, want %v (most recent first)", got, want)
 	}
 
-	all, err := fixture.sessions.ListAllSessions(t.Context())
+	all, err := fixture.sessions.AllSessions(t.Context())
 	if err != nil {
-		t.Fatalf("ListAllSessions error = %v", err)
+		t.Fatalf("AllSessions error = %v", err)
 	}
 
 	var got []string
@@ -82,9 +82,9 @@ func TestSessionListOfAccountAndOfAllAccounts(t *testing.T) {
 		t.Errorf("all sessions = %v, want %v", got, want)
 	}
 
-	none, err := fixture.sessions.ListSessions(t.Context(), "account-Nobody")
+	none, err := fixture.sessions.AccountSessions(t.Context(), "account-Nobody")
 	if err != nil || len(none) != 0 {
-		t.Errorf("ListSessions(unknown) = %v, %v, want empty", none, err)
+		t.Errorf("AccountSessions(unknown) = %v, %v, want empty", none, err)
 	}
 }
 
@@ -216,8 +216,8 @@ func TestSessionStoreReportsCancelledContext(t *testing.T) {
 	}
 
 	_, checks["SessionByTokenHash"] = fixture.sessions.SessionByTokenHash(ctx, "hash-s1")
-	_, checks["ListSessions"] = fixture.sessions.ListSessions(ctx, "account-Ben")
-	_, checks["ListAllSessions"] = fixture.sessions.ListAllSessions(ctx)
+	_, checks["AccountSessions"] = fixture.sessions.AccountSessions(ctx, "account-Ben")
+	_, checks["AllSessions"] = fixture.sessions.AllSessions(ctx)
 	_, checks["DeleteAccountSession"] = fixture.sessions.DeleteAccountSession(ctx, "account-Ben", "s1")
 	_, checks["PurgeSessions"] = fixture.sessions.PurgeSessions(ctx, time.Now(), time.Now())
 

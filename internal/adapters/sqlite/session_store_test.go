@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"database/sql"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -17,6 +18,8 @@ import (
 var (
 	_ auth.SessionStore    = (*sqlite.SessionStore)(nil)
 	_ auth.SessionRevoker  = (*sqlite.SessionStore)(nil)
+	_ auth.ProfileSelector = (*sqlite.SessionStore)(nil)
+	_ auth.DeviceStore     = (*sqlite.SessionStore)(nil)
 	_ users.SessionRevoker = (*sqlite.SessionStore)(nil)
 )
 
@@ -112,6 +115,23 @@ func TestSessionCreateAndResolveRoundTrip(t *testing.T) {
 	plain, err := fixture.sessions.SessionByTokenHash(t.Context(), want.TokenHash)
 	if err != nil || !sessionsEqual(plain, want) {
 		t.Errorf("SessionByTokenHash = %+v, %v, want %+v", plain, err, want)
+	}
+}
+
+func TestSessionByID(t *testing.T) {
+	t.Parallel()
+
+	fixture := newSessionFixture(t)
+	want := fixture.newSession("s1", "Ben", benKidProfileID)
+	fixture.mustCreate(t, want)
+
+	got, err := fixture.sessions.SessionByID(t.Context(), "s1")
+	if err != nil || !sessionsEqual(got, want) {
+		t.Errorf("SessionByID = %+v, %v, want %+v", got, err, want)
+	}
+
+	if _, err := fixture.sessions.SessionByID(t.Context(), "unknown"); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("SessionByID(unknown) = %v, want ErrNotFound", err)
 	}
 }
 

@@ -410,7 +410,7 @@ func mustAPI(t *testing.T, logger *slog.Logger, mounts []restapi.Mount) http.Han
 }
 
 // withAdminViewer stands in for the session middleware: every request carries an unrestricted
-// administrator, as the pre-account mode of the server chain does.
+// administrator.
 func withAdminViewer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		next.ServeHTTP(writer, request.WithContext(appaccess.WithViewer(request.Context(), adminViewer())))

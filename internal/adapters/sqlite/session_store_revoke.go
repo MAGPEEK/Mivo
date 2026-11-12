@@ -9,8 +9,8 @@ import (
 	"github.com/magpeek/mivo/internal/app/auth"
 )
 
-// ListSessions returns the sessions of the account, most recently used first.
-func (store *SessionStore) ListSessions(ctx context.Context, accountID string) ([]auth.Session, error) {
+// AccountSessions returns the sessions of the account, most recently used first.
+func (store *SessionStore) AccountSessions(ctx context.Context, accountID string) ([]auth.Session, error) {
 	rows, err := sqlcgen.New(store.reader).ListUserSessions(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("list sessions of account %s: %w", accountID, err)
@@ -24,9 +24,9 @@ func (store *SessionStore) ListSessions(ctx context.Context, accountID string) (
 	return sessions, nil
 }
 
-// ListAllSessions returns the sessions of every account with the account name, most recently
+// AllSessions returns the sessions of every account with the account name, most recently
 // used first; it serves the admin device list.
-func (store *SessionStore) ListAllSessions(ctx context.Context) ([]AccountSession, error) {
+func (store *SessionStore) AllSessions(ctx context.Context) ([]AccountSession, error) {
 	rows, err := sqlcgen.New(store.reader).ListAllSessions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all sessions: %w", err)
