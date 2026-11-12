@@ -111,6 +111,8 @@ func withMiddleware(next http.Handler, settings chainSettings) http.Handler {
 		handler = lan.wrap(handler)
 	}
 
+	handler = lan.classify(handler)
+
 	handler = settings.origins.wrap(handler)
 	handler = recoverPanics(handler, settings.logger)
 	handler = logAccess(handler, settings.logger, settings.quiet)

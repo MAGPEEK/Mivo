@@ -313,6 +313,13 @@ func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 		{http.MethodPost, "/api/v1/system/%74ranscoder/test", true},
 		{http.MethodPost, "/api/v1/system/transcoder/test/", true},
 		{http.MethodGet, "/api/v1/system/transcoders", false},
+		// The activity view names every viewer's titles and library scans (M5-16).
+		{http.MethodGet, "/api/v1/activity", true},
+		{http.MethodHead, "/api/v1/activity", true},
+		{http.MethodGet, "/api/v1/activity/", true},
+		{http.MethodGet, "/api/v1/%61ctivity", true},
+		{http.MethodGet, "/api/v1/activity?x=1", true},
+		{http.MethodGet, "/api/v1/activities", false},
 		{http.MethodGet, "/api/v1/media-files/" + manageLibraryID + "/trickplay", false},
 		{http.MethodPost, "/api/v1/media-files/" + manageLibraryID + "/trickplay", false},
 	}

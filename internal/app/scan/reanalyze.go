@@ -140,7 +140,7 @@ func (service *Service) runReanalysis(plan reanalysis, done chan struct{}) {
 }
 
 func (service *Service) executeReanalysis(ctx context.Context, plan reanalysis) error {
-	scanTracker := newTracker(ctx, service.clock())
+	scanTracker := newTracker(ctx, plan.library.Name, service.clock())
 	defer scanTracker.cancel()
 
 	itemKind, err := libraryItemKind(plan.library)

@@ -26,6 +26,7 @@ const (
 	sessionsRefusalDetail         = "The running playback sessions are only shown to an administrator on the local network."
 	transcoderRefusalDetail       = "Transcoder settings need an administrator on the local network."
 	analysisRefusalDetail         = "Re-analyzing files needs an administrator on the local network."
+	activityRefusalDetail         = "The server activity is only shown to an administrator on the local network."
 )
 
 // manageArea is the guarded area a request belongs to; areaNone is not guarded.
@@ -51,6 +52,8 @@ const (
 	areaTranscoder
 	// areaAnalysis is re-analyzing the files of an item (PL-35).
 	areaAnalysis
+	// areaActivity is the running scans and sessions of every viewer (M5-16).
+	areaActivity
 )
 
 // Paths of the guarded routes (api/openapi.yaml).
@@ -66,6 +69,7 @@ const (
 	apiV1Profiles         = "/api/v1/profiles"
 	apiV1Playback         = "/api/v1/playback"
 	apiV1Transcoder       = "/api/v1/system/transcoder"
+	apiV1Activity         = "/api/v1/activity"
 
 	// settingsSegments and posterSegments are the path segments of the settings route and of
 	// one poster ("api", "v1", ... and the poster ID).
@@ -230,6 +234,8 @@ func areaRefusalDetail(area manageArea) string {
 		return transcoderRefusalDetail
 	case areaAnalysis:
 		return analysisRefusalDetail
+	case areaActivity:
+		return activityRefusalDetail
 	case areaNone, areaLibraries:
 		return manageRefusalDetail
 	default:
@@ -251,6 +257,7 @@ func areaRefusalDetail(area manageArea) string {
 //   - sessions: reading the list at /api/v1/playback/sessions (GET and HEAD, ADR 0030 §7).
 //   - transcoder: every request below /api/v1/system/transcoder (ADR 0030 §5).
 //   - analysis: re-analyzing an item's files, POST /api/v1/items/{id}/reanalyze (M5-17).
+//   - activity: every request below /api/v1/activity; it lists every viewer's titles (M5-16).
 //
 // The path is classified twice and the first guarded answer wins (fail closed): once split
 // into segments that are unescaped one by one, as ServeMux matches them, so an encoded slash
@@ -306,6 +313,8 @@ func streamingArea(segments []string, isRead bool) manageArea {
 	switch {
 	case isPrefixOf(segments, apiV1Transcoder):
 		return areaTranscoder
+	case isPrefixOf(segments, apiV1Activity):
+		return areaActivity
 	case isPrefixOf(segments, apiV1Playback):
 		// The collection only, also with a trailing slash; a POST starts the viewer's own
 		// session.

@@ -55,6 +55,16 @@ func (guard lanGuard) wrap(next http.Handler) http.Handler {
 	})
 }
 
+// classify stores whether the client is in the local network (clientorigin.WithLocal), also
+// when server.lan_only is off and the guard itself does not run, so handlers can record the
+// address class without repeating the LAN rules.
+func (guard lanGuard) classify(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ctx := clientorigin.WithLocal(request.Context(), guard.admitsPeer(request))
+		next.ServeHTTP(writer, request.WithContext(ctx))
+	})
+}
+
 // admitsPeer reports whether the resolved client is in a fixed LAN range or, for global IPv6
 // clients, inside an on-link prefix of a host interface: dual-stack home networks give LAN
 // clients only global and link-local IPv6 addresses, and browsers prefer the global one. A

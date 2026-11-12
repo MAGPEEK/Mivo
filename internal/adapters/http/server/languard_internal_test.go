@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	"github.com/magpeek/mivo/internal/adapters/http/restapi"
 )
@@ -272,6 +273,41 @@ func TestLANGuardOffServesPublicPeers(t *testing.T) {
 
 		if strings.Contains(logs.String(), refusedMessage) {
 			t.Errorf("log %q reports a refusal with the guard off", logs)
+		}
+	}
+}
+
+// TestChainStoresTheClientClassForHandlers: with the guard off a public client still reaches
+// the API, and the handler can tell it from a local one (activity view, M5-16).
+func TestChainStoresTheClientClassForHandlers(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		remoteAddr string
+		wantLocal  bool
+	}{
+		{remoteAddr: lanPeer, wantLocal: true},
+		{remoteAddr: publicPeer, wantLocal: false},
+		{remoteAddr: "garbage", wantLocal: false},
+	}
+
+	for _, test := range tests {
+		var gotLocal bool
+
+		logger, _ := newDebugLogger()
+		options := Options{
+			Logger: logger, AllowPublicClients: true,
+			APIHandler: http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+				gotLocal = clientorigin.IsLocal(request.Context())
+			}),
+		}
+
+		request := newRequest(t, http.MethodGet, "/api/v1/libraries")
+		request.RemoteAddr = test.remoteAddr
+		serveChain(t, options, request)
+
+		if gotLocal != test.wantLocal {
+			t.Errorf("IsLocal for %q = %v, want %v", test.remoteAddr, gotLocal, test.wantLocal)
 		}
 	}
 }

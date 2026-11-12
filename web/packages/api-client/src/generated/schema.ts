@@ -1118,6 +1118,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show what the server does right now
+         * @description Read-only snapshot for the activity indicator and the administrator's "Now playing" view: the library scans that run and the playback sessions that are starting or ready. Both lists are empty when the server is idle. The payload is small, so clients poll it. A session names its item by the catalog title, never by file name, path or stream URL. Management operation (ADR 0028): it needs the primary profile of an admin account selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local peers.
+         */
+        get: operations["getActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/playback/sessions": {
         parameters: {
             query?: never;
@@ -3872,6 +3892,92 @@ export interface components {
             /** @description Every session that is starting or ready, oldest first. */
             sessions: components["schemas"]["PlaybackSessionSummary"][];
         };
+        /** @description What the server does right now (getActivity). */
+        ActivityStatus: {
+            /** @description The library scans that run, oldest first. */
+            scans: components["schemas"]["ScanActivity"][];
+            /** @description The playback sessions that are starting or ready, oldest first. */
+            sessions: components["schemas"]["ActivitySession"][];
+        };
+        /** @description One running library scan. The file total is not known in advance, so progress is the counts that grow while the scan runs. */
+        ScanActivity: {
+            /**
+             * Format: uuid
+             * @description ID of the library that is scanned.
+             * @example 3f2b8c1e-7d4a-4c59-9a1e-2b6f0d8e4a71
+             */
+            libraryId: string;
+            /**
+             * @description Name of the library as the administrator gave it.
+             * @example Movies
+             */
+            libraryName: string;
+            /**
+             * Format: date-time
+             * @description Start of the scan (UTC).
+             * @example 2026-11-12T08:00:00Z
+             */
+            startedAt: string;
+            counts: components["schemas"]["ScanCounts"];
+        };
+        /**
+         * @description Whether the client of a session is in the local network ("lan") or outside it ("remote"), as seen when the session started. Clients must tolerate values added in later versions.
+         * @example lan
+         * @enum {string}
+         */
+        ActivityClientClass: "lan" | "remote";
+        /** @description One running playback session in the activity view. It carries no file name, path or stream URL. */
+        ActivitySession: {
+            /**
+             * Format: uuid
+             * @description ID of the session; stopPlaybackSession takes it.
+             * @example 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description ID of the catalog item the played file belongs to; the nil UUID when the item is gone from the catalog.
+             * @example 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+             */
+            itemId: string;
+            /**
+             * @description Title of the item from the catalog; empty when the item is gone.
+             * @example Big Buck Bunny
+             */
+            title: string;
+            state: components["schemas"]["PlaybackSessionState"];
+            mode: components["schemas"]["PlaybackMode"];
+            /** @description Why a cheaper mode was not possible; empty for direct play. */
+            reasons: components["schemas"]["PlaybackReason"][];
+            /**
+             * @description FFmpeg video encoder; omitted when no video is re-encoded.
+             * @example libx264
+             */
+            videoEncoder?: string;
+            /**
+             * @description Whether videoEncoder is a hardware encoder.
+             * @example false
+             */
+            hardware: boolean;
+            /**
+             * Format: double
+             * @description CPU use of the session's FFmpeg process in percent of one core; omitted for direct play and when the server cannot measure it.
+             * @example 183.5
+             */
+            cpuPercent?: number;
+            /**
+             * @description Name the client gave itself; free text, shown as text only.
+             * @example chromium-desktop
+             */
+            clientName: string;
+            clientClass: components["schemas"]["ActivityClientClass"];
+            /**
+             * Format: date-time
+             * @description When the session was created (UTC).
+             * @example 2026-11-12T08:01:00Z
+             */
+            startedAt: string;
+        };
         /**
          * @description Value of the server setting transcode.hwaccel (ADR 0030 section 5): "auto" (the first usable API in the order NVENC, QSV, VAAPI, AMF, else software), "off" (software only) or one API to use. Clients must tolerate values added in later versions.
          * @example auto
@@ -5910,6 +6016,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getActivity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current activity. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityStatus"];
+                };
+            };
+            /** @description There is no signed-in session ("unauthenticated"). */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller may not manage the server ("forbidden"). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
             };
             default: components["responses"]["Problem"];
         };

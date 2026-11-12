@@ -85,6 +85,9 @@ type StartRequest struct {
 	// AllowDegradeSubtitles starts without the subtitle when its burn-in is impossible or
 	// the re-encoding limit is reached, with warning subtitle_burn_in_unavailable; false fails.
 	AllowDegradeSubtitles bool
+	// Local is true when the client is in the local network; the activity view shows
+	// it. The HTTP adapter classifies the peer, the service only stores the answer.
+	Local bool
 	// ReplacesSessionID names the session this one replaces, for example after a seek outside
 	// the produced range. The new session takes over its slot when it is reserved, so the
 	// limits never refuse the seek; the old session keeps playing until the new production

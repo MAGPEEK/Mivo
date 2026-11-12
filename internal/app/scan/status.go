@@ -81,16 +81,19 @@ type tracker struct {
 	mutex  sync.Mutex
 	status Status
 	done   chan struct{}
+	// libraryName is the library's name when the scan started, for the activity view.
+	libraryName string
 	// scanContext is the context of this scan, a child of the service's; cancel ends this scan
 	// only (Service.Cancel).
 	scanContext context.Context
 	cancel      context.CancelFunc
 }
 
-func newTracker(parent context.Context, startedAt time.Time) *tracker {
+func newTracker(parent context.Context, libraryName string, startedAt time.Time) *tracker {
 	scanContext, cancel := context.WithCancel(parent)
 
 	return &tracker{
+		libraryName: libraryName,
 		status:      Status{State: StateRunning, StartedAt: startedAt},
 		done:        make(chan struct{}),
 		scanContext: scanContext,

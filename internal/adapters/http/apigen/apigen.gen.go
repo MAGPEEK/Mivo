@@ -38,6 +38,24 @@ func (e AccountRole) Valid() bool {
 	}
 }
 
+// Defines values for ActivityClientClass.
+const (
+	ActivityClientClassLan    ActivityClientClass = "lan"
+	ActivityClientClassRemote ActivityClientClass = "remote"
+)
+
+// Valid indicates whether the value is a known member of the ActivityClientClass enum.
+func (e ActivityClientClass) Valid() bool {
+	switch e {
+	case ActivityClientClassLan:
+		return true
+	case ActivityClientClassRemote:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AddressClass.
 const (
 	AddressClassLan    AddressClass = "lan"
@@ -1159,6 +1177,81 @@ type AccountDeviceList struct {
 //
 // Example: admin
 type AccountRole string
+
+// ActivityClientClass Whether the client of a session is in the local network ("lan") or outside it ("remote"), as seen when the session started. Clients must tolerate values added in later versions.
+//
+// Example: lan
+type ActivityClientClass string
+
+// ActivitySession One running playback session in the activity view. It carries no file name, path or stream URL.
+type ActivitySession struct {
+	// ClientClass Whether the client of a session is in the local network ("lan") or outside it ("remote"), as seen when the session started. Clients must tolerate values added in later versions.
+	//
+	// Example: lan
+	ClientClass ActivityClientClass `json:"clientClass"`
+
+	// ClientName Name the client gave itself; free text, shown as text only.
+	//
+	// Example: chromium-desktop
+	ClientName string `json:"clientName"`
+
+	// CPUPercent CPU use of the session's FFmpeg process in percent of one core; omitted for direct play and when the server cannot measure it.
+	//
+	// Example: 183.5
+	CPUPercent *float64 `json:"cpuPercent,omitempty"`
+
+	// Hardware Whether videoEncoder is a hardware encoder.
+	//
+	// Example: false
+	Hardware bool `json:"hardware"`
+
+	// ID ID of the session; stopPlaybackSession takes it.
+	//
+	// Example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+	ID uuid.UUID `json:"id"`
+
+	// ItemID ID of the catalog item the played file belongs to; the nil UUID when the item is gone from the catalog.
+	//
+	// Example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+	ItemID uuid.UUID `json:"itemId"`
+
+	// Mode How the file is played, from cheapest to most expensive: "direct_play" (the original file), "remux" (streams copied into HLS with fMP4 segments) or "transcode" (at least one stream re-encoded). Clients must tolerate values added in later versions.
+	//
+	// Example: remux
+	Mode PlaybackMode `json:"mode"`
+
+	// Reasons Why a cheaper mode was not possible; empty for direct play.
+	Reasons []PlaybackReason `json:"reasons"`
+
+	// StartedAt When the session was created (UTC).
+	//
+	// Example: 2026-11-12T08:01:00Z
+	StartedAt time.Time `json:"startedAt"`
+
+	// State Lifecycle of a session: "starting" (FFmpeg has not produced the first segment yet), "ready" (the stream can be loaded), "ended" (production finished or the session was stopped) or "failed" (see failureCode). Direct-play sessions start as "ready". Clients must tolerate values added in later versions.
+	//
+	// Example: ready
+	State PlaybackSessionState `json:"state"`
+
+	// Title Title of the item from the catalog; empty when the item is gone.
+	//
+	// Example: Big Buck Bunny
+	Title string `json:"title"`
+
+	// VideoEncoder FFmpeg video encoder; omitted when no video is re-encoded.
+	//
+	// Example: libx264
+	VideoEncoder *string `json:"videoEncoder,omitempty"`
+}
+
+// ActivityStatus What the server does right now (getActivity).
+type ActivityStatus struct {
+	// Scans The library scans that run, oldest first.
+	Scans []ScanActivity `json:"scans"`
+
+	// Sessions The playback sessions that are starting or ready, oldest first.
+	Sessions []ActivitySession `json:"sessions"`
+}
 
 // AddressClass Where a device was last seen from: "lan" (local network) or "remote". Clients must tolerate new values.
 //
@@ -3369,6 +3462,27 @@ type RowKind string
 // Example: noItems
 type RowsHint string
 
+// ScanActivity One running library scan. The file total is not known in advance, so progress is the counts that grow while the scan runs.
+type ScanActivity struct {
+	// Counts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
+	Counts ScanCounts `json:"counts"`
+
+	// LibraryID ID of the library that is scanned.
+	//
+	// Example: 3f2b8c1e-7d4a-4c59-9a1e-2b6f0d8e4a71
+	LibraryID uuid.UUID `json:"libraryId"`
+
+	// LibraryName Name of the library as the administrator gave it.
+	//
+	// Example: Movies
+	LibraryName string `json:"libraryName"`
+
+	// StartedAt Start of the scan (UTC).
+	//
+	// Example: 2026-11-12T08:00:00Z
+	StartedAt time.Time `json:"startedAt"`
+}
+
 // ScanCounts File counts of the current or last scan. While a scan runs they grow; all are zero before the first scan.
 type ScanCounts struct {
 	// Added New video files that were probed and added.
@@ -4236,6 +4350,9 @@ type CreateProfileJSONRequestBody = ProfileCreate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetActivity Show what the server does right now
+	// (GET /api/v1/activity)
+	GetActivity(w http.ResponseWriter, r *http.Request)
 	// DeleteSession Sign out
 	// (DELETE /api/v1/auth/session)
 	DeleteSession(w http.ResponseWriter, r *http.Request)
@@ -4432,6 +4549,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetActivity operation middleware
+func (siw *ServerInterfaceWrapper) GetActivity(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetActivity(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // DeleteSession operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSession(w http.ResponseWriter, r *http.Request) {
@@ -6683,6 +6814,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.GetMetadataSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/settings/metadata", wrapper.UpdateMetadataSettings)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/metadata/status", wrapper.GetMetadataStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/activity", wrapper.GetActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.ListPlaybackSessions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/playback/sessions", wrapper.CreatePlaybackSession)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/playback/sessions/{sessionId}", wrapper.StopPlaybackSession)
@@ -6713,6 +6845,72 @@ type TooManyAttemptsApplicationProblemPlusJSONResponse struct {
 	Body Problem
 
 	Headers TooManyAttemptsResponseHeaders
+}
+
+type GetActivityRequestObject struct {
+}
+
+type GetActivityResponseObject interface {
+	VisitGetActivityResponse(w http.ResponseWriter) error
+}
+
+type GetActivity200JSONResponse ActivityStatus
+
+func (response GetActivity200JSONResponse) VisitGetActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetActivity401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetActivity401ApplicationProblemPlusJSONResponse) VisitGetActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetActivity403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetActivity403ApplicationProblemPlusJSONResponse) VisitGetActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetActivitydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetActivitydefaultApplicationProblemPlusJSONResponse) VisitGetActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type DeleteSessionRequestObject struct {
@@ -9482,6 +9680,9 @@ func (response CreateProfiledefaultApplicationProblemPlusJSONResponse) VisitCrea
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetActivity Show what the server does right now
+	// (GET /api/v1/activity)
+	GetActivity(ctx context.Context, request GetActivityRequestObject) (GetActivityResponseObject, error)
 	// DeleteSession Sign out
 	// (DELETE /api/v1/auth/session)
 	DeleteSession(ctx context.Context, request DeleteSessionRequestObject) (DeleteSessionResponseObject, error)
@@ -9707,6 +9908,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetActivity operation middleware
+func (sh *strictHandler) GetActivity(w http.ResponseWriter, r *http.Request) {
+	var request GetActivityRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetActivity(ctx, request.(GetActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetActivityResponseObject); ok {
+		if err := validResponse.VisitGetActivityResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // DeleteSession operation middleware

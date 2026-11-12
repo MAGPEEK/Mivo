@@ -20,6 +20,22 @@ func TestClientOriginRoundTrip(t *testing.T) {
 	}
 }
 
+func TestLocalClassRoundTripAndMissingIsRemote(t *testing.T) {
+	t.Parallel()
+
+	if clientorigin.IsLocal(t.Context()) {
+		t.Error("IsLocal without a stored class = true, want the strict reading false")
+	}
+
+	if !clientorigin.IsLocal(clientorigin.WithLocal(t.Context(), true)) {
+		t.Error("IsLocal after WithLocal(true) = false")
+	}
+
+	if clientorigin.IsLocal(clientorigin.WithLocal(t.Context(), false)) {
+		t.Error("IsLocal after WithLocal(false) = true")
+	}
+}
+
 // TestClientOriginMissingIsTheStrictReading: a request that never passed the resolver has no
 // address and is not secure.
 func TestClientOriginMissingIsTheStrictReading(t *testing.T) {

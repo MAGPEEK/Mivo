@@ -165,6 +165,14 @@ type ProgressReporter interface {
 	Progress() Progress
 }
 
+// CPUReporter is implemented by a Production that can measure the CPU use of its process. It
+// is optional: callers type-assert a Production to it, and without it the use is unknown.
+type CPUReporter interface {
+	// CPUPercent returns the use in percent of one core since the process started; false
+	// when it cannot be measured (for example the process ended).
+	CPUPercent() (percent float64, known bool)
+}
+
 // Pausable is implemented by a Production that can be frozen without being killed, the
 // throttling primitive of ADR 0030. It is optional: callers type-assert a Production to it.
 type Pausable interface {

@@ -108,15 +108,15 @@ func scanStatusResponse(status appscan.Status) (apigen.ScanStatus, error) {
 		StartedAt:  optionalTimestamp(status.StartedAt),
 		FinishedAt: optionalTimestamp(status.FinishedAt),
 		ErrorCode:  optionalString(string(status.ErrorCode)),
-		Counts: apigen.ScanCounts{
-			Added:     status.Counts.Added,
-			Updated:   status.Counts.Updated,
-			Removed:   status.Counts.Removed,
-			Unchanged: status.Counts.Unchanged,
-			Failed:    status.Counts.Failed,
-			Skipped:   status.Counts.Skipped,
-		},
+		Counts:     scanCountsResponse(status.Counts),
 	}, nil
+}
+
+func scanCountsResponse(counts appscan.Counts) apigen.ScanCounts {
+	return apigen.ScanCounts{
+		Added: counts.Added, Updated: counts.Updated, Removed: counts.Removed,
+		Unchanged: counts.Unchanged, Failed: counts.Failed, Skipped: counts.Skipped,
+	}
 }
 
 func scanStateResponse(state appscan.State) (apigen.ScanState, error) {

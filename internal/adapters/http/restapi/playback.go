@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/magpeek/mivo/internal/adapters/http/apigen"
+	"github.com/magpeek/mivo/internal/adapters/http/clientorigin"
 	"github.com/magpeek/mivo/internal/adapters/http/requestid"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain/playback"
@@ -54,6 +55,8 @@ func (api *API) CreatePlaybackSession(ctx context.Context, request apigen.Create
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", operationCreatePlaybackSession, err)
 	}
+
+	startRequest.Local = clientorigin.IsLocal(ctx)
 
 	session, err := api.playback.Start(ctx, startRequest)
 	if errors.Is(err, appplayback.ErrSessionLimitReached) {

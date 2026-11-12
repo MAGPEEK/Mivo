@@ -8,7 +8,7 @@ info:
   title: Mivo API
   # Version of this document. Its major version equals SystemInfo.apiVersion and the /api/v1
   # path prefix; minor and patch versions track additive changes and fixes.
-  version: "1.18.0"
+  version: "1.19.0"
   description: >-
     REST API of the media server. Paths carry the full version prefix. JSON fields use
     camelCase. Errors are RFC 9457 problem details with a machine-readable code. Within a
@@ -1908,6 +1908,42 @@ paths:
               $ref: "#/components/headers/ImageETag"
             Cache-Control:
               $ref: "#/components/headers/ImageCacheControl"
+        default:
+          $ref: "#/components/responses/Problem"
+  /api/v1/activity:
+    get:
+      operationId: getActivity
+      summary: Show what the server does right now
+      description: >-
+        Read-only snapshot for the activity indicator and the administrator's "Now playing"
+        view: the library scans that run and the playback sessions that are starting or
+        ready. Both lists are empty when the server is idle. The payload is small, so
+        clients poll it. A session names its item by the catalog title, never by file
+        name, path or stream URL.
+        Management operation (ADR 0028): it needs the primary profile of an admin account
+        selected (ADR 0032 section 9), else 403 "forbidden", and it is served only to local
+        peers.
+      tags:
+        - system
+      responses:
+        "200":
+          description: The current activity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityStatus"
+        "401":
+          description: There is no signed-in session ("unauthenticated").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "403":
+          description: The caller may not manage the server ("forbidden").
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
         default:
           $ref: "#/components/responses/Problem"
   /api/v1/playback/sessions:
@@ -6725,6 +6761,130 @@ components:
           description: Every session that is starting or ready, oldest first.
           items:
             $ref: "#/components/schemas/PlaybackSessionSummary"
+    ActivityStatus:
+      type: object
+      description: What the server does right now (getActivity).
+      required:
+        - scans
+        - sessions
+      properties:
+        scans:
+          type: array
+          description: The library scans that run, oldest first.
+          items:
+            $ref: "#/components/schemas/ScanActivity"
+        sessions:
+          type: array
+          description: The playback sessions that are starting or ready, oldest first.
+          items:
+            $ref: "#/components/schemas/ActivitySession"
+    ScanActivity:
+      type: object
+      description: >-
+        One running library scan. The file total is not known in advance, so progress is
+        the counts that grow while the scan runs.
+      required:
+        - libraryId
+        - libraryName
+        - startedAt
+        - counts
+      properties:
+        libraryId:
+          type: string
+          format: uuid
+          description: ID of the library that is scanned.
+          example: 3f2b8c1e-7d4a-4c59-9a1e-2b6f0d8e4a71
+        libraryName:
+          type: string
+          description: Name of the library as the administrator gave it.
+          example: Movies
+        startedAt:
+          type: string
+          format: date-time
+          description: Start of the scan (UTC).
+          example: "2026-11-12T08:00:00Z"
+        counts:
+          $ref: "#/components/schemas/ScanCounts"
+    ActivityClientClass:
+      type: string
+      description: >-
+        Whether the client of a session is in the local network ("lan") or outside it
+        ("remote"), as seen when the session started. Clients must tolerate values added
+        in later versions.
+      enum:
+        - lan
+        - remote
+      example: lan
+    ActivitySession:
+      type: object
+      description: >-
+        One running playback session in the activity view. It carries no file name, path
+        or stream URL.
+      required:
+        - id
+        - itemId
+        - title
+        - state
+        - mode
+        - reasons
+        - hardware
+        - clientName
+        - clientClass
+        - startedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID of the session; stopPlaybackSession takes it.
+          example: 5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a
+        itemId:
+          type: string
+          format: uuid
+          description: >-
+            ID of the catalog item the played file belongs to; the nil UUID when the item is
+            gone from the catalog.
+          example: 8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d
+        title:
+          type: string
+          description: Title of the item from the catalog; empty when the item is gone.
+          example: Big Buck Bunny
+        state:
+          $ref: "#/components/schemas/PlaybackSessionState"
+        mode:
+          $ref: "#/components/schemas/PlaybackMode"
+        reasons:
+          type: array
+          description: Why a cheaper mode was not possible; empty for direct play.
+          items:
+            $ref: "#/components/schemas/PlaybackReason"
+        videoEncoder:
+          type: string
+          description: FFmpeg video encoder; omitted when no video is re-encoded.
+          example: libx264
+        hardware:
+          type: boolean
+          description: Whether videoEncoder is a hardware encoder.
+          example: false
+        cpuPercent:
+          type: number
+          format: double
+          minimum: 0
+          description: >-
+            CPU use of the session's FFmpeg process in percent of one core; omitted for
+            direct play and when the server cannot measure it.
+          example: 183.5
+        clientName:
+          type: string
+          maxLength: 64
+          description: Name the client gave itself; free text, shown as text only.
+          example: chromium-desktop
+        clientClass:
+          $ref: "#/components/schemas/ActivityClientClass"
+        startedAt:
+          type: string
+          format: date-time
+          description: When the session was created (UTC).
+          example: "2026-11-12T08:01:00Z"
     HardwareAccelerationSetting:
       type: string
       description: >-

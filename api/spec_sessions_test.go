@@ -15,6 +15,7 @@ import (
 // hardware acceleration status with its test run, and trickplay.
 
 const (
+	activityPath         = "/api/v1/activity"
 	playbackSessionsPath = "/api/v1/playback/sessions"
 	transcoderPath       = "/api/v1/system/transcoder"
 	transcoderTestPath   = transcoderPath + "/test"
@@ -27,6 +28,8 @@ const (
 
 func sessionsOperationCases() []operationCase {
 	return []operationCase{
+		{method: http.MethodGet, path: activityPath, operationID: "getActivity", tag: systemTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "ActivityStatus"},
+		{method: http.MethodGet, path: activityPath, operationID: "getActivity", tag: systemTag, statuses: []int{http.StatusForbidden}, mediaType: problemMediaType, schema: "Problem"},
 		{method: http.MethodGet, path: playbackSessionsPath, operationID: "listPlaybackSessions", tag: playbackTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "PlaybackSessionList"},
 		{method: http.MethodGet, path: transcoderPath, operationID: "getTranscoderStatus", tag: systemTag, statuses: []int{http.StatusOK}, mediaType: jsonMediaType, schema: "TranscoderStatus"},
 		{method: http.MethodPost, path: transcoderTestPath, operationID: "testTranscoder", tag: systemTag, statuses: []int{http.StatusAccepted}, mediaType: jsonMediaType, schema: "TranscoderStatus"},

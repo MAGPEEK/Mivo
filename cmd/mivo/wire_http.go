@@ -16,6 +16,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/http/stream"
 	"github.com/magpeek/mivo/internal/adapters/http/webui"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
+	appactivity "github.com/magpeek/mivo/internal/app/activity"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	approws "github.com/magpeek/mivo/internal/app/rows"
@@ -55,6 +56,8 @@ type wiredServices struct {
 
 	playback *appplayback.Service
 	streams  *stream.Handlers
+	// activity joins the running scans and sessions for the administrator's activity view.
+	activity *appactivity.Service
 }
 
 // httpHandlers are the handlers the HTTP server routes between: the REST API below /api/ and
@@ -145,6 +148,7 @@ func (app application) newHTTPHandlers(ctx context.Context, services wiredServic
 		Logger:       app.logger,
 		Mounts:       services.mounts(),
 		Metadata:     services.online.apiServices(),
+		Activity:     services.activity,
 	})
 	if err != nil {
 		return httpHandlers{}, fmt.Errorf("create api handler: %w", err)

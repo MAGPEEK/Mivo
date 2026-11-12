@@ -28,6 +28,22 @@ type Origin struct {
 
 type originKey struct{}
 
+type localKey struct{}
+
+// WithLocal stores whether the client is in the local network, as the LAN guard's rules
+// decide (ranges and on-link IPv6 prefixes), so a handler can record it without knowing them.
+func WithLocal(ctx context.Context, local bool) context.Context {
+	return context.WithValue(ctx, localKey{}, local)
+}
+
+// IsLocal returns the value stored by WithLocal; without one it is false, the stricter
+// reading (remote).
+func IsLocal(ctx context.Context) bool {
+	local, _ := ctx.Value(localKey{}).(bool)
+
+	return local
+}
+
 // With stores the origin of a request.
 func With(ctx context.Context, origin Origin) context.Context {
 	return context.WithValue(ctx, originKey{}, origin)

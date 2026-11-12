@@ -17,6 +17,17 @@ the admin dashboard "Now playing" (AD-10, PL-43) from one read-only API.
 - [ ] Tests: use case with fakes (scan + session sources), handler tests incl. guard.
 - [ ] Gates: lint + layer rules + coverage thresholds pass.
 
+## Implementation notes (contract 1.19.0)
+- `GET /api/v1/activity` is administration as a whole (guard area `areaActivity`, admin viewer,
+  local peer, same-origin) and the use case `app/activity.Service` refuses non-admins too, so no
+  title of a hidden item reaches a managed profile. Polling uses the small payload; no ETag.
+- Scans come from `scan.Service.Running()` (library name kept in the tracker); sessions from
+  `playback.Service.List` (now with `Reasons`, `Remote`, `CPUPercent`).
+- Address class: `lanGuard.classify` stores `clientorigin.WithLocal`; `createPlaybackSession`
+  passes `StartRequest.Remote`; unclassified requests count as remote.
+- `cpuPercent` is reported when a production implements `playback.CPUReporter`; the FFmpeg
+  adapter does not yet (needs a per-process CPU sampler, BACKLOG m5-16).
+
 ## Notes
 Define consumer-side ports `ScanActivity` and `SessionActivity` (1-2 methods each); reuse
 existing scan state and session registry, do not duplicate state.

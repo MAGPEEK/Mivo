@@ -64,6 +64,7 @@ type sessionEntry struct {
 	// both are guarded by the registry lock.
 	encoder        playback.Encoder
 	clientName     string
+	local          bool
 	highestSegment int
 	paused         bool
 

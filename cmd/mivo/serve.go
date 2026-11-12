@@ -14,6 +14,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/fs/libraryfs"
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	"github.com/magpeek/mivo/internal/adapters/uuidgen"
+	appactivity "github.com/magpeek/mivo/internal/app/activity"
 	appsystem "github.com/magpeek/mivo/internal/app/system"
 	"github.com/magpeek/mivo/internal/platform/brand"
 	"github.com/magpeek/mivo/internal/platform/buildinfo"
@@ -271,7 +272,14 @@ func (app application) serveWithPlayback(ctx context.Context, db *sqlite.DB, cat
 		return withCleanupError(ctx, err, closePlaybackStep, app.closePlayback(ctx, playback))
 	}
 
-	serveErr := app.serveHTTP(ctx, wiredServices{catalogServices: catalog, playback: playback, streams: streams})
+	activity, err := appactivity.NewService(appactivity.Dependencies{
+		Scans: catalog.scans, Sessions: playback, Items: sqlite.NewCatalogReader(db), Logger: app.logger,
+	})
+	if err != nil {
+		return withCleanupError(ctx, fmt.Errorf("create activity service: %w", err), closePlaybackStep, app.closePlayback(ctx, playback))
+	}
+
+	serveErr := app.serveHTTP(ctx, wiredServices{catalogServices: catalog, playback: playback, streams: streams, activity: activity})
 
 	return withCleanupError(ctx, serveErr, closePlaybackStep, app.closePlayback(ctx, playback))
 }

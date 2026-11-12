@@ -32,6 +32,14 @@ type SessionInfo struct {
 	Paused bool
 	// ClientName is the name of the client profile that started the session.
 	ClientName string
+	// Local is true when the client was in the local network at the start; the zero value is
+	// remote, the stricter reading.
+	Local bool
+	// Reasons are the plan's reasons why a cheaper mode was not possible; empty for direct
+	// play. The slice belongs to the caller.
+	Reasons []playback.Reason
+	// CPUPercent is the CPU use of the FFmpeg process in percent of one core; 0 when unknown.
+	CPUPercent float64
 	StartedAt  time.Time
 }
 
@@ -41,6 +49,7 @@ type listed struct {
 	session    Session
 	encoder    playback.Encoder
 	clientName string
+	local      bool
 	paused     bool
 	production Production
 }
@@ -70,7 +79,14 @@ func infoOf(snapshot listed) SessionInfo {
 		ID: session.ID, FileID: session.FileID, State: session.State, Mode: session.Plan.Mode,
 		Encoder: snapshot.encoder.Name, Hardware: snapshot.encoder.Hardware,
 		OutputBitRate: session.OutputBitRate, Paused: snapshot.paused,
-		ClientName: snapshot.clientName, StartedAt: session.CreatedAt,
+		ClientName: snapshot.clientName, Local: snapshot.local, Reasons: session.Plan.Reasons,
+		StartedAt: session.CreatedAt,
+	}
+
+	if reporter, ok := snapshot.production.(CPUReporter); ok {
+		if percent, known := reporter.CPUPercent(); known {
+			info.CPUPercent = percent
+		}
 	}
 
 	if reporter, ok := snapshot.production.(ProgressReporter); ok {
@@ -99,7 +115,7 @@ func (sessions *registry) snapshot(allow func(owner string) bool) []listed {
 
 		result = append(result, listed{
 			session: entry.session.clone(), encoder: entry.encoder, clientName: entry.clientName,
-			paused: entry.paused, production: entry.production,
+			local: entry.local, paused: entry.paused, production: entry.production,
 		})
 	}
 

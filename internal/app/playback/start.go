@@ -61,6 +61,7 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 
 	prepared.owner = viewer.AuthSessionID
 	prepared.clientName = request.Profile.Name
+	prepared.local = request.Local
 	request.ReplacesSessionID = s.replaceableBy(viewer, request.ReplacesSessionID)
 
 	prepared, entry, err := s.reserveSlot(prepared, request)
@@ -144,6 +145,7 @@ type preparedStart struct {
 	// owner is the auth session that starts the session (Viewer.AuthSessionID).
 	owner      string
 	clientName string
+	local      bool
 	inputPath  string
 	// disc is the title of a disc source; nil for a single file. inputPath is then the
 	// absolute disc root.
@@ -260,6 +262,7 @@ func (s *Service) newEntry(prepared preparedStart, replaces string) (*sessionEnt
 		replaces:     replaces,
 		owner:        prepared.owner,
 		clientName:   prepared.clientName,
+		local:        prepared.local,
 		encoder:      s.encoderFor(plan),
 		reencodes:    plan.Mode == playback.ModeTranscode,
 		runsFFmpeg:   hls,

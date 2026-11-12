@@ -65,6 +65,10 @@ type Options struct {
 	// Reanalysis re-probes the files of one item (PL-35). It is optional: without it the
 	// endpoint answers 501 "not_implemented".
 	Reanalysis ItemReanalyzer
+	// Activity serves the activity endpoint, the running scans and sessions for the
+	// administrator (M5-16). It is optional: without it the endpoint answers 501
+	// "not_implemented".
+	Activity ActivityService
 }
 
 // Mount is one extra route of the API mux.

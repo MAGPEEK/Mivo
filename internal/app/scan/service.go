@@ -300,7 +300,7 @@ func (service *Service) launch(scanned library.ManagedLibrary) (Status, error) {
 		}
 	}
 
-	scanTracker := newTracker(service.scanContext, service.clock())
+	scanTracker := newTracker(service.scanContext, scanned.Name, service.clock())
 	service.trackers[scanned.ID] = scanTracker
 
 	go service.runScan(scanned, scanTracker)

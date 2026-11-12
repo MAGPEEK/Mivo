@@ -130,6 +130,7 @@ type fakeProduction struct {
 	// progress is what Progress reports; noPause makes Pausable report false; paused, pauses
 	// and resumes record the throttle calls, pausedAtStop the state when Stop ran.
 	progress     appplayback.Progress
+	cpuPercent   float64
 	noPause      bool
 	paused       bool
 	pauses       int
@@ -146,6 +147,20 @@ func (production *fakeProduction) Progress() appplayback.Progress {
 	defer production.mutex.Unlock()
 
 	return production.progress
+}
+
+// CPUPercent implements appplayback.CPUReporter.
+func (production *fakeProduction) CPUPercent() (float64, bool) {
+	production.mutex.Lock()
+	defer production.mutex.Unlock()
+
+	return production.cpuPercent, production.cpuPercent > 0
+}
+
+func (production *fakeProduction) setCPUPercent(percent float64) {
+	production.mutex.Lock()
+	production.cpuPercent = percent
+	production.mutex.Unlock()
 }
 
 // setOutputTime moves the media time the production reports.
