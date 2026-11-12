@@ -1,6 +1,8 @@
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach } from "vitest";
 
+import { installFakeResizeObserver, resetObservedWidth } from "./resizeObserver";
+
 // Whole-app tests render the router, the providers and axe in jsdom. On a loaded machine
 // (parallel test runs, CI) the first render alone can take longer than Testing Library's
 // default of 1 s for findBy/waitFor, which made a different test fail on each run. Waiting
@@ -14,9 +16,13 @@ configure({ asyncUtilTimeout: asyncUtilTimeoutMs });
 // scroll position on every navigation, so a no-op keeps the test output readable.
 window.scrollTo = () => undefined;
 
+installFakeResizeObserver();
+
 // Testing Library only cleans up automatically with Vitest globals, which this workspace does
 // not enable. Persisted UI preferences (e.g. the collapsed sidebar) must not leak between tests.
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
+  window.sessionStorage.clear();
+  resetObservedWidth();
 });

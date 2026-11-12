@@ -2,7 +2,7 @@ import type { ItemSummary } from "@mivo/api-client";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
-import { Badge, FilmIcon, Poster, ScreenIcon } from "../../../shared/ui";
+import { AlertIcon, Badge, FilmIcon, Poster, ScreenIcon } from "../../../shared/ui";
 import { useFocusOnMount } from "../hooks/useFocusOnMount";
 import { toItemRowModel, type ItemRowModel } from "../lib/itemRow";
 import { libraryNamespace } from "../locales";
@@ -17,7 +17,13 @@ export interface ItemRowsProps {
 }
 
 const rowLinkClass = "font-semibold hover:underline";
-const rowClass = "border-b border-divider rounded-sm hover:bg-surface focus-within:bg-surface";
+const mutedRowLinkClass = "font-semibold text-text-muted hover:underline";
+const rowBorderClass =
+  "border-b border-divider rounded-sm hover:bg-surface focus-within:bg-surface";
+/** Classes of a List row's `li`; the virtual grid adds the position. */
+export const listRowClass = `${rowBorderClass} grid grid-cols-[1fr_4rem_auto] items-center gap-3 px-2.5 py-2 sm:grid-cols-[1fr_4rem_6rem_auto]`;
+/** Classes of a Details row's `li`. */
+export const detailsRowClass = `${rowBorderClass} flex items-start gap-4 p-2.5`;
 // Posters of the Details view are a fixed 72 px wide thumbnail.
 const thumbnailWidth = 72;
 const thumbnailSizes = `${String(thumbnailWidth)}px`;
@@ -30,30 +36,61 @@ interface RowTitleProps {
 function RowTitle({ row, focusOnMount }: RowTitleProps) {
   const linkRef = useFocusOnMount<HTMLAnchorElement>(focusOnMount);
   return (
-    <Link to="/items/$itemId" params={{ itemId: row.id }} ref={linkRef} className={rowLinkClass}>
+    <Link
+      to="/items/$itemId"
+      params={{ itemId: row.id }}
+      ref={linkRef}
+      className={row.available ? rowLinkClass : mutedRowLinkClass}
+    >
       {row.title}
     </Link>
+  );
+}
+
+/** Props of {@link ListRowBody} and {@link DetailsRowBody}: the content of one row. */
+export interface RowBodyProps {
+  readonly item: ItemSummary;
+  readonly focusOnMount: boolean;
+}
+
+function UnavailableBadge() {
+  const { t } = useTranslation(libraryNamespace);
+  return (
+    <Badge icon={<AlertIcon className="size-3 shrink-0 text-accent" />}>
+      {t("items.unavailable")}
+    </Badge>
+  );
+}
+
+/** The cells of a compact row (LB-27): title, year, duration and the resolution chip. */
+export function ListRowBody({ item, focusOnMount }: RowBodyProps) {
+  const row = toItemRowModel(item);
+  return (
+    <>
+      <RowTitle row={row} focusOnMount={focusOnMount} />
+      <span className="text-text-muted">{row.year}</span>
+      <span className="hidden text-text-muted sm:inline">{row.duration}</span>
+      <span className="justify-self-end">
+        {row.available ? (
+          row.resolution !== "" && <Badge>{row.resolution}</Badge>
+        ) : (
+          <UnavailableBadge />
+        )}
+      </span>
+    </>
   );
 }
 
 /** Compact rows (LB-27): title, year, duration and the resolution chip. */
 export function ListView({ items, label, focusItemId }: ItemRowsProps) {
   return (
-    <ul aria-label={label}>
-      {items.map((item) => {
-        const row = toItemRowModel(item);
-        return (
-          <li
-            key={item.id}
-            className={`${rowClass} grid grid-cols-[1fr_4rem_auto] items-center gap-3 px-2.5 py-2 sm:grid-cols-[1fr_4rem_6rem_5rem]`}
-          >
-            <RowTitle row={row} focusOnMount={item.id === focusItemId} />
-            <span className="text-text-muted">{row.year}</span>
-            <span className="hidden text-text-muted sm:inline">{row.duration}</span>
-            <span>{row.resolution !== "" && <Badge>{row.resolution}</Badge>}</span>
-          </li>
-        );
-      })}
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops the list role of a list without bullets
+    <ul role="list" aria-label={label}>
+      {items.map((item) => (
+        <li key={item.id} className={listRowClass}>
+          <ListRowBody item={item} focusOnMount={item.id === focusItemId} />
+        </li>
+      ))}
     </ul>
   );
 }
@@ -61,26 +98,25 @@ export function ListView({ items, label, focusItemId }: ItemRowsProps) {
 /** Rows with a poster thumbnail, a summary line and technical chips (LB-27). */
 export function DetailsView({ items, label, focusItemId }: ItemRowsProps) {
   return (
-    <ul aria-label={label}>
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Safari drops the list role of a list without bullets
+    <ul role="list" aria-label={label}>
       {items.map((item) => (
-        <DetailsRow key={item.id} item={item} focusOnMount={item.id === focusItemId} />
+        <li key={item.id} className={detailsRowClass}>
+          <DetailsRowBody item={item} focusOnMount={item.id === focusItemId} />
+        </li>
       ))}
     </ul>
   );
 }
 
-interface DetailsRowProps {
-  readonly item: ItemSummary;
-  readonly focusOnMount: boolean;
-}
-
-function DetailsRow({ item, focusOnMount }: DetailsRowProps) {
+/** The content of a Details row: thumbnail, title, summary line and chips. */
+export function DetailsRowBody({ item, focusOnMount }: RowBodyProps) {
   const { t } = useTranslation(libraryNamespace);
   const row = toItemRowModel(item);
   const summary = detailsSummary(row, t("items.seasons", { count: row.seasonCount }));
   const chips = [row.chip, row.resolution].filter((chip) => chip !== "");
   return (
-    <li className={`${rowClass} flex items-start gap-4 p-2.5`}>
+    <>
       <div className="shrink-0" style={{ width: thumbnailWidth }}>
         <Poster
           imageRef={item.poster}
@@ -93,19 +129,19 @@ function DetailsRow({ item, focusOnMount }: DetailsRowProps) {
         />
       </div>
       <div className="min-w-0">
-        <h3 className="text-[0.9375rem]">
+        <h2 className="text-[0.9375rem]">
           <RowTitle row={row} focusOnMount={focusOnMount} />
-        </h3>
+        </h2>
         {summary !== "" && <p className="my-1 text-sm text-text-muted">{summary}</p>}
         <div className="flex flex-wrap gap-1">
           {chips.map((chip) => (
             <Badge key={chip}>{chip}</Badge>
           ))}
-          {!row.available && <Badge>{t("items.unavailable")}</Badge>}
+          {!row.available && <UnavailableBadge />}
           {row.unmatched && <Badge>{t("items.unmatched")}</Badge>}
         </div>
       </div>
-    </li>
+    </>
   );
 }
 

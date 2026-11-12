@@ -55,11 +55,44 @@ describe("ListView", () => {
   });
 });
 
+describe("unavailable items in the row views", () => {
+  const broken = fakeItem({ id: "broken", title: "Broken", media: { available: false } });
+
+  it("marks an unavailable item in List with a badge and a muted title", async () => {
+    await renderInRouter(<ListView items={[broken, movie]} label="Videos" />);
+
+    expect(screen.getByText("Unavailable")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Broken" }).className).toContain("text-text-muted");
+    expect(screen.getByRole("link", { name: "Big Buck Bunny" }).className).not.toContain(
+      "text-text-muted",
+    );
+  });
+
+  it("marks an unavailable item in Details with the alert icon", async () => {
+    await renderInRouter(<DetailsView items={[broken]} label="Videos" />);
+
+    const badge = screen.getByText("Unavailable").parentElement;
+    expect(badge?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("keeps the list role in both views, which Safari drops from unstyled lists", async () => {
+    const container = await renderInRouter(
+      <>
+        <ListView items={[movie]} label="Rows" />
+        <DetailsView items={[movie]} label="Thumbnails" />
+      </>,
+    );
+
+    const lists = [...container.querySelectorAll("ul")];
+    expect(lists.map((list) => list.getAttribute("role"))).toEqual(["list", "list"]);
+  });
+});
+
 describe("DetailsView", () => {
   it("shows a thumbnail, the summary line and technical chips", async () => {
     const container = await renderInRouter(<DetailsView items={[movie, show]} label="Videos" />);
 
-    expect(screen.getByRole("heading", { level: 3, name: "Big Buck Bunny" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "Big Buck Bunny" })).toBeTruthy();
     expect(screen.getByText("2008 · 9:56")).toBeTruthy();
     expect(screen.getByText("MKV · H.264 · AAC")).toBeTruthy();
     expect(screen.getByText("1080p")).toBeTruthy();

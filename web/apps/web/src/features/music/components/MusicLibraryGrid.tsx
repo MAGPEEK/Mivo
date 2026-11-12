@@ -52,6 +52,7 @@ export function MusicLibraryGrid({ albums, filter }: MusicLibraryGridProps) {
       texts={texts}
       renderCard={renderAlbumCard}
       emptyIcon={<LibraryKindIcon kind="music" className="size-10" />}
+      cardFormat="square"
     />
   );
 }

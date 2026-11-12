@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from "react";
 
 import { useBrowseState, type BrowseSearchChange } from "../hooks/useBrowseState";
 import { useLibraryItems, type LibraryItems } from "../hooks/useLibraryItems";
+import { useLibraryLetters } from "../hooks/useLibraryLetters";
 import { useViewPreference } from "../hooks/useViewPreference";
 import type { BrowseSearch, BrowseType, LibraryItemFilter } from "../lib/browseQuery";
 import { BrowseItemGrid } from "./BrowseItemGrid";
@@ -50,7 +51,8 @@ export function BrowsePivot({
 }: BrowsePivotProps) {
   const browse = useBrowseState({ search, onSearchChange, libraryKind });
   const items = useLibraryItems(libraryId, browse.query);
-  // Keyed, so focus targets and "load more" state never carry over to another query.
+  const letters = useLibraryLetters(libraryId, browse.query);
+  // Keyed, so the grid's focus, jumps and loading never carry over to another query.
   const key = browse.query === undefined ? pendingQueryKey : JSON.stringify(browse.query);
   const view = useViewPreference();
   // Types with their own view (albums, photos...) ignore the view style, so no controls.
@@ -66,7 +68,15 @@ export function BrowsePivot({
       />
       <FilterChips browse={browse} />
       <Fragment key={key}>
-        {customItems ?? <BrowseItemGrid items={items} filter={browse.filter} view={view} />}
+        {customItems ?? (
+          <BrowseItemGrid
+            items={items}
+            filter={browse.filter}
+            view={view}
+            letters={letters}
+            scrollKey={`${libraryId}|${key}`}
+          />
+        )}
       </Fragment>
     </>
   );

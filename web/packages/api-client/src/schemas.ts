@@ -198,6 +198,17 @@ export type ItemQuickFilter = Schemas["ItemQuickFilter"];
 /** Query parameters of `GET /api/v1/libraries/{libraryId}/items`: sort, filters and paging. */
 export type LibraryItemsQuery = NonNullable<operations["listLibraryItems"]["parameters"]["query"]>;
 
+/** Query parameters of `GET /api/v1/libraries/{libraryId}/letters`: order and filters. */
+export type LibraryLettersQuery = NonNullable<
+  operations["listLibraryLetters"]["parameters"]["query"]
+>;
+
+/** Where each first letter starts in the title-sorted list (`GET .../letters`). */
+export type LetterIndex = Schemas["LetterIndex"];
+
+/** One entry of a {@link LetterIndex}: a letter ("A"-"Z" or "#") and its first position. */
+export type LetterOffset = Schemas["LetterOffset"];
+
 /** Query parameters of `GET /api/v1/libraries/{libraryId}/facets`: fields and filters. */
 export type LibraryFacetsQuery = NonNullable<
   operations["listLibraryFacets"]["parameters"]["query"]

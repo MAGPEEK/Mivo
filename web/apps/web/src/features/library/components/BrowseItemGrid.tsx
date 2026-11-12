@@ -1,19 +1,19 @@
-import type { ItemSummary } from "@mivo/api-client";
+import type { LetterIndex } from "@mivo/api-client";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { CardFormat } from "../../../shared/lib/rowScroll";
 import { EmptyState, LibraryIcon, Skeleton } from "../../../shared/ui";
 import type { LibraryItems } from "../hooks/useLibraryItems";
-import { useNewPageFocus } from "../hooks/useNewPageFocus";
-import type { ViewPreference } from "../hooks/useViewPreference";
 import type { LibraryItemFilter } from "../lib/browseQuery";
-import { cardSize, type CardSize } from "../lib/viewStyle";
+import type { GridView } from "../lib/gridGeometry";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
-import { DetailsView, ListView } from "./ItemRows";
-import { itemGridClass } from "./gridLayout";
+import type { BrowseCardProps } from "./browseCardProps";
+import { VirtualItemGrid } from "./VirtualItemGrid";
 import { WatchableItemCard } from "./WatchableItemCard";
+
+export type { BrowseCardProps };
 
 /** The translated texts of a {@link BrowseItemGrid}; the defaults speak of videos. */
 export interface BrowseItemTexts {
@@ -30,15 +30,6 @@ export interface BrowseItemTexts {
   readonly emptyUnmatchedHint: string;
 }
 
-/** What a {@link BrowseItemGrid} hands to its card renderer. */
-export interface BrowseCardProps {
-  readonly item: ItemSummary;
-  /** Focus the card link when it mounts: the first card of a page "Load more" loaded. */
-  readonly focusOnMount: boolean;
-  /** The card size of the size slider; `undefined` keeps the card's own fixed sizes. */
-  readonly size?: CardSize | undefined;
-}
-
 /** Props of {@link BrowseItemGrid}. */
 export interface BrowseItemGridProps {
   readonly items: LibraryItems;
@@ -51,16 +42,20 @@ export interface BrowseItemGridProps {
   /** Icon of the empty state; defaults to the generic library icon. */
   readonly emptyIcon?: ReactNode;
   /**
-   * View style and card size of the device. Without it the grid keeps its fixed breakpoint
-   * columns, which is what the features with their own cards use.
+   * View style and card size of the device. Without it the grid keeps the default card size and
+   * the cards their own sizes, which is what the features with their own cards use.
    */
-  readonly view?: Pick<ViewPreference, "viewStyle" | "cardStep"> | undefined;
+  readonly view?: GridView | undefined;
   /** Shape of the cards, so episode stills get wider columns than posters. */
   readonly cardFormat?: CardFormat | undefined;
+  /** Where each letter starts (title sort); the A-Z bar shows only with it. */
+  readonly letters?: LetterIndex | undefined;
+  /** Identifies the listing, so Back restores its scroll position; absent keeps none. */
+  readonly scrollKey?: string | undefined;
 }
 
-function renderPosterCard({ item, focusOnMount, size }: BrowseCardProps): ReactNode {
-  return <WatchableItemCard item={item} focusOnMount={focusOnMount} size={size} />;
+function renderPosterCard({ item, size }: BrowseCardProps): ReactNode {
+  return <WatchableItemCard item={item} size={size} />;
 }
 
 function useVideoTexts(): BrowseItemTexts {
@@ -79,9 +74,9 @@ function useVideoTexts(): BrowseItemTexts {
 }
 
 /**
- * The listed items of a library as a dense grid of 2:3 cards, page by page: loading, error and
- * empty states, "Load more" and the focus move to the first new card. Features with their own
- * card (e.g. audiobooks) pass `renderCard` and their texts.
+ * The listed items of a library as a virtual grid of cards, rows or details, page by page:
+ * loading, error and empty states, skeletons for pages on their way and the A-Z bar. Features
+ * with their own card (e.g. audiobooks) pass `renderCard` and their texts.
  */
 export function BrowseItemGrid({
   items,
@@ -91,6 +86,8 @@ export function BrowseItemGrid({
   emptyIcon,
   view,
   cardFormat,
+  letters,
+  scrollKey,
 }: BrowseItemGridProps) {
   const videoTexts = useVideoTexts();
   const shown = texts ?? videoTexts;
@@ -108,12 +105,16 @@ export function BrowseItemGrid({
     return <ItemsEmpty filter={filter} texts={shown} icon={emptyIcon} />;
   }
   return (
-    <ItemList
+    <VirtualItemGrid
       items={items}
-      texts={shown}
+      label={shown.label}
+      loadMoreFailedText={shown.loadMoreFailed}
+      loadingMoreText={shown.loadingMore}
       renderCard={renderCard}
       view={view}
       cardFormat={cardFormat}
+      letters={letters}
+      scrollKey={scrollKey}
     />
   );
 }
@@ -165,99 +166,4 @@ function ItemsLoadError({ items, texts }: ItemsLoadErrorProps) {
       </button>
     </div>
   );
-}
-
-interface ItemListProps {
-  readonly items: LibraryItems;
-  readonly texts: BrowseItemTexts;
-  readonly renderCard: (card: BrowseCardProps) => ReactNode;
-  readonly view: BrowseItemGridProps["view"];
-  readonly cardFormat: CardFormat | undefined;
-}
-
-function ItemList({ items, texts, renderCard, view, cardFormat }: ItemListProps) {
-  const { t } = useTranslation(libraryNamespace);
-  const { focusItemId, markLoadMore } = useNewPageFocus(items);
-  const loadMore = () => {
-    markLoadMore();
-    items.loadMore();
-  };
-  return (
-    <>
-      <ItemsBody
-        items={items.items}
-        label={texts.label}
-        focusItemId={focusItemId}
-        renderCard={renderCard}
-        view={view}
-        cardFormat={cardFormat}
-      />
-      {items.hasMore && (
-        <div className="mt-8 flex flex-col items-center gap-3">
-          {items.loadMoreFailed && !items.loadingMore && (
-            <p role="alert" className="text-sm text-text-muted">
-              {texts.loadMoreFailed}
-            </p>
-          )}
-          {/* aria-disabled instead of disabled: a disabled button drops keyboard focus. */}
-          <button
-            type="button"
-            onClick={loadMore}
-            aria-disabled={items.loadingMore}
-            aria-busy={items.loadingMore}
-            className={secondaryButtonClass}
-          >
-            {loadMoreLabel(items, texts, t("items.loadMore"), t("retry"))}
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
-interface ItemsBodyProps {
-  readonly items: readonly ItemSummary[];
-  readonly label: string;
-  readonly focusItemId: string | undefined;
-  readonly renderCard: (card: BrowseCardProps) => ReactNode;
-  readonly view: BrowseItemGridProps["view"];
-  readonly cardFormat: CardFormat | undefined;
-}
-
-// The list views take the items only, so they also serve season pages (M5-44).
-function ItemsBody({ items, label, focusItemId, renderCard, view, cardFormat }: ItemsBodyProps) {
-  if (view?.viewStyle === "list") {
-    return <ListView items={items} label={label} focusItemId={focusItemId} />;
-  }
-  if (view?.viewStyle === "details") {
-    return <DetailsView items={items} label={label} focusItemId={focusItemId} />;
-  }
-  const size = view === undefined ? undefined : cardSize(view.cardStep, cardFormat);
-  return (
-    <ul
-      aria-label={label}
-      className={size === undefined ? itemGridClass : "grid gap-x-4 gap-y-6"}
-      style={
-        size === undefined
-          ? undefined
-          : { gridTemplateColumns: `repeat(auto-fill, minmax(${String(size.columnWidth)}px, 1fr))` }
-      }
-    >
-      {items.map((item) => (
-        <li key={item.id}>{renderCard({ item, focusOnMount: item.id === focusItemId, size })}</li>
-      ))}
-    </ul>
-  );
-}
-
-function loadMoreLabel(
-  items: LibraryItems,
-  texts: BrowseItemTexts,
-  loadMore: string,
-  retry: string,
-): string {
-  if (items.loadingMore) {
-    return texts.loadingMore;
-  }
-  return items.loadMoreFailed ? retry : loadMore;
 }

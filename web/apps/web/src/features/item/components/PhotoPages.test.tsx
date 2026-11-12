@@ -1,11 +1,12 @@
 import type { ItemDetail, ItemSummary } from "@mivo/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { blockingAxeViolations } from "../../../test/axe";
 import { hierarchyServer } from "../test/fakeHierarchyServer";
 import { mediaFile } from "../test/fakeItemServer";
 import { renderItemPage } from "../test/renderItemPage";
+import { resetWindowScroll, scrollWindowToEnd } from "../../../test/scrollWindow";
 
 const libraryId = "library-1";
 // More than one page of an album's contents.
@@ -78,6 +79,8 @@ function renderPhoto(photo: ItemDetail, languages = ["en"]) {
   renderItemPage(`/items/${photo.id}`, { fetch: server.fetch, languages });
 }
 
+afterEach(resetWindowScroll);
+
 describe("Photo album page", () => {
   it("shows the photo count, then the sub-albums and the photos as tiles", async () => {
     renderAlbum([lakeShore, photoSummary("IMG_0101", { takenAt: "2024-07-14T09:30:00Z" })]);
@@ -95,21 +98,18 @@ describe("Photo album page", () => {
     expect(await blockingAxeViolations(document.body)).toEqual([]);
   });
 
-  it("pages through a large album without an order and focuses the first new tile", async () => {
+  it("pages through a large album without an order as the window scrolls to the end", async () => {
     const photos = Array.from({ length: manyPhotos }, (_, index) =>
       photoSummary(`photo-${String(index)}`),
     );
     const server = renderAlbum(photos);
 
     const list = await screen.findByRole("list", { name: "Album contents" });
-    const firstPage = within(list).getAllByRole("listitem").length;
-    expect(firstPage).toBeLessThan(manyPhotos);
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(within(list).getAllByRole("listitem").length).toBeLessThan(manyPhotos);
+    scrollWindowToEnd();
 
     await waitFor(() => {
-      expect(document.activeElement?.getAttribute("href")).toBe(
-        `/items/photo-${String(firstPage)}`,
-      );
+      expect(list.querySelector(`a[href="/items/photo-${String(manyPhotos - 1)}"]`)).not.toBeNull();
     });
     // The server lists albums in one order only and rejects order=desc.
     expect(

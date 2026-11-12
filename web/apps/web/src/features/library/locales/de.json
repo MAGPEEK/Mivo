@@ -48,7 +48,6 @@
     "label": "Videos",
     "loading": "Videos werden geladen",
     "loadFailed": "Die Videos konnten nicht geladen werden.",
-    "loadMore": "Mehr laden",
     "loadingMore": "Weitere Videos werden geladen",
     "loadMoreFailed": "Weitere Videos konnten nicht geladen werden.",
     "unavailable": "Nicht verfügbar",
@@ -118,6 +117,10 @@
       "photo_one": "{{count, number}} Foto",
       "photo_other": "{{count, number}} Fotos"
     }
+  },
+  "alpha": {
+    "label": "Zu Buchstabe springen",
+    "symbols": "Zahlen und Sonderzeichen"
   },
   "view": {
     "label": "Ansicht",

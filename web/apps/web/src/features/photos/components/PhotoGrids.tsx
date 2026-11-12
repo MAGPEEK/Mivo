@@ -64,6 +64,7 @@ export function PhotoAlbumGrid({ items, filter }: PhotoLibraryGridProps) {
       texts={useGridTexts("albums")}
       renderCard={renderPhotoCard}
       emptyIcon={emptyIcon}
+      cardFormat="square"
     />
   );
 }
@@ -77,6 +78,7 @@ export function PhotoGrid({ items, filter }: PhotoLibraryGridProps) {
       texts={useGridTexts("photos")}
       renderCard={renderPhotoCard}
       emptyIcon={emptyIcon}
+      cardFormat="square"
     />
   );
 }
@@ -99,6 +101,7 @@ export function PhotoAlbumContents({ albumId }: PhotoAlbumContentsProps) {
       texts={useGridTexts("contents")}
       renderCard={renderPhotoCard}
       emptyIcon={emptyIcon}
+      cardFormat="square"
     />
   );
 }

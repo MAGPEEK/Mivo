@@ -1,6 +1,6 @@
 import type { ItemDetail, ItemSummary } from "@mivo/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { blockingAxeViolations } from "../../../test/axe";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../../../test/fakeApi";
 import { fakeLibrary, itemsRoute, libraryRoute } from "../../../test/libraryFixtures";
 import { renderApp } from "../../../test/renderApp";
+import { resetWindowScroll, scrollWindowToEnd } from "../../../test/scrollWindow";
 
 const library = fakeLibrary({ name: "Audiobooks", kind: "audiobooks" });
 const libraryPath = `/libraries/${library.id}`;
@@ -77,6 +78,8 @@ function renderBooks(
   renderApp(path, { fetch: server.fetch, languages });
   return server;
 }
+
+afterEach(resetWindowScroll);
 
 describe("Audiobook grid", () => {
   it("lists books with 2:3 covers, their authors and length", async () => {
@@ -149,18 +152,15 @@ describe("Audiobook grid", () => {
     expect(await screen.findByRole("list", { name: "Audiobooks" })).toBeTruthy();
   });
 
-  it("loads more books and moves focus to the first new card", async () => {
+  it("loads more books as the window scrolls to the end", async () => {
     const many = Array.from({ length: manyBooks }, (_, index) => book(`book-${String(index)}`));
     renderBooks([itemsRoute(library.id, many)]);
 
     const list = await screen.findByRole("list", { name: "Audiobooks" });
-    const firstPage = within(list).getAllByRole("listitem").length;
-    expect(firstPage).toBeLessThan(manyBooks);
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(within(list).getAllByRole("listitem").length).toBeLessThan(manyBooks);
+    scrollWindowToEnd();
 
-    await waitFor(() => {
-      expect(document.activeElement?.textContent).toBe(`Book book-${String(firstPage)}`);
-    });
+    expect(await within(list).findByText(`Book book-${String(manyBooks - 1)}`)).toBeTruthy();
   });
 
   it("speaks German", async () => {

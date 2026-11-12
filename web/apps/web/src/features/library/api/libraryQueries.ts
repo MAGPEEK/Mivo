@@ -4,6 +4,7 @@ import {
   type ApiClient,
   type Library,
   type LibraryFacetsQuery,
+  type LibraryLettersQuery,
   type ScanStatus,
 } from "@mivo/api-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
@@ -38,10 +39,10 @@ export function libraryRowsQueryKey(libraryId: string) {
 export const scanStatusPollIntervalMs = 2_000;
 
 /**
- * Items per page. Without virtualisation (milestone 5) a page adds this many cards to the
- * DOM, so it stays well below the server maximum of 500.
+ * Items per page. The virtual grid asks for pages in a chain (the API pages by cursor only), so a
+ * larger page means fewer requests on the way to a letter; the server maximum is 500.
  */
-export const libraryItemsPageSize = 60;
+export const libraryItemsPageSize = 100;
 
 // One retry rides out a server restart; more would only delay the error state.
 const libraryRetries = 1;
@@ -172,6 +173,34 @@ export function libraryFacetsQueryOptions(
       requestData(
         client.GET("/api/v1/libraries/{libraryId}/facets", {
           params: { path: { libraryId }, query: facetQuery },
+          signal,
+        }),
+      ),
+    staleTime: facetsStaleTimeMs,
+    retry: shouldRetryLibraryQuery,
+  });
+}
+
+/**
+ * Cache key of `GET /api/v1/libraries/{libraryId}/letters`. Below the items key, so a finished
+ * scan, which invalidates the items, refreshes the letter positions too.
+ */
+export function libraryLettersQueryKey(libraryId: string) {
+  return [...libraryItemsQueryKey(libraryId), "letters"] as const;
+}
+
+/** Query options for where each first letter starts in the title-sorted list under `query`. */
+export function libraryLettersQueryOptions(
+  client: ApiClient,
+  libraryId: string,
+  query: LibraryLettersQuery,
+) {
+  return queryOptions({
+    queryKey: [...libraryLettersQueryKey(libraryId), query] as const,
+    queryFn: ({ signal }) =>
+      requestData(
+        client.GET("/api/v1/libraries/{libraryId}/letters", {
+          params: { path: { libraryId }, query },
           signal,
         }),
       ),

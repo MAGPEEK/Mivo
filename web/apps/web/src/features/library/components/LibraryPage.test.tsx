@@ -61,6 +61,22 @@ function countedItemsRoute(totalCount: number): FakeRoute {
   };
 }
 
+// Scrolls the window to the end of the listing, where the pages of the virtual grid are asked for.
+function scrollToBottom(): void {
+  Object.defineProperty(window, "scrollY", {
+    value: 1_000_000,
+    configurable: true,
+    writable: true,
+  });
+  act(() => {
+    fireEvent.scroll(window);
+  });
+}
+
+afterEach(() => {
+  Object.defineProperty(window, "scrollY", { value: 0, configurable: true, writable: true });
+});
+
 async function findItemList(): Promise<HTMLElement> {
   return screen.findByRole("list", { name: "Videos" });
 }
@@ -227,31 +243,28 @@ describe("LibraryPage grid", () => {
     });
   });
 
-  it("pages with Load more and moves focus to the first new card", async () => {
+  it("pages by cursor as the rows scroll into view and mounts only the rows near the window", async () => {
     const items = fakeItems(libraryItemsPageSize * 2 + 1);
     const { server } = renderLoadedLibrary(items);
 
     const list = await findItemList();
-    expect(within(list).getAllByRole("listitem")).toHaveLength(libraryItemsPageSize);
+    expect(within(list).getAllByRole("listitem").length).toBeLessThan(libraryItemsPageSize);
     const firstRequest = new URL(server.requests.find((r) => r.url.includes("/items"))?.url ?? "");
     expect(firstRequest.searchParams.get("limit")).toBe(String(libraryItemsPageSize));
     expect(firstRequest.searchParams.has("cursor")).toBe(false);
-
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-    const firstNew = await within(list).findByRole("link", {
-      name: `Item ${String(libraryItemsPageSize + 1)}`,
-    });
-    expect(document.activeElement).toBe(firstNew);
-
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-    const last = await within(list).findByRole("link", { name: `Item ${String(items.length)}` });
-    expect(document.activeElement).toBe(last);
-    expect(within(list).getAllByRole("listitem")).toHaveLength(items.length);
+    expect(server.countRequests("GET", itemsApiPath)).toBe(1);
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+
+    scrollToBottom();
+
+    expect(
+      await within(list).findByRole("link", { name: `Item ${String(items.length)}` }),
+    ).toBeTruthy();
+    expect(within(list).queryByRole("link", { name: "Item 1" })).toBeNull();
     expect(server.countRequests("GET", itemsApiPath)).toBe(3);
   });
 
-  it("keeps Load more focused and ignores clicks while the next page loads", async () => {
+  it("says that the next page loads and asks for it only once", async () => {
     let releaseSecondPage: () => void = () => undefined;
     const pagedItems = itemsRoute(library.id, fakeItems(libraryItemsPageSize + 1));
     const { server } = renderLibrary([
@@ -268,23 +281,19 @@ describe("LibraryPage grid", () => {
         },
       },
     ]);
-    await findItemList();
-    const button = screen.getByRole("button", { name: "Load more" });
-    act(() => {
-      button.focus();
+    const list = await findItemList();
+
+    scrollToBottom();
+
+    await waitFor(() => {
+      expect(list.getAttribute("aria-busy")).toBe("true");
     });
-
-    fireEvent.click(button);
-    const busy = await screen.findByRole("button", { name: "Loading more videos" });
-    fireEvent.click(busy);
-
-    expect(busy).toBe(button);
-    expect(busy.getAttribute("aria-busy")).toBe("true");
-    expect(busy.getAttribute("aria-disabled")).toBe("true");
-    expect(document.activeElement).toBe(busy);
+    expect(screen.getByText("Loading more videos")).toBeTruthy();
+    scrollToBottom();
     expect(server.countRequests("GET", itemsApiPath)).toBe(2);
     releaseSecondPage();
-    expect(await screen.findByRole("link", { name: "Item 61" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Item 101" })).toBeTruthy();
+    expect(list.getAttribute("aria-busy")).toBe("false");
   });
 
   it("still shows the next page when a scan starts while it loads", async () => {
@@ -310,8 +319,10 @@ describe("LibraryPage grid", () => {
       },
     ]);
     await findItemList();
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-    await screen.findByRole("button", { name: "Loading more videos" });
+    scrollToBottom();
+    await waitFor(() => {
+      expect(server.countRequests("GET", itemsApiPath)).toBe(2);
+    });
 
     fireEvent.click(scanButton());
     await waitFor(() => {
@@ -322,14 +333,14 @@ describe("LibraryPage grid", () => {
     });
     releaseSecondPage();
 
-    expect(await screen.findByRole("link", { name: "Item 61" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "Item 101" })).toBeTruthy();
     expect(server.countRequests("GET", itemsApiPath)).toBe(2);
   });
 
-  it("keeps the cards when the next page fails and retries it in place", async () => {
+  it("keeps the cards when the next page fails and retries it on request", async () => {
     let failing = true;
     const pagedItems = itemsRoute(library.id, fakeItems(libraryItemsPageSize + 1));
-    renderLibrary([
+    const { server } = renderLibrary([
       libraryRoute(library),
       {
         ...pagedItems,
@@ -339,65 +350,20 @@ describe("LibraryPage grid", () => {
             : pagedItems.respond(request),
       },
     ]);
-    const list = await findItemList();
-    const button = screen.getByRole("button", { name: "Load more" });
-    act(() => {
-      button.focus();
-    });
+    await findItemList();
 
-    fireEvent.click(button);
+    scrollToBottom();
 
     expect((await screen.findByRole("alert")).textContent).toBe("More videos could not be loaded.");
-    expect(within(list).getAllByRole("listitem")).toHaveLength(libraryItemsPageSize);
-    expect(button.textContent).toBe("Try again");
-    expect(document.activeElement).toBe(button);
+    expect(screen.getByRole("link", { name: "Item 100" })).toBeTruthy();
+    // First request, the failed page and its one retry: no loop.
+    expect(server.countRequests("GET", itemsApiPath)).toBe(3);
 
     failing = false;
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    const firstNew = await within(list).findByRole("link", { name: "Item 61" });
-    expect(document.activeElement).toBe(firstNew);
+    expect(await screen.findByRole("link", { name: "Item 101" })).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("does not move focus again when a refresh adds cards later", async () => {
-    let shown = fakeItems(libraryItemsPageSize + 1);
-    const { server } = renderLibrary([
-      libraryRoute(library),
-      {
-        method: "POST",
-        path: `${libraryApiPath}/scan`,
-        respond: () => {
-          // Lands exactly where the page loaded by "Load more" began.
-          shown = [
-            ...shown.slice(0, libraryItemsPageSize),
-            fakeItem({ id: "new", title: "New arrival" }),
-            ...shown.slice(libraryItemsPageSize),
-          ];
-          return jsonResponse(finishedScan, 202);
-        },
-      },
-      {
-        method: "GET",
-        path: itemsApiPath,
-        respond: (request) => itemsRoute(library.id, shown).respond(request),
-      },
-    ]);
-    const list = await findItemList();
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
-    const firstNew = await within(list).findByRole("link", { name: "Item 61" });
-    expect(document.activeElement).toBe(firstNew);
-
-    act(() => {
-      scanButton().focus();
-    });
-    fireEvent.click(scanButton());
-
-    expect(await within(list).findByRole("link", { name: "New arrival" })).toBeTruthy();
-    await waitFor(() => {
-      expect(server.countRequests("GET", itemsApiPath)).toBe(4);
-    });
-    expect(document.activeElement).toBe(scanButton());
   });
 
   it("keeps the cards when a background refresh fails", async () => {

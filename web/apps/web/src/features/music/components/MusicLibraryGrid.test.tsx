@@ -1,6 +1,6 @@
 import type { ItemDetail, ItemSummary } from "@mivo/api-client";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { blockingAxeViolations } from "../../../test/axe";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../../../test/fakeApi";
 import { fakeLibrary, itemsRoute, libraryRoute } from "../../../test/libraryFixtures";
 import { renderApp } from "../../../test/renderApp";
+import { resetWindowScroll, scrollWindowToEnd } from "../../../test/scrollWindow";
 
 const library = fakeLibrary({ name: "Music", kind: "music" });
 const libraryPath = `/libraries/${library.id}`;
@@ -68,6 +69,8 @@ async function findAlbumList(name = "Albums"): Promise<HTMLElement> {
   return screen.findByRole("list", { name });
 }
 
+afterEach(resetWindowScroll);
+
 describe("Music library grid", () => {
   it("lists albums with square covers, artist and year, and asks for the artist once", async () => {
     const server = renderMusicLibrary([itemsRoute(library.id, [symphony, sketches])]);
@@ -122,22 +125,15 @@ describe("Music library grid", () => {
     expect(await findAlbumList()).toBeTruthy();
   });
 
-  it("loads more albums page by page", async () => {
+  it("loads more albums as the window scrolls to the end", async () => {
     const many = Array.from({ length: manyAlbums }, (_, index) => album(`album-${String(index)}`));
     renderMusicLibrary([itemsRoute(library.id, many)]);
 
     const list = await findAlbumList();
-    const firstPage = within(list).getAllByRole("listitem").length;
-    expect(firstPage).toBeLessThan(manyAlbums);
-    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    expect(within(list).getAllByRole("listitem").length).toBeLessThan(manyAlbums);
+    scrollWindowToEnd();
 
-    await waitFor(() => {
-      expect(within(list).getAllByRole("listitem").length).toBeGreaterThan(firstPage);
-    });
-    // Focus moves to the first new card, so keyboard users continue where the page grew.
-    await waitFor(() => {
-      expect(document.activeElement?.textContent).toContain(`Album album-${String(firstPage)}`);
-    });
+    expect(await within(list).findByText(`Album album-${String(manyAlbums - 1)}`)).toBeTruthy();
   });
 
   it("lists artists in the poster grid and switches to the albums with the type menu", async () => {
