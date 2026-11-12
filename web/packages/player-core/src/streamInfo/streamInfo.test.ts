@@ -39,6 +39,9 @@ describe("streamInfo", () => {
       container: { source: "MP4", target: "MP4", changed: false },
       encoder: undefined,
       sourceBitRate: { key: "streamInfo.bitRate.megabits", params: { value: 4.1 } },
+      outputBitRate: undefined,
+      subtitle: { key: "streamInfo.subtitleMode.off", track: undefined },
+      speed: undefined,
     });
   });
 
@@ -269,6 +272,88 @@ describe("stream lines", () => {
       sourceCodec: "E-AC-3",
       targetChannels: "5.1",
     });
+  });
+});
+
+describe("stream info extensions (PL-41)", () => {
+  it("names the output bit rate like the source bit rate", () => {
+    const info = streamInfo({ ...transcodeSession, outputBitRate: 8_000_000 });
+
+    expect(info.outputBitRate).toEqual({
+      key: "streamInfo.bitRate.megabits",
+      params: { value: 8 },
+    });
+  });
+
+  it("calls the encoder hardware when the server says so, whatever its name", () => {
+    const hardwareVideo: StreamDecision = {
+      kind: "video",
+      sourceIndex: 0,
+      action: "transcode",
+      sourceCodec: "hevc",
+      targetCodec: "h264",
+      encoder: "custom_encoder",
+      hardware: true,
+    };
+
+    expect(streamInfo({ ...transcodeSession, streams: [hardwareVideo] }).encoder).toEqual({
+      key: "streamInfo.encoder.hardware",
+      params: { encoder: "custom_encoder" },
+    });
+  });
+
+  it.each<{ mode: string; key: string }>([
+    { mode: "off", key: "streamInfo.subtitleMode.off" },
+    { mode: "sidecar", key: "streamInfo.subtitleMode.sidecar" },
+    { mode: "burn_in", key: "streamInfo.subtitleMode.burn_in" },
+    { mode: "projected", key: "streamInfo.subtitleMode.unknown" },
+  ])("maps the subtitle mode $mode to $key", ({ mode, key }) => {
+    const session = { ...transcodeSession, subtitle: { mode, trackId: "s:3" } };
+
+    expect(streamInfo(session as PlaybackSession).subtitle.key).toBe(key);
+  });
+
+  it("shows no subtitle for a session that says nothing about it", () => {
+    expect(streamInfo(transcodeSession).subtitle.key).toBe("streamInfo.subtitleMode.off");
+  });
+
+  it("names the selected track by language and format when the file lists it", () => {
+    const session: PlaybackSession = {
+      ...transcodeSession,
+      subtitle: { mode: "burn_in", trackId: "s:3" },
+    };
+    const tracks = [
+      { id: "s:2", language: "deu", format: "subrip" },
+      { id: "s:3", language: "eng", format: "hdmv_pgs_subtitle" },
+    ];
+
+    expect(streamInfo(session, tracks).subtitle.track).toEqual({
+      language: "eng",
+      format: "PGS",
+    });
+    expect(streamInfo(session, []).subtitle.track).toBeUndefined();
+  });
+
+  it.each([
+    { speed: 2.4, value: 2.4, slow: false },
+    { speed: 1, value: 1, slow: false },
+    { speed: 0.87, value: 0.87, slow: true },
+    { speed: 0.996, value: 1, slow: false },
+    { speed: 0, value: 0, slow: true },
+  ])("reads the transcode speed $speed", ({ speed, value, slow }) => {
+    expect(streamInfo({ ...transcodeSession, transcodeSpeed: speed }).speed).toEqual({
+      value,
+      slow,
+    });
+  });
+
+  it.each([undefined, -1, Number.NaN, Number.POSITIVE_INFINITY])("has no speed for %s", (speed) => {
+    const session: PlaybackSession = { ...transcodeSession };
+    if (speed !== undefined) {
+      session.transcodeSpeed = speed;
+    }
+
+    expect(streamInfo(session).speed).toBeUndefined();
   });
 });
 

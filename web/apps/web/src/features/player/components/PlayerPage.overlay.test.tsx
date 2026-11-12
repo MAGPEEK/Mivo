@@ -60,6 +60,8 @@ describe("PlayerPage stream-info overlay", () => {
       ["Video", "H.264 · Copied"],
       ["Audio", "AAC · Copied"],
       ["Source bit rate", "950 kbit/s"],
+      ["Output bit rate", "unknown"],
+      ["Subtitles", "Off"],
       ["Buffer ahead", "unknown"],
       ["Network", "unknown"],
     ]);
@@ -72,7 +74,7 @@ describe("PlayerPage stream-info overlay", () => {
     expect(within(overlay()).getByText("Direct Stream").className).toContain("bg-direct-stream");
     expect(listItems("Why")).toEqual(["MKV not supported → MP4"]);
     expect(overlayRows()[0]).toEqual(["Container", "MKV → MP4"]);
-    expect(overlayRows().at(-3)).toEqual(["Source bit rate", "4.1 Mbit/s"]);
+    expect(overlayRows().at(-6)).toEqual(["Source bit rate", "4.1 Mbit/s"]);
   });
 
   it("shows a transcode in amber with reasons, streams, encoder and warnings", async () => {
@@ -91,6 +93,9 @@ describe("PlayerPage stream-info overlay", () => {
       ["Audio", "AC-3 → AAC · 2.0 · Transcoded"],
       ["Encoder", "Software (libx264)"],
       ["Source bit rate", "18.5 Mbit/s"],
+      ["Output bit rate", "unknown"],
+      ["Subtitles", "Off"],
+      ["Speed", "unknown"],
       ["Buffer ahead", "unknown"],
       ["Network", "unknown"],
     ]);
@@ -127,6 +132,9 @@ describe("PlayerPage stream-info overlay", () => {
       "Container",
       "Video",
       "Audio",
+      "Output bit rate",
+      "Subtitles",
+      "Speed",
       "Buffer ahead",
       "Network",
     ]);

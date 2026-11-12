@@ -130,6 +130,12 @@
     "containerChange": "{{source}} → {{target}}",
     "encoder": "Encoder",
     "sourceBitRate": "Bitrate der Quelle",
+    "outputBitRate": "Bitrate der Ausgabe",
+    "subtitles": "Untertitel",
+    "subtitleTrack": "{{language}} · {{format}}",
+    "speed": "Tempo",
+    "speedValue": "{{value, number(maximumFractionDigits: 2)}}× Echtzeit",
+    "speedSlow": "zu langsam – Ruckeln wahrscheinlich",
     "bufferAhead": "Puffer voraus",
     "bufferAheadValue": "{{value, number(maximumFractionDigits: 0)}} s",
     "throughput": "Netzwerk",
@@ -198,6 +204,12 @@
     "bitRate": {
       "kilobits": "{{value, number}} kbit/s",
       "megabits": "{{value, number}} Mbit/s"
+    },
+    "subtitleMode": {
+      "off": "Aus",
+      "sidecar": "Im Player gerendert (WebVTT)",
+      "burn_in": "Ins Video eingebrannt – das Video wird umgewandelt",
+      "unknown": "Anderer Modus"
     }
   }
 }

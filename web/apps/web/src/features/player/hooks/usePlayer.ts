@@ -23,6 +23,7 @@ import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
 import type { PlayerQueueView } from "./usePlayerQueue";
 import { usePlayerShortcuts } from "./usePlayerShortcuts";
 import { usePlayerTransport, type TransportActions } from "./usePlayerTransport";
+import { useLiveTranscodeSpeed } from "./useLiveTranscodeSpeed";
 import { useNetworkStats, type NetworkStats } from "./useNetworkStats";
 import { useSessionToasts } from "./useSessionToasts";
 import { useStreamInfoOverlay, type StreamInfoOverlay } from "./useStreamInfoOverlay";
@@ -143,6 +144,33 @@ function otherAudioTracks(
   );
 }
 
+/**
+ * What the overlay shows of the session: the speed the open overlay polled replaces the one
+ * the session was created with, which is only the first sample.
+ */
+function useStreamInfoView(
+  playback: Pick<PlaybackOptionsInput, "session" | "tracks">,
+  overlayOpen: boolean,
+): StreamInfo | undefined {
+  const { session, tracks } = playback;
+  const liveSpeed = useLiveTranscodeSpeed(session?.id, overlayOpen);
+  if (session === undefined) {
+    return undefined;
+  }
+  const current = liveSpeed === undefined ? session : { ...session, transcodeSpeed: liveSpeed };
+  return streamInfo(current, tracks?.subtitles ?? []);
+}
+
+/** Everything the stream-info overlay shows; sampled and polled only while it is open. */
+function useStreamInfoData(
+  video: HTMLVideoElement | null,
+  playback: Pick<PlaybackOptionsInput, "session" | "tracks">,
+  overlayOpen: boolean,
+): Pick<PlayerView, "streamInfo" | "networkStats"> {
+  const networkStats = useNetworkStats(video, playback.session?.streamUrl, overlayOpen);
+  return { streamInfo: useStreamInfoView(playback, overlayOpen), networkStats };
+}
+
 /** What the full-screen button and the stream-info overlay do. */
 function panelActions(
   fullscreen: Fullscreen,
@@ -207,11 +235,10 @@ export function usePlayer(target: PlaybackTarget): Player {
   const { attachVideo, seek, retry, ...playback } = usePlaybackWithChoice(target);
   const [video, videoRef] = useVideoElement(attachVideo);
   const [container, setContainer] = useState<HTMLElement | null>(null);
-  const { session } = playback;
   const { media, actions: mediaActions } = usePlayerMedia(video, playback);
   const fullscreen = useFullscreen(container);
   const overlay = useStreamInfoOverlay();
-  const networkStats = useNetworkStats(video, session?.streamUrl, overlay.open);
+  const overlayData = useStreamInfoData(video, playback, overlay.open);
   const [playButtonRef, retryAndFocus] = useRetryWithFocus(retry);
   const { item, duration, transport } = usePlayerNavigation(target, playback, seek);
   const { view: trackView, actions: trackActions, optionsToggleRef } = useTracks(playback, video);
@@ -232,8 +259,7 @@ export function usePlayer(target: PlaybackTarget): Player {
       item,
       queue: transport.queue,
       notice: playbackNotice(playback),
-      streamInfo: session === undefined ? undefined : streamInfo(session),
-      networkStats,
+      ...overlayData,
       alternativeAudio: otherAudioTracks(playback),
       position: playback.position,
       duration,

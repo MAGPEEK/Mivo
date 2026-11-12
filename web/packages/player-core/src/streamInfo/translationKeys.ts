@@ -3,7 +3,12 @@
 // translates them in, nested under `streamInfo`. Every known code has its own key; codes added
 // by a newer server map to the group's `unknown` key, so the overlay always shows some text.
 
-import type { MediaStreamKind, PlaybackMode, StreamAction } from "./playbackSession";
+import type {
+  MediaStreamKind,
+  PlaybackMode,
+  StreamAction,
+  SubtitleDeliveryMode,
+} from "./playbackSession";
 
 /** Name of the fallback key in every group whose values come from the server. */
 export const unknownKeyName = "unknown";
@@ -58,6 +63,13 @@ export const encoderTypes = ["software", "hardware"] as const;
 /** Units the source bit rate is shown in. */
 export const bitRateUnits = ["kilobits", "megabits"] as const;
 
+/** Subtitle modes of the API: not shown, sidecar rendered by the player, burned into the video. */
+export const knownSubtitleModes = [
+  "off",
+  "sidecar",
+  "burn_in",
+] as const satisfies readonly SubtitleDeliveryMode[];
+
 /** A known reason code. */
 export type KnownReasonCode = (typeof knownReasonCodes)[number];
 /** A known warning code. */
@@ -80,9 +92,19 @@ export type EncoderKey = Key<"encoder", (typeof encoderTypes)[number]>;
 /** Key of the source bit rate. Params: `value` (a number in the key's unit). */
 export type BitRateKey = Key<"bitRate", (typeof bitRateUnits)[number]>;
 
+/** Key of a subtitle mode's description. Params: none. */
+export type SubtitleModeKey = Key<"subtitleMode", (typeof knownSubtitleModes)[number] | Unknown>;
+
 /** Every translation key the stream-info view model can contain. */
 export type StreamInfoTranslationKey =
-  ModeKey | ReasonKey | WarningKey | StreamKindKey | StreamActionKey | EncoderKey | BitRateKey;
+  | ModeKey
+  | ReasonKey
+  | WarningKey
+  | StreamKindKey
+  | StreamActionKey
+  | EncoderKey
+  | BitRateKey
+  | SubtitleModeKey;
 
 function groupKeys<Group extends string, Name extends string>(
   group: Group,
@@ -103,6 +125,7 @@ export const streamInfoTranslationKeys: readonly StreamInfoTranslationKey[] = [
   ...groupKeys("action", [...knownStreamActions, unknownKeyName]),
   ...groupKeys("encoder", encoderTypes),
   ...groupKeys("bitRate", bitRateUnits),
+  ...groupKeys("subtitleMode", [...knownSubtitleModes, unknownKeyName]),
 ];
 
 /**

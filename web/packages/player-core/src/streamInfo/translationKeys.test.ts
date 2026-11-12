@@ -46,6 +46,10 @@ describe("streamInfoTranslationKeys", () => {
       "streamInfo.encoder.hardware",
       "streamInfo.bitRate.kilobits",
       "streamInfo.bitRate.megabits",
+      "streamInfo.subtitleMode.off",
+      "streamInfo.subtitleMode.sidecar",
+      "streamInfo.subtitleMode.burn_in",
+      "streamInfo.subtitleMode.unknown",
     ]);
   });
 
@@ -84,5 +88,7 @@ function usedKeys(session: typeof transcodeSession): StreamInfoTranslationKey[] 
     ...info.streams.flatMap((line) => [line.kindKey, line.actionKey]),
     ...(info.encoder === undefined ? [] : [info.encoder.key]),
     ...(info.sourceBitRate === undefined ? [] : [info.sourceBitRate.key]),
+    ...(info.outputBitRate === undefined ? [] : [info.outputBitRate.key]),
+    info.subtitle.key,
   ];
 }

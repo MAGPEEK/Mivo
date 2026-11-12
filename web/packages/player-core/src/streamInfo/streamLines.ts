@@ -88,13 +88,17 @@ export function targetResolution(decision: StreamDecision): string | undefined {
  * stream is copied.
  */
 export function encoderText(decisions: readonly StreamDecision[]): EncoderText | undefined {
-  const encoder = decisions.find(
-    (decision) => decision.action === "transcode" && decision.encoder !== undefined,
-  )?.encoder;
+  const decision = decisions.find(
+    (candidate) => candidate.action === "transcode" && candidate.encoder !== undefined,
+  );
+  const encoder = decision?.encoder;
   if (encoder === undefined) {
     return undefined;
   }
-  const hardware = hardwareEncoderSuffixes.some((suffix) => encoder.endsWith(suffix));
+  // The server's flag wins; the name is the fallback for a server that does not report it.
+  const hardware =
+    decision?.hardware === true ||
+    hardwareEncoderSuffixes.some((suffix) => encoder.endsWith(suffix));
   return {
     key: hardware ? "streamInfo.encoder.hardware" : "streamInfo.encoder.software",
     params: { encoder },

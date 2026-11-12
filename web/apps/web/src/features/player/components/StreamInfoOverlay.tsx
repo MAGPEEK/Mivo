@@ -1,4 +1,11 @@
-import type { AudioTrack, ReasonText, StreamInfo, StreamInfoColorToken } from "@mivo/player-core";
+import type {
+  AudioTrack,
+  ReasonText,
+  StreamInfo,
+  StreamInfoColorToken,
+  SubtitleInfo,
+  TranscodeSpeedInfo,
+} from "@mivo/player-core";
 import { useId, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -173,7 +180,53 @@ function FactRows({ info }: { readonly info: StreamInfo }) {
           value={t(sourceBitRate.key, sourceBitRate.params)}
         />
       )}
+      <InfoRow
+        label={t("overlay.outputBitRate")}
+        value={
+          info.outputBitRate === undefined
+            ? t("overlay.unknown")
+            : t(info.outputBitRate.key, info.outputBitRate.params)
+        }
+      />
+      <SubtitleRow subtitle={info.subtitle} />
+      {info.mode.id === "direct_play" ? null : <SpeedRow speed={info.speed} />}
     </>
+  );
+}
+
+/** The subtitle mode with the selected track, e.g. "Rendered in the player · eng · SRT". */
+function SubtitleRow({ subtitle }: { readonly subtitle: SubtitleInfo }) {
+  const { t } = useTranslation(playerNamespace);
+  const { track } = subtitle;
+  const trackText =
+    track === undefined
+      ? undefined
+      : t("overlay.subtitleTrack", {
+          language: track.language ?? t("overlay.unknown"),
+          format: track.format,
+        });
+  const value = [t(subtitle.key), trackText].filter((part) => part !== undefined).join(" · ");
+  return <InfoRow label={t("overlay.subtitles")} value={value} />;
+}
+
+/** Transcode speed; below real time it takes the warning colour and says why. */
+function SpeedRow({ speed }: { readonly speed: TranscodeSpeedInfo | undefined }) {
+  const { t } = useTranslation(playerNamespace);
+  return (
+    <div className="contents">
+      <dt className="text-text-muted">{t("overlay.speed")}</dt>
+      <dd className={speed?.slow === true ? "text-transcode" : undefined}>
+        {speed === undefined
+          ? t("overlay.unknown")
+          : t("overlay.speedValue", { value: speed.value })}
+        {speed?.slow === true ? (
+          <span className="flex items-center gap-1">
+            <AlertIcon className="size-4 shrink-0" />
+            {t("overlay.speedSlow")}
+          </span>
+        ) : null}
+      </dd>
+    </div>
   );
 }
 

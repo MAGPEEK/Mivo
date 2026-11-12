@@ -119,6 +119,10 @@ export {
   type StreamInfo,
   type StreamInfoColorToken,
   type StreamInfoSession,
+  type SubtitleInfo,
+  type SubtitleTrackSummary,
+  type SubtitleTrackText,
+  type TranscodeSpeedInfo,
 } from "./streamInfo/streamInfo";
 export {
   bufferAheadSeconds,
@@ -147,6 +151,7 @@ export {
   type StreamActionKey,
   type StreamInfoTranslationKey,
   type StreamKindKey,
+  type SubtitleModeKey,
   type WarningKey,
 } from "./streamInfo/translationKeys";
 export { progressKinds, reportsProgress } from "./progress/progressKinds";
