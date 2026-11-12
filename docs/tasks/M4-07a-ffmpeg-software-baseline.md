@@ -14,7 +14,7 @@ threads and low OS priority (ADR 0030 §1).
       `BELOW_NORMAL_PRIORITY_CLASS`; other OS: no-op. ffprobe keeps normal priority.
 - [ ] Existing hardening tests (parent-death kill, job object) still pass.
 - [ ] Tests: arg-builder table tests; Linux test (Docker) reads the child's niceness from `/proc/<pid>/stat`; Windows test reads the
-      priority class; corpus test: a veryfast transcode of the 720p clip succeeds.
+      priority class; corpus test: a veryfast, 1-thread, low-priority transcode of a corpus clip succeeds (the corpus has no 720p clip; the MPEG-2 clip is used, criterion amended by the orchestrator 2026-11-12).
 - [ ] Gates: lint + layer rules + `go test -race ./internal/adapters/ffmpeg/...` + coverage gate.
 
 ## Notes

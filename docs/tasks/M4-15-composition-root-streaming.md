@@ -21,3 +21,5 @@ Everything of M4's P0 slice runs in the real binary: checkpoint of the milestone
 - Checkpoint for DS925+ behaviour: see M4-18.
 
 Note (orchestrator, M4-13b): map `config.Transcode.ThrottleAheadSeconds` into `playback.Options.ThrottleAhead` in the same change as M4-14a's segment hook (without the hook the controller measures against segment 0 and stalls playback past about segment 11); until then ThrottleAhead stays 0 (off).
+
+Note (orchestrator, M4-07a): in `cmd/mivo/wire_playback.go` pass `ProducerOptions.Preset`, `Threads` (0 resolved to `max(1, NumCPU/2)`, clamped to a sane upper bound) and `LowPriority` (`Transcode.Priority == "low"`) from `config.Transcode`, with a wiring test; also set `LowPriority` for the subtitle extractor (M4-08a) and the trickplay generator (M4-12), and pass `scan.SubtitlePorts{Lister, Catalog}` (M4-06a/b).
