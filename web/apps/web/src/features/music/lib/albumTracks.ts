@@ -16,8 +16,8 @@ export interface TrackRowModel {
 
 /** The tracks of one disc, in server order (track number, then file name). */
 export interface DiscGroup {
-  /** Disc number; `undefined` for tracks without a disc tag. */
-  readonly disc: number | undefined;
+  /** Disc number; tracks without a disc tag count as disc 1, like on the server. */
+  readonly disc: number;
   readonly tracks: readonly TrackRowModel[];
 }
 
@@ -33,41 +33,23 @@ export function toTrackRowModel(track: ItemSummary): TrackRowModel {
   };
 }
 
-// Missing numbers sort after every real one.
-function numberOrLast(value: number | undefined): number {
-  return value ?? Number.POSITIVE_INFINITY;
-}
+// The server orders tracks without a disc tag as disc 1 (ListChildren of an album), so the
+// grouping does the same; otherwise the list would split what the server keeps together.
+const untaggedDisc = 1;
 
 /**
- * The tracks in album order: by disc, then track number; tracks without a disc or number come
- * last. The server's children order is by track number only, so discs would interleave.
- * Array sort is stable, so equal tracks keep the server's order.
- */
-export function sortTracks(tracks: readonly ItemSummary[]): ItemSummary[] {
-  return [...tracks].sort(
-    (a, b) =>
-      compareNumbers(numberOrLast(a.discNumber), numberOrLast(b.discNumber)) ||
-      compareNumbers(numberOrLast(a.number), numberOrLast(b.number)),
-  );
-}
-
-// Subtraction would yield NaN for two infinities.
-function compareNumbers(a: number, b: number): number {
-  return a === b ? 0 : a < b ? -1 : 1;
-}
-
-/**
- * Groups the tracks of an album by disc, in {@link sortTracks} order: consecutive tracks of the
- * same disc form one group.
+ * Groups the tracks of an album by disc. The server lists them by disc, track number (unnumbered
+ * last), file name and ID, also across pages, so consecutive tracks of a disc form one group.
  */
 export function groupByDisc(tracks: readonly ItemSummary[]): DiscGroup[] {
-  const groups: { disc: number | undefined; tracks: TrackRowModel[] }[] = [];
-  for (const track of sortTracks(tracks)) {
+  const groups: { disc: number; tracks: TrackRowModel[] }[] = [];
+  for (const track of tracks) {
+    const disc = track.discNumber ?? untaggedDisc;
     const last = groups.at(-1);
-    if (last !== undefined && last.disc === track.discNumber) {
+    if (last?.disc === disc) {
       last.tracks.push(toTrackRowModel(track));
     } else {
-      groups.push({ disc: track.discNumber, tracks: [toTrackRowModel(track)] });
+      groups.push({ disc, tracks: [toTrackRowModel(track)] });
     }
   }
   return groups;
@@ -83,11 +65,9 @@ export function firstPlayableTrackId(tracks: readonly ItemSummary[]): string | u
   return playQueueIds(tracks)[0];
 }
 
-/** The IDs of the playable tracks in album order: the queue Play and Shuffle hand to the player. */
+/** The IDs of the playable tracks in server (album) order: the queue Play and Shuffle hand over. */
 export function playQueueIds(tracks: readonly ItemSummary[]): string[] {
-  return sortTracks(tracks)
-    .filter((track) => track.media?.available === true)
-    .map((track) => track.id);
+  return tracks.filter((track) => track.media?.available === true).map((track) => track.id);
 }
 
 /** The track a shuffle starts with, picked by `fraction` in [0, 1); none for an empty queue. */

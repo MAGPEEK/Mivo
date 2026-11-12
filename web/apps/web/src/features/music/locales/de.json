@@ -21,6 +21,9 @@
     "albums": "Alben",
     "loading": "Alben werden geladen",
     "loadFailed": "Die Alben konnten nicht geladen werden.",
+    "loadMore": "Mehr laden",
+    "loadingMore": "Weitere Alben werden geladen",
+    "loadMoreFailed": "Weitere Alben konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
     "empty": "Dieser Künstler hat noch keine Alben."
   },
@@ -34,7 +37,6 @@
     "retry": "Erneut versuchen",
     "empty": "Dieses Album hat noch keine Titel.",
     "disc": "Disc {{number}}",
-    "discUnknown": "Weitere Titel",
     "play": "{{title}} abspielen",
     "unavailable": "Nicht verfügbar"
   }

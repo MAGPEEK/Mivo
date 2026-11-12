@@ -64,10 +64,9 @@ function TrackListBody({ tracks }: { readonly tracks: AlbumTracks }) {
   }
   return (
     <>
-      {tracks.discs.map((group, position) => (
-        // Disc numbers repeat only for a disc whose tracks are split by an untagged one.
+      {tracks.discs.map((group) => (
         <Disc
-          key={`${String(group.disc)}-${String(position)}`}
+          key={group.disc}
           group={group}
           titled={tracks.showDiscHeadings}
           queueIds={tracks.queueIds}
@@ -99,8 +98,7 @@ interface DiscProps {
 function Disc({ group, titled, queueIds }: DiscProps) {
   const { t } = useTranslation(musicNamespace);
   const headingId = useId();
-  const name =
-    group.disc === undefined ? t("tracks.discUnknown") : t("tracks.disc", { number: group.disc });
+  const name = t("tracks.disc", { number: group.disc });
   return (
     <div className="mb-4">
       {titled && (
@@ -111,7 +109,8 @@ function Disc({ group, titled, queueIds }: DiscProps) {
           {name}
         </h3>
       )}
-      <ol aria-labelledby={titled ? headingId : undefined} className="flex flex-col">
+      {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- list-style: none drops the list semantics in Safari */}
+      <ol role="list" aria-labelledby={titled ? headingId : undefined} className="flex flex-col">
         {group.tracks.map((track) => (
           <li key={track.id}>
             <TrackRow track={track} queueIds={queueIds} />
@@ -148,10 +147,11 @@ function TrackRow({
             to="/items/$itemId/play"
             params={{ itemId: track.id }}
             state={queueHandoffState({ ids: queueIds, shuffle: false })}
-            aria-label={t("tracks.play", { title: track.title })}
             className={`truncate font-medium ${stretchedLinkClass}`}
           >
-            {track.title}
+            {/* The visible title stays; assistive technology hears the action with it. */}
+            <span aria-hidden="true">{track.title}</span>
+            <span className="sr-only">{t("tracks.play", { title: track.title })}</span>
           </Link>
         ) : (
           <>

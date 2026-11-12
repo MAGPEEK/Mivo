@@ -74,7 +74,7 @@ describe("Album page", () => {
       within(discOne)
         .getAllByRole("listitem")
         .map((row) => row.textContent),
-    ).toEqual(["1Overture0:02", "2Allegro0:02"]);
+    ).toEqual(["1OverturePlay Overture0:02", "2AllegroPlay Allegro0:02"]);
     expect(within(discTwo).getByRole("link", { name: "Play Adagio" }).getAttribute("href")).toBe(
       "/items/adagio/play",
     );
@@ -98,20 +98,60 @@ describe("Album page", () => {
     });
   });
 
-  it("orders by disc and number whatever order the server lists, unnumbered tracks last", async () => {
+  it("keeps the server order and lists a track without a disc tag on disc 1", async () => {
+    // The server orders by disc (untagged counts as 1), number, unnumbered last.
     renderAlbum([
+      trackSummary("overture", { title: "Overture", discNumber: 1, number: 1 }),
+      trackSummary("allegro", { title: "Allegro", number: 2 }),
       trackSummary("bonus", { title: "Bonus", discNumber: 1 }),
       trackSummary("adagio", { title: "Adagio", discNumber: 2, number: 1 }),
-      trackSummary("allegro", { title: "Allegro", discNumber: 1, number: 2 }),
-      trackSummary("overture", { title: "Overture", discNumber: 1, number: 1 }),
     ]);
 
     const discOne = await screen.findByRole("list", { name: "Disc 1" });
     expect(
       within(discOne)
-        .getAllByRole("listitem")
-        .map((row) => row.textContent),
-    ).toEqual(["1Overture0:02", "2Allegro0:02", "Bonus0:02"]);
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["OverturePlay Overture", "AllegroPlay Allegro", "BonusPlay Bonus"]);
+    expect(screen.getByRole("list", { name: "Disc 2" })).toBeTruthy();
+  });
+
+  it("shows a loading state while the tracks load", async () => {
+    const server = createFakeServer([
+      { method: "GET", path: "/api/v1/items/album-1", respond: () => jsonResponse(albumDetail) },
+      {
+        method: "GET",
+        path: "/api/v1/items/album-1/children",
+        respond: () => new Promise<Response>(() => undefined),
+      },
+    ]);
+    renderItemPage("/items/album-1", { fetch: server.fetch });
+
+    expect(await screen.findByText("Loading tracks")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Play" }).getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("loads further track pages with Load more", async () => {
+    const many = Array.from({ length: 3 }, (_, index) =>
+      trackSummary(`t${String(index)}`, { title: `Song ${String(index)}`, number: index + 1 }),
+    );
+    const server = createFakeServer([
+      { method: "GET", path: "/api/v1/items/album-1", respond: () => jsonResponse(albumDetail) },
+      {
+        method: "GET",
+        path: "/api/v1/items/album-1/children",
+        respond: ({ url }) =>
+          url.searchParams.has("cursor")
+            ? jsonResponse({ items: many.slice(2) })
+            : jsonResponse({ items: many.slice(0, 2), nextCursor: "2" }),
+      },
+    ]);
+    renderItemPage("/items/album-1", { fetch: server.fetch });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByRole("link", { name: "Play Song 2" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
   it("plays the album from a clicked track and queues the playable tracks", async () => {

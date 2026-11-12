@@ -9,7 +9,6 @@ import {
   hasSeveralDiscs,
   playQueueIds,
   shuffleStartId,
-  sortTracks,
   toTrackRowModel,
 } from "./albumTracks";
 
@@ -119,27 +118,6 @@ describe("sortAlbumsByYear", () => {
   });
 });
 
-describe("sortTracks", () => {
-  it("orders by disc, then number, with untagged discs and unnumbered tracks last", () => {
-    const sorted = sortTracks([
-      track({ id: "unnumbered", discNumber: 1 }),
-      track({ id: "d2t1", discNumber: 2, number: 1 }),
-      track({ id: "loose", number: 1 }),
-      track({ id: "d1t2", discNumber: 1, number: 2 }),
-      track({ id: "d1t1", discNumber: 1, number: 1 }),
-    ]);
-
-    expect(sorted.map((row) => row.id)).toEqual(["d1t1", "d1t2", "unnumbered", "d2t1", "loose"]);
-  });
-
-  it("keeps the server order of equal tracks and leaves its input alone", () => {
-    const input = [track({ id: "b", number: 1 }), track({ id: "a", number: 1 })];
-
-    expect(sortTracks(input).map((row) => row.id)).toEqual(["b", "a"]);
-    expect(input.map((row) => row.id)).toEqual(["b", "a"]);
-  });
-});
-
 describe("playQueueFrom", () => {
   const tracks = [
     track({ id: "a", discNumber: 1, number: 1 }),
@@ -164,16 +142,21 @@ describe("groupByDisc", () => {
       track({ id: "a", discNumber: 1 }),
       track({ id: "b", discNumber: 1 }),
       track({ id: "c", discNumber: 2 }),
-      track({ id: "d" }),
     ]);
 
-    expect(groups.map((group) => group.disc)).toEqual([1, 2, undefined]);
-    expect(groups.map((group) => group.tracks.map((row) => row.id))).toEqual([
-      ["a", "b"],
-      ["c"],
-      ["d"],
-    ]);
+    expect(groups.map((group) => group.disc)).toEqual([1, 2]);
+    expect(groups.map((group) => group.tracks.map((row) => row.id))).toEqual([["a", "b"], ["c"]]);
     expect(hasSeveralDiscs(groups)).toBe(true);
+  });
+
+  it("counts a track without a disc tag as disc 1, like the server's order", () => {
+    const groups = groupByDisc([
+      track({ id: "a", discNumber: 1, number: 1 }),
+      track({ id: "b", number: 2 }),
+      track({ id: "c", discNumber: 2, number: 1 }),
+    ]);
+
+    expect(groups.map((group) => group.tracks.map((row) => row.id))).toEqual([["a", "b"], ["c"]]);
   });
 
   it.each([

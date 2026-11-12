@@ -74,6 +74,40 @@ describe("Artist page", () => {
     expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
   });
 
+  it("shows a loading state while the albums load", async () => {
+    const server = createFakeServer([
+      { method: "GET", path: "/api/v1/items/artist-1", respond: () => jsonResponse(artistDetail) },
+      {
+        method: "GET",
+        path: "/api/v1/items/artist-1/children",
+        respond: () => new Promise<Response>(() => undefined),
+      },
+    ]);
+    renderItemPage("/items/artist-1", { fetch: server.fetch });
+
+    expect(await screen.findByText("Loading albums")).toBeTruthy();
+  });
+
+  it("loads further album pages with Load more", async () => {
+    const server = createFakeServer([
+      { method: "GET", path: "/api/v1/items/artist-1", respond: () => jsonResponse(artistDetail) },
+      {
+        method: "GET",
+        path: "/api/v1/items/artist-1/children",
+        respond: ({ url }) =>
+          url.searchParams.has("cursor")
+            ? jsonResponse({ items: [albums[2]] })
+            : jsonResponse({ items: [albums[0]], nextCursor: "1" }),
+      },
+    ]);
+    renderItemPage("/items/artist-1", { fetch: server.fetch });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByRole("link", { name: /Early Work/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+
   it("says so when the artist has no albums", async () => {
     renderArtist([]);
 

@@ -21,6 +21,9 @@
     "albums": "Albums",
     "loading": "Loading albums",
     "loadFailed": "The albums could not be loaded.",
+    "loadMore": "Load more",
+    "loadingMore": "Loading more albums",
+    "loadMoreFailed": "More albums could not be loaded.",
     "retry": "Try again",
     "empty": "This artist has no albums yet."
   },
@@ -34,7 +37,6 @@
     "retry": "Try again",
     "empty": "This album has no tracks yet.",
     "disc": "Disc {{number}}",
-    "discUnknown": "Other tracks",
     "play": "Play {{title}}",
     "unavailable": "Unavailable"
   }

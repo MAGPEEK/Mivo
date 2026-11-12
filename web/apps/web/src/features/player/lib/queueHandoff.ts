@@ -1,6 +1,9 @@
 // How a page (an album, later playlists) hands a queue to the player: in the history entry's
 // state, not the URL, because an album can hold hundreds of tracks. The player reads it once
 // when it opens; a reload keeps it, a plain link to the same item carries none.
+//
+// History state is user-controllable (devtools, a crafted link target in another tab), so it is
+// validated strictly before it can become a queue.
 
 /** The queue a page hands to the player. */
 export interface QueueHandoff {
@@ -12,9 +15,29 @@ export interface QueueHandoff {
 
 const handoffKey = "mivoQueue";
 
+/** Most items a handed-over queue may hold. */
+export const maxHandoffIds = 5000;
+const maxIdLength = 64;
+// Item IDs are UUID-like: letters, digits and hyphens.
+const idPattern = /^[A-Za-z0-9-]+$/;
+
 /** The history state that carries `handoff` to the player route. */
 export function queueHandoffState(handoff: QueueHandoff): Record<string, unknown> {
   return { [handoffKey]: handoff };
+}
+
+function isItemId(value: unknown): value is string {
+  return typeof value === "string" && value.length <= maxIdLength && idPattern.test(value);
+}
+
+function areValidIds(ids: unknown): ids is string[] {
+  return (
+    Array.isArray(ids) &&
+    ids.length > 0 &&
+    ids.length <= maxHandoffIds &&
+    ids.every(isItemId) &&
+    new Set(ids).size === ids.length
+  );
 }
 
 function isHandoff(value: unknown): value is QueueHandoff {
@@ -22,9 +45,7 @@ function isHandoff(value: unknown): value is QueueHandoff {
     return false;
   }
   const { ids, shuffle } = value as Record<string, unknown>;
-  return (
-    Array.isArray(ids) && ids.every((id) => typeof id === "string") && typeof shuffle === "boolean"
-  );
+  return areValidIds(ids) && typeof shuffle === "boolean";
 }
 
 /**

@@ -54,7 +54,8 @@ function AlbumsBody({ albums }: { readonly albums: ArtistAlbumsState }) {
   }
   return (
     <>
-      <ul className={itemGridClass}>
+      {/* eslint-disable-next-line jsx-a11y/no-redundant-roles -- list-style: none drops the list semantics in Safari */}
+      <ul role="list" aria-label={t("artist.albums")} className={itemGridClass}>
         {albums.albums.map((album) => (
           <li key={album.id}>
             <AlbumCard album={album} />
@@ -65,9 +66,9 @@ function AlbumsBody({ albums }: { readonly albums: ArtistAlbumsState }) {
         <LoadMoreButton
           paged={albums}
           texts={{
-            loadMore: t("tracks.loadMore"),
-            loadingMore: t("artist.loading"),
-            failed: t("artist.loadFailed"),
+            loadMore: t("artist.loadMore"),
+            loadingMore: t("artist.loadingMore"),
+            failed: t("artist.loadMoreFailed"),
             retry: t("artist.retry"),
           }}
         />
