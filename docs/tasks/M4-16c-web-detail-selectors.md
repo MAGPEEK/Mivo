@@ -7,7 +7,7 @@ Files/areas: `web/apps/web/src/features/item/**`, i18n `item`
 Before pressing play the user chooses version, audio and subtitles (DT-07), and the choice is passed to the player.
 
 ## Acceptance criteria
-- [ ] Version selector appears only with more than one file (label, resolution, bit rate); default = highest quality the profile direct-plays.
+- [ ] Version selector appears only with more than one file (label, resolution, bit rate); default = the first version in the server's order (the server lists versions best-first for the requesting profile per ADR 0022; the client does not rank them; criterion amended by the orchestrator 2026-11-12).
 - [ ] Audio and subtitle selectors list the tracks of the selected version; default from the policy of M4-04a (server-provided `defaultAudioStreamIndex` / `defaultSubtitleTrackId` in the item resource, otherwise first).
 - [ ] Choice is forwarded to the player route (state, not URL secrets) and remembered per item on the device.
 - [ ] Technical chips (existing) update with the selected version.
