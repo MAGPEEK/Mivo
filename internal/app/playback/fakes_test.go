@@ -119,7 +119,12 @@ type fakeProduction struct {
 	// already cancelled when Stop ran, which a real producer would report as a crash.
 	jobContext      context.Context
 	killedByContext bool
+	// fellBack is what Fallback reports: the hardware encoder failed and software took over.
+	fellBack bool
 }
+
+// Fallback implements appplayback.FallbackReporter.
+func (production *fakeProduction) Fallback() bool { return production.fellBack }
 
 func newFakeProduction(jobContext context.Context, stopGate <-chan struct{}) *fakeProduction {
 	return &fakeProduction{
@@ -242,6 +247,8 @@ type fakeProducer struct {
 	gate         chan struct{}
 	holdSegments bool
 	stopGate     chan struct{}
+	// fallback makes every production report a fallback to software.
+	fallback bool
 }
 
 func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (appplayback.Production, error) {
@@ -258,6 +265,8 @@ func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (a
 	}
 
 	production := newFakeProduction(ctx, producer.stopGate)
+	production.fellBack = producer.fallback
+
 	if !producer.holdSegments {
 		production.writeSegment()
 	}

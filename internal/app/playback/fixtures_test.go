@@ -100,6 +100,9 @@ type environment struct {
 	options   appplayback.Options
 	// discs are the disc ports; zero leaves disc playback unconfigured.
 	discs appplayback.DiscPorts
+	// subtitles and hardware are the optional ports; nil leaves them unconfigured.
+	subtitles appplayback.SubtitleTracks
+	hardware  appplayback.HardwareStatus
 }
 
 func newEnvironment() *environment {
@@ -134,6 +137,8 @@ func (env *environment) dependencies() appplayback.Dependencies {
 		After:     env.clock.After,
 		Logger:    slog.New(slog.NewMultiHandler(slog.NewTextHandler(env.logs, nil), env.records)),
 		Discs:     env.discs,
+		Subtitles: env.subtitles,
+		Hardware:  env.hardware,
 	}
 }
 

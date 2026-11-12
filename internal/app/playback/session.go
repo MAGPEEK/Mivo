@@ -36,6 +36,15 @@ type Session struct {
 	Plan        playback.Plan
 	// StreamURL is the opaque URL the client loads, built by the StreamURLBuilder.
 	StreamURL string
+	// SubtitleMode and SubtitleTrackID report the subtitle of the plan (the track is empty
+	// when the mode is playback.SubtitleOff).
+	SubtitleMode    playback.SubtitleDelivery
+	SubtitleTrackID string
+	// SourceBitRate is the overall bit rate of the file in bits per second, 0 when unknown.
+	// OutputBitRate is what the client receives: the cap of a capped transcode, else the
+	// source's rate; 0 when unknown.
+	SourceBitRate int64
+	OutputBitRate int64
 	// StartPosition is where the stream starts in the file: the keyframe at or before the
 	// requested position when video is copied, the requested position when it is
 	// re-encoded, and 0 for direct play, whose stream is the whole file (the player seeks in
@@ -67,6 +76,15 @@ type StartRequest struct {
 	StartPosition time.Duration
 	// AudioStreamIndex selects an audio stream by its ffprobe index; nil plays the default.
 	AudioStreamIndex *int
+	// SubtitleTrackID selects a subtitle by its track ID; nil applies the profile's track
+	// preference, a pointer to "" switches subtitles off.
+	SubtitleTrackID *string
+	// MaxBitrate caps the whole stream in bits per second; playback.OriginalQuality (0) plays
+	// the source as it is.
+	MaxBitrate int64
+	// AllowDegradeSubtitles starts without the subtitle when its burn-in is impossible or
+	// the re-encoding limit is reached, with warning subtitle_burn_in_unavailable; false fails.
+	AllowDegradeSubtitles bool
 	// ReplacesSessionID names the session this one replaces, for example after a seek outside
 	// the produced range. The new session takes over its slot when it is reserved, so the
 	// limits never refuse the seek; the old session keeps playing until the new production

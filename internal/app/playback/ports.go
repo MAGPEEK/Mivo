@@ -76,6 +76,16 @@ type Job struct {
 	// StartPosition is where FFmpeg seeks to (-ss) before reading; 0 starts at the
 	// beginning. For copied video it is already the keyframe position.
 	StartPosition time.Duration
+	// BurnInSubtitle is the track the producer draws into the video (the plan's subtitle mode
+	// is playback.SubtitleBurnIn); nil otherwise. For an external track the producer finds
+	// the file through the track ID.
+	BurnInSubtitle *playback.SubtitleTrack
+	// MaxBitrate is the cap of the whole stream in bits per second, 0 for none (the video
+	// decision of Plan carries the same value).
+	MaxBitrate int64
+	// Encoder is the video encoder of a transcode; the zero value when no video is
+	// re-encoded.
+	Encoder playback.Encoder
 	// OutputDir is the session's workspace directory that receives the playlist and segments.
 	OutputDir string
 }
@@ -91,6 +101,27 @@ type StreamProducer interface {
 // on purpose, so the kill's exit error is not a failure. It wraps domain.ErrNotFound, because
 // a stopped session no longer exists for its clients.
 var ErrProductionStopped = fmt.Errorf("production stopped: %w", domain.ErrNotFound)
+
+// SubtitleTracks lists the subtitle files next to a media file. It is optional: without it
+// the decision knows the embedded tracks only. Implemented by adapters/sqlite.
+type SubtitleTracks interface {
+	// Tracks returns the external subtitle tracks of the file, empty when there are none.
+	Tracks(ctx context.Context, fileID string) ([]playback.SubtitleTrack, error)
+}
+
+// HardwareStatus records the outcome of hardware encodes. It is optional. Implemented by
+// app/transcoder (M4-13d).
+type HardwareStatus interface {
+	// MarkDegraded excludes the encoders of the API until the next successful test.
+	MarkDegraded(api playback.HardwareAPI)
+}
+
+// FallbackReporter is implemented by a Production that retried in software because its
+// hardware encoder failed before the first segment. It is optional.
+type FallbackReporter interface {
+	// Fallback reports that the production runs in software after a hardware failure.
+	Fallback() bool
+}
 
 // Production is one running FFmpeg process writing HLS into a session's workspace.
 // Implementations are safe for concurrent use.

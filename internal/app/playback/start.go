@@ -50,16 +50,13 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 		return Session{}, err
 	}
 
-	entry, err := s.newEntry(prepared, request.ReplacesSessionID)
+	// A viewer check (M7-14) belongs here: after the plan, before a slot is taken.
+	prepared, entry, err := s.reserveSlot(prepared, request)
 	if err != nil {
 		return Session{}, err
 	}
 
 	id := entry.session.ID
-
-	if err := s.sessions.reserve(entry); err != nil {
-		return Session{}, err
-	}
 
 	// Close waits until this start has activated or torn down what it started.
 	defer s.sessions.untrack()
@@ -83,16 +80,55 @@ func (s *Service) start(ctx context.Context, request StartRequest) (Session, err
 	}
 
 	if started.production != nil {
-		s.follow(id, started.production)
+		s.follow(id, started.production, s.encoderFor(prepared.plan))
 	}
 
 	return session, nil
 }
 
+// reserveSlot creates the session record and takes its slot. A burn-in that the limit
+// refuses falls back to no subtitle when the request allows it; the replaced session, whose
+// slot counts as freed by the reservation, keeps running whenever this fails.
+func (s *Service) reserveSlot(prepared preparedStart, request StartRequest) (preparedStart, *sessionEntry, error) {
+	entry, err := s.newEntry(prepared, request.ReplacesSessionID)
+	if err != nil {
+		return preparedStart{}, nil, err
+	}
+
+	reserveErr := s.sessions.reserve(entry)
+	if reserveErr == nil {
+		return prepared, entry, nil
+	}
+
+	if !errors.Is(reserveErr, ErrSessionLimitReached) || !request.AllowDegradeSubtitles ||
+		prepared.plan.Subtitle.Mode != playback.SubtitleBurnIn {
+		return preparedStart{}, nil, reserveErr
+	}
+
+	plan, err := withoutSubtitle(prepared.input)
+	if err != nil {
+		return preparedStart{}, nil, reserveErr
+	}
+
+	prepared.plan = plan
+
+	if entry, err = s.newEntry(prepared, request.ReplacesSessionID); err != nil {
+		return preparedStart{}, nil, err
+	}
+
+	if err := s.sessions.reserve(entry); err != nil {
+		return preparedStart{}, nil, err
+	}
+
+	return prepared, entry, nil
+}
+
 // preparedStart is a decided plan for a file whose path was resolved.
 type preparedStart struct {
-	playable  PlayableFile
-	plan      playback.Plan
+	playable PlayableFile
+	plan     playback.Plan
+	// input is what the plan was decided from, kept to decide again without a subtitle.
+	input     playback.Input
 	inputPath string
 	// disc is the title of a disc source; nil for a single file. inputPath is then the
 	// absolute disc root.
@@ -103,26 +139,38 @@ type preparedStart struct {
 // deleted file or one that escapes its library fails here for direct play too, before a
 // slot is taken. A disc also resolves its main title.
 func (s *Service) prepare(ctx context.Context, request StartRequest) (preparedStart, error) {
-	playable, plan, err := s.decide(ctx, request)
+	prepared, err := s.decide(ctx, request)
 	if err != nil {
 		return preparedStart{}, err
 	}
 
+	playable := prepared.playable
+
 	if playable.File.Layout.IsDisc() {
-		discPath, disc, err := s.prepareDisc(ctx, playable)
+		prepared.inputPath, prepared.disc, err = s.prepareDisc(ctx, playable)
 		if err != nil {
 			return preparedStart{}, err
 		}
 
-		return preparedStart{playable: playable, plan: plan, inputPath: discPath, disc: disc}, nil
+		return prepared, nil
 	}
 
-	inputPath, err := s.paths.Resolve(playable.LibraryRoot, playable.File.RelativePath)
+	prepared.inputPath, err = s.paths.Resolve(playable.LibraryRoot, playable.File.RelativePath)
 	if err != nil {
 		return preparedStart{}, s.resolveFailure(ctx, playable.File, err)
 	}
 
-	return preparedStart{playable: playable, plan: plan, inputPath: inputPath}, nil
+	return prepared, nil
+}
+
+// encoderFor is the video encoder of the plan's transcode; the zero value when no video is
+// re-encoded.
+func (s *Service) encoderFor(plan playback.Plan) playback.Encoder {
+	if video, found := plan.Video(); !found || video.Action != playback.ActionTranscode {
+		return playback.Encoder{}
+	}
+
+	return playback.ChooseVideoEncoder(s.capabilities, s.policy.HardwareAcceleration)
 }
 
 // resolveFailure reports a file that cannot be resolved. A file that leaves its library
@@ -143,37 +191,34 @@ func (s *Service) resolveFailure(ctx context.Context, file media.File, err error
 }
 
 // decide validates the profile, loads the file and runs the decision engine.
-func (s *Service) decide(ctx context.Context, request StartRequest) (PlayableFile, playback.Plan, error) {
+func (s *Service) decide(ctx context.Context, request StartRequest) (preparedStart, error) {
 	if err := request.Profile.Validate(); err != nil {
-		return PlayableFile{}, playback.Plan{}, err
+		return preparedStart{}, err
 	}
 
 	playable, err := s.files.PlayableFile(ctx, request.FileID)
 	if err != nil {
-		return PlayableFile{}, playback.Plan{}, fmt.Errorf("load file: %w", err)
+		return preparedStart{}, fmt.Errorf("load file: %w", err)
 	}
 
 	if !playable.File.Probed() {
-		return PlayableFile{}, playback.Plan{}, fmt.Errorf("file has no probe result (%s): %w",
+		return preparedStart{}, fmt.Errorf("file has no probe result (%s): %w",
 			playable.File.ProbeError, domain.ErrUnsupported)
 	}
 
-	plan, err := playback.Decide(playback.Input{
-		Description:  playable.File.Description,
-		Layout:       playable.File.Layout,
-		Profile:      request.Profile,
-		Capabilities: s.capabilities,
-		Request: playback.Request{
-			AudioStreamIndex: request.AudioStreamIndex,
-			StartPosition:    request.StartPosition,
-		},
-		Policy: s.policy,
-	})
+	builder := inputBuilder{capabilities: s.capabilities, policy: s.policy, subtitles: s.subtitles}
+
+	input, err := builder.build(ctx, playable, request)
 	if err != nil {
-		return PlayableFile{}, playback.Plan{}, err
+		return preparedStart{}, err
 	}
 
-	return playable, plan, nil
+	plan, err := playback.Decide(input)
+	if err != nil {
+		return preparedStart{}, err
+	}
+
+	return preparedStart{playable: playable, plan: plan, input: input}, nil
 }
 
 // newEntry builds the registry record of a new session.
@@ -193,6 +238,9 @@ func (s *Service) newEntry(prepared preparedStart, replaces string) (*sessionEnt
 			StreamURL: s.urls.StreamURL(id, plan.Delivery),
 			Duration:  file.Description.Duration,
 			CreatedAt: now, LastAccessedAt: now,
+			SubtitleMode: plan.Subtitle.Mode, SubtitleTrackID: plan.Subtitle.TrackID,
+			SourceBitRate: file.Description.BitRate,
+			OutputBitRate: outputBitRate(plan, file.Description.BitRate),
 		},
 		replaces:     replaces,
 		reencodes:    plan.Mode == playback.ModeTranscode,
@@ -257,6 +305,12 @@ func (s *Service) produce(ctx context.Context, request productionRequest) (activ
 		SessionID: id, Plan: prepared.plan,
 		LibraryRoot: prepared.playable.LibraryRoot, RelativePath: prepared.playable.File.RelativePath,
 		InputPath: prepared.inputPath, StartPosition: start, OutputDir: directory,
+		BurnInSubtitle: burnInTrack(prepared.input, prepared.plan),
+		Encoder:        s.encoderFor(prepared.plan),
+	}
+
+	if video, found := prepared.plan.Video(); found {
+		job.MaxBitrate = video.MaxBitrate
 	}
 
 	if disc := prepared.disc; disc != nil {

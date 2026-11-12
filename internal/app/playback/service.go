@@ -23,7 +23,11 @@ const minReencodingSessions = 1
 // Dependencies lists the ports and helpers Service needs; all are required except Discs.
 type Dependencies struct {
 	// Discs plays disc sources; without them a disc fails with ErrDiscPlaybackUnavailable.
-	Discs     DiscPorts
+	Discs DiscPorts
+	// Subtitles lists external subtitle tracks; without it only embedded tracks exist.
+	Subtitles SubtitleTracks
+	// Hardware learns about failed hardware encoders; optional.
+	Hardware  HardwareStatus
 	Files     FileSource
 	Paths     PathResolver
 	Keyframes KeyframeLocator
@@ -55,6 +59,8 @@ type Service struct {
 	paths        PathResolver
 	keyframes    KeyframeLocator
 	discs        DiscPorts
+	subtitles    SubtitleTracks
+	hardware     HardwareStatus
 	producer     StreamProducer
 	workspace    Workspace
 	urls         StreamURLBuilder
@@ -88,6 +94,8 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 		paths:        dependencies.Paths,
 		keyframes:    dependencies.Keyframes,
 		discs:        dependencies.Discs,
+		subtitles:    dependencies.Subtitles,
+		hardware:     dependencies.Hardware,
 		producer:     dependencies.Producer,
 		workspace:    dependencies.Workspace,
 		urls:         dependencies.URLs,

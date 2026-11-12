@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/magpeek/mivo/internal/domain/playback"
 )
 
 // FailureTranscodeFailed is the failure code of a session whose FFmpeg exited with an error
@@ -12,7 +14,7 @@ const FailureTranscodeFailed = "transcode_failed"
 
 // follow starts a watcher that moves an HLS session's state with its production. It runs
 // under the process context and ends with the production or on Close.
-func (s *Service) follow(id string, production Production) {
+func (s *Service) follow(id string, production Production, encoder playback.Encoder) {
 	if !s.sessions.track() {
 		return
 	}
@@ -20,18 +22,20 @@ func (s *Service) follow(id string, production Production) {
 	go func() {
 		defer s.sessions.untrack()
 
-		s.followProduction(id, production)
+		s.followProduction(id, production, encoder)
 	}()
 }
 
 // followProduction waits for the first segment (ready) and then for the exit (ended or
 // failed). Production.Ready returns the exit result at once after Done (port contract).
-func (s *Service) followProduction(id string, production Production) {
+func (s *Service) followProduction(id string, production Production, encoder playback.Encoder) {
 	if err := production.Ready(s.processContext); err != nil {
 		s.finish(id, err)
 
 		return
 	}
+
+	s.reportHardwareFallback(production, encoder)
 
 	s.sessions.transition(id, StateReady, "")
 
@@ -40,6 +44,20 @@ func (s *Service) followProduction(id string, production Production) {
 		s.finish(id, production.Ready(s.processContext))
 	case <-s.processContext.Done():
 	}
+}
+
+// reportHardwareFallback marks the hardware encoder degraded when its production fell back to
+// software, so later sessions skip it (ADR 0030 section 5). The producer reports it once the
+// first segment exists, which is why it is checked after Ready.
+func (s *Service) reportHardwareFallback(production Production, encoder playback.Encoder) {
+	reporter, ok := production.(FallbackReporter)
+	if !ok || s.hardware == nil || !encoder.Hardware || !reporter.Fallback() {
+		return
+	}
+
+	s.hardware.MarkDegraded(encoder.API)
+	s.logger.WarnContext(s.processContext, "hardware encoder failed, session runs in software",
+		"encoder", encoder.Name, "api", string(encoder.API))
 }
 
 // finish records how a production ended. A stopped production and a shutdown are no
