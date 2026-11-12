@@ -7,6 +7,7 @@ import { Backdrop } from "./Backdrop";
 import { PlayAction } from "./PlayAction";
 import { Summary } from "./Summary";
 import { TitleBlock } from "./TitleBlock";
+import { TrailerAction } from "./TrailerAction";
 
 /** Props of {@link DetailLayout}. */
 export interface DetailLayoutProps {
@@ -32,6 +33,17 @@ const artworkColumns: Readonly<Record<PosterAspect, { className: string; sizes: 
   still: { className: "w-full sm:w-96", sizes: "(min-width: 40rem) 24rem, 100vw" },
   square: { className: "w-40 sm:w-56", sizes: "(min-width: 40rem) 14rem, 10rem" },
 };
+
+// Play, the trailer and the actions of the kind (watched toggle, overflow menu).
+function ActionBar({ item, children }: { readonly item: ItemView; readonly children?: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-start gap-3">
+      <PlayAction play={item.play} />
+      <TrailerAction trailerId={item.trailerId} />
+      {children}
+    </div>
+  );
+}
 
 /**
  * The shared top of every detail page (DT-01…03, DT-06): blurred backdrop, artwork column with
@@ -76,10 +88,7 @@ export function DetailLayout({
             above={above}
             {...(leadFacts === undefined ? {} : { leadFacts })}
           />
-          <div className="flex flex-wrap items-start gap-3">
-            <PlayAction play={item.play} />
-            {actions}
-          </div>
+          <ActionBar item={item}>{actions}</ActionBar>
           <Summary tagline={item.tagline} summary={item.summary} />
           {children}
         </div>

@@ -3,6 +3,8 @@ import type {
   ItemAncestor,
   ItemDetail,
   ItemKind,
+  ItemPerson,
+  ItemSummary,
   MediaFile,
   PersonRole,
   ViewerState,
@@ -13,6 +15,7 @@ import { resumeSeconds } from "../../../shared/lib/watchState";
 import { formatDuration } from "../../library";
 import { formatAirDate } from "./airDate";
 import type { DurationParts } from "./duration";
+import { firstTrailer } from "./extras";
 import { formatFileSize } from "./fileSize";
 import { languageName } from "./languageName";
 import { playTarget, type UnavailableReason } from "./playTarget";
@@ -111,6 +114,12 @@ export interface ItemView {
   readonly metadataSources: readonly string[];
   /** The profile's watch state; `undefined` without any, and for kinds that have none. */
   readonly viewerState: ViewerState | undefined;
+  /** Credited people in metadata order; empty when the item has none. */
+  readonly people: readonly ItemPerson[];
+  /** Extras of a movie or show, as the server orders them; empty for other kinds. */
+  readonly extras: readonly ItemSummary[];
+  /** ID of the first trailer extra, which the trailer button plays; `undefined` without one. */
+  readonly trailerId: string | undefined;
 }
 
 /** The translated texts the view needs; the hook builds them from i18next. */
@@ -180,6 +189,9 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     play: playView(item, texts),
     metadataSources: item.metadataSources ?? [],
     viewerState: item.viewerState,
+    people: item.people ?? [],
+    extras: item.extras ?? [],
+    trailerId: firstTrailer(item.extras ?? [])?.id,
     ...fileView,
     facts:
       item.kind === "audiobook"

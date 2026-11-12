@@ -5,6 +5,7 @@ import type { ChildOrder } from "../lib/itemSearch";
 import type { ItemView } from "../lib/itemView";
 import { ChildrenList } from "./ChildrenList";
 import { DetailLayout } from "./DetailLayout";
+import { ItemExtras } from "./ItemExtras";
 import { AncestorLinks, SiblingArrows } from "./ItemNavigation";
 
 /** Props of the show and season pages. */
@@ -27,6 +28,7 @@ export function ShowPage({ headingRef, itemId, item, actions }: ShowPageProps) {
     <article>
       <DetailLayout headingRef={headingRef} item={item} aspect="poster" actions={actions} />
       <ChildrenList itemId={itemId} childKind="season" order="asc" />
+      <ItemExtras item={item} />
     </article>
   );
 }

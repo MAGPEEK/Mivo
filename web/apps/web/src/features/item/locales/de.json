@@ -132,6 +132,33 @@
     "more": "Weitere Wiedergabeoptionen",
     "fromStart": "Von Anfang an abspielen"
   },
+  "cast": {
+    "heading": "Besetzung & Crew",
+    "role": {
+      "actor": "Darsteller",
+      "director": "Regie",
+      "writer": "Drehbuch",
+      "producer": "Produktion",
+      "guest_star": "Gaststar",
+      "author": "Autor",
+      "narrator": "Sprecher"
+    }
+  },
+  "extras": {
+    "type": {
+      "trailer": "Trailer",
+      "featurette": "Featurettes",
+      "behind_the_scenes": "Hinter den Kulissen",
+      "deleted_scene": "Geschnittene Szenen",
+      "interview": "Interviews",
+      "scene": "Szenen",
+      "short": "Kurzfilme",
+      "other": "Weitere Extras"
+    }
+  },
+  "trailer": {
+    "label": "Trailer"
+  },
   "watched": {
     "mark": "Als gesehen markieren",
     "unmark": "Als ungesehen markieren",

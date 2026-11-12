@@ -132,6 +132,33 @@
     "more": "More ways to play",
     "fromStart": "Play from start"
   },
+  "cast": {
+    "heading": "Cast & crew",
+    "role": {
+      "actor": "Actor",
+      "director": "Director",
+      "writer": "Writer",
+      "producer": "Producer",
+      "guest_star": "Guest star",
+      "author": "Author",
+      "narrator": "Narrator"
+    }
+  },
+  "extras": {
+    "type": {
+      "trailer": "Trailers",
+      "featurette": "Featurettes",
+      "behind_the_scenes": "Behind the scenes",
+      "deleted_scene": "Deleted scenes",
+      "interview": "Interviews",
+      "scene": "Scenes",
+      "short": "Shorts",
+      "other": "More extras"
+    }
+  },
+  "trailer": {
+    "label": "Trailer"
+  },
   "watched": {
     "mark": "Mark as watched",
     "unmark": "Mark as unwatched",

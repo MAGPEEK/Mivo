@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { FileView, ItemView } from "../lib/itemView";
 import { itemNamespace } from "../locales";
 import { DetailLayout } from "./DetailLayout";
+import { ItemExtras } from "./ItemExtras";
 import { TrackList } from "./TrackList";
 
 /** Props of {@link ItemDetails}. */
@@ -53,6 +54,7 @@ export function ItemDetails({ headingRef, item, above, leadFacts, actions }: Ite
         />
         {item.file !== undefined && <FileSection file={item.file} />}
       </div>
+      <ItemExtras item={item} />
     </article>
   );
 }
