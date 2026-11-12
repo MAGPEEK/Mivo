@@ -36,6 +36,8 @@ type harness struct {
 	photos scan.PhotoPorts
 	// discs are the disc ports; zero stores every disc as disc_unsupported.
 	discs scan.DiscPorts
+	// subtitles are the optional external subtitle ports.
+	subtitles scan.SubtitlePorts
 	// finished is the optional Finished callback.
 	// metadataRefresher, when set, replaces the recording refresher with the real one.
 	metadataRefresher *scan.MetadataRefresher
@@ -90,6 +92,7 @@ func (h *harness) dependencies() scan.Dependencies {
 		Audiobooks: h.audiobooks,
 		Photos:     h.photos,
 		Discs:      h.discs,
+		Subtitles:  h.subtitles,
 	}
 
 	// A nil pointer in an interface field would count as set.

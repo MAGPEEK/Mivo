@@ -131,6 +131,10 @@ func (scanRun *runV2) steps(ctx context.Context) error {
 		return err
 	}
 
+	if err := scanRun.scanSubtitles(ctx, files); err != nil {
+		return err
+	}
+
 	return scanRun.finishSidecars(ctx, files)
 }
 

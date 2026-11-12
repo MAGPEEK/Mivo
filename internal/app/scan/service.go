@@ -39,6 +39,9 @@ type Dependencies struct {
 	// Discs holds the ports that resolve and probe disc titles; without them discs are
 	// skipped and stored entries at or below them kept (DiscPorts).
 	Discs DiscPorts
+	// Subtitles holds the optional ports that record external subtitle files; without them the
+	// scan leaves subtitles alone (SubtitlePorts).
+	Subtitles SubtitlePorts
 	// Finished, when set, is called after every scan ended, whatever its outcome.
 	Finished func(ctx context.Context, libraryID string)
 	// Enrichment, when set, queues online enrichment of the items a scan refreshed.
@@ -65,6 +68,7 @@ type Service struct {
 	audiobook AudiobookPorts
 	photo     PhotoPorts
 	discs     DiscPorts
+	subtitles SubtitlePorts
 	finished  func(ctx context.Context, libraryID string)
 	enrich    EnrichmentRequester
 	ids       IDGenerator
@@ -127,6 +131,7 @@ func NewService(dependencies Dependencies) (*Service, error) {
 		audiobook:   dependencies.Audiobooks,
 		photo:       dependencies.Photos,
 		discs:       dependencies.Discs,
+		subtitles:   dependencies.Subtitles,
 		finished:    dependencies.Finished,
 		enrich:      dependencies.Enrichment,
 		libraries:   dependencies.Libraries,
