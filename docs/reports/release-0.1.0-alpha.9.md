@@ -3,8 +3,9 @@
 Date: 2026-11-12. Release commit: `18b812e1f2995c2b059006fa8ddd58f1c77eb1a3`. Standing owner approval
 (CLAUDE.md release rule 6). HEAD == `origin/main`, tree clean. No `latest` tag.
 
-**Status:** the Docker image is published. The SPKs, the git tag `v0.1.0-alpha.9` and the GitHub
-pre-release are NOT published: the emulated Synology smoke (a real gate) failed, see below.
+**Status:** the Docker image is published, the git tag `v0.1.0-alpha.9` (on 18b812e) and a Docker-only GitHub
+pre-release exist (https://github.com/MAGPEEK/Mivo/releases/tag/v0.1.0-alpha.9, no assets). The SPKs are NOT part of
+this release: the emulated Synology smoke (a real gate) failed, see below; they follow with 0.1.0-alpha.10.
 
 ## Contents
 
@@ -69,6 +70,6 @@ the three SPKs under a new version. armv8 and armv7 emulated runs were not done 
 
 ## Not done
 
-Tag `v0.1.0-alpha.9`, GitHub pre-release, assets, copy to `Mivo-SPK-Test/2026-11-12-alpha.9/`. The Docker image
+SPK assets and the copy to `Mivo-SPK-Test/2026-11-12-alpha.9/` (tag and Docker-only pre-release were created afterwards). The Docker image
 `alpha.9` is therefore a Docker-only version; the SPKs follow as the next version (a published version is never
 changed).
