@@ -127,10 +127,71 @@ type fakeProduction struct {
 	killedByContext bool
 	// fellBack is what Fallback reports: the hardware encoder failed and software took over.
 	fellBack bool
+	// progress is what Progress reports; noPause makes Pausable report false; paused, pauses
+	// and resumes record the throttle calls, pausedAtStop the state when Stop ran.
+	progress     appplayback.Progress
+	noPause      bool
+	paused       bool
+	pauses       int
+	resumes      int
+	pausedAtStop bool
 }
 
 // Fallback implements appplayback.FallbackReporter.
 func (production *fakeProduction) Fallback() bool { return production.fellBack }
+
+// Progress implements appplayback.ProgressReporter.
+func (production *fakeProduction) Progress() appplayback.Progress {
+	production.mutex.Lock()
+	defer production.mutex.Unlock()
+
+	return production.progress
+}
+
+// setOutputTime moves the media time the production reports.
+func (production *fakeProduction) setOutputTime(outputTime time.Duration) {
+	production.mutex.Lock()
+	production.progress.OutputTime = outputTime
+	production.mutex.Unlock()
+}
+
+func (production *fakeProduction) setSpeedAndBitRate(speed float64, bitRate int64) {
+	production.mutex.Lock()
+	production.progress.Speed, production.progress.BitRate = speed, bitRate
+	production.mutex.Unlock()
+}
+
+// Pausable implements appplayback.Pausable.
+func (production *fakeProduction) Pausable() bool { return !production.noPause }
+
+// Pause implements appplayback.Pausable.
+func (production *fakeProduction) Pause() error {
+	production.mutex.Lock()
+	defer production.mutex.Unlock()
+
+	production.paused = true
+	production.pauses++
+
+	return nil
+}
+
+// Resume implements appplayback.Pausable.
+func (production *fakeProduction) Resume() error {
+	production.mutex.Lock()
+	defer production.mutex.Unlock()
+
+	production.paused = false
+	production.resumes++
+
+	return nil
+}
+
+func (production *fakeProduction) isPaused() bool {
+	production.mutex.Lock()
+	defer production.mutex.Unlock()
+
+	return production.paused
+}
 
 func newFakeProduction(jobContext context.Context, stopGate <-chan struct{}) *fakeProduction {
 	return &fakeProduction{
@@ -186,6 +247,7 @@ func (production *fakeProduction) hasSegment() bool {
 func (production *fakeProduction) Stop() {
 	production.mutex.Lock()
 	production.stops++
+	production.pausedAtStop = production.pausedAtStop || production.paused
 
 	if production.jobContext.Err() != nil {
 		production.killedByContext = true
@@ -255,6 +317,8 @@ type fakeProducer struct {
 	stopGate     chan struct{}
 	// fallback makes every production report a fallback to software.
 	fallback bool
+	// noPause makes every production report that it cannot be paused.
+	noPause bool
 }
 
 func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (appplayback.Production, error) {
@@ -272,6 +336,7 @@ func (producer *fakeProducer) Start(ctx context.Context, job appplayback.Job) (a
 
 	production := newFakeProduction(ctx, producer.stopGate)
 	production.fellBack = producer.fallback
+	production.noPause = producer.noPause
 
 	if !producer.holdSegments {
 		production.writeSegment()

@@ -111,6 +111,8 @@ type StreamAccess struct {
 	production Production
 	// lease is shared by every copy of the access, so releasing one copy releases all.
 	lease *accessLease
+	// noteSegment feeds the throttle controller; nil on the zero value.
+	noteSegment func(index int)
 }
 
 // accessLease ends one access exactly once.

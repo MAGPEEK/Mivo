@@ -51,6 +51,9 @@ type Options struct {
 	// MaxTranscodeSessions limits concurrent sessions that re-encode a stream (OD-4 A,
 	// default 2); between 1 and MaxFFmpegSessions.
 	MaxTranscodeSessions int
+	// ThrottleAhead pauses a production that is this far ahead of the viewer (ADR 0030
+	// section 2); 0 turns throttling off.
+	ThrottleAhead time.Duration
 }
 
 // Service implements the playback session use cases. It is safe for concurrent use.
@@ -71,6 +74,8 @@ type Service struct {
 	capabilities playback.ServerCapabilities
 	policy       playback.Policy
 	sessions     *registry
+	// throttleAhead is the allowed lead of a production over the viewer; 0 disables.
+	throttleAhead time.Duration
 
 	// processContext outlives every request: FFmpeg, the reaper and the production watchers
 	// run under it, never under a request context (ADR 0024). Close cancels it.
@@ -90,21 +95,22 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 	processContext, cancelProcesses := context.WithCancel(context.Background())
 
 	service := &Service{
-		files:        dependencies.Files,
-		paths:        dependencies.Paths,
-		keyframes:    dependencies.Keyframes,
-		discs:        dependencies.Discs,
-		subtitles:    dependencies.Subtitles,
-		hardware:     dependencies.Hardware,
-		producer:     dependencies.Producer,
-		workspace:    dependencies.Workspace,
-		urls:         dependencies.URLs,
-		ids:          dependencies.IDs,
-		clock:        dependencies.Clock,
-		after:        dependencies.After,
-		logger:       dependencies.Logger,
-		capabilities: options.Capabilities,
-		policy:       options.Policy,
+		files:         dependencies.Files,
+		paths:         dependencies.Paths,
+		keyframes:     dependencies.Keyframes,
+		discs:         dependencies.Discs,
+		subtitles:     dependencies.Subtitles,
+		hardware:      dependencies.Hardware,
+		producer:      dependencies.Producer,
+		workspace:     dependencies.Workspace,
+		urls:          dependencies.URLs,
+		ids:           dependencies.IDs,
+		clock:         dependencies.Clock,
+		after:         dependencies.After,
+		logger:        dependencies.Logger,
+		capabilities:  options.Capabilities,
+		policy:        options.Policy,
+		throttleAhead: options.ThrottleAhead,
 		sessions: newRegistry(sessionLimits{
 			maxReencoding: options.MaxTranscodeSessions,
 			maxFFmpeg:     MaxFFmpegSessions,
@@ -115,6 +121,7 @@ func NewService(dependencies Dependencies, options Options) (*Service, error) {
 	}
 
 	service.startReaper()
+	service.startThrottle()
 
 	return service, nil
 }
@@ -148,6 +155,10 @@ func (dependencies Dependencies) validate() error {
 }
 
 func (options Options) validate() error {
+	if options.ThrottleAhead < 0 {
+		return fmt.Errorf("throttle lead %s is negative: %w", options.ThrottleAhead, domain.ErrInvalid)
+	}
+
 	if options.MaxTranscodeSessions < minReencodingSessions || options.MaxTranscodeSessions > MaxFFmpegSessions {
 		return fmt.Errorf("re-encoding session limit %d outside %d..%d: %w",
 			options.MaxTranscodeSessions, minReencodingSessions, MaxFFmpegSessions, domain.ErrInvalid)
@@ -189,6 +200,7 @@ func (s *Service) Access(ctx context.Context, id string) (StreamAccess, error) {
 	}
 
 	access.lease = &accessLease{end: func() { s.sessions.endAccess(entry, s.clock()) }}
+	access.noteSegment = func(index int) { s.sessions.noteSegment(entry, index) }
 
 	return access, nil
 }
@@ -234,6 +246,7 @@ func (s *Service) teardown(ctx context.Context, entry *sessionEntry) {
 	}
 
 	if entry.production != nil {
+		resumeBeforeStop(entry, s.sessions.wasPaused(entry))
 		entry.production.Stop()
 	}
 

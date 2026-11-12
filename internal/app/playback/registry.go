@@ -59,6 +59,14 @@ type sessionEntry struct {
 	// the session (ADR 0024, Notes M7-14).
 	owner string
 
+	// encoder, clientName are fixed at start and only shown by List. highestSegment is the
+	// highest HLS segment a client requested and paused is set by the throttle controller;
+	// both are guarded by the registry lock.
+	encoder        playback.Encoder
+	clientName     string
+	highestSegment int
+	paused         bool
+
 	libraryRoot  string
 	relativePath string
 	contentType  string
