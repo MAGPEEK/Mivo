@@ -1,13 +1,22 @@
 import { Link } from "@tanstack/react-router";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
-import { FilmIcon, Poster, ScreenIcon, Skeleton, stretchedLinkClass } from "../../../shared/ui";
-import { WatchBadgeOverlay } from "../../library";
+import { rowCardSizes } from "../../../shared/lib/rowScroll";
+import {
+  MediaRow,
+  Poster,
+  ScreenIcon,
+  Skeleton,
+  stretchedLinkClass,
+  type RowCardProps,
+} from "../../../shared/ui";
+import { ViewControls, WatchBadgeOverlay, useViewPreference } from "../../library";
 import { useItemChildren, type ItemChildren } from "../hooks/useItemChildren";
 import type { ChildRow } from "../lib/childRow";
 import { oppositeOrder, searchForOrder, type ChildOrder } from "../lib/itemSearch";
 import { itemNamespace } from "../locales";
+import { EpisodeGrid } from "./EpisodeGrid";
 
 /** Props of {@link ChildrenList}. */
 export interface ChildrenListProps {
@@ -20,31 +29,96 @@ export interface ChildrenListProps {
 
 const buttonClass =
   "rounded-md border border-divider bg-surface px-4 py-2 text-sm font-medium text-text hover:bg-surface-raised aria-disabled:cursor-not-allowed aria-disabled:text-text-muted";
-const seasonGridClass =
-  "grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8";
-const seasonPosterSizes =
-  "(min-width: 1280px) 12.5vw, (min-width: 1024px) 17vw, (min-width: 768px) 25vw, (min-width: 640px) 34vw, 50vw";
-const episodeStillSizes = "10rem";
 const placeholderIconClass = "size-1/4";
 
 /**
- * The seasons of a show as a poster grid, or the episodes of a season as a list with 16:9
- * stills, page by page. Only the episode list can be reversed.
+ * The seasons of a show as a scrolling poster row, or the episodes of a season in the device's
+ * view style, page by page. Only the episode list can be reversed.
  */
 export function ChildrenList({ itemId, childKind, order }: ChildrenListProps) {
+  return childKind === "season" ? (
+    <SeasonsSection itemId={itemId} />
+  ) : (
+    <EpisodesSection itemId={itemId} order={order} />
+  );
+}
+
+function SeasonsSection({ itemId }: { readonly itemId: string }) {
   const { t } = useTranslation(itemNamespace);
-  const headingId = useId();
+  const list = useItemChildren(itemId, "asc");
+  return (
+    <ChildrenFrame list={list} heading={t("season.list")} hasToolbar={false}>
+      {(rows) => (
+        <MediaRow
+          title={t("season.list")}
+          items={rows}
+          format="poster"
+          getKey={(row) => row.id}
+          renderCard={(row, card) => <SeasonCard row={row} card={card} />}
+        />
+      )}
+    </ChildrenFrame>
+  );
+}
+
+function EpisodesSection({
+  itemId,
+  order,
+}: {
+  readonly itemId: string;
+  readonly order: ChildOrder;
+}) {
+  const { t } = useTranslation(itemNamespace);
   const list = useItemChildren(itemId, order);
-  const isEpisodes = childKind === "episode";
+  const view = useViewPreference();
+  return (
+    <ChildrenFrame
+      list={list}
+      heading={t("episode.list")}
+      hasToolbar
+      toolbar={
+        <>
+          <OrderToggle itemId={itemId} order={order} />
+          <ViewControls view={view} />
+        </>
+      }
+    >
+      {(rows) => <EpisodeGrid rows={rows} viewStyle={view.viewStyle} cardStep={view.cardStep} />}
+    </ChildrenFrame>
+  );
+}
+
+interface ChildrenFrameProps {
+  readonly list: ItemChildren;
+  readonly heading: string;
+  /** Whether the section draws its own heading row; a {@link MediaRow} brings its own. */
+  readonly hasToolbar: boolean;
+  readonly toolbar?: ReactNode;
+  readonly children: (rows: readonly ChildRow[]) => ReactNode;
+}
+
+// Loading, error and empty states and "Load more" around the loaded rows.
+function ChildrenFrame({ list, heading, hasToolbar, toolbar, children }: ChildrenFrameProps) {
+  const headingId = useId();
+  const loaded = list.status === "success" && list.rows.length > 0;
+  if (loaded && !hasToolbar) {
+    return (
+      <div className="mt-8">
+        {children(list.rows)}
+        {list.hasMore && <LoadMore list={list} />}
+      </div>
+    );
+  }
   return (
     <section aria-labelledby={headingId} className="mt-8">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h2 id={headingId} className="text-lg font-semibold">
-          {isEpisodes ? t("episode.list") : t("season.list")}
+          {heading}
         </h2>
-        {isEpisodes && <OrderToggle itemId={itemId} order={order} />}
+        {hasToolbar && <div className="flex flex-wrap items-center gap-3">{toolbar}</div>}
       </div>
-      <ChildrenBody list={list} childKind={childKind} />
+      {loaded ? children(list.rows) : <ChildrenStatus list={list} />}
+      {loaded && list.hasMore && <LoadMore list={list} />}
     </section>
   );
 }
@@ -65,12 +139,7 @@ function OrderToggle({ itemId, order }: { readonly itemId: string; readonly orde
   );
 }
 
-interface ChildrenBodyProps {
-  readonly list: ItemChildren;
-  readonly childKind: "season" | "episode";
-}
-
-function ChildrenBody({ list, childKind }: ChildrenBodyProps) {
+function ChildrenStatus({ list }: { readonly list: ItemChildren }) {
   const { t } = useTranslation(itemNamespace);
   if (list.status === "pending") {
     return (
@@ -91,34 +160,10 @@ function ChildrenBody({ list, childKind }: ChildrenBodyProps) {
       </div>
     );
   }
-  if (list.rows.length === 0) {
-    return <p className="text-text-muted">{t("children.empty")}</p>;
-  }
-  return (
-    <>
-      {childKind === "season" ? (
-        <ul className={seasonGridClass}>
-          {list.rows.map((row) => (
-            <li key={row.id}>
-              <SeasonCard row={row} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {list.rows.map((row) => (
-            <li key={row.id}>
-              <EpisodeRow row={row} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {list.hasMore && <LoadMore list={list} />}
-    </>
-  );
+  return <p className="text-text-muted">{t("children.empty")}</p>;
 }
 
-function SeasonCard({ row }: { readonly row: ChildRow }) {
+function SeasonCard({ row, card }: { readonly row: ChildRow; readonly card: RowCardProps }) {
   return (
     <div className="group relative flex flex-col gap-2">
       <div className="relative overflow-hidden rounded-md shadow-card">
@@ -126,42 +171,21 @@ function SeasonCard({ row }: { readonly row: ChildRow }) {
           imageRef={row.image}
           aspect="poster"
           alt=""
-          sizes={seasonPosterSizes}
+          sizes={rowCardSizes("poster")}
           icon={<ScreenIcon className={placeholderIconClass} />}
         />
         <WatchBadgeOverlay badges={row.watch} />
       </div>
       <h3 className="text-sm font-medium">
-        <Link to="/items/$itemId" params={{ itemId: row.id }} className={stretchedLinkClass}>
+        <Link
+          to="/items/$itemId"
+          params={{ itemId: row.id }}
+          {...card}
+          className={stretchedLinkClass}
+        >
           {row.title}
         </Link>
       </h3>
-    </div>
-  );
-}
-
-function EpisodeRow({ row }: { readonly row: ChildRow }) {
-  const details = [row.label, row.runtime].filter((text) => text !== "");
-  return (
-    <div className="relative flex items-center gap-4">
-      <div className="relative w-40 shrink-0 overflow-hidden rounded-md shadow-card">
-        <Poster
-          imageRef={row.image}
-          aspect="still"
-          alt=""
-          sizes={episodeStillSizes}
-          icon={<FilmIcon className={placeholderIconClass} />}
-        />
-        <WatchBadgeOverlay badges={row.watch} />
-      </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <h3 className="font-medium break-words">
-          <Link to="/items/$itemId" params={{ itemId: row.id }} className={stretchedLinkClass}>
-            {row.title}
-          </Link>
-        </h3>
-        {details.length > 0 && <p className="text-sm text-text-muted">{details.join(" · ")}</p>}
-      </div>
     </div>
   );
 }

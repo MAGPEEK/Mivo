@@ -8,6 +8,7 @@ export {
   type BrowseItemTexts,
 } from "./components/BrowseItemGrid";
 export { ListView, DetailsView, type ItemRowsProps } from "./components/ItemRows";
+export { ViewControls, type ViewControlsProps } from "./components/ViewControls";
 export { useViewPreference, type ViewPreference } from "./hooks/useViewPreference";
 export { cardSize, type CardSize, type ViewStyle } from "./lib/viewStyle";
 export { itemPosterSizes } from "./components/gridLayout";
