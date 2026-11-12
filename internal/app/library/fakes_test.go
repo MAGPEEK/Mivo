@@ -11,6 +11,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -128,7 +129,7 @@ func parseIndexCursor(cursor string, itemCount int) (int, error) {
 	return start, nil
 }
 
-func (reader *memoryItemReader) GetItem(_ context.Context, itemID string) (applibrary.ItemDetail, error) {
+func (reader *memoryItemReader) GetItem(_ context.Context, itemID string, _ access.Restriction) (applibrary.ItemDetail, error) {
 	reader.mutex.Lock()
 	defer reader.mutex.Unlock()
 
@@ -244,7 +245,7 @@ func (reader *memoryChildReader) put(summaries ...applibrary.ItemSummary) {
 }
 
 func (reader *memoryChildReader) ListChildren(_ context.Context, itemID string,
-	request applibrary.ChildPageRequest,
+	request applibrary.ChildPageRequest, _ access.Restriction,
 ) (applibrary.ItemPage, error) {
 	reader.mutex.Lock()
 	defer reader.mutex.Unlock()

@@ -10,6 +10,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/photo"
@@ -45,7 +46,7 @@ func collectPhotoChildren(t *testing.T, fixture *photoFixture, albumID string, l
 	request := library.PageRequest{Limit: limit}
 
 	for pages = 1; ; pages++ {
-		page, err := fixture.reader.ListPhotoChildren(t.Context(), albumID, request)
+		page, err := fixture.reader.ListPhotoChildren(t.Context(), albumID, request, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("page %d error = %v", pages, err)
 		}
@@ -84,7 +85,7 @@ func TestListPhotoChildrenOrdersAlbumsThenPhotos(t *testing.T) {
 
 	want := []string{"album:Beach(3/4)", "album:Zoo(1/1)", "photo:early", "photo:A", "photo:b", "photo:late"}
 
-	first, err := fixture.reader.ListPhotoChildren(t.Context(), album, library.PageRequest{Limit: 1})
+	first, err := fixture.reader.ListPhotoChildren(t.Context(), album, library.PageRequest{Limit: 1}, access.Unrestricted())
 	if err != nil || len(first.Children) != 1 || first.Children[0].CoverPhotoID != newest {
 		t.Errorf("first page = %+v, %v, want Beach with cover %s", first, err, newest)
 	}
@@ -109,7 +110,7 @@ func collectLibraryPhotos(t *testing.T, fixture *photoFixture, limit int) []stri
 	request := library.PageRequest{Limit: limit}
 
 	for {
-		page, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, request)
+		page, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, request, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("limit %d: error = %v", limit, err)
 		}
@@ -142,13 +143,13 @@ func TestListLibraryPhotosListsEveryPhotoByCaptureTime(t *testing.T) {
 		assertDeepEqual(t, fmt.Sprintf("photos with limit %d", limit), got, want)
 	}
 
-	albumPage, err := fixture.reader.ListPhotoChildren(t.Context(), album, library.PageRequest{Limit: 1})
+	albumPage, err := fixture.reader.ListPhotoChildren(t.Context(), album, library.PageRequest{Limit: 1}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("album page error = %v", err)
 	}
 
 	for _, request := range []library.PageRequest{{Cursor: albumPage.NextCursor}, {Limit: -1}} {
-		if _, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, request); !errors.Is(err, domain.ErrInvalid) {
+		if _, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, request, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 			t.Errorf("request %+v: error = %v, want ErrInvalid", request, err)
 		}
 	}
@@ -156,11 +157,11 @@ func TestListLibraryPhotosListsEveryPhotoByCaptureTime(t *testing.T) {
 	// A well-formed cursor of this library's scope, but for the album group.
 	scope := base64.RawURLEncoding.EncodeToString([]byte(
 		strings.Join([]string{"photos", "library:" + photosLibraryID, "album", album, "", "trip"}, "\x00")))
-	if _, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, library.PageRequest{Cursor: scope}); !errors.Is(err, domain.ErrInvalid) {
+	if _, err := fixture.reader.ListLibraryPhotos(t.Context(), photosLibraryID, library.PageRequest{Cursor: scope}, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("album-group cursor: error = %v, want ErrInvalid", err)
 	}
 
-	empty, err := fixture.reader.ListLibraryPhotos(t.Context(), unknownID, library.PageRequest{})
+	empty, err := fixture.reader.ListLibraryPhotos(t.Context(), unknownID, library.PageRequest{}, access.Unrestricted())
 	if err != nil || len(empty.Children) != 0 {
 		t.Errorf("unknown library = %+v, %v, want an empty page", empty, err)
 	}
@@ -174,7 +175,7 @@ func TestListPhotoChildrenRejectsBadRequests(t *testing.T) {
 	fixture.addPhoto(t, "Trip/b.jpg", 2)
 	other := fixture.addPhoto(t, "Other/c.jpg", 3)[0]
 
-	first, err := fixture.reader.ListPhotoChildren(t.Context(), chain[0], library.PageRequest{Limit: 1})
+	first, err := fixture.reader.ListPhotoChildren(t.Context(), chain[0], library.PageRequest{Limit: 1}, access.Unrestricted())
 	if err != nil || first.NextCursor == "" {
 		t.Fatalf("first page = %v, %v, want a cursor", first, err)
 	}
@@ -193,7 +194,7 @@ func TestListPhotoChildrenRejectsBadRequests(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		if _, err := fixture.reader.ListPhotoChildren(t.Context(), test.albumID, test.page); !errors.Is(err, test.want) {
+		if _, err := fixture.reader.ListPhotoChildren(t.Context(), test.albumID, test.page, access.Unrestricted()); !errors.Is(err, test.want) {
 			t.Errorf("%s: error = %v, want %v", test.name, err, test.want)
 		}
 	}
@@ -217,7 +218,7 @@ func TestPhotoDetailErrors(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		if _, err := fixture.reader.PhotoDetail(t.Context(), test.itemID); !errors.Is(err, test.want) {
+		if _, err := fixture.reader.PhotoDetail(t.Context(), test.itemID, access.Unrestricted()); !errors.Is(err, test.want) {
 			t.Errorf("%s: error = %v, want %v", test.name, err, test.want)
 		}
 	}

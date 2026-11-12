@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -91,7 +92,7 @@ func TestFoldersOrderThePrimaryFileAndResolveTheirPaths(t *testing.T) {
 	fixture.savePlaced(t, placedRecord{moviesLibraryID, testID('f', 1), "Z/Heat.mkv"})
 	fixture.savePlaced(t, placedRecord{secondMoviesRootID, testID('f', 2), "A/Heat.mkv"})
 
-	detail, err := fixture.reader.GetItem(t.Context(), fixture.onlyItemID(t))
+	detail, err := fixture.reader.GetItem(t.Context(), fixture.onlyItemID(t), access.Unrestricted())
 	if err != nil {
 		t.Fatal(err)
 	}

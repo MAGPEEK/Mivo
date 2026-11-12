@@ -11,20 +11,27 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
 // ListArtistAlbums returns one page of the albums of an artist ordered by (sort title, ID),
-// each with its track count as ChildCount. Limit and cursor work as for ListItems. An unknown
-// item wraps domain.ErrNotFound; an item that is no artist, an invalid limit and a malformed
+// each with its track count as ChildCount, as the restriction allows (albums and counted
+// tracks). Limit and cursor work as for ListItems. An unknown item and one the restriction
+// hides wrap domain.ErrNotFound; an item that is no artist, an invalid limit and a malformed
 // cursor wrap domain.ErrInvalid.
-func (catalog *CatalogReader) ListArtistAlbums(ctx context.Context, artistID string, page library.PageRequest) (applibrary.ItemPage, error) {
-	result, err := catalog.readAlbumPage(ctx, page, func(queries *sqlcgen.Queries, request albumPageRequest) ([]listedItem, error) {
-		if _, err := itemOfKind(ctx, queries, artistID, library.ItemKindArtist); err != nil {
+func (catalog *CatalogReader) ListArtistAlbums(
+	ctx context.Context, artistID string, page library.PageRequest, restriction access.Restriction,
+) (applibrary.ItemPage, error) {
+	view := viewOf(restriction)
+
+	result, err := catalog.readAlbumPage(ctx, page, view.content, func(queries *sqlcgen.Queries, request albumPageRequest) ([]listedItem, error) {
+		if _, err := view.itemOfKind(ctx, queries, artistID, library.ItemKindArtist); err != nil {
 			return nil, err
 		}
 
 		rows, err := queries.ListArtistAlbums(ctx, sqlcgen.ListArtistAlbumsParams{
+			MaxAge: view.content.maxAge, AllowUnrated: view.content.allowUnrated,
 			ParentID:       sql.NullString{String: artistID, Valid: true},
 			AfterSortTitle: request.after.sortTitle, AfterID: request.after.id, RowLimit: request.rowLimit,
 		})
@@ -48,9 +55,19 @@ func (catalog *CatalogReader) ListArtistAlbums(ctx context.Context, artistID str
 
 // ListLibraryAlbums returns one page of every album of a library ordered by (sort title, ID),
 // like ListArtistAlbums. A library without albums yields an empty page; an unknown library
-// wraps domain.ErrNotFound.
-func (catalog *CatalogReader) ListLibraryAlbums(ctx context.Context, libraryID string, page library.PageRequest) (applibrary.ItemPage, error) {
-	result, err := catalog.readAlbumPage(ctx, page, func(queries *sqlcgen.Queries, request albumPageRequest) ([]listedItem, error) {
+// and one the restriction does not allow wrap domain.ErrNotFound.
+func (catalog *CatalogReader) ListLibraryAlbums(
+	ctx context.Context, libraryID string, page library.PageRequest, restriction access.Restriction,
+) (applibrary.ItemPage, error) {
+	content := contentLimitOf(restriction)
+
+	result, err := catalog.readAlbumPage(ctx, page, content, func(queries *sqlcgen.Queries, request albumPageRequest) ([]listedItem, error) {
+		// Checked before the database is read, like completeTarget, so the answer for a
+		// library the viewer may not see does not depend on whether it exists.
+		if !libraryAllowed(restriction, libraryID) {
+			return nil, domain.ErrNotFound
+		}
+
 		found, err := queries.LibraryExists(ctx, libraryID)
 		if err != nil {
 			return nil, fmt.Errorf("read library: %w", err)
@@ -61,6 +78,7 @@ func (catalog *CatalogReader) ListLibraryAlbums(ctx context.Context, libraryID s
 		}
 
 		rows, err := queries.ListLibraryAlbums(ctx, sqlcgen.ListLibraryAlbumsParams{
+			MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
 			LibraryID: libraryID, AfterSortTitle: request.after.sortTitle, AfterID: request.after.id, RowLimit: request.rowLimit,
 		})
 		if err != nil {
@@ -91,7 +109,7 @@ type albumPageRequest struct {
 // readAlbumPage validates the page request and runs list in a read transaction; list reads
 // one row more than the limit, so pageOf learns whether another page follows.
 func (catalog *CatalogReader) readAlbumPage(
-	ctx context.Context, page library.PageRequest,
+	ctx context.Context, page library.PageRequest, content contentLimit,
 	list func(*sqlcgen.Queries, albumPageRequest) ([]listedItem, error),
 ) (applibrary.ItemPage, error) {
 	limit, err := library.NormalizeLimit(page.Limit)
@@ -112,7 +130,7 @@ func (catalog *CatalogReader) readAlbumPage(
 			return listErr
 		}
 
-		result, listErr = pageOf(ctx, queries, pageSource{rows: listed, limit: limit}, func(last listedItem) string {
+		result, listErr = pageOf(ctx, queries, pageSource{rows: listed, limit: limit, content: content}, func(last listedItem) string {
 			return encodeCursor(itemKey{sortTitle: last.item.SortTitle, id: last.item.ID})
 		})
 
@@ -128,9 +146,12 @@ func (catalog *CatalogReader) readAlbumPage(
 // ListAlbumTracks returns one page of the tracks of an album ordered by library.CompareTracks
 // (disc, track number with unnumbered tracks last, file name of the primary file), then ID.
 // A track without stored disc counts as disc 1. Limit and cursor work as for ListItems; a
-// cursor is bound to its album. An unknown item wraps domain.ErrNotFound; an item that is no
-// album, an invalid limit and a cursor not issued for this album wrap domain.ErrInvalid.
-func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID string, page library.PageRequest) (applibrary.ItemPage, error) {
+// cursor is bound to its album. Only tracks the restriction allows are returned. An unknown
+// item and one the restriction hides wrap domain.ErrNotFound; an item that is no album, an
+// invalid limit and a cursor not issued for this album wrap domain.ErrInvalid.
+func (catalog *CatalogReader) ListAlbumTracks(
+	ctx context.Context, albumID string, page library.PageRequest, restriction access.Restriction,
+) (applibrary.ItemPage, error) {
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("list tracks of album %q: %w", albumID, err)
@@ -145,14 +166,18 @@ func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID strin
 
 	var result applibrary.ItemPage
 
+	view := viewOf(restriction)
+
 	err = inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
-		if _, err := itemOfKind(ctx, queries, albumID, library.ItemKindAlbum); err != nil {
+		if _, err := view.itemOfKind(ctx, queries, albumID, library.ItemKindAlbum); err != nil {
 			return err
 		}
 
 		var readErr error
 
-		result, readErr = readTrackPage(ctx, queries, trackPageRequest{scope: scope, after: after, hasAfter: hasAfter, limit: limit})
+		result, readErr = readTrackPage(ctx, queries, trackPageRequest{
+			scope: scope, after: after, hasAfter: hasAfter, limit: limit, content: view.content,
+		})
 
 		return readErr
 	})
@@ -164,12 +189,13 @@ func (catalog *CatalogReader) ListAlbumTracks(ctx context.Context, albumID strin
 }
 
 // trackPageRequest asks for one page of the tracks of the album scope.parentID in the
-// direction of scope.
+// direction of scope, of the tracks that pass content.
 type trackPageRequest struct {
 	scope    childCursorScope
 	after    trackPosition
 	hasAfter bool
 	limit    int
+	content  contentLimit
 }
 
 // readTrackPage reads every track of a known album, sorts them in Go (the order needs the
@@ -178,7 +204,10 @@ type trackPageRequest struct {
 // tracks, but the "Unknown Album" of untagged files in the root can hold thousands (keyset
 // paging on a stored sort key: BACKLOG).
 func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackPageRequest) (applibrary.ItemPage, error) {
-	rows, err := queries.ListAlbumTracks(ctx, sql.NullString{String: request.scope.parentID, Valid: true})
+	rows, err := queries.ListAlbumTracks(ctx, sqlcgen.ListAlbumTracksParams{
+		ParentID: sql.NullString{String: request.scope.parentID, Valid: true},
+		MaxAge:   request.content.maxAge, AllowUnrated: request.content.allowUnrated,
+	})
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("read tracks: %w", err)
 	}
@@ -205,7 +234,7 @@ func readTrackPage(ctx context.Context, queries *sqlcgen.Queries, request trackP
 		return compare(positions[left.item.ID], positions[right.item.ID])
 	})
 
-	page := pageSource{rows: listed[:min(len(listed), request.limit+1)], limit: request.limit}
+	page := pageSource{rows: listed[:min(len(listed), request.limit+1)], limit: request.limit, content: request.content}
 
 	return pageOf(ctx, queries, page, func(last listedItem) string {
 		return encodeTrackCursor(request.scope, positions[last.item.ID])

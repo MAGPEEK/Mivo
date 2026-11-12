@@ -8,6 +8,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/app/scan"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/photo"
 )
 
@@ -29,7 +30,7 @@ func TestSavePhotoDetailsStoresTheInfo(t *testing.T) {
 	}
 	fixture.saveDetails(t, scan.PhotoDetails{ItemID: chain[2], PrimaryFileID: fileID, Info: info, TakenAtSource: photo.TakenAtExif, ThumbnailState: photo.ThumbnailReady})
 
-	detail, err := fixture.reader.PhotoDetail(t.Context(), chain[2])
+	detail, err := fixture.reader.PhotoDetail(t.Context(), chain[2], access.Unrestricted())
 	if err != nil {
 		t.Fatalf("PhotoDetail error = %v", err)
 	}
@@ -61,7 +62,7 @@ func TestSavePhotoDetailsAgainReplacesThem(t *testing.T) {
 	details.Info, details.TakenAtSource, details.ThumbnailState = photo.Info{TakenAt: modified}, photo.TakenAtFile, photo.ThumbnailUnsupported
 	fixture.saveDetails(t, details)
 
-	detail, err := fixture.reader.PhotoDetail(t.Context(), chain[0])
+	detail, err := fixture.reader.PhotoDetail(t.Context(), chain[0], access.Unrestricted())
 	if err != nil {
 		t.Fatalf("PhotoDetail error = %v", err)
 	}

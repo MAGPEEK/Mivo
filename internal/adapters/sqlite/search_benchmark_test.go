@@ -9,6 +9,7 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	appsearch "github.com/magpeek/mivo/internal/app/search"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/metadata"
 )
 
@@ -33,7 +34,7 @@ func BenchmarkSearch(b *testing.B) {
 	seedBenchmarkLibrary(b, path)
 
 	index := sqlite.NewSearchIndex(db)
-	filter := appsearch.Filter{LibraryIDs: []string{moviesLibraryID}}
+	filter := appsearch.Filter{LibraryIDs: []string{moviesLibraryID}, Restriction: access.Unrestricted()}
 
 	for _, query := range []string{"movie", "dra", "movie 4242", "comedy movie 12", "zzz"} {
 		b.Run(query, func(b *testing.B) {

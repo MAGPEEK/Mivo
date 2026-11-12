@@ -1,7 +1,8 @@
 # 0032 Accounts, sessions, profiles and access control (milestone 7)
 
 - Status: Accepted (orchestrator by owner delegation, 2026-11-06; proposed by the architect the same day – the owner may still object).
-  Amended 2026-11-11: trusted reverse proxies (§3, §5, §9) and the ancestor visibility rule (§7)
+  Amended 2026-11-11: trusted reverse proxies (§3, §5, §9) and the ancestor visibility rule (§7).
+  Amended 2026-11-12: fail-closed uncomputed visibility, hide-unrated for video kinds only (§7)
 - Date: 2026-11-06
 - Refines: 0006 (local-only accounts), 0024 (streaming sessions)
 - Supersedes: 0028 §4 "Security before accounts" and §7 "Accepted residual risks until M7" in
@@ -175,9 +176,29 @@ user data. UX ids: `docs/design/ux-spec.md` section 10 (US-*), prototype
   Implementation (M7-13a, migration `00016`): each item stores the visibility of its whole
   chain – `visibility_age_rating`, the highest own bucket of the item and its ancestors (NULL
   when none is rated), and `visibility_unrated`, set when the top ancestor has no own rating.
-  The one predicate is "bucket is NULL or ≤ max age, and (not hide-unrated or the flag is 0)";
-  both values are maintained wherever `effective_age_rating` is propagated, and a changed
-  `parent_id` marks the row stale for the backfill.
+  The one predicate is "bucket is NULL or ≤ max age, and (not hide-unrated or the flag is 0 or
+  the kind is not video)"; both values are maintained wherever `effective_age_rating` is
+  propagated, and a changed `parent_id` marks the row stale for the backfill.
+  Fail closed (M7-13b, migration `00017`): a row whose pair is **not computed** holds
+  `(18, 1)`, the strictest pair, which passes no maximum age below 18 and no hide-unrated –
+  not `(NULL, 1)`, which a viewer with only a maximum age would see. Triggers store it for
+  every stale row: an insert with a rating, a `content_rating` or `parent_id` changed without
+  the adapter. The adapter computes the real pair in the same transaction as its own writes;
+  for everything else `BackfillAgeRatings` does, which must run before a restricted viewer
+  can sign in (M7-25). A writer that moves an item must propagate to the subtree itself: the
+  trigger closes the moved row only.
+  The generated (sqlc) queries of the children, detail, music and photo reads cannot take SQL
+  text; they repeat the predicate with two bound values (max age, 18 for none; allow unrated),
+  and a test holds both forms equal for every kind, stored pair and limit.
+- **Hide-unrated applies to video only** (orchestrator decision 2026-11-11, owner informed;
+  M7-13b): movies, shows, seasons, episodes and their extras. Music (artist, album, track)
+  and photos (photo album, photo) carry no age rating in any source Mivo reads, so hiding the
+  unrated ones would empty those libraries for every limited profile; they stay visible
+  within the allowed libraries. **Audiobooks** are treated like music (decision M7-13b): no
+  scanner or provider writes a `content_rating` for them, so the video rule would hide every
+  audiobook. The **maximum age** still applies to every kind, should an item carry a rating
+  (set by hand or by a later source), and library access is unchanged. Revisit when a source
+  of audiobook ratings exists.
 - The restriction (library set, max age, hide unrated) is applied in SQL for every listing,
   facet, letter, folder, row, search, children, summary and detail read, and checked before a
   playback session starts. A hidden item answers `404 not_found`, never `403`, so its existence

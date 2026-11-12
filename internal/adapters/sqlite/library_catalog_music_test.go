@@ -7,6 +7,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
 	"github.com/magpeek/mivo/internal/domain/metadata"
@@ -166,7 +167,7 @@ func TestMetadataWriterKeepsMusicBrainzIDs(t *testing.T) {
 
 	assertDeepEqual(t, "track IDs", fixture.providerIDs(t, chain[2]), []string{"musicbrainz_track=" + trackMBID, "tmdb=42"})
 
-	detail, err := fixture.reader.GetItem(t.Context(), chain[2])
+	detail, err := fixture.reader.GetItem(t.Context(), chain[2], access.Unrestricted())
 	if err != nil {
 		t.Fatalf("GetItem error = %v", err)
 	}
@@ -205,7 +206,7 @@ func TestListAlbumTracksOrdersByDiscTrackAndFileName(t *testing.T) {
 
 	for _, limit := range []int{100, 2, 1} {
 		titles, pages := collectPages(t, limit, func(page library.PageRequest) (applibrary.ItemPage, error) {
-			return fixture.reader.ListAlbumTracks(t.Context(), albumID, page)
+			return fixture.reader.ListAlbumTracks(t.Context(), albumID, page, access.Unrestricted())
 		})
 
 		assertDeepEqual(t, "track titles", titles, want)
@@ -222,7 +223,7 @@ func TestListAlbumTracksReturnsTrackSummaries(t *testing.T) {
 	fixture := newMusicFixture(t)
 	albumID := newOrderingAlbum(t, &fixture)
 
-	page, err := fixture.reader.ListAlbumTracks(t.Context(), albumID, library.PageRequest{Limit: 1})
+	page, err := fixture.reader.ListAlbumTracks(t.Context(), albumID, library.PageRequest{Limit: 1}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ListAlbumTracks error = %v", err)
 	}
@@ -240,7 +241,7 @@ func TestListAlbumTracksRejectsBadRequests(t *testing.T) {
 	albumID := newOrderingAlbum(t, &fixture)
 	other := fixture.addTrack(t, musicTrack{path: "Band/Other/01 X.flac"})
 
-	first, err := fixture.reader.ListAlbumTracks(t.Context(), albumID, library.PageRequest{Limit: 2})
+	first, err := fixture.reader.ListAlbumTracks(t.Context(), albumID, library.PageRequest{Limit: 2}, access.Unrestricted())
 	if err != nil || first.NextCursor == "" {
 		t.Fatalf("first page = %+v, %v, want a next cursor", first, err)
 	}
@@ -263,7 +264,7 @@ func TestListAlbumTracksRejectsBadRequests(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if _, err := fixture.reader.ListAlbumTracks(t.Context(), test.itemID, test.page); !errors.Is(err, test.want) {
+			if _, err := fixture.reader.ListAlbumTracks(t.Context(), test.itemID, test.page, access.Unrestricted()); !errors.Is(err, test.want) {
 				t.Errorf("ListAlbumTracks error = %v, want %v", err, test.want)
 			}
 		})
@@ -300,13 +301,13 @@ func TestListArtistAlbumsOrdersBySortTitleAcrossPages(t *testing.T) {
 
 	for _, limit := range []int{100, 2, 1} {
 		titles, _ := collectPages(t, limit, func(page library.PageRequest) (applibrary.ItemPage, error) {
-			return fixture.reader.ListArtistAlbums(t.Context(), artistID, page)
+			return fixture.reader.ListArtistAlbums(t.Context(), artistID, page, access.Unrestricted())
 		})
 
 		assertDeepEqual(t, "album titles", titles, want)
 	}
 
-	page, err := fixture.reader.ListArtistAlbums(t.Context(), artistID, library.PageRequest{Limit: 1})
+	page, err := fixture.reader.ListArtistAlbums(t.Context(), artistID, library.PageRequest{Limit: 1}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ListArtistAlbums error = %v", err)
 	}
@@ -325,13 +326,13 @@ func TestListLibraryAlbumsPagesOverEveryArtist(t *testing.T) {
 
 	for _, limit := range []int{100, 3, 1} {
 		titles, _ := collectPages(t, limit, func(page library.PageRequest) (applibrary.ItemPage, error) {
-			return fixture.reader.ListLibraryAlbums(t.Context(), musicLibraryID, page)
+			return fixture.reader.ListLibraryAlbums(t.Context(), musicLibraryID, page, access.Unrestricted())
 		})
 
 		assertDeepEqual(t, "album titles", titles, want)
 	}
 
-	page, err := fixture.reader.ListLibraryAlbums(t.Context(), moviesLibraryID, library.PageRequest{})
+	page, err := fixture.reader.ListLibraryAlbums(t.Context(), moviesLibraryID, library.PageRequest{}, access.Unrestricted())
 	if err != nil || len(page.Items) != 0 {
 		t.Errorf("albums of the movies library = %+v, %v, want an empty page", page, err)
 	}
@@ -345,12 +346,12 @@ func TestAlbumListingsRejectBadRequests(t *testing.T) {
 	ctx := t.Context()
 
 	albumOf := func(itemID string, page library.PageRequest) error {
-		_, err := fixture.reader.ListArtistAlbums(ctx, itemID, page)
+		_, err := fixture.reader.ListArtistAlbums(ctx, itemID, page, access.Unrestricted())
 
 		return err
 	}
 	albumsIn := func(libraryID string, page library.PageRequest) error {
-		_, err := fixture.reader.ListLibraryAlbums(ctx, libraryID, page)
+		_, err := fixture.reader.ListLibraryAlbums(ctx, libraryID, page, access.Unrestricted())
 
 		return err
 	}

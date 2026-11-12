@@ -34,7 +34,16 @@ SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key,
 FROM items
 WHERE items.parent_id = ?1
   AND items.kind = 'track'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 `
+
+type ListAlbumTracksParams struct {
+	ParentID     sql.NullString
+	MaxAge       int64
+	AllowUnrated int64
+}
 
 type ListAlbumTracksRow struct {
 	Item        Item
@@ -44,8 +53,8 @@ type ListAlbumTracksRow struct {
 // ListAlbumTracks returns every track of an album with the relative path of its primary file
 // (” without file). The adapter orders them by library.CompareTracks, which needs the file
 // name; an album holds at most a few hundred tracks.
-func (q *Queries) ListAlbumTracks(ctx context.Context, parentID sql.NullString) ([]ListAlbumTracksRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAlbumTracks, parentID)
+func (q *Queries) ListAlbumTracks(ctx context.Context, arg ListAlbumTracksParams) ([]ListAlbumTracksRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAlbumTracks, arg.ParentID, arg.MaxAge, arg.AllowUnrated)
 	if err != nil {
 		return nil, err
 	}
@@ -96,19 +105,28 @@ func (q *Queries) ListAlbumTracks(ctx context.Context, parentID sql.NullString) 
 }
 
 const listArtistAlbums = `-- name: ListArtistAlbums :many
+
 SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS tracks
-        WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
+        WHERE tracks.parent_id = items.id AND tracks.kind = 'track'
+          AND coalesce(tracks.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (tracks.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR tracks.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count
 FROM items
-WHERE items.parent_id = ?1
+WHERE items.parent_id = ?3
   AND items.kind = 'album'
-  AND items.sort_title >= ?2
-  AND (items.sort_title > ?2 OR items.id > ?3)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND items.sort_title >= ?4
+  AND (items.sort_title > ?4 OR items.id > ?5)
 ORDER BY items.sort_title, items.id
-LIMIT ?4
+LIMIT ?6
 `
 
 type ListArtistAlbumsParams struct {
+	MaxAge         int64
+	AllowUnrated   int64
 	ParentID       sql.NullString
 	AfterSortTitle string
 	AfterID        string
@@ -120,10 +138,14 @@ type ListArtistAlbumsRow struct {
 	ChildCount int64
 }
 
+// The listings below take the viewer's content limit (max_age, allow_unrated) like the
+// queries of catalog_read.sql; they return and count only what passes it.
 // ListArtistAlbums returns the albums of an artist after the key (after_sort_title, after_id)
 // in keyset order, each with its track count. The empty key lies before every album.
 func (q *Queries) ListArtistAlbums(ctx context.Context, arg ListArtistAlbumsParams) ([]ListArtistAlbumsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listArtistAlbums,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.ParentID,
 		arg.AfterSortTitle,
 		arg.AfterID,
@@ -181,17 +203,25 @@ func (q *Queries) ListArtistAlbums(ctx context.Context, arg ListArtistAlbumsPara
 const listLibraryAlbums = `-- name: ListLibraryAlbums :many
 SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS tracks
-        WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
+        WHERE tracks.parent_id = items.id AND tracks.kind = 'track'
+          AND coalesce(tracks.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (tracks.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR tracks.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count
 FROM items
-WHERE items.library_id = ?1
+WHERE items.library_id = ?3
   AND items.kind = 'album'
-  AND items.sort_title >= ?2
-  AND (items.sort_title > ?2 OR items.id > ?3)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND items.sort_title >= ?4
+  AND (items.sort_title > ?4 OR items.id > ?5)
 ORDER BY items.sort_title, items.id
-LIMIT ?4
+LIMIT ?6
 `
 
 type ListLibraryAlbumsParams struct {
+	MaxAge         int64
+	AllowUnrated   int64
 	LibraryID      string
 	AfterSortTitle string
 	AfterID        string
@@ -207,6 +237,8 @@ type ListLibraryAlbumsRow struct {
 // the partial index items_albums, so SQLite scans it as a range.
 func (q *Queries) ListLibraryAlbums(ctx context.Context, arg ListLibraryAlbumsParams) ([]ListLibraryAlbumsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listLibraryAlbums,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.LibraryID,
 		arg.AfterSortTitle,
 		arg.AfterID,

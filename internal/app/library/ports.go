@@ -30,9 +30,11 @@ type ItemReader interface {
 	// cursor. The service checks that the library exists, so an unknown library may simply
 	// yield an empty page.
 	ListItems(ctx context.Context, libraryID string, page library.PageRequest, query library.ListingQuery) (ItemPage, error)
-	// GetItem returns an item with its detail (ItemDetail), the primary file first. An
-	// unknown ID wraps domain.ErrNotFound.
-	GetItem(ctx context.Context, itemID string) (ItemDetail, error)
+	// GetItem returns an item with its detail (ItemDetail), the primary file first, as the
+	// restriction allows: siblings, play target, extras and counts cover visible items
+	// only. An unknown ID wraps domain.ErrNotFound, and so does an item the restriction
+	// hides, itself or through an ancestor; its zero value hides every item.
+	GetItem(ctx context.Context, itemID string, restriction access.Restriction) (ItemDetail, error)
 }
 
 // ChildReader pages through the children of a catalog item. It is a port of its own, not a
@@ -51,14 +53,15 @@ type ItemReader interface {
 // and unnumbered episodes come first; a photo album lists ascending only and wraps
 // domain.ErrInvalid for Descending.
 //
-// Error contract as ItemReader: an unknown item wraps domain.ErrNotFound, a cursor the reader
-// did not produce (or one issued for the other direction) wraps domain.ErrInvalid, a stored
-// row the domain cannot read is a plain error. A leaf (movie, episode, extra) yields an
-// empty page.
+// Error contract as ItemReader: an unknown item and one the restriction hides wrap
+// domain.ErrNotFound, a cursor the reader did not produce (or one issued for the other
+// direction) wraps domain.ErrInvalid, a stored row the domain cannot read is a plain error. A
+// leaf (movie, episode, extra) yields an empty page.
 type ChildReader interface {
-	// ListChildren returns one page of the item's children. request.Page.Limit is already
-	// normalised (1 to library.MaxPageLimit).
-	ListChildren(ctx context.Context, itemID string, request ChildPageRequest) (ItemPage, error)
+	// ListChildren returns one page of the item's children that the restriction allows,
+	// with the counts of their visible members; its zero value hides every item.
+	// request.Page.Limit is already normalised (1 to library.MaxPageLimit).
+	ListChildren(ctx context.Context, itemID string, request ChildPageRequest, restriction access.Restriction) (ItemPage, error)
 }
 
 // RootChecker reports whether a library root is reachable now. Implemented by

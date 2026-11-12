@@ -19,15 +19,24 @@ SET external_id = excluded.external_id;
 DELETE FROM item_provider_ids
 WHERE item_id = ? AND provider = ?;
 
+-- The listings below take the viewer's content limit (max_age, allow_unrated) like the
+-- queries of catalog_read.sql; they return and count only what passes it.
+
 -- ListArtistAlbums returns the albums of an artist after the key (after_sort_title, after_id)
 -- in keyset order, each with its track count. The empty key lies before every album.
 -- name: ListArtistAlbums :many
 SELECT sqlc.embed(items),
        (SELECT COUNT(*) FROM items AS tracks
-        WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
+        WHERE tracks.parent_id = items.id AND tracks.kind = 'track'
+          AND coalesce(tracks.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (tracks.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR tracks.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count
 FROM items
 WHERE items.parent_id = sqlc.arg(parent_id)
   AND items.kind = 'album'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND items.sort_title >= sqlc.arg(after_sort_title)
   AND (items.sort_title > sqlc.arg(after_sort_title) OR items.id > sqlc.arg(after_id))
 ORDER BY items.sort_title, items.id
@@ -38,10 +47,16 @@ LIMIT sqlc.arg(row_limit);
 -- name: ListLibraryAlbums :many
 SELECT sqlc.embed(items),
        (SELECT COUNT(*) FROM items AS tracks
-        WHERE tracks.parent_id = items.id AND tracks.kind = 'track') AS child_count
+        WHERE tracks.parent_id = items.id AND tracks.kind = 'track'
+          AND coalesce(tracks.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (tracks.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR tracks.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count
 FROM items
 WHERE items.library_id = sqlc.arg(library_id)
   AND items.kind = 'album'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND items.sort_title >= sqlc.arg(after_sort_title)
   AND (items.sort_title > sqlc.arg(after_sort_title) OR items.id > sqlc.arg(after_id))
 ORDER BY items.sort_title, items.id
@@ -58,4 +73,7 @@ SELECT sqlc.embed(items),
                     LIMIT 1), '') AS TEXT) AS primary_path
 FROM items
 WHERE items.parent_id = sqlc.arg(parent_id)
-  AND items.kind = 'track';
+  AND items.kind = 'track'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'));

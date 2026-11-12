@@ -87,7 +87,7 @@ func collectChildren(t *testing.T, fixture *photoFixture, itemID string, limit i
 	var items []applibrary.ItemSummary
 
 	for {
-		page, err := fixture.reader.ListChildren(t.Context(), itemID, request)
+		page, err := fixture.reader.ListChildren(t.Context(), itemID, request, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("ListChildren(%s, limit %d) error = %v", itemID, limit, err)
 		}
@@ -153,12 +153,12 @@ func TestListChildrenOfAPhotoAlbumRejectsForeignRequests(t *testing.T) {
 	show := fixture.save(t, placedFile(photosLibraryID, testID('f', 90), "Show/S01E01.mkv", episodePlacement("show", 1, 1)))[0]
 	fixture.save(t, placedFile(photosLibraryID, testID('f', 91), "Show/S02E01.mkv", episodePlacement("show", 2, 1)))
 
-	photoPage, err := fixture.reader.ListChildren(t.Context(), album, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}})
+	photoPage, err := fixture.reader.ListChildren(t.Context(), album, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}}, access.Unrestricted())
 	if err != nil || photoPage.NextCursor == "" {
 		t.Fatalf("first photo page = %+v, %v", photoPage, err)
 	}
 
-	showPage, err := fixture.reader.ListChildren(t.Context(), show, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}})
+	showPage, err := fixture.reader.ListChildren(t.Context(), show, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}}, access.Unrestricted())
 	if err != nil || showPage.NextCursor == "" {
 		t.Fatalf("show page error = %v", err)
 	}
@@ -173,7 +173,7 @@ func TestListChildrenOfAPhotoAlbumRejectsForeignRequests(t *testing.T) {
 	}
 
 	for name, test := range requests {
-		if _, err := fixture.reader.ListChildren(t.Context(), test.itemID, test.request); !errors.Is(err, domain.ErrInvalid) {
+		if _, err := fixture.reader.ListChildren(t.Context(), test.itemID, test.request, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 			t.Errorf("%s: error = %v, want ErrInvalid", name, err)
 		}
 	}
@@ -191,7 +191,7 @@ func TestGetItemOfPhotosAndAlbums(t *testing.T) {
 	video := fixture.addVideoPhoto(t, "Trip/clip.mp4", 9)
 	fixture.addPhoto(t, "Trip/Beach/sand.jpg", 1)
 
-	detail, err := fixture.reader.GetItem(t.Context(), pair[1])
+	detail, err := fixture.reader.GetItem(t.Context(), pair[1], access.Unrestricted())
 	if err != nil {
 		t.Fatalf("GetItem(photo) error = %v", err)
 	}
@@ -202,12 +202,12 @@ func TestGetItemOfPhotosAndAlbums(t *testing.T) {
 		t.Errorf("photo detail = %+v, want details, the JPEG first, its tile and nothing to play", detail)
 	}
 
-	clip, err := fixture.reader.GetItem(t.Context(), video[1])
+	clip, err := fixture.reader.GetItem(t.Context(), video[1], access.Unrestricted())
 	if _, hasTile := clip.Artwork[artwork.KindPoster]; err != nil || clip.Photo == nil || clip.PlayItemID != video[1] || hasTile {
 		t.Errorf("video detail = %+v, %v, want details, play and no tile", clip, err)
 	}
 
-	album, err := fixture.reader.GetItem(t.Context(), pair[0])
+	album, err := fixture.reader.GetItem(t.Context(), pair[0], access.Unrestricted())
 	if err != nil || album.Photo != nil || album.PlayItemID != "" || album.ChildCount != 3 || album.LeafCount != 3 ||
 		album.Artwork[artwork.KindPoster].ID != pair[1] {
 		t.Errorf("album detail = %+v, %v, want 3 children, 3 photos, the pair as tile", album, err)

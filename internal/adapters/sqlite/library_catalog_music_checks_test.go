@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -36,17 +37,17 @@ func TestMusicListingsFailWithACancelledContext(t *testing.T) {
 
 	listings := map[string]func() error{
 		"artist albums": func() error {
-			_, err := fixture.reader.ListArtistAlbums(ctx, artistID, library.PageRequest{})
+			_, err := fixture.reader.ListArtistAlbums(ctx, artistID, library.PageRequest{}, access.Unrestricted())
 
 			return err
 		},
 		"library albums": func() error {
-			_, err := fixture.reader.ListLibraryAlbums(ctx, musicLibraryID, library.PageRequest{})
+			_, err := fixture.reader.ListLibraryAlbums(ctx, musicLibraryID, library.PageRequest{}, access.Unrestricted())
 
 			return err
 		},
 		"album tracks": func() error {
-			_, err := fixture.reader.ListAlbumTracks(ctx, albumID, library.PageRequest{})
+			_, err := fixture.reader.ListAlbumTracks(ctx, albumID, library.PageRequest{}, access.Unrestricted())
 
 			return err
 		},

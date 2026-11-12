@@ -98,9 +98,11 @@ func (scope listingScope) availableEpisodeSQL(offlineRootIDs []string) string {
 }
 
 // episodeScope is the scope of the episode queries: they need only the builder and the
-// folder count of primaryFileSQL, not the top-level base condition.
+// folder count of primaryFileSQL, not the top-level base condition. It carries the viewer's
+// restriction, so a condition built from the scope alone (visibleMemberSQL) is never
+// unrestricted by omission.
 func episodeScope(builder *sqlBuilder, target listingTarget) listingScope {
-	return listingScope{builder: builder, multiFolder: target.multiFolder}
+	return listingScope{builder: builder, multiFolder: target.multiFolder, restriction: target.restriction}
 }
 
 // libraryEpisodesSQL selects the available episodes of the target's library that the viewer

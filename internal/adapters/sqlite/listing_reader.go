@@ -150,7 +150,9 @@ func readListingPage(ctx context.Context, session listingSession, request listin
 		keyByID[key.id] = key
 	}
 
-	page, err := pageOf(ctx, session.queries, pageSource{rows: listed, limit: request.rowLimit - 1}, func(last listedItem) string {
+	source := pageSource{rows: listed, limit: request.rowLimit - 1, content: contentLimitOf(target.restriction)}
+
+	page, err := pageOf(ctx, session.queries, source, func(last listedItem) string {
 		return encodeListingCursor(scope, keyByID[last.item.ID])
 	})
 	if err != nil {

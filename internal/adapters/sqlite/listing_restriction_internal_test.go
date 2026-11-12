@@ -22,6 +22,10 @@ func restrictedTo(t *testing.T, libraries access.LibraryAccess, maxAge access.Ag
 	return access.Viewer{Libraries: libraries, Limit: limit}.Restriction()
 }
 
+// unratedHiddenSQL is the "hide unrated" condition on alias i: only the video kinds are hidden
+// for a chain without a rating (ADR 0032 section 7, decision 2026-11-11).
+const unratedHiddenSQL = "(i.visibility_unrated = 0 OR i.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))"
+
 func TestListingRestrictionConditionSQL(t *testing.T) {
 	t.Parallel()
 
@@ -33,10 +37,10 @@ func TestListingRestrictionConditionSQL(t *testing.T) {
 	}{
 		{name: "unrestricted adds no text", restriction: access.Unrestricted()},
 		{name: "zero value never matches", want: neverMatches},
-		{name: "no library never matches", restriction: restrictedTo(t, access.OnlyLibraries(), access.Age6, true), want: neverMatches + " AND i.visibility_age_rating <= :p1 AND i.visibility_unrated = 0", wantArgs: 1},
+		{name: "no library never matches", restriction: restrictedTo(t, access.OnlyLibraries(), access.Age6, true), want: neverMatches + " AND (i.visibility_age_rating IS NULL OR i.visibility_age_rating <= :p1) AND " + unratedHiddenSQL, wantArgs: 1},
 		{
 			name: "libraries and hidden unrated", restriction: restrictedTo(t, access.OnlyLibraries("b", "a"), access.Age6, true),
-			want: "i.library_id IN (:p1, :p2) AND i.visibility_age_rating <= :p3 AND i.visibility_unrated = 0", wantArgs: 3,
+			want: "i.library_id IN (:p1, :p2) AND (i.visibility_age_rating IS NULL OR i.visibility_age_rating <= :p3) AND " + unratedHiddenSQL, wantArgs: 3,
 		},
 		{
 			name: "unrated shown", restriction: restrictedTo(t, access.AllLibraries(), access.Age12, false),
@@ -45,7 +49,7 @@ func TestListingRestrictionConditionSQL(t *testing.T) {
 		{
 			name:        "only unrated hidden",
 			restriction: access.Viewer{Libraries: access.AllLibraries(), Limit: access.NoLimit().HidingUnrated(true)}.Restriction(),
-			want:        "i.visibility_unrated = 0",
+			want:        unratedHiddenSQL,
 		},
 	}
 	for _, test := range tests {

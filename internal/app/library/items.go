@@ -158,7 +158,8 @@ func (service *Service) ListItems(ctx context.Context, libraryID string, page li
 // GetItem returns an item with its detail (see ItemDetail). An unknown ID wraps
 // domain.ErrNotFound.
 func (service *Service) GetItem(ctx context.Context, itemID string) (ItemDetail, error) {
-	detail, err := service.items.GetItem(ctx, itemID)
+	// TODO(M7-14): the viewer's restriction.
+	detail, err := service.items.GetItem(ctx, itemID, access.Unrestricted())
 	if err != nil {
 		return ItemDetail{}, fmt.Errorf("get item %q: %w", itemID, err)
 	}

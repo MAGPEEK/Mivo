@@ -13,17 +13,33 @@ import (
 
 const getPhotoAlbumTotals = `-- name: GetPhotoAlbumTotals :one
 WITH RECURSIVE albums (id) AS (
-    SELECT items.id FROM items WHERE items.id = ?1
+    SELECT items.id FROM items WHERE items.id = ?3
     UNION ALL
     SELECT items.id
     FROM items
     JOIN albums ON items.parent_id = albums.id
     WHERE items.kind = 'photo_album'
+      AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+      AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+           OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 )
-SELECT (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id IN (SELECT id FROM albums)) AS leaf_count,
+SELECT (SELECT COUNT(*) FROM photo_info
+        WHERE photo_info.parent_id IN (SELECT id FROM albums)
+          AND ((CAST(?1 AS INTEGER) >= 18 AND CAST(?2 AS INTEGER) >= 1)
+               OR EXISTS (SELECT 1 FROM items AS photos
+                          WHERE photos.id = photo_info.item_id
+                            AND coalesce(photos.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+                            AND (photos.visibility_unrated <= CAST(?2 AS INTEGER)
+                                 OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))) AS leaf_count,
        CAST(ifnull((SELECT photo_info.item_id FROM photo_info
                     WHERE photo_info.parent_id IN (SELECT id FROM albums)
                       AND photo_info.thumbnail_state = 'ready'
+                      AND ((CAST(?1 AS INTEGER) >= 18 AND CAST(?2 AS INTEGER) >= 1)
+                           OR EXISTS (SELECT 1 FROM items AS photos
+                                      WHERE photos.id = photo_info.item_id
+                                        AND coalesce(photos.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+                                        AND (photos.visibility_unrated <= CAST(?2 AS INTEGER)
+                                             OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))
                       AND EXISTS (SELECT 1 FROM media_files
                                   WHERE media_files.id = photo_info.primary_file_id
                                     AND media_files.container = 'unknown')
@@ -31,18 +47,25 @@ SELECT (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id IN (SELECT id
                     LIMIT 1), '') AS TEXT) AS cover_photo_id
 `
 
+type GetPhotoAlbumTotalsParams struct {
+	MaxAge       int64
+	AllowUnrated int64
+	AlbumID      string
+}
+
 type GetPhotoAlbumTotalsRow struct {
 	LeafCount    int64
 	CoverPhotoID string
 }
 
-// GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums and the
+// GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums that
+// pass the viewer's content limit (a hidden sub-album hides its subtree) and the
 // newest of them whose thumbnail can be rendered (latest capture time, ties by the last name
 // key and ID; empty without such a photo), the album's tile. A video counts as a photo but
 // is no tile: the image endpoint renders still images only, which the scan saves with the
 // container 'unknown'. Albums nest as deep as the folder tree, usually a few levels.
-func (q *Queries) GetPhotoAlbumTotals(ctx context.Context, albumID string) (GetPhotoAlbumTotalsRow, error) {
-	row := q.db.QueryRowContext(ctx, getPhotoAlbumTotals, albumID)
+func (q *Queries) GetPhotoAlbumTotals(ctx context.Context, arg GetPhotoAlbumTotalsParams) (GetPhotoAlbumTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, getPhotoAlbumTotals, arg.MaxAge, arg.AllowUnrated, arg.AlbumID)
 	var i GetPhotoAlbumTotalsRow
 	err := row.Scan(&i.LeafCount, &i.CoverPhotoID)
 	return i, err
@@ -121,16 +144,21 @@ SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key,
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.parent_id = ?1
-  AND photo_info.taken_at >= ?2
-  AND (photo_info.taken_at > ?2
-       OR photo_info.name_key > ?3
-       OR (photo_info.name_key = ?3 AND photo_info.item_id > ?4))
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND photo_info.taken_at >= ?4
+  AND (photo_info.taken_at > ?4
+       OR photo_info.name_key > ?5
+       OR (photo_info.name_key = ?5 AND photo_info.item_id > ?6))
 ORDER BY photo_info.taken_at, photo_info.name_key, photo_info.item_id
-LIMIT ?5
+LIMIT ?7
 `
 
 type ListAlbumPhotosParams struct {
 	ParentID     sql.NullString
+	MaxAge       int64
+	AllowUnrated int64
 	AfterTakenAt int64
 	AfterNameKey string
 	AfterID      string
@@ -148,6 +176,8 @@ type ListAlbumPhotosRow struct {
 func (q *Queries) ListAlbumPhotos(ctx context.Context, arg ListAlbumPhotosParams) ([]ListAlbumPhotosRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAlbumPhotos,
 		arg.ParentID,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.AfterTakenAt,
 		arg.AfterNameKey,
 		arg.AfterID,
@@ -226,16 +256,21 @@ SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key,
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.library_id = ?1
-  AND photo_info.taken_at >= ?2
-  AND (photo_info.taken_at > ?2
-       OR photo_info.name_key > ?3
-       OR (photo_info.name_key = ?3 AND photo_info.item_id > ?4))
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND photo_info.taken_at >= ?4
+  AND (photo_info.taken_at > ?4
+       OR photo_info.name_key > ?5
+       OR (photo_info.name_key = ?5 AND photo_info.item_id > ?6))
 ORDER BY photo_info.taken_at, photo_info.name_key, photo_info.item_id
-LIMIT ?5
+LIMIT ?7
 `
 
 type ListLibraryPhotosParams struct {
 	LibraryID    string
+	MaxAge       int64
+	AllowUnrated int64
 	AfterTakenAt int64
 	AfterNameKey string
 	AfterID      string
@@ -252,6 +287,8 @@ type ListLibraryPhotosRow struct {
 func (q *Queries) ListLibraryPhotos(ctx context.Context, arg ListLibraryPhotosParams) ([]ListLibraryPhotosRow, error) {
 	rows, err := q.db.QueryContext(ctx, listLibraryPhotos,
 		arg.LibraryID,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.AfterTakenAt,
 		arg.AfterNameKey,
 		arg.AfterID,
@@ -435,20 +472,36 @@ func (q *Queries) ListPhotoMainFiles(ctx context.Context) ([]ListPhotoMainFilesR
 }
 
 const listPhotoSubAlbums = `-- name: ListPhotoSubAlbums :many
+
 SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated,
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind = 'photo_album')
-       + (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id = items.id) AS child_count
+        WHERE children.parent_id = items.id AND children.kind = 'photo_album'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (children.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode')))
+       + (SELECT COUNT(*) FROM photo_info
+          WHERE photo_info.parent_id = items.id
+            AND ((CAST(?1 AS INTEGER) >= 18 AND CAST(?2 AS INTEGER) >= 1)
+                 OR EXISTS (SELECT 1 FROM items AS photos
+                            WHERE photos.id = photo_info.item_id
+                              AND coalesce(photos.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+                              AND (photos.visibility_unrated <= CAST(?2 AS INTEGER)
+                                   OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))) AS child_count
 FROM items
-WHERE items.parent_id = ?1
+WHERE items.parent_id = ?3
   AND items.kind = 'photo_album'
-  AND items.sort_title >= ?2
-  AND (items.sort_title > ?2 OR items.id > ?3)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND items.sort_title >= ?4
+  AND (items.sort_title > ?4 OR items.id > ?5)
 ORDER BY items.sort_title, items.id
-LIMIT ?4
+LIMIT ?6
 `
 
 type ListPhotoSubAlbumsParams struct {
+	MaxAge         int64
+	AllowUnrated   int64
 	ParentID       sql.NullString
 	AfterSortTitle string
 	AfterID        string
@@ -460,12 +513,18 @@ type ListPhotoSubAlbumsRow struct {
 	ChildCount int64
 }
 
+// The listings and totals below take the viewer's content limit (max_age, allow_unrated)
+// like the queries of catalog_read.sql. Counting photos reads photo_info only; the limit
+// needs the items row of each photo, which a viewer without a limit does not pay for (the
+// first operand of the OR is decided before any row is read).
 // ListPhotoSubAlbums returns the sub-albums of an album after the key (after_sort_title,
 // after_id) in keyset order, each with the number of its direct children as ListPhotoChildren
 // lists them: sub-albums plus photos with photo details. The empty key lies
 // before every album.
 func (q *Queries) ListPhotoSubAlbums(ctx context.Context, arg ListPhotoSubAlbumsParams) ([]ListPhotoSubAlbumsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPhotoSubAlbums,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.ParentID,
 		arg.AfterSortTitle,
 		arg.AfterID,

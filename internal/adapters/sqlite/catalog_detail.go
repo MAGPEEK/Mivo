@@ -10,7 +10,6 @@ import (
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
-	"github.com/magpeek/mivo/internal/domain"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/media"
@@ -24,16 +23,15 @@ const (
 	maxAncestorDepth = 8
 )
 
-// readItemDetail assembles an item detail with a handful of queries, independent of the size
-// of the item's library.
-func readItemDetail(ctx context.Context, queries *sqlcgen.Queries, itemID string) (applibrary.ItemDetail, error) {
-	row, err := queries.GetItem(ctx, itemID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return applibrary.ItemDetail{}, domain.ErrNotFound
-	}
-
+// readItemDetail assembles the detail of an item the view may see with a handful of queries,
+// independent of the size of the item's library. Everything in it that names another item
+// (siblings, play target, extras, counts, album tile) covers visible items only; the
+// ancestors and a season's fallback poster need no check, because a visible item has only
+// visible ancestors (ADR 0032 section 7).
+func readItemDetail(ctx context.Context, queries *sqlcgen.Queries, itemID string, view catalogView) (applibrary.ItemDetail, error) {
+	row, err := view.item(ctx, queries, itemID)
 	if err != nil {
-		return applibrary.ItemDetail{}, fmt.Errorf("read item: %w", err)
+		return applibrary.ItemDetail{}, err
 	}
 
 	item, err := itemFromRow(row)
@@ -42,11 +40,12 @@ func readItemDetail(ctx context.Context, queries *sqlcgen.Queries, itemID string
 	}
 
 	detail := applibrary.ItemDetail{Item: item}
+	content := view.content
 
 	steps := []func(context.Context, *sqlcgen.Queries, sqlcgen.Item, *applibrary.ItemDetail) error{
-		readDetailFiles, readDetailMetadata, readDetailAncestors, readDetailSiblings,
-		readDetailPlayTarget, readDetailArtwork, readDetailExtras, readDetailCounts, readDetailChapters,
-		readDetailPhoto,
+		readDetailFiles, readDetailMetadata, readDetailAncestors, content.readDetailSiblings,
+		content.readDetailPlayTarget, readDetailArtwork, content.readDetailExtras, content.readDetailCounts,
+		readDetailChapters, content.readDetailPhoto,
 	}
 
 	for _, step := range steps {
@@ -135,15 +134,18 @@ func childKeyOf(row sqlcgen.Item) childKey {
 	return key
 }
 
-// readDetailSiblings finds the neighbours of a season or episode by asking for one child after
-// its own key in each direction.
-func readDetailSiblings(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
+// readDetailSiblings finds the neighbours of a season or episode by asking for one visible
+// child after its own key in each direction, so "next" skips a hidden episode.
+func (content contentLimit) readDetailSiblings(
+	ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail,
+) error {
 	if !row.ParentID.Valid || (row.Kind != library.ItemKindSeason.String() && row.Kind != library.ItemKindEpisode.String()) {
 		return nil
 	}
 
 	key := childKeyOf(row)
 	params := sqlcgen.ListChildrenAscendingParams{
+		MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
 		ParentID: row.ParentID, HasAfter: storedTrue, AfterGroup: key.group, AfterNumber: key.number,
 		AfterSortTitle: key.sortTitle, AfterID: key.id, RowLimit: 1,
 	}
@@ -170,11 +172,15 @@ func readDetailSiblings(ctx context.Context, queries *sqlcgen.Queries, row sqlcg
 }
 
 // readDetailPlayTarget picks the item Play starts: a leaf plays itself, a season its first
-// episode, a show the first episode of its first regular season that has one.
-func readDetailPlayTarget(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
+// visible episode, a show the first visible episode of its first regular season that has one.
+func (content contentLimit) readDetailPlayTarget(
+	ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail,
+) error {
 	switch row.Kind {
 	case library.ItemKindShow.String():
-		first, err := queries.FirstEpisodeOfShow(ctx, sql.NullString{String: row.ID, Valid: true})
+		first, err := queries.FirstEpisodeOfShow(ctx, sqlcgen.FirstEpisodeOfShowParams{
+			ShowID: sql.NullString{String: row.ID, Valid: true}, MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
+		})
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("read first episode: %w", err)
 		}
@@ -182,6 +188,7 @@ func readDetailPlayTarget(ctx context.Context, queries *sqlcgen.Queries, row sql
 		detail.PlayItemID = first
 	case library.ItemKindSeason.String():
 		episodes, err := queries.ListChildrenAscending(ctx, sqlcgen.ListChildrenAscendingParams{
+			MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
 			ParentID: sql.NullString{String: row.ID, Valid: true}, RowLimit: 1,
 		})
 		if err != nil {
@@ -218,9 +225,12 @@ func readDetailArtwork(ctx context.Context, queries *sqlcgen.Queries, row sqlcge
 	return nil
 }
 
-func readDetailExtras(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
+func (content contentLimit) readDetailExtras(
+	ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail,
+) error {
 	extraRows, err := queries.ListExtras(ctx, sqlcgen.ListExtrasParams{
 		ParentID: sql.NullString{String: row.ID, Valid: true}, RowLimit: maxExtrasInDetail,
+		MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
 	})
 	if err != nil {
 		return fmt.Errorf("read extras: %w", err)
@@ -231,13 +241,18 @@ func readDetailExtras(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen
 		listed = append(listed, listedItem{item: extra})
 	}
 
-	detail.Extras, err = summariesOf(ctx, queries, listed, sqlcgen.Item{})
+	detail.Extras, err = summariesOf(ctx, queries, pageSource{rows: listed, content: content})
 
 	return err
 }
 
-func readDetailCounts(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
-	counts, err := queries.GetItemCounts(ctx, row.ID)
+// readDetailCounts counts the children and episodes the viewer may see.
+func (content contentLimit) readDetailCounts(
+	ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail,
+) error {
+	counts, err := queries.GetItemCounts(ctx, sqlcgen.GetItemCountsParams{
+		ItemID: row.ID, MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
+	})
 	if err != nil {
 		return fmt.Errorf("read counts: %w", err)
 	}

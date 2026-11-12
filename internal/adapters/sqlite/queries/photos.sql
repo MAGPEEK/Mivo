@@ -38,6 +38,11 @@ SELECT *
 FROM photo_info
 WHERE item_id IN (sqlc.slice(item_ids));
 
+-- The listings and totals below take the viewer's content limit (max_age, allow_unrated)
+-- like the queries of catalog_read.sql. Counting photos reads photo_info only; the limit
+-- needs the items row of each photo, which a viewer without a limit does not pay for (the
+-- first operand of the OR is decided before any row is read).
+
 -- ListPhotoSubAlbums returns the sub-albums of an album after the key (after_sort_title,
 -- after_id) in keyset order, each with the number of its direct children as ListPhotoChildren
 -- lists them: sub-albums plus photos with photo details. The empty key lies
@@ -45,11 +50,24 @@ WHERE item_id IN (sqlc.slice(item_ids));
 -- name: ListPhotoSubAlbums :many
 SELECT sqlc.embed(items),
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind = 'photo_album')
-       + (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id = items.id) AS child_count
+        WHERE children.parent_id = items.id AND children.kind = 'photo_album'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (children.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode')))
+       + (SELECT COUNT(*) FROM photo_info
+          WHERE photo_info.parent_id = items.id
+            AND ((CAST(sqlc.arg(max_age) AS INTEGER) >= 18 AND CAST(sqlc.arg(allow_unrated) AS INTEGER) >= 1)
+                 OR EXISTS (SELECT 1 FROM items AS photos
+                            WHERE photos.id = photo_info.item_id
+                              AND coalesce(photos.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+                              AND (photos.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+                                   OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))) AS child_count
 FROM items
 WHERE items.parent_id = sqlc.arg(parent_id)
   AND items.kind = 'photo_album'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND items.sort_title >= sqlc.arg(after_sort_title)
   AND (items.sort_title > sqlc.arg(after_sort_title) OR items.id > sqlc.arg(after_id))
 ORDER BY items.sort_title, items.id
@@ -63,6 +81,9 @@ SELECT sqlc.embed(items), sqlc.embed(photo_info)
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.parent_id = sqlc.arg(parent_id)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND photo_info.taken_at >= sqlc.arg(after_taken_at)
   AND (photo_info.taken_at > sqlc.arg(after_taken_at)
        OR photo_info.name_key > sqlc.arg(after_name_key)
@@ -96,7 +117,8 @@ WHERE items.kind = 'photo'
 ORDER BY media_files.item_id, media_files.id IS NOT photo_info.primary_file_id, library_roots.position,
          media_files.relative_path, media_files.id;
 
--- GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums and the
+-- GetPhotoAlbumTotals returns the number of photos in an album and all its sub-albums that
+-- pass the viewer's content limit (a hidden sub-album hides its subtree) and the
 -- newest of them whose thumbnail can be rendered (latest capture time, ties by the last name
 -- key and ID; empty without such a photo), the album's tile. A video counts as a photo but
 -- is no tile: the image endpoint renders still images only, which the scan saves with the
@@ -109,11 +131,27 @@ WITH RECURSIVE albums (id) AS (
     FROM items
     JOIN albums ON items.parent_id = albums.id
     WHERE items.kind = 'photo_album'
+      AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+      AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+           OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 )
-SELECT (SELECT COUNT(*) FROM photo_info WHERE photo_info.parent_id IN (SELECT id FROM albums)) AS leaf_count,
+SELECT (SELECT COUNT(*) FROM photo_info
+        WHERE photo_info.parent_id IN (SELECT id FROM albums)
+          AND ((CAST(sqlc.arg(max_age) AS INTEGER) >= 18 AND CAST(sqlc.arg(allow_unrated) AS INTEGER) >= 1)
+               OR EXISTS (SELECT 1 FROM items AS photos
+                          WHERE photos.id = photo_info.item_id
+                            AND coalesce(photos.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+                            AND (photos.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+                                 OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))) AS leaf_count,
        CAST(ifnull((SELECT photo_info.item_id FROM photo_info
                     WHERE photo_info.parent_id IN (SELECT id FROM albums)
                       AND photo_info.thumbnail_state = 'ready'
+                      AND ((CAST(sqlc.arg(max_age) AS INTEGER) >= 18 AND CAST(sqlc.arg(allow_unrated) AS INTEGER) >= 1)
+                           OR EXISTS (SELECT 1 FROM items AS photos
+                                      WHERE photos.id = photo_info.item_id
+                                        AND coalesce(photos.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+                                        AND (photos.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+                                             OR photos.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))))
                       AND EXISTS (SELECT 1 FROM media_files
                                   WHERE media_files.id = photo_info.primary_file_id
                                     AND media_files.container = 'unknown')
@@ -127,6 +165,9 @@ SELECT sqlc.embed(items), sqlc.embed(photo_info)
 FROM photo_info
 JOIN items ON items.id = photo_info.item_id
 WHERE photo_info.library_id = sqlc.arg(library_id)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND photo_info.taken_at >= sqlc.arg(after_taken_at)
   AND (photo_info.taken_at > sqlc.arg(after_taken_at)
        OR photo_info.name_key > sqlc.arg(after_name_key)

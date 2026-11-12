@@ -22,8 +22,9 @@ import (
 // newest still photo whose thumbnail is ready.
 
 // addPhotoSummaries completes the summaries of photos and photo albums in place; other
-// kinds are left alone. It costs one query for the photos of the page and two per album.
-func addPhotoSummaries(ctx context.Context, queries *sqlcgen.Queries, summaries []applibrary.ItemSummary) error {
+// kinds are left alone. It costs one query for the photos of the page and two per album. An
+// album counts and shows only photos that pass content.
+func addPhotoSummaries(ctx context.Context, queries *sqlcgen.Queries, summaries []applibrary.ItemSummary, content contentLimit) error {
 	details, err := photoDetailsOf(ctx, queries, summaries)
 	if err != nil {
 		return err
@@ -44,7 +45,7 @@ func addPhotoSummaries(ctx context.Context, queries *sqlcgen.Queries, summaries 
 			continue
 		}
 
-		if err := addAlbumTotals(ctx, queries, summary); err != nil {
+		if err := content.addAlbumTotals(ctx, queries, summary); err != nil {
 			return err
 		}
 	}
@@ -85,9 +86,10 @@ func photoDetailsOf(ctx context.Context, queries *sqlcgen.Queries, summaries []a
 	return details, nil
 }
 
-// addAlbumTotals sets the photo count of an album with its sub-albums and its tile.
-func addAlbumTotals(ctx context.Context, queries *sqlcgen.Queries, summary *applibrary.ItemSummary) error {
-	totals, err := queries.GetPhotoAlbumTotals(ctx, summary.Item.ID)
+// addAlbumTotals sets the photo count of an album with its sub-albums and its tile, over the
+// photos that pass the content limit.
+func (content contentLimit) addAlbumTotals(ctx context.Context, queries *sqlcgen.Queries, summary *applibrary.ItemSummary) error {
+	totals, err := queries.GetPhotoAlbumTotals(ctx, content.albumTotalsOf(summary.Item.ID))
 	if err != nil {
 		return fmt.Errorf("read totals of album %q: %w", summary.Item.ID, err)
 	}
@@ -97,6 +99,11 @@ func addAlbumTotals(ctx context.Context, queries *sqlcgen.Queries, summary *appl
 	summary.Poster, err = albumTile(ctx, queries, totals.CoverPhotoID)
 
 	return err
+}
+
+// albumTotalsOf is the request for the totals of one album under the content limit.
+func (content contentLimit) albumTotalsOf(albumID string) sqlcgen.GetPhotoAlbumTotalsParams {
+	return sqlcgen.GetPhotoAlbumTotalsParams{AlbumID: albumID, MaxAge: content.maxAge, AllowUnrated: content.allowUnrated}
 }
 
 // albumTile references the cover photo of an album; none for an empty coverPhotoID.
@@ -140,12 +147,14 @@ func isVideoFile(file media.File) bool {
 }
 
 // readDetailPhoto completes the detail of a photo or photo album; other kinds are left alone.
-func readDetailPhoto(ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail) error {
+func (content contentLimit) readDetailPhoto(
+	ctx context.Context, queries *sqlcgen.Queries, row sqlcgen.Item, detail *applibrary.ItemDetail,
+) error {
 	switch row.Kind {
 	case library.ItemKindPhoto.String():
 		return readPhotoItemDetail(ctx, queries, row, detail)
 	case library.ItemKindPhotoAlbum.String():
-		return readPhotoAlbumDetail(ctx, queries, row, detail)
+		return content.readPhotoAlbumDetail(ctx, queries, detail)
 	default:
 		return nil
 	}
@@ -188,11 +197,11 @@ func readPhotoItemDetail(ctx context.Context, queries *sqlcgen.Queries, row sqlc
 
 // readPhotoAlbumDetail adds the photo count with the sub-albums and the tile; an album has
 // nothing to play.
-func readPhotoAlbumDetail(ctx context.Context, queries *sqlcgen.Queries, _ sqlcgen.Item, detail *applibrary.ItemDetail) error {
+func (content contentLimit) readPhotoAlbumDetail(ctx context.Context, queries *sqlcgen.Queries, detail *applibrary.ItemDetail) error {
 	detail.PlayItemID = ""
 
 	summary := applibrary.ItemSummary{Item: detail.Item}
-	if err := addAlbumTotals(ctx, queries, &summary); err != nil {
+	if err := content.addAlbumTotals(ctx, queries, &summary); err != nil {
 		return err
 	}
 

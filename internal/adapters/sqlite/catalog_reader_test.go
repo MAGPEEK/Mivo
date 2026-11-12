@@ -234,7 +234,7 @@ func TestGetItemOfAnUnknownIDReturnsNotFound(t *testing.T) {
 
 	fixture := newCatalogFixture(t)
 
-	if _, err := fixture.reader.GetItem(t.Context(), unknownID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := fixture.reader.GetItem(t.Context(), unknownID, access.Unrestricted()); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("GetItem error = %v, want domain.ErrNotFound", err)
 	}
 }
@@ -313,7 +313,7 @@ func TestReadingCorruptCatalogRowsIsAServerError(t *testing.T) {
 			storeUnchecked(t, fixture.inspection, test.query)
 
 			_, listErr := fixture.reader.ListItems(t.Context(), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
-			_, getErr := fixture.reader.GetItem(t.Context(), record.Item.ID)
+			_, getErr := fixture.reader.GetItem(t.Context(), record.Item.ID, access.Unrestricted())
 			_, playableErr := fixture.reader.PlayableFile(t.Context(), record.File.ID)
 
 			errs := map[string]error{"ListItems": listErr, "GetItem": getErr, "PlayableFile": playableErr}
@@ -355,7 +355,7 @@ func TestCatalogReaderReportsDatabaseErrors(t *testing.T) {
 			}
 
 			_, listErr := fixture.reader.ListItems(test.ctx(t), moviesLibraryID, library.PageRequest{}, library.ListingQuery{Restriction: access.Unrestricted()})
-			_, getErr := fixture.reader.GetItem(test.ctx(t), record.Item.ID)
+			_, getErr := fixture.reader.GetItem(test.ctx(t), record.Item.ID, access.Unrestricted())
 			_, playableErr := fixture.reader.PlayableFile(test.ctx(t), record.File.ID)
 
 			errs := map[string]error{"ListItems": listErr, "GetItem": getErr, "PlayableFile": playableErr}

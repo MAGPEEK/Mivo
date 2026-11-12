@@ -184,7 +184,7 @@ func TestAudiobookDetailAndSummaryCoverAllParts(t *testing.T) {
 	fixture.replace(t, first, chapter("One", 0, seconds(60)))
 	fixture.replace(t, second, chapter("Two", 0, seconds(40)))
 
-	detail, err := fixture.reader.GetItem(t.Context(), bookID)
+	detail, err := fixture.reader.GetItem(t.Context(), bookID, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("GetItem(book) error = %v", err)
 	}
@@ -216,7 +216,7 @@ func TestNonAudiobookDetailAndSummaryHaveNoChaptersOrPartsDuration(t *testing.T)
 	movieID := fixture.save(t, record)[0]
 	fixture.replace(t, testID('f', 1), chapter("Opening", 0, seconds(60)))
 
-	detail, err := fixture.reader.GetItem(t.Context(), movieID)
+	detail, err := fixture.reader.GetItem(t.Context(), movieID, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("GetItem(movie) error = %v", err)
 	}

@@ -15,15 +15,24 @@ const firstEpisodeOfShow = `-- name: FirstEpisodeOfShow :one
 SELECT episodes.id
 FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
-WHERE seasons.parent_id = ? AND seasons.kind = 'season' AND seasons.number > 0
+WHERE seasons.parent_id = ?1 AND seasons.kind = 'season' AND seasons.number > 0
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (episodes.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 ORDER BY seasons.number, episodes.number IS NULL, episodes.number, episodes.sort_title, episodes.id
 LIMIT 1
 `
 
+type FirstEpisodeOfShowParams struct {
+	ShowID       sql.NullString
+	MaxAge       int64
+	AllowUnrated int64
+}
+
 // FirstEpisodeOfShow returns the first episode of the first regular season (number above 0)
-// that has one; the specials are not a play target.
-func (q *Queries) FirstEpisodeOfShow(ctx context.Context, parentID sql.NullString) (string, error) {
-	row := q.db.QueryRowContext(ctx, firstEpisodeOfShow, parentID)
+// that has one the viewer may see; the specials are not a play target.
+func (q *Queries) FirstEpisodeOfShow(ctx context.Context, arg FirstEpisodeOfShowParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, firstEpisodeOfShow, arg.ShowID, arg.MaxAge, arg.AllowUnrated)
 	var id string
 	err := row.Scan(&id)
 	return id, err
@@ -78,25 +87,96 @@ func (q *Queries) GetArtworkWithRoot(ctx context.Context, id string) (GetArtwork
 
 const getItemCounts = `-- name: GetItemCounts :one
 SELECT (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (children.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
-WHERE items.id = ?
+WHERE items.id = ?3
 `
+
+type GetItemCountsParams struct {
+	MaxAge       int64
+	AllowUnrated int64
+	ItemID       string
+}
 
 type GetItemCountsRow struct {
 	ChildCount int64
 	LeafCount  int64
 }
 
-// GetItemCounts returns the counts of ListItemsWithCounts for one item.
-func (q *Queries) GetItemCounts(ctx context.Context, id string) (GetItemCountsRow, error) {
-	row := q.db.QueryRowContext(ctx, getItemCounts, id)
+// GetItemCounts returns the counts of ListItemsWithCounts for one item, over the members that
+// pass the content limit.
+func (q *Queries) GetItemCounts(ctx context.Context, arg GetItemCountsParams) (GetItemCountsRow, error) {
+	row := q.db.QueryRowContext(ctx, getItemCounts, arg.MaxAge, arg.AllowUnrated, arg.ItemID)
 	var i GetItemCountsRow
 	err := row.Scan(&i.ChildCount, &i.LeafCount)
+	return i, err
+}
+
+const getVisibleItem = `-- name: GetVisibleItem :one
+
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated
+FROM items
+WHERE items.id = ?1
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+`
+
+type GetVisibleItemParams struct {
+	ItemID       string
+	MaxAge       int64
+	AllowUnrated int64
+}
+
+// Viewer restriction (ADR 0032 section 7). The queries below take the content limit of the
+// viewer as two values: max_age, the highest bucket the viewer may see (18 without a limit),
+// and allow_unrated, 1 unless unrated titles are hidden. Each restricted alias repeats the
+// same two conditions, the bound form of ageConditionSQL (restriction_sql.go);
+// TestGeneratedVisibilityMatchesTheSharedPredicate holds the two forms equal. An item's
+// stored visibility covers its ancestors, so the children of a visible parent need no
+// ancestor check; the adapter checks the library on the item or parent a read starts from.
+// GetVisibleItem returns an item that passes the content limit.
+func (q *Queries) GetVisibleItem(ctx context.Context, arg GetVisibleItemParams) (Item, error) {
+	row := q.db.QueryRowContext(ctx, getVisibleItem, arg.ItemID, arg.MaxAge, arg.AllowUnrated)
+	var i Item
+	err := row.Scan(
+		&i.ID,
+		&i.LibraryID,
+		&i.ParentID,
+		&i.Kind,
+		&i.MatchKey,
+		&i.Title,
+		&i.SortTitle,
+		&i.OriginalTitle,
+		&i.Year,
+		&i.ReleaseDate,
+		&i.Summary,
+		&i.Tagline,
+		&i.ContentRating,
+		&i.Number,
+		&i.NumberEnd,
+		&i.AbsoluteNumber,
+		&i.DiscNumber,
+		&i.ExtraType,
+		&i.MetadataLanguage,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.AgeRating,
+		&i.EffectiveAgeRating,
+		&i.AgeRatingSource,
+		&i.VisibilityAgeRating,
+		&i.VisibilityUnrated,
+	)
 	return i, err
 }
 
@@ -139,25 +219,36 @@ SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key,
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (children.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
-WHERE items.parent_id = ?1
+WHERE items.parent_id = ?3
   AND items.kind <> 'extra'
-  AND (CAST(?2 AS INTEGER) = 0 OR (
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND (CAST(?4 AS INTEGER) = 0 OR (
         CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
              THEN 1 ELSE 0 END,
         ifnull(items.number, 0), items.sort_title, items.id)
-       > (CAST(?3 AS INTEGER), CAST(?4 AS INTEGER),
-          CAST(?5 AS TEXT), CAST(?6 AS TEXT)))
+       > (CAST(?5 AS INTEGER), CAST(?6 AS INTEGER),
+          CAST(?7 AS TEXT), CAST(?8 AS TEXT)))
 ORDER BY order_group, order_number, items.sort_title, items.id
-LIMIT ?7
+LIMIT ?9
 `
 
 type ListChildrenAscendingParams struct {
+	MaxAge         int64
+	AllowUnrated   int64
 	ParentID       sql.NullString
 	HasAfter       int64
 	AfterGroup     int64
@@ -185,6 +276,8 @@ type ListChildrenAscendingRow struct {
 // hundred children, and the sort never touches other parents' rows.
 func (q *Queries) ListChildrenAscending(ctx context.Context, arg ListChildrenAscendingParams) ([]ListChildrenAscendingRow, error) {
 	rows, err := q.db.QueryContext(ctx, listChildrenAscending,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.ParentID,
 		arg.HasAfter,
 		arg.AfterGroup,
@@ -251,25 +344,36 @@ SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key,
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (children.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(?2 AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
-WHERE items.parent_id = ?1
+WHERE items.parent_id = ?3
   AND items.kind <> 'extra'
-  AND (CAST(?2 AS INTEGER) = 0 OR (
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?1 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?2 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
+  AND (CAST(?4 AS INTEGER) = 0 OR (
         CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
              THEN 1 ELSE 0 END,
         ifnull(items.number, 0), items.sort_title, items.id)
-       < (CAST(?3 AS INTEGER), CAST(?4 AS INTEGER),
-          CAST(?5 AS TEXT), CAST(?6 AS TEXT)))
+       < (CAST(?5 AS INTEGER), CAST(?6 AS INTEGER),
+          CAST(?7 AS TEXT), CAST(?8 AS TEXT)))
 ORDER BY order_group DESC, order_number DESC, items.sort_title DESC, items.id DESC
-LIMIT ?7
+LIMIT ?9
 `
 
 type ListChildrenDescendingParams struct {
+	MaxAge         int64
+	AllowUnrated   int64
 	ParentID       sql.NullString
 	HasAfter       int64
 	AfterGroup     int64
@@ -289,6 +393,8 @@ type ListChildrenDescendingRow struct {
 
 func (q *Queries) ListChildrenDescending(ctx context.Context, arg ListChildrenDescendingParams) ([]ListChildrenDescendingRow, error) {
 	rows, err := q.db.QueryContext(ctx, listChildrenDescending,
+		arg.MaxAge,
+		arg.AllowUnrated,
 		arg.ParentID,
 		arg.HasAfter,
 		arg.AfterGroup,
@@ -350,9 +456,12 @@ func (q *Queries) ListChildrenDescending(ctx context.Context, arg ListChildrenDe
 }
 
 const listExtras = `-- name: ListExtras :many
-SELECT id, library_id, parent_id, kind, match_key, title, sort_title, original_title, year, release_date, summary, tagline, content_rating, number, number_end, absolute_number, disc_number, extra_type, metadata_language, created_at, updated_at, age_rating, effective_age_rating, age_rating_source, visibility_age_rating, visibility_unrated
+SELECT items.id, items.library_id, items.parent_id, items.kind, items.match_key, items.title, items.sort_title, items.original_title, items.year, items.release_date, items.summary, items.tagline, items.content_rating, items.number, items.number_end, items.absolute_number, items.disc_number, items.extra_type, items.metadata_language, items.created_at, items.updated_at, items.age_rating, items.effective_age_rating, items.age_rating_source, items.visibility_age_rating, items.visibility_unrated
 FROM items
-WHERE parent_id = ?1 AND kind = 'extra'
+WHERE items.parent_id = ?1 AND items.kind = 'extra'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(?2 AS INTEGER)
+  AND (items.visibility_unrated <= CAST(?3 AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 ORDER BY CASE extra_type
              WHEN 'trailer' THEN 0
              WHEN 'featurette' THEN 1
@@ -364,18 +473,25 @@ ORDER BY CASE extra_type
              ELSE 7
          END,
          sort_title, id
-LIMIT ?2
+LIMIT ?4
 `
 
 type ListExtrasParams struct {
-	ParentID sql.NullString
-	RowLimit int64
+	ParentID     sql.NullString
+	MaxAge       int64
+	AllowUnrated int64
+	RowLimit     int64
 }
 
 // ListExtras returns the extras of an item by type (the order of library.ExtraType), then
 // title.
 func (q *Queries) ListExtras(ctx context.Context, arg ListExtrasParams) ([]Item, error) {
-	rows, err := q.db.QueryContext(ctx, listExtras, arg.ParentID, arg.RowLimit)
+	rows, err := q.db.QueryContext(ctx, listExtras,
+		arg.ParentID,
+		arg.MaxAge,
+		arg.AllowUnrated,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

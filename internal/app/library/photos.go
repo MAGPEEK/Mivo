@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/photo"
 )
@@ -11,20 +12,21 @@ import (
 // (M3-15e), whose ChildReader and ItemReader serve the same order and details through the
 // generic item endpoints (M3-15h); the port stays for photo-only views such as the timeline.
 //
-// Error contract as ChildReader: an unknown item wraps domain.ErrNotFound; an item of the
-// wrong kind, an invalid limit and a cursor the reader did not issue for this album wrap
-// domain.ErrInvalid.
+// Error contract as ChildReader: an unknown item and one the restriction hides wrap
+// domain.ErrNotFound; an item of the wrong kind, an invalid limit and a cursor the reader did
+// not issue for this album wrap domain.ErrInvalid. Every read returns and counts only what
+// the restriction allows; its zero value allows nothing.
 type PhotoReader interface {
 	// ListPhotoChildren returns one page of the children of a photo album: its sub-albums by
 	// sort title, then its photos by capture time and file name (case-insensitive), ties by
 	// item ID.
-	ListPhotoChildren(ctx context.Context, albumID string, page library.PageRequest) (PhotoChildPage, error)
+	ListPhotoChildren(ctx context.Context, albumID string, page library.PageRequest, restriction access.Restriction) (PhotoChildPage, error)
 	// ListLibraryPhotos returns one page of every photo of a library, whatever album it is
-	// in, in the photo order of ListPhotoChildren (the timeline). An unknown library yields
-	// an empty page.
-	ListLibraryPhotos(ctx context.Context, libraryID string, page library.PageRequest) (PhotoChildPage, error)
+	// in, in the photo order of ListPhotoChildren (the timeline). An unknown library and one
+	// the restriction does not allow yield an empty page.
+	ListLibraryPhotos(ctx context.Context, libraryID string, page library.PageRequest, restriction access.Restriction) (PhotoChildPage, error)
 	// PhotoDetail returns the photo block of a photo item.
-	PhotoDetail(ctx context.Context, itemID string) (PhotoDetail, error)
+	PhotoDetail(ctx context.Context, itemID string, restriction access.Restriction) (PhotoDetail, error)
 }
 
 // PhotoDetail is what the catalog knows about one photo. Info.TakenAt holds the capture

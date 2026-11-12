@@ -9,6 +9,7 @@ import (
 
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -29,7 +30,7 @@ func TestListChildrenOfAnAlbumFollowsTrackOrder(t *testing.T) {
 
 		for _, limit := range []int{100, 2, 1} {
 			titles, _ := collectPages(t, limit, func(page library.PageRequest) (applibrary.ItemPage, error) {
-				return fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{Page: page, Descending: descending})
+				return fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{Page: page, Descending: descending}, access.Unrestricted())
 			})
 
 			assertDeepEqual(t, "album children", titles, want)
@@ -44,7 +45,7 @@ func TestListChildrenReadsDiscNumbersAndArtistAlbums(t *testing.T) {
 	fixture := newMusicFixture(t)
 	albumID := newOrderingAlbum(t, &fixture)
 
-	page, err := fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{})
+	page, err := fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ListChildren(album) error = %v", err)
 	}
@@ -56,7 +57,7 @@ func TestListChildrenReadsDiscNumbersAndArtistAlbums(t *testing.T) {
 
 	artistID := newDiscography(t, &fixture)
 
-	albums, err := fixture.reader.ListChildren(t.Context(), artistID, applibrary.ChildPageRequest{})
+	albums, err := fixture.reader.ListChildren(t.Context(), artistID, applibrary.ChildPageRequest{}, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ListChildren(artist) error = %v", err)
 	}
@@ -73,12 +74,12 @@ func TestChildrenCursorsStayInTheirListing(t *testing.T) {
 	albumID := newOrderingAlbum(t, &fixture)
 	artistID := newDiscography(t, &fixture)
 
-	trackPage, err := fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}})
+	trackPage, err := fixture.reader.ListChildren(t.Context(), albumID, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}}, access.Unrestricted())
 	if err != nil || trackPage.NextCursor == "" {
 		t.Fatalf("track page = %+v, %v; want a next cursor", trackPage, err)
 	}
 
-	albumPage, err := fixture.reader.ListChildren(t.Context(), artistID, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}})
+	albumPage, err := fixture.reader.ListChildren(t.Context(), artistID, applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 1}}, access.Unrestricted())
 	if err != nil || albumPage.NextCursor == "" {
 		t.Fatalf("album page = %+v, %v; want a next cursor", albumPage, err)
 	}
@@ -101,12 +102,12 @@ func TestChildrenCursorsStayInTheirListing(t *testing.T) {
 
 	for _, test := range tests {
 		request := applibrary.ChildPageRequest{Page: test.page, Descending: test.down}
-		if _, err := fixture.reader.ListChildren(t.Context(), test.itemID, request); !errors.Is(err, domain.ErrInvalid) {
+		if _, err := fixture.reader.ListChildren(t.Context(), test.itemID, request, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 			t.Errorf("%s: ListChildren error = %v, want domain.ErrInvalid", test.name, err)
 		}
 	}
 
-	_, err = fixture.reader.ListLibraryAlbums(t.Context(), musicLibraryID, library.PageRequest{Cursor: trackPage.NextCursor})
+	_, err = fixture.reader.ListLibraryAlbums(t.Context(), musicLibraryID, library.PageRequest{Cursor: trackPage.NextCursor}, access.Unrestricted())
 	if !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("ListLibraryAlbums with a track cursor error = %v, want domain.ErrInvalid", err)
 	}

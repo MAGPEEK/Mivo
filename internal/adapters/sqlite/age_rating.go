@@ -57,8 +57,8 @@ func backfillAgeRatingBatch(ctx context.Context, queries *sqlcgen.Queries) (int,
 }
 
 // storeAgeRating sets the bucket of an item's content rating and the effective bucket and
-// ancestor visibility of the item and its subtree. It runs in the caller's transaction, so a show's rating and the
-// buckets its seasons and episodes inherit change together.
+// ancestor visibility of the item and its subtree. It runs in the caller's transaction, so a
+// show's rating and the buckets its seasons and episodes inherit change together.
 func storeAgeRating(ctx context.Context, queries *sqlcgen.Queries, itemID, contentRating string) error {
 	err := queries.SetItemAgeRating(ctx, sqlcgen.SetItemAgeRatingParams{
 		AgeRating:       ageRatingColumn(contentRating),
@@ -74,8 +74,9 @@ func storeAgeRating(ctx context.Context, queries *sqlcgen.Queries, itemID, conte
 
 // propagateEffectiveAgeRating writes the effective bucket and the ancestor visibility
 // (migration 00016) of every row in the item's subtree whose stored values are outdated. Any
-// write that changes an item's own bucket or its parent must end here, or a descendant could
-// stay visible below a hidden ancestor.
+// write that changes an item's own bucket or its parent must end here in the same
+// transaction, or a descendant could stay visible below a hidden ancestor: the triggers of
+// migration 00017 close only the changed row itself until the backfill runs.
 func propagateEffectiveAgeRating(ctx context.Context, queries *sqlcgen.Queries, itemID string) error {
 	outdated, err := queries.ListOutdatedAgeRatings(ctx, itemID)
 	if err != nil {
@@ -83,8 +84,13 @@ func propagateEffectiveAgeRating(ctx context.Context, queries *sqlcgen.Queries, 
 	}
 
 	for _, row := range outdated {
-		err := queries.SetEffectiveAgeRating(ctx, sqlcgen.SetEffectiveAgeRatingParams{
-			EffectiveAgeRating: row.Effective, VisibilityAgeRating: nullableBucket(row.Visibility),
+		visibility, err := nullableBucket(row.Visibility)
+		if err != nil {
+			return fmt.Errorf("visibility of item %q: %w", row.ID, err)
+		}
+
+		err = queries.SetEffectiveAgeRating(ctx, sqlcgen.SetEffectiveAgeRatingParams{
+			EffectiveAgeRating: row.Effective, VisibilityAgeRating: visibility,
 			VisibilityUnrated: row.Unrated, ID: row.ID,
 		})
 		if err != nil {
@@ -96,11 +102,17 @@ func propagateEffectiveAgeRating(ctx context.Context, queries *sqlcgen.Queries, 
 }
 
 // nullableBucket converts a computed bucket, which sqlc cannot type (a CASE over two nullable
-// columns): the driver yields an int64 or nil.
-func nullableBucket(value any) sql.NullInt64 {
-	bucket, rated := value.(int64)
-
-	return sql.NullInt64{Int64: bucket, Valid: rated}
+// columns): the driver yields an int64 or nil. Any other type is an error and never NULL,
+// because a NULL bucket passes every maximum age.
+func nullableBucket(value any) (sql.NullInt64, error) {
+	switch bucket := value.(type) {
+	case nil:
+		return sql.NullInt64{}, nil
+	case int64:
+		return sql.NullInt64{Int64: bucket, Valid: true}, nil
+	default:
+		return sql.NullInt64{}, fmt.Errorf("computed bucket has type %T, want an integer or NULL", value)
+	}
 }
 
 // ageRatingColumn is the stored form of a rating's bucket; NULL means unknown, which a content

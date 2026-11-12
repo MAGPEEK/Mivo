@@ -78,7 +78,7 @@ func TestListChildrenRejectsForeignAndMalformedCursors(t *testing.T) {
 	ctx := t.Context()
 
 	ascending, err := fixture.reader.ListChildren(ctx, fixture.season1ID,
-		applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 2}})
+		applibrary.ChildPageRequest{Page: library.PageRequest{Limit: 2}}, access.Unrestricted())
 	if err != nil || ascending.NextCursor == "" {
 		t.Fatalf("first page = %+v, %v, want a next cursor", ascending, err)
 	}
@@ -97,7 +97,7 @@ func TestListChildrenRejectsForeignAndMalformedCursors(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if _, err := fixture.reader.ListChildren(ctx, test.itemID, test.request); !errors.Is(err, domain.ErrInvalid) {
+		if _, err := fixture.reader.ListChildren(ctx, test.itemID, test.request, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 			t.Errorf("%s: error = %v, want domain.ErrInvalid", test.name, err)
 		}
 	}
@@ -120,18 +120,18 @@ func TestListChildrenOfUnknownItemsAndLeaves(t *testing.T) {
 	movie := newItemSpec(testID('m', 1), moviesLibraryID, "movie", "Movie")
 	insertItem(t, fixture.inspection, movie)
 
-	_, err := fixture.reader.ListChildren(t.Context(), unknownID, request("", false))
+	_, err := fixture.reader.ListChildren(t.Context(), unknownID, request("", false), access.Unrestricted())
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("unknown item error = %v, want domain.ErrNotFound", err)
 	}
 
-	page, err := fixture.reader.ListChildren(t.Context(), movie.id, request("", false))
+	page, err := fixture.reader.ListChildren(t.Context(), movie.id, request("", false), access.Unrestricted())
 	if err != nil || len(page.Items) != 0 || page.NextCursor != "" {
 		t.Errorf("children of a movie = %+v, %v, want an empty last page", page, err)
 	}
 
 	tooMany := applibrary.ChildPageRequest{Page: library.PageRequest{Limit: library.MaxPageLimit + 1}}
-	if _, err = fixture.reader.ListChildren(t.Context(), fixture.season1ID, tooMany); !errors.Is(err, domain.ErrInvalid) {
+	if _, err = fixture.reader.ListChildren(t.Context(), fixture.season1ID, tooMany, access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("limit above the maximum error = %v, want domain.ErrInvalid", err)
 	}
 }
@@ -210,7 +210,7 @@ func TestSeasonPosterFallsBackToTheShow(t *testing.T) {
 		relativePath: "season2.jpg", tag: "tagseason", selected: true,
 	})
 
-	page, err := fixture.reader.ListChildren(t.Context(), fixture.showID, request("", false))
+	page, err := fixture.reader.ListChildren(t.Context(), fixture.showID, request("", false), access.Unrestricted())
 	if err != nil {
 		t.Fatalf("ListChildren error = %v", err)
 	}
@@ -430,12 +430,12 @@ func TestReadingACorruptV2RowIsAServerError(t *testing.T) {
 	fixture := newShowFixture(t, 1)
 	storeUnchecked(t, fixture.inspection, `UPDATE items SET kind = 'hologram' WHERE id = ?`, testID('e', 1))
 
-	_, err := fixture.reader.ListChildren(t.Context(), fixture.season1ID, request("", false))
+	_, err := fixture.reader.ListChildren(t.Context(), fixture.season1ID, request("", false), access.Unrestricted())
 	assertUndecodableRowError(t, "ListChildren", err)
 
 	storeUnchecked(t, fixture.inspection, `UPDATE items SET release_date = 'soon' WHERE id = ?`, fixture.showID)
 
-	_, err = fixture.reader.GetItem(t.Context(), fixture.showID)
+	_, err = fixture.reader.GetItem(t.Context(), fixture.showID, access.Unrestricted())
 	assertUndecodableRowError(t, "GetItem", err)
 }
 
@@ -460,7 +460,7 @@ func childIDs(t *testing.T, fixture showFixture, query childQuery, wantSizes []i
 	for range 20 {
 		page, err := fixture.reader.ListChildren(t.Context(), query.itemID, applibrary.ChildPageRequest{
 			Page: library.PageRequest{Limit: query.limit, Cursor: cursor}, Descending: query.descending,
-		})
+		}, access.Unrestricted())
 		if err != nil {
 			t.Fatalf("ListChildren error = %v", err)
 		}
@@ -487,7 +487,7 @@ func childIDs(t *testing.T, fixture showFixture, query childQuery, wantSizes []i
 func mustGetV2Item(t *testing.T, reader applibrary.ItemReader, itemID string) applibrary.ItemDetail {
 	t.Helper()
 
-	detail, err := reader.GetItem(t.Context(), itemID)
+	detail, err := reader.GetItem(t.Context(), itemID, access.Unrestricted())
 	if err != nil {
 		t.Fatalf("GetItem(%q) error = %v", itemID, err)
 	}
@@ -554,7 +554,7 @@ func TestListChildrenReportsABadCursorBeforeAnUnknownItem(t *testing.T) {
 
 	fixture := newShowFixture(t, 1)
 
-	if _, err := fixture.reader.ListChildren(t.Context(), unknownID, request("%%%", false)); !errors.Is(err, domain.ErrInvalid) {
+	if _, err := fixture.reader.ListChildren(t.Context(), unknownID, request("%%%", false), access.Unrestricted()); !errors.Is(err, domain.ErrInvalid) {
 		t.Errorf("bad cursor on an unknown item error = %v, want domain.ErrInvalid", err)
 	}
 }

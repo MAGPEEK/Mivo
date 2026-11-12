@@ -11,6 +11,7 @@ import (
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	appplayback "github.com/magpeek/mivo/internal/app/playback"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/media"
 )
 
@@ -41,14 +42,18 @@ func NewCatalogReader(db *DB) *CatalogReader {
 
 // GetItem returns an item with its detail: files and streams (the primary file first),
 // metadata, ancestors, siblings, play target, artwork, extras and counts (see
-// applibrary.ItemDetail). An unknown ID wraps domain.ErrNotFound.
-func (catalog *CatalogReader) GetItem(ctx context.Context, itemID string) (applibrary.ItemDetail, error) {
+// applibrary.ItemDetail), as the restriction allows: siblings, play target, extras and counts
+// cover visible items only. An unknown ID wraps domain.ErrNotFound, and so does an item the
+// restriction hides, itself or through an ancestor; the zero restriction hides every item.
+func (catalog *CatalogReader) GetItem(
+	ctx context.Context, itemID string, restriction access.Restriction,
+) (applibrary.ItemDetail, error) {
 	var detail applibrary.ItemDetail
 
 	err := inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
 		var err error
 
-		detail, err = readItemDetail(ctx, queries, itemID)
+		detail, err = readItemDetail(ctx, queries, itemID, viewOf(restriction))
 
 		return err
 	})

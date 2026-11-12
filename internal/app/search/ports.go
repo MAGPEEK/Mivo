@@ -6,6 +6,7 @@ package search
 import (
 	"context"
 
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -20,6 +21,11 @@ type Filter struct {
 	// Kinds are the item kinds returned; empty returns every indexed kind. Seasons and
 	// extras are not indexed, so asking for them finds nothing.
 	Kinds []library.ItemKind
+	// Restriction is what the viewer may see (ADR 0032 section 7): a hit lies in a library
+	// of LibraryIDs that the restriction allows too, and it and every ancestor pass the
+	// content limit. The index applies it before the limit, so hidden items never shorten a
+	// result. The zero value finds nothing.
+	Restriction access.Restriction
 }
 
 // Hit is one search result.
@@ -34,7 +40,8 @@ type Index interface {
 	// Search returns up to limit hits for query, best match first. Every word of query
 	// matches as a prefix, case- and accent-insensitively, in a title, original title, sort
 	// title, person or genre of the item; all words must match. Any query text is accepted:
-	// one without a letter or digit finds nothing. A limit outside 1..MaxLimit or an unknown
+	// one without a letter or digit finds nothing. A hit by a person's name is a hit of the
+	// item, so it follows the item's visibility. A limit outside 1..MaxLimit or an unknown
 	// kind wraps domain.ErrInvalid.
 	Search(ctx context.Context, query string, filter Filter, limit int) ([]Hit, error)
 }

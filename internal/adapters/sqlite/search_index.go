@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	appsearch "github.com/magpeek/mivo/internal/app/search"
 	"github.com/magpeek/mivo/internal/domain"
@@ -39,7 +40,7 @@ func (index *SearchIndex) Search(ctx context.Context, query string, filter appse
 	}
 
 	expression := searchMatchExpression(query)
-	if expression == "" || len(filter.LibraryIDs) == 0 {
+	if expression == "" || len(filter.LibraryIDs) == 0 || filter.Restriction.DeniesAll() {
 		return []appsearch.Hit{}, nil
 	}
 
@@ -73,21 +74,40 @@ func validateSearchRequest(filter appsearch.Filter, limit int) error {
 }
 
 // searchStatement builds the query of one search. Only fixed SQL text and placeholders go into
-// it; the match expression, library IDs and kinds are bound parameters.
+// it; the match expression, library IDs, kinds and the restriction's values are bound
+// parameters.
+//
+// The viewer's restriction (ADR 0032 section 7) is part of the WHERE clause, so the limit
+// counts visible hits only. Its library part reads search_docs; its content limit needs the
+// items row of each match, which only a viewer with a limit pays for (see searchRankSQL on
+// what that row costs).
 func searchStatement(expression string, filter appsearch.Filter, limit int) (string, []any) {
-	var builder sqlBuilder
+	var (
+		builder  sqlBuilder
+		joinSQL  string
+		whereSQL strings.Builder
+	)
+
+	// The conditions are built before the statement is written, but their placeholders are
+	// numbered, so the order of the text does not have to follow the order of the arguments.
+	whereSQL.WriteString(andSQL(libraryConditionSQL(&builder, filter.Restriction, "search_docs.library_id")))
+
+	if content := ageConditionSQL(&builder, filter.Restriction, "items"); content != "" {
+		joinSQL = "\nJOIN items ON items.id = search_docs.item_id"
+
+		whereSQL.WriteString(andSQL(content))
+	}
+
+	if len(filter.Kinds) > 0 {
+		whereSQL.WriteString(` AND search_docs.kind IN (` + list(&builder, filter.Kinds) + `)`)
+	}
 
 	builder.write(`SELECT search_docs.item_id, search_docs.library_id, search_docs.kind
 FROM item_search
-JOIN search_docs ON search_docs.doc_id = item_search.rowid
+JOIN search_docs ON search_docs.doc_id = item_search.rowid`, joinSQL, `
 WHERE item_search MATCH `, builder.arg(expression),
-		` AND search_docs.library_id IN (`, list(&builder, filter.LibraryIDs), `)`)
-
-	if len(filter.Kinds) > 0 {
-		builder.write(` AND search_docs.kind IN (`, list(&builder, filter.Kinds), `)`)
-	}
-
-	builder.write(` ORDER BY `, searchRankSQL, ` LIMIT `, builder.arg(limit))
+		` AND search_docs.library_id IN (`, list(&builder, filter.LibraryIDs), `)`, whereSQL.String(),
+		` ORDER BY `, searchRankSQL, ` LIMIT `, builder.arg(limit))
 
 	return builder.text.String(), builder.args
 }

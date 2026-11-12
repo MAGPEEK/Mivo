@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -36,7 +37,8 @@ func (service *Service) ListChildren(ctx context.Context, itemID string, request
 
 	// Unlike ListItems no existence check is needed: the reader knows the item and reports
 	// an unknown one itself.
-	children, err := service.children.ListChildren(ctx, itemID, request)
+	// TODO(M7-14): the viewer's restriction.
+	children, err := service.children.ListChildren(ctx, itemID, request, access.Unrestricted())
 	if err != nil {
 		return ItemPage{}, fmt.Errorf("list children of item %q: %w", itemID, err)
 	}

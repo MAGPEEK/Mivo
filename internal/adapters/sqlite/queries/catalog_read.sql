@@ -19,6 +19,23 @@ SELECT sqlc.embed(items),
 FROM items
 WHERE items.id IN (sqlc.slice(item_ids));
 
+-- Viewer restriction (ADR 0032 section 7). The queries below take the content limit of the
+-- viewer as two values: max_age, the highest bucket the viewer may see (18 without a limit),
+-- and allow_unrated, 1 unless unrated titles are hidden. Each restricted alias repeats the
+-- same two conditions, the bound form of ageConditionSQL (restriction_sql.go);
+-- TestGeneratedVisibilityMatchesTheSharedPredicate holds the two forms equal. An item's
+-- stored visibility covers its ancestors, so the children of a visible parent need no
+-- ancestor check; the adapter checks the library on the item or parent a read starts from.
+
+-- GetVisibleItem returns an item that passes the content limit.
+-- name: GetVisibleItem :one
+SELECT items.*
+FROM items
+WHERE items.id = sqlc.arg(item_id)
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'));
+
 -- ListChildrenAscending and ListChildrenDescending return the children of an item in child
 -- order (ChildReader): order_group 0 holds the numbered children and 1 the specials (season
 -- 0) and the unnumbered ones, which come last; then by number, sort title and ID. The
@@ -33,14 +50,23 @@ SELECT sqlc.embed(items),
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (children.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
 WHERE items.parent_id = sqlc.arg(parent_id)
   AND items.kind <> 'extra'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND (CAST(sqlc.arg(has_after) AS INTEGER) = 0 OR (
         CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
              THEN 1 ELSE 0 END,
@@ -56,14 +82,23 @@ SELECT sqlc.embed(items),
                  THEN 1 ELSE 0 END AS INTEGER) AS order_group,
        CAST(ifnull(items.number, 0) AS INTEGER) AS order_number,
        (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (children.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
 WHERE items.parent_id = sqlc.arg(parent_id)
   AND items.kind <> 'extra'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
   AND (CAST(sqlc.arg(has_after) AS INTEGER) = 0 OR (
         CASE WHEN items.number IS NULL OR (items.kind = 'season' AND items.number = 0)
              THEN 1 ELSE 0 END,
@@ -73,23 +108,33 @@ WHERE items.parent_id = sqlc.arg(parent_id)
 ORDER BY order_group DESC, order_number DESC, items.sort_title DESC, items.id DESC
 LIMIT sqlc.arg(row_limit);
 
--- GetItemCounts returns the counts of ListItemsWithCounts for one item.
+-- GetItemCounts returns the counts of ListItemsWithCounts for one item, over the members that
+-- pass the content limit.
 -- name: GetItemCounts :one
 SELECT (SELECT COUNT(*) FROM items AS children
-        WHERE children.parent_id = items.id AND children.kind <> 'extra') AS child_count,
+        WHERE children.parent_id = items.id AND children.kind <> 'extra'
+          AND coalesce(children.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (children.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR children.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS child_count,
        (SELECT COUNT(*) FROM items AS seasons
         JOIN items AS episodes ON episodes.parent_id = seasons.id
         WHERE seasons.parent_id = items.id AND seasons.kind = 'season'
-          AND episodes.kind = 'episode') AS leaf_count
+          AND episodes.kind = 'episode'
+          AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+          AND (episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+               OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))) AS leaf_count
 FROM items
-WHERE items.id = ?;
+WHERE items.id = sqlc.arg(item_id);
 
 -- ListExtras returns the extras of an item by type (the order of library.ExtraType), then
 -- title.
 -- name: ListExtras :many
-SELECT *
+SELECT items.*
 FROM items
-WHERE parent_id = sqlc.arg(parent_id) AND kind = 'extra'
+WHERE items.parent_id = sqlc.arg(parent_id) AND items.kind = 'extra'
+  AND coalesce(items.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (items.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR items.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 ORDER BY CASE extra_type
              WHEN 'trailer' THEN 0
              WHEN 'featurette' THEN 1
@@ -104,12 +149,15 @@ ORDER BY CASE extra_type
 LIMIT sqlc.arg(row_limit);
 
 -- FirstEpisodeOfShow returns the first episode of the first regular season (number above 0)
--- that has one; the specials are not a play target.
+-- that has one the viewer may see; the specials are not a play target.
 -- name: FirstEpisodeOfShow :one
 SELECT episodes.id
 FROM items AS seasons
 JOIN items AS episodes ON episodes.parent_id = seasons.id AND episodes.kind = 'episode'
-WHERE seasons.parent_id = ? AND seasons.kind = 'season' AND seasons.number > 0
+WHERE seasons.parent_id = sqlc.arg(show_id) AND seasons.kind = 'season' AND seasons.number > 0
+  AND coalesce(episodes.visibility_age_rating, 0) <= CAST(sqlc.arg(max_age) AS INTEGER)
+  AND (episodes.visibility_unrated <= CAST(sqlc.arg(allow_unrated) AS INTEGER)
+       OR episodes.kind NOT IN ('movie', 'extra', 'show', 'season', 'episode'))
 ORDER BY seasons.number, episodes.number IS NULL, episodes.number, episodes.sort_title, episodes.id
 LIMIT 1;
 

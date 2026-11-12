@@ -180,7 +180,7 @@ func (catalog *CatalogReader) ItemSummaries(
 			return err
 		}
 
-		summaries, err = summariesOf(ctx, queries, listed, sqlcgen.Item{})
+		summaries, err = summariesOf(ctx, queries, pageSource{rows: listed, content: contentLimitOf(restriction)})
 
 		return err
 	})

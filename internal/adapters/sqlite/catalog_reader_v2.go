@@ -3,12 +3,12 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/artwork"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
@@ -16,11 +16,15 @@ import (
 // ListChildren returns one page of the children of an item: the seasons of a show, the
 // episodes of a season or the albums of an artist in child order, or the tracks of an album
 // in track order (see ListAlbumTracks), reversed for request.Descending; extras are never
-// children. A leaf yields an empty page. An unknown item wraps domain.ErrNotFound, an invalid
-// limit and a cursor that was not issued for this item and direction domain.ErrInvalid. The
-// request is validated before the item is read, so a bad cursor on an unknown item reports
-// domain.ErrInvalid, not domain.ErrNotFound.
-func (catalog *CatalogReader) ListChildren(ctx context.Context, itemID string, request applibrary.ChildPageRequest) (applibrary.ItemPage, error) {
+// children. A leaf yields an empty page. Only children the restriction allows are
+// returned, with the counts of their visible members. An unknown item and one the restriction
+// hides (itself or through an ancestor) wrap domain.ErrNotFound, an invalid limit and a cursor
+// that was not issued for this item and direction domain.ErrInvalid. The request is validated
+// before the item is read, so a bad cursor on an unknown item reports domain.ErrInvalid, not
+// domain.ErrNotFound.
+func (catalog *CatalogReader) ListChildren(
+	ctx context.Context, itemID string, request applibrary.ChildPageRequest, restriction access.Restriction,
+) (applibrary.ItemPage, error) {
 	limit, err := library.NormalizeLimit(request.Page.Limit)
 	if err != nil {
 		return applibrary.ItemPage{}, fmt.Errorf("list children of item %q: %w", itemID, err)
@@ -42,6 +46,7 @@ func (catalog *CatalogReader) ListChildren(ctx context.Context, itemID string, r
 			scope: scope, after: cursor.child, hasAfter: cursor.hasChild,
 			afterTrack: cursor.track, hasAfterTrack: cursor.hasTrack,
 			afterPhoto: cursor.photo, hasAfterPhoto: cursor.hasPhoto, limit: limit,
+			view: viewOf(restriction),
 		})
 
 		return readErr
@@ -64,8 +69,9 @@ type listedItem struct {
 
 // childrenRequest is one page of children after a child key (hasAfter) or, for the tracks
 // of an album, after a track position (hasAfterTrack), or, for the children of a photo
-// album, after a photo position (hasAfterPhoto).
+// album, after a photo position (hasAfterPhoto), as view may see them.
 type childrenRequest struct {
+	view          catalogView
 	scope         childCursorScope
 	after         childKey
 	hasAfter      bool
@@ -83,27 +89,27 @@ type childrenRequest struct {
 func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request childrenRequest) (applibrary.ItemPage, error) {
 	parentID := request.scope.parentID
 
-	parent, err := queries.GetItem(ctx, parentID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return applibrary.ItemPage{}, domain.ErrNotFound
-	}
-
+	// A visible parent has only visible ancestors, so its poster may stand in for a season's.
+	parent, err := request.view.item(ctx, queries, parentID)
 	if err != nil {
-		return applibrary.ItemPage{}, fmt.Errorf("read item: %w", err)
+		return applibrary.ItemPage{}, err
 	}
 
 	if err := checkChildrenCursor(parent.Kind, request); err != nil {
 		return applibrary.ItemPage{}, err
 	}
 
+	content := request.view.content
+
 	switch parent.Kind {
 	case library.ItemKindAlbum.String():
 		return readTrackPage(ctx, queries, trackPageRequest{
 			scope: request.scope, after: request.afterTrack, hasAfter: request.hasAfterTrack, limit: request.limit,
+			content: content,
 		})
 	case library.ItemKindPhotoAlbum.String():
 		return photoChildrenPage(ctx, queries, photoChildrenRequest{
-			albumID: parentID, after: request.afterPhoto, limit: request.limit,
+			albumID: parentID, after: request.afterPhoto, limit: request.limit, view: request.view,
 		})
 	}
 
@@ -112,7 +118,7 @@ func readChildrenPage(ctx context.Context, queries *sqlcgen.Queries, request chi
 		return applibrary.ItemPage{}, err
 	}
 
-	page := pageSource{rows: listed, limit: request.limit}
+	page := pageSource{rows: listed, limit: request.limit, content: content}
 
 	// Only the children of a show are seasons; reading the parent's artwork for episodes
 	// would be wasted.
@@ -154,6 +160,7 @@ func checkChildrenCursor(parentKind string, request childrenRequest) error {
 func listChildren(ctx context.Context, queries *sqlcgen.Queries, request childrenRequest, rowLimit int64) ([]listedItem, error) {
 	parentID := sql.NullString{String: request.scope.parentID, Valid: true}
 	after := sqlcgen.ListChildrenAscendingParams{
+		MaxAge: request.view.content.maxAge, AllowUnrated: request.view.content.allowUnrated,
 		ParentID: parentID, HasAfter: storedFlag(request.hasAfter), AfterGroup: request.after.group,
 		AfterNumber: request.after.number, AfterSortTitle: request.after.sortTitle, AfterID: request.after.id,
 		RowLimit: rowLimit,
@@ -196,19 +203,22 @@ func childListedItem(row sqlcgen.ListChildrenAscendingRow) listedItem {
 
 // pageSource is the rows of a listing, one more than limit when another page follows.
 // fallbackParent is the parent of a children listing: its poster stands in for a season
-// without one.
+// without one. content is the viewer's content limit for what the summaries count beyond the
+// rows (the photos of an album); the rows themselves are already the visible ones.
 type pageSource struct {
 	rows           []listedItem
 	limit          int
 	fallbackParent sqlcgen.Item
+	content        contentLimit
 }
 
 // pageOf cuts the extra row, builds the summaries and the cursor behind the last row.
 func pageOf(ctx context.Context, queries *sqlcgen.Queries, source pageSource, cursorAfter func(listedItem) string) (applibrary.ItemPage, error) {
 	hasMore := len(source.rows) > source.limit
 	rows := source.rows[:min(len(source.rows), source.limit)]
+	source.rows = rows
 
-	items, err := summariesOf(ctx, queries, rows, source.fallbackParent)
+	items, err := summariesOf(ctx, queries, source)
 	if err != nil {
 		return applibrary.ItemPage{}, err
 	}
@@ -221,11 +231,14 @@ func pageOf(ctx context.Context, queries *sqlcgen.Queries, source pageSource, cu
 	return page, nil
 }
 
-// summariesOf builds the summaries of listed items with a fixed number of queries whatever the
-// page size: the primary files with their streams, the selected artwork and, for a page with
-// audiobooks, their summed part lengths. A season without a poster shows the poster of
-// fallbackParent, its show.
-func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedItem, fallbackParent sqlcgen.Item) ([]applibrary.ItemSummary, error) {
+// summariesOf builds the summaries of every row of source (its limit is not applied) with a
+// fixed number of queries whatever the page size: the primary files with their streams, the
+// selected artwork and, for a page with audiobooks, their summed part lengths. A season
+// without a poster shows the poster of source.fallbackParent, its show. The caller passes
+// only rows and a parent the viewer may see.
+func summariesOf(ctx context.Context, queries *sqlcgen.Queries, source pageSource) ([]applibrary.ItemSummary, error) {
+	listed, fallbackParent := source.rows, source.fallbackParent
+
 	itemIDs := make([]string, 0, len(listed)+1)
 	for _, entry := range listed {
 		itemIDs = append(itemIDs, entry.item.ID)
@@ -268,7 +281,7 @@ func summariesOf(ctx context.Context, queries *sqlcgen.Queries, listed []listedI
 		})
 	}
 
-	if err := addPhotoSummaries(ctx, queries, summaries); err != nil {
+	if err := addPhotoSummaries(ctx, queries, summaries, source.content); err != nil {
 		return nil, err
 	}
 

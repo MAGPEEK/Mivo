@@ -11,6 +11,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite/sqlcgen"
 	applibrary "github.com/magpeek/mivo/internal/app/library"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 	"github.com/magpeek/mivo/internal/domain/photo"
 )
@@ -19,11 +20,12 @@ var _ applibrary.PhotoReader = (*CatalogReader)(nil)
 
 // ListPhotoChildren returns one page of the children of a photo album: its sub-albums by sort
 // title, then its photos by capture time and lower-case file name, ties by item ID. Limit
-// works as for ListItems; a cursor is bound to its album. An unknown item wraps
-// domain.ErrNotFound; an item that is no photo album, an invalid limit and a cursor not
-// issued for this album wrap domain.ErrInvalid.
+// works as for ListItems; a cursor is bound to its album. Only children the restriction
+// allows are returned, with the counts and tiles of their visible photos. An unknown item
+// and one the restriction hides wrap domain.ErrNotFound; an item that is no photo album, an
+// invalid limit and a cursor not issued for this album wrap domain.ErrInvalid.
 func (catalog *CatalogReader) ListPhotoChildren(
-	ctx context.Context, albumID string, page library.PageRequest,
+	ctx context.Context, albumID string, page library.PageRequest, restriction access.Restriction,
 ) (applibrary.PhotoChildPage, error) {
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
@@ -40,7 +42,9 @@ func (catalog *CatalogReader) ListPhotoChildren(
 	err = inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
 		var readErr error
 
-		result, readErr = readPhotoChildren(ctx, queries, photoChildrenRequest{albumID: albumID, after: after, limit: limit})
+		result, readErr = readPhotoChildren(ctx, queries, photoChildrenRequest{
+			albumID: albumID, after: after, limit: limit, view: viewOf(restriction),
+		})
 
 		return readErr
 	})
@@ -51,10 +55,13 @@ func (catalog *CatalogReader) ListPhotoChildren(
 	return result, nil
 }
 
+// photoChildrenRequest asks for one page of the children of an album after a position, as
+// view may see them.
 type photoChildrenRequest struct {
 	albumID string
 	after   photoPosition
 	limit   int
+	view    catalogView
 }
 
 // listedPhotoChild is one child of a page with its place in album order.
@@ -66,7 +73,7 @@ type listedPhotoChild struct {
 // readPhotoChildren reads one row more than the limit, sub-albums first, so it learns whether
 // another page follows.
 func readPhotoChildren(ctx context.Context, queries *sqlcgen.Queries, request photoChildrenRequest) (applibrary.PhotoChildPage, error) {
-	if _, err := itemOfKind(ctx, queries, request.albumID, library.ItemKindPhotoAlbum); err != nil {
+	if _, err := request.view.itemOfKind(ctx, queries, request.albumID, library.ItemKindPhotoAlbum); err != nil {
 		return applibrary.PhotoChildPage{}, err
 	}
 
@@ -111,7 +118,10 @@ func photoPageOf(request photoChildrenRequest, listed []listedPhotoChild) applib
 }
 
 func listSubAlbums(ctx context.Context, queries *sqlcgen.Queries, request photoChildrenRequest, rowLimit int) ([]listedPhotoChild, error) {
+	content := request.view.content
+
 	rows, err := queries.ListPhotoSubAlbums(ctx, sqlcgen.ListPhotoSubAlbumsParams{
+		MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
 		ParentID:       sql.NullString{String: request.albumID, Valid: true},
 		AfterSortTitle: request.after.sortTitle, AfterID: request.after.id, RowLimit: int64(rowLimit),
 	})
@@ -127,7 +137,7 @@ func listSubAlbums(ctx context.Context, queries *sqlcgen.Queries, request photoC
 			return nil, err
 		}
 
-		totals, err := queries.GetPhotoAlbumTotals(ctx, item.ID)
+		totals, err := queries.GetPhotoAlbumTotals(ctx, content.albumTotalsOf(item.ID))
 		if err != nil {
 			return nil, fmt.Errorf("read totals of album %q: %w", item.ID, err)
 		}
@@ -146,6 +156,7 @@ func listSubAlbums(ctx context.Context, queries *sqlcgen.Queries, request photoC
 func listAlbumPhotos(ctx context.Context, queries *sqlcgen.Queries, request photoChildrenRequest, rowLimit int) ([]listedPhotoChild, error) {
 	params := sqlcgen.ListAlbumPhotosParams{
 		ParentID: sql.NullString{String: request.albumID, Valid: true}, AfterTakenAt: math.MinInt64, RowLimit: int64(rowLimit),
+		MaxAge: request.view.content.maxAge, AllowUnrated: request.view.content.allowUnrated,
 	}
 	if after := request.after; after.photo {
 		params.AfterTakenAt, params.AfterNameKey, params.AfterID = after.takenAt, after.nameKey, after.id
@@ -194,10 +205,11 @@ const libraryCursorScope = "library:"
 
 // ListLibraryPhotos returns one page of every photo of a library, whatever album it is in,
 // by capture time and lower-case file name, ties by item ID (the timeline). Limit works as
-// for ListItems; a cursor is bound to its library. An unknown library yields an empty page;
+// for ListItems; a cursor is bound to its library. Only photos the restriction allows are
+// returned. An unknown library and one the restriction does not allow yield an empty page;
 // an invalid limit and a cursor not issued for this library wrap domain.ErrInvalid.
 func (catalog *CatalogReader) ListLibraryPhotos(
-	ctx context.Context, libraryID string, page library.PageRequest,
+	ctx context.Context, libraryID string, page library.PageRequest, restriction access.Restriction,
 ) (applibrary.PhotoChildPage, error) {
 	limit, err := library.NormalizeLimit(page.Limit)
 	if err != nil {
@@ -215,7 +227,16 @@ func (catalog *CatalogReader) ListLibraryPhotos(
 		return applibrary.PhotoChildPage{}, fmt.Errorf("list photos of library %q: %w", libraryID, err)
 	}
 
-	params := sqlcgen.ListLibraryPhotosParams{LibraryID: libraryID, AfterTakenAt: math.MinInt64, RowLimit: int64(limit) + 1}
+	if !libraryAllowed(restriction, libraryID) {
+		return applibrary.PhotoChildPage{Children: []applibrary.PhotoChild{}}, nil
+	}
+
+	content := contentLimitOf(restriction)
+
+	params := sqlcgen.ListLibraryPhotosParams{
+		LibraryID: libraryID, AfterTakenAt: math.MinInt64, RowLimit: int64(limit) + 1,
+		MaxAge: content.maxAge, AllowUnrated: content.allowUnrated,
+	}
 	if after.photo {
 		params.AfterTakenAt, params.AfterNameKey, params.AfterID = after.takenAt, after.nameKey, after.id
 	}
@@ -239,14 +260,18 @@ func (catalog *CatalogReader) ListLibraryPhotos(
 	return photoPageOf(photoChildrenRequest{albumID: scope, limit: limit}, listed), nil
 }
 
-// PhotoDetail returns the photo block of a photo item. An unknown item, and a photo the
-// photo writer has not stored yet, wrap domain.ErrNotFound; an item that is no photo wraps
-// domain.ErrInvalid.
-func (catalog *CatalogReader) PhotoDetail(ctx context.Context, itemID string) (applibrary.PhotoDetail, error) {
+// PhotoDetail returns the photo block of a photo item. An unknown item, one the restriction
+// hides and a photo the photo writer has not stored yet wrap domain.ErrNotFound; an item
+// that is no photo wraps domain.ErrInvalid.
+func (catalog *CatalogReader) PhotoDetail(
+	ctx context.Context, itemID string, restriction access.Restriction,
+) (applibrary.PhotoDetail, error) {
 	var detail applibrary.PhotoDetail
 
+	view := viewOf(restriction)
+
 	err := inReadTransaction(ctx, catalog.reader, func(queries *sqlcgen.Queries) error {
-		if _, err := itemOfKind(ctx, queries, itemID, library.ItemKindPhoto); err != nil {
+		if _, err := view.itemOfKind(ctx, queries, itemID, library.ItemKindPhoto); err != nil {
 			return err
 		}
 

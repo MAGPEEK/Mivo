@@ -13,6 +13,7 @@ import (
 	"github.com/magpeek/mivo/internal/adapters/sqlite"
 	appsearch "github.com/magpeek/mivo/internal/app/search"
 	"github.com/magpeek/mivo/internal/domain"
+	"github.com/magpeek/mivo/internal/domain/access"
 	"github.com/magpeek/mivo/internal/domain/library"
 )
 
@@ -56,7 +57,9 @@ type searchFixture struct {
 }
 
 func allSearchLibraries() appsearch.Filter {
-	return appsearch.Filter{LibraryIDs: []string{moviesLibraryID, showsLibraryID, musicLibraryID}}
+	return appsearch.Filter{
+		LibraryIDs: []string{moviesLibraryID, showsLibraryID, musicLibraryID}, Restriction: access.Unrestricted(),
+	}
 }
 
 func newSearchFixture(t *testing.T) searchFixture {
@@ -194,15 +197,15 @@ func TestSearchAppliesTheFilterAndLimit(t *testing.T) {
 		limit  int
 		want   []string
 	}{
-		{name: "one library", query: "keanu", filter: appsearch.Filter{LibraryIDs: []string{showsLibraryID}}, limit: 10, want: []string{}},
+		{name: "one library", query: "keanu", filter: appsearch.Filter{LibraryIDs: []string{showsLibraryID}, Restriction: access.Unrestricted()}, limit: 10, want: []string{}},
 		{name: "no library finds nothing", query: "keanu", filter: appsearch.Filter{}, limit: 10, want: []string{}},
 		{
 			name: "kinds", query: "d", limit: 10, want: []string{searchDarkID},
-			filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{library.ItemKindShow}},
+			filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{library.ItemKindShow}, Restriction: access.Unrestricted()},
 		},
 		{
 			name: "several kinds", query: "s", limit: 10, want: []string{searchEpisodeID, searchCafeID, searchSpeedID},
-			filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{library.ItemKindEpisode, library.ItemKindMovie}},
+			filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{library.ItemKindEpisode, library.ItemKindMovie}, Restriction: access.Unrestricted()},
 		},
 		{name: "limit", query: "keanu", filter: allSearchLibraries(), limit: 1, want: []string{searchMatrixID}},
 	}
@@ -243,7 +246,7 @@ func TestSearchRejectsAnInvalidLimitOrKind(t *testing.T) {
 	}{
 		{name: "zero limit", filter: allSearchLibraries(), limit: 0},
 		{name: "limit above the maximum", filter: allSearchLibraries(), limit: appsearch.MaxLimit + 1},
-		{name: "unknown kind", filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{"hologram"}}, limit: 1},
+		{name: "unknown kind", filter: appsearch.Filter{LibraryIDs: allSearchLibraries().LibraryIDs, Kinds: []library.ItemKind{"hologram"}, Restriction: access.Unrestricted()}, limit: 1},
 	}
 
 	for _, test := range tests {

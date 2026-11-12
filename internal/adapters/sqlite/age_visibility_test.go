@@ -153,6 +153,10 @@ func TestAgeVisibilityBackfillAfterTheMigration(t *testing.T) {
 		t.Fatalf("stale rows after the migration = %d, want 3", got)
 	}
 
+	for _, id := range []string{show, season, episode} {
+		assertVisibility(t, fixture.inspection, id, uncomputed())
+	}
+
 	if err := fixture.catalog.BackfillAgeRatings(t.Context()); err != nil {
 		t.Fatalf("BackfillAgeRatings error = %v", err)
 	}
@@ -179,6 +183,9 @@ func TestAgeVisibilityReparentedSubtreeIsRecomputed(t *testing.T) {
 	if got := staleAgeRatingRows(t, fixture.inspection); got != 1 {
 		t.Fatalf("stale rows after reparenting = %d, want 1", got)
 	}
+
+	// Until the backfill runs, the moved row is closed (migration 00017).
+	assertVisibility(t, fixture.inspection, season, uncomputed())
 
 	if err := fixture.catalog.BackfillAgeRatings(t.Context()); err != nil {
 		t.Fatalf("BackfillAgeRatings error = %v", err)

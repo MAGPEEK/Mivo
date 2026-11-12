@@ -44,7 +44,7 @@ func (catalog *CatalogReader) ListRowItems(ctx context.Context, request approws.
 			return err
 		}
 
-		summaries, err = summariesOf(ctx, queries, listed, sqlcgen.Item{})
+		summaries, err = summariesOf(ctx, queries, pageSource{rows: listed, content: contentLimitOf(target.restriction)})
 
 		return err
 	})

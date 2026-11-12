@@ -9,10 +9,14 @@ import (
 
 // The viewer restriction of ADR 0032 section 7 as SQL. Every catalog read filters with the
 // functions of this file (listing, facets, letters and folders since M7-12; rows, summaries
-// and counts since M7-13), so the rule "allowed library, the item and every ancestor up to the
-// maximum age, unrated chains hidden or not" is written once. The ancestors are not walked
-// here: the adapter stores the visibility of the whole chain on each item (migration 00016). A restriction that limits nothing adds no SQL text, so an unrestricted read keeps its
-// statement and its query plan.
+// and counts since M7-13a; search since M7-13b), so the rule "allowed library, the item and
+// every ancestor up to the maximum age, unrated video chains hidden or not" is written once.
+// The ancestors are not walked here: the adapter stores the visibility of the whole chain on
+// each item (migrations 00016 and 00017). A restriction that limits nothing adds no SQL text,
+// so an unrestricted read keeps its statement and its query plan.
+//
+// The generated queries (children, detail, music and photo reads) cannot take SQL text, so
+// they carry the same content limit with bound values (contentLimit, restriction_bound.go).
 
 // Columns the restriction compares, appended to an items alias.
 const (
@@ -22,7 +26,16 @@ const (
 	visibilityAgeColumn = ".visibility_age_rating"
 	// visibilityUnratedColumn is 1 when the item or an ancestor has no effective bucket.
 	visibilityUnratedColumn = ".visibility_unrated"
+	kindColumn              = ".kind"
 )
+
+// ratedKindsSQL lists the kinds "hide unrated" applies to: video, which NFO files and the
+// metadata providers rate. Extras belong to a film or show and follow it. Music, audiobooks
+// and photos carry no age rating in any source Mivo reads, so hiding the unrated ones would
+// empty their libraries for every limited profile; they stay visible within the allowed
+// libraries (orchestrator decision 2026-11-11, ADR 0032 section 7). A maximum age still
+// applies to every kind.
+const ratedKindsSQL = "('movie', 'extra', 'show', 'season', 'episode')"
 
 // libraryAllowed reports whether the restriction allows the library. AllLibraries and
 // DeniesAll are checked before LibraryIDs, whose empty list means either of them.
@@ -55,22 +68,23 @@ func libraryConditionSQL(builder *sqlBuilder, restriction access.Restriction, co
 // limit. The alias may carry a unary plus, which keeps the condition out of SQLite's index
 // choice (see visibleSQL).
 //
-// An unrated chain has no bucket to compare or is flagged unrated below a rated member, so
-// hiding unrated titles tests the flag and showing them lets a NULL bucket pass.
+// A chain without any rating has no bucket to compare, so a NULL bucket passes every maximum
+// age; hiding unrated titles tests the flag instead, for the rated kinds only. A row whose
+// visibility was not computed yet holds (18, 1) and passes neither (migration 00017).
 func ageConditionSQL(builder *sqlBuilder, restriction access.Restriction, alias string) string {
-	maxAge, limited := restriction.MaxAge()
-	bucket, rated := alias+visibilityAgeColumn, alias+visibilityUnratedColumn+" = 0"
+	var conditions []string
 
-	switch {
-	case limited && restriction.HideUnrated():
-		return bucket + " <= " + builder.arg(int64(maxAge)) + " AND " + rated
-	case limited:
-		return "(" + bucket + " IS NULL OR " + bucket + " <= " + builder.arg(int64(maxAge)) + ")"
-	case restriction.HideUnrated():
-		return rated
-	default:
-		return ""
+	if maxAge, limited := restriction.MaxAge(); limited {
+		bucket := alias + visibilityAgeColumn
+		conditions = append(conditions, "("+bucket+" IS NULL OR "+bucket+" <= "+builder.arg(int64(maxAge))+")")
 	}
+
+	if restriction.HideUnrated() {
+		conditions = append(conditions,
+			"("+alias+visibilityUnratedColumn+" = 0 OR "+alias+kindColumn+" NOT IN "+ratedKindsSQL+")")
+	}
+
+	return strings.Join(conditions, " AND ")
 }
 
 // restrictionConditionSQL returns the whole restriction on the items row of the given alias,
