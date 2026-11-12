@@ -1,0 +1,13 @@
+# Recorded on Windows with FFmpeg 9.0.2 (gyan.dev full build): ffmpeg -progress pipe:1 -nostats -hide_banner -nostdin -loglevel error -y -i <1080p25 H.264/AAC, 60 s> -c copy -f hls -hls_time 6 -hls_segment_type fmp4 -hls_flags temp_file index.m3u8
+frame=1500
+fps=0.00
+stream_0_0_q=-1.0
+bitrate=N/A
+total_size=N/A
+out_time_us=60000000
+out_time_ms=60000000
+out_time=00:01:00.000000
+dup_frames=0
+drop_frames=0
+speed= 150x
+progress=end

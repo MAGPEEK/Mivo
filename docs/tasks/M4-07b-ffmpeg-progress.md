@@ -17,3 +17,12 @@ The server knows how fast a transcode runs (needed for the "too slow" hint, the 
 ## Notes
 - Output bit rate for copied streams may be `N/A`; the sessions list then omits it.
 - Do not log progress lines (volume).
+
+## Implementation notes
+- `Progress` and the optional `ProgressReporter` interface live in `internal/app/playback/ports.go`; `Production`
+  itself is unchanged, callers type-assert. The FFmpeg production implements it.
+- FFmpeg 9.0.2 reports `bitrate=N/A` and `total_size=N/A` for every HLS run (transcode and remux), so `BitRate`
+  stays 0 in practice; the sessions list needs another source for the output bit rate (the plan's target bit rate
+  or the segment sizes). `total_size` is recognised but not kept: FFmpeg derives `bitrate` from it.
+- `out_time_us` and `speed` are `N/A` in the blocks while FFmpeg flushes; the last known values are kept.
+- The last block (`progress=end`) is always published, so a run shorter than a second still has a snapshot.

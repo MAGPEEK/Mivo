@@ -142,6 +142,7 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		cancel:      cancel,
 		done:        make(chan struct{}),
 		release:     prepared.release,
+		progress:    newProgressTracker(),
 	}
 
 	// The process is started and waited for on the supervising goroutine, never on the
@@ -150,7 +151,8 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 	startResult := make(chan error, 1)
 
 	go production.run(ctx, func() (*process, error) {
-		return p.ffmpeg.start(processContext, prepared.arguments, processFiles{inherited: prepared.inherited})
+		return p.ffmpeg.start(processContext, withProgressArguments(prepared.arguments),
+			processFiles{stdout: production.progress, inherited: prepared.inherited})
 	}, startResult)
 
 	if err := <-startResult; err != nil {
@@ -238,6 +240,14 @@ type production struct {
 	ready atomic.Bool
 	// release frees the input files that outlive the start (preparedRun.release); may be nil.
 	release func()
+	// progress reads FFmpeg's standard output (progress.go).
+	progress *progressTracker
+}
+
+// Progress implements appplayback.ProgressReporter: the latest progress FFmpeg reported, at
+// most a second old while it runs, and the last one after it ended.
+func (p *production) Progress() appplayback.Progress {
+	return p.progress.snapshot()
 }
 
 // Ready implements appplayback.Production: it returns nil once the playlist lists a first

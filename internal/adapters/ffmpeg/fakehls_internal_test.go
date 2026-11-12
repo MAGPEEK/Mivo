@@ -36,6 +36,9 @@ const (
 		"#EXT-X-PLAYLIST-TYPE:EVENT\n#EXT-X-INDEPENDENT-SEGMENTS\n#EXT-X-MAP:URI=\"init.mp4\"\n"
 	fakePlaylistSegment = "#EXTINF:6.000000,\n" + fakeSegmentName + "\n"
 	fakePlaylistEnd     = "#EXT-X-ENDLIST\n"
+	// fakeProgressBlock is one -progress block in FFmpeg's format.
+	fakeProgressBlock = "frame=144\nfps=24.00\nbitrate= 800.0kbits/s\ntotal_size=600000\nout_time_us=6000000\n" +
+		"speed=   2x\nprogress=continue\n"
 )
 
 // isFakeHLSMode reports the modes fakeHLS handles.
@@ -59,6 +62,13 @@ func fakeHLS(mode string, arguments []string) int {
 		fmt.Fprintln(os.Stderr, err)
 
 		return 1
+	}
+
+	// Like FFmpeg, the fake reports its progress only when asked to.
+	if slices.Contains(arguments, progressFlag) {
+		if _, err := fmt.Fprint(os.Stdout, fakeProgressBlock); err != nil {
+			return 1
+		}
 	}
 
 	switch mode {

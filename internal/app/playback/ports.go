@@ -109,6 +109,29 @@ type Production interface {
 	Done() <-chan struct{}
 }
 
+// Progress is a snapshot of how far and how fast a production runs, as FFmpeg reports it.
+// A zero field means FFmpeg has not reported that value (yet).
+type Progress struct {
+	// OutputTime is the media time written so far, measured from the start position.
+	OutputTime time.Duration
+	// Speed is the processing speed relative to playback: 1 is real time, below 1 the
+	// production is too slow to play without stalling.
+	Speed float64
+	// FPS is the number of video frames processed per second.
+	FPS float64
+	// BitRate is the output bit rate in bits per second; FFmpeg often does not know it for
+	// segmented output and copied streams.
+	BitRate int64
+}
+
+// ProgressReporter is implemented by a Production that knows its progress. It is optional:
+// callers type-assert a Production to it, and a production without it has no progress.
+type ProgressReporter interface {
+	// Progress returns the latest snapshot without blocking; the zero Progress before the
+	// first report. Snapshots change at most once per second.
+	Progress() Progress
+}
+
 // Workspace manages the per-session output directories. Implemented by
 // adapters/fs/transcodedir.
 type Workspace interface {
