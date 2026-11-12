@@ -317,3 +317,14 @@ rescan and prune keep it (later user data such as ratings follows the same rule)
 - SeekPreviewBubble: Escape should dismiss the hover/keyboard preview (WCAG 1.4.13).
 - e2e/trickplay.spec.ts: `toBeLessThanOrEqual(1)` POSTs also passes with no POST.
 - Vite build warns about chunks > 500 kB (non-blocking); consider code-splitting.
+
+## m6-17 review minors (2026-11-12)
+- cmd/mivo: no unit test for defaultRunHooks in either build (e2e: hooks set with the variable; release: empty even with the variable set).
+- e2e/support/fakeTmdb.ts: MIVO_E2E_TMDB_URL duplicated; derive the prefix from productId like server.ts.
+- Flow 5 uses fixed quiet periods (1.5 s / 2 s); acceptable for a zero-requests check.
+- Criterion "locked field unchanged" moved here until a field-lock surface exists.
+- Load flakes seen under parallel agents (green alone): music.spec.ts:144/174, branded.spec.ts:63 currentTime timeouts, player-options.spec.ts:20 ERR_NO_BUFFER_SPACE.
+
+## m5-65 re-review nits (2026-11-12)
+- usePlayContainerClick: no test pins the busy guard.
+- collectIds.ts: `seenCursors.add(cursor ?? "")`, add only a defined cursor.

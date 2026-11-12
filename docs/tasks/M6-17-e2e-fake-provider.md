@@ -12,7 +12,7 @@ Core M6 flows verified end to end without the internet.
 - [ ] Flow 1: add a library, scan, posters and titles appear from the fake provider, detail
       page shows the TMDB attribution.
 - [ ] Flow 2: an ambiguous title stays "Not matched"; the filter finds it; Fix match picks the
-      candidate; the item turns matched and a locked field (title set via fixture) is unchanged.
+      candidate; the item turns matched and the locked-field check moves to the backlog until a field-lock surface exists (m6-17 notes).
 - [ ] Flow 3: Remove match drops the provider poster and keeps local data; a rescan does not
       re-match it.
 - [ ] Flow 4: fake server down → library and playback still work, status shows "offline",
