@@ -289,6 +289,8 @@ type environment struct {
 	logs        *syncBuffer
 	libraryRoot string
 	content     []byte
+	subtitles   *fakeSubtitles
+	sheets      *fakeSheets
 }
 
 func newEnvironment(t *testing.T) *environment {
@@ -318,7 +320,12 @@ func newEnvironment(t *testing.T) *environment {
 		URLs: stream.NewURLBuilder(), IDs: uuidgen.New(), Clock: env.clock.Now, Logger: logger,
 	})
 
-	env.handlers = mustHandlers(t, stream.Options{Sessions: env.service, Library: library, Output: workspace, Logger: logger})
+	env.subtitles = &fakeSubtitles{}
+	env.sheets = &fakeSheets{}
+	env.handlers = mustHandlers(t, stream.Options{
+		Sessions: env.service, Library: library, Output: workspace, Logger: logger,
+		Subtitles: env.subtitles, Trickplay: env.sheets,
+	})
 	env.api = mustAPI(t, logger, env.handlers.Mounts())
 
 	return env

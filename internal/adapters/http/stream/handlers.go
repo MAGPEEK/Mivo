@@ -50,12 +50,16 @@ type SessionFiles interface {
 	OpenFile(sessionID, name string) (*os.File, error)
 }
 
-// Options are the dependencies of the stream handlers; all are required.
+// Options are the dependencies of the stream handlers. Sessions, Library, Output and Logger
+// are required; Subtitles and Trickplay are optional, and without one the routes it serves
+// are not mounted.
 type Options struct {
-	Sessions Sessions
-	Library  LibraryFiles
-	Output   SessionFiles
-	Logger   *slog.Logger
+	Sessions  Sessions
+	Library   LibraryFiles
+	Output    SessionFiles
+	Logger    *slog.Logger
+	Subtitles Subtitles
+	Trickplay Trickplay
 }
 
 func (options Options) validate() error {
@@ -81,6 +85,10 @@ type Handlers struct {
 	logger  *slog.Logger
 	// readyTimeout is the readyTimeout constant; tests shorten it.
 	readyTimeout time.Duration
+	subtitles    Subtitles
+	trickplay    Trickplay
+	// conversionTimeout bounds the wait for a subtitle conversion; tests shorten it.
+	conversionTimeout time.Duration
 }
 
 // New returns the stream handlers. A missing dependency is a wiring bug and wraps
@@ -96,15 +104,27 @@ func New(options Options) (*Handlers, error) {
 		output:       options.Output,
 		logger:       options.Logger,
 		readyTimeout: readyTimeout,
+		subtitles:    options.Subtitles, trickplay: options.Trickplay,
+		conversionTimeout: conversionTimeout,
 	}, nil
 }
 
 // Mounts returns the stream routes for restapi.Options.Mounts.
 func (handlers *Handlers) Mounts() []restapi.Mount {
-	return []restapi.Mount{
+	mounts := []restapi.Mount{
 		{Pattern: filePattern, Handler: http.HandlerFunc(handlers.serveFile)},
 		{Pattern: hlsPattern, Handler: http.HandlerFunc(handlers.serveHLS)},
 	}
+
+	if handlers.subtitles != nil {
+		mounts = append(mounts, restapi.Mount{Pattern: subtitlePattern, Handler: http.HandlerFunc(handlers.serveSubtitle)})
+	}
+
+	if handlers.trickplay != nil {
+		mounts = append(mounts, restapi.Mount{Pattern: trickplayPattern, Handler: http.HandlerFunc(handlers.serveTrickplaySheet)})
+	}
+
+	return mounts
 }
 
 // grant is a stream access the playback service granted for one request. The handler must
@@ -122,6 +142,9 @@ type grant struct {
 	waitReady func(ctx context.Context) error
 	// release ends the grant (StreamAccess.Release); it is idempotent.
 	release func()
+	// requestSegment reports the HLS segment the client asked for (StreamAccess.RequestSegment);
+	// nil in tests that do not observe the throttle.
+	requestSegment func(index int)
 }
 
 // accessFunc grants access to a session's stream. The handlers take a function rather than
@@ -140,7 +163,7 @@ func grantsOf(sessions Sessions) accessFunc {
 		return grant{
 			sessionID: sessionID, delivery: access.Delivery,
 			libraryRoot: access.LibraryRoot, relativePath: access.RelativePath, contentType: access.ContentType,
-			waitReady: access.WaitReady, release: access.Release,
+			waitReady: access.WaitReady, release: access.Release, requestSegment: access.RequestSegment,
 		}, nil
 	}
 }

@@ -113,6 +113,8 @@ func TestQuietPatternsAreTheMountedRoutes(t *testing.T) {
 	want := []string{
 		"GET /api/v1/playback/sessions/{sessionId}/file",
 		"GET /api/v1/playback/sessions/{sessionId}/hls/{fileName}",
+		"GET /api/v1/media-files/{fileId}/subtitles/{trackFile}",
+		"GET /api/v1/media-files/{fileId}/trickplay/{sheetFile}",
 	}
 
 	if !slices.Equal(mounted, want) || !slices.Equal(stream.QuietPatterns(), want) {

@@ -76,6 +76,12 @@ func (handlers *Handlers) serveHLS(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
+	// Reported before the wait: a segment the viewer asks for is its position even while the
+	// producer has not written it yet, and the throttle must not pause for it.
+	if index, isSegment := segmentIndex(name); isSegment && granted.requestSegment != nil {
+		granted.requestSegment(index)
+	}
+
 	if !handlers.awaitStream(response, request, granted) {
 		return
 	}
@@ -104,6 +110,20 @@ func isSegmentName(name string) bool {
 
 	return hasPrefix && hasSuffix && len(number) == segmentDigits &&
 		strings.IndexFunc(number, isNotASCIIDigit) < 0
+}
+
+// segmentIndex returns the number of a seg-NNNNN.m4s name, and false for any other name.
+func segmentIndex(name string) (int, bool) {
+	if !isSegmentName(name) {
+		return 0, false
+	}
+
+	index, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(name, segmentPrefix), segmentSuffix))
+	if err != nil {
+		return 0, false
+	}
+
+	return index, true
 }
 
 func isNotASCIIDigit(character rune) bool {

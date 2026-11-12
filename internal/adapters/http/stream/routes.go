@@ -22,6 +22,20 @@ const (
 	// hlsPattern serves the playlist and segments of a remux or transcode session.
 	hlsPattern = http.MethodGet + " " + sessionsPath + "{" + sessionIDParameter + "}" + hlsSegment +
 		"{" + fileNameParameter + "}"
+
+	mediaFilesPath  = "/api/v1/media-files/"
+	fileIDParameter = "fileId"
+	// trackFileParameter and sheetFileParameter hold "<id>.vtt" and "<number>.jpg": net/http
+	// patterns cannot match a suffix inside a segment, so the handlers cut it off.
+	trackFileParameter = "trackFile"
+	sheetFileParameter = "sheetFile"
+
+	// subtitlePattern serves a subtitle track as WebVTT; GET also matches HEAD.
+	subtitlePattern = http.MethodGet + " " + mediaFilesPath + "{" + fileIDParameter + "}/subtitles/{" +
+		trackFileParameter + "}"
+	// trickplayPattern serves one sprite sheet of a file's seek preview.
+	trickplayPattern = http.MethodGet + " " + mediaFilesPath + "{" + fileIDParameter + "}/trickplay/{" +
+		sheetFileParameter + "}"
 )
 
 // URLBuilder builds the stream URLs of sessions. It implements app/playback.StreamURLBuilder
@@ -52,5 +66,5 @@ func (URLBuilder) StreamURL(sessionID string, delivery playback.Delivery) string
 // QuietPatterns returns the patterns of the stream routes for server.Options.QuietPatterns:
 // segment polling is logged at debug level while it succeeds (ADR 0024).
 func QuietPatterns() []string {
-	return []string{filePattern, hlsPattern}
+	return []string{filePattern, hlsPattern, subtitlePattern, trickplayPattern}
 }
