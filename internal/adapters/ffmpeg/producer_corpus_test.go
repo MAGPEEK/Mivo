@@ -23,6 +23,10 @@ const (
 	producerSessionID = "00000000-0000-4000-8000-000000000124"
 	// corruptInputSize is the length of the garbage file FFmpeg must reject.
 	corruptInputSize = 64 << 10
+	// pauseSettleTime lets FFmpeg finish the write in flight when it is paused; pauseObserveTime
+	// is how long the file count must then stay constant.
+	pauseSettleTime  = 500 * time.Millisecond
+	pauseObserveTime = 2 * time.Second
 )
 
 // corpusProducer returns a producer for the local ffmpeg that opens inputs through
@@ -156,6 +160,66 @@ func TestProducerStopsARunningTranscode(t *testing.T) {
 	if _, err := os.Stat(job.OutputDir); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("session directory still exists: %v", err)
 	}
+}
+
+// TestProducerPausesATranscode: a paused transcode writes no further segments, and after
+// Resume it runs to the end.
+func TestProducerPausesATranscode(t *testing.T) {
+	tools, manifest := requireHLSTools(t)
+	t.Parallel()
+
+	job := corpusJob(t, tools, manifest, hlsCorpusRun{
+		name: "video-ts-mpeg2-mp2-long", profile: playbacktest.ChromiumDesktop(),
+		wantMode: playback.ModeTranscode, wantVideo: playback.ActionTranscode, wantAudio: playback.ActionTranscode,
+	})
+	production := startCorpusProduction(t, corpusProducer(t, tools), job)
+
+	pausable, ok := production.(appplayback.Pausable)
+	if !ok || !pausable.Pausable() {
+		t.Skip("pausing a process needs Linux job control signals")
+	}
+
+	readyOrFail(t, production)
+
+	if err := pausable.Pause(); err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
+
+	// FFmpeg may finish the file it was writing when the signal arrived; the count is taken
+	// after a settle time and must then stay constant.
+	time.Sleep(pauseSettleTime)
+
+	before := countFiles(t, job.OutputDir)
+
+	time.Sleep(pauseObserveTime)
+
+	if after := countFiles(t, job.OutputDir); after != before {
+		t.Errorf("the paused production wrote files: %d before, %d after", before, after)
+	}
+
+	if err := pausable.Resume(); err != nil {
+		t.Fatalf("Resume: %v", err)
+	}
+
+	select {
+	case <-production.Done():
+	case <-time.After(hlsRunTimeout):
+		t.Fatalf("the resumed transcode did not finish within %s", hlsRunTimeout)
+	}
+
+	readyOrFail(t, production)
+	hlsAssertPlaylist(t, job.OutputDir)
+}
+
+func countFiles(t *testing.T, directory string) int {
+	t.Helper()
+
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("read %s: %v", directory, err)
+	}
+
+	return len(entries)
 }
 
 func TestProducerReportsACorruptInput(t *testing.T) {

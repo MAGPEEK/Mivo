@@ -145,6 +145,10 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 		progress:    newProgressTracker(),
 	}
 
+	if pauseSupported {
+		production.pause.signal = signalProcess
+	}
+
 	// The process is started and waited for on the supervising goroutine, never on the
 	// caller's: on Linux it must be waited for on the goroutine that started it, which keeps
 	// the thread its parent-death signal is bound to alive (lifetime_linux.go).
@@ -242,6 +246,8 @@ type production struct {
 	release func()
 	// progress reads FFmpeg's standard output (progress.go).
 	progress *progressTracker
+	// pause freezes and continues the process (pause.go).
+	pause pauseControl
 }
 
 // Progress implements appplayback.ProgressReporter: the latest progress FFmpeg reported, at
@@ -296,6 +302,9 @@ func (p *production) settled() (bool, error) {
 // at most stopTimeout. It is idempotent and safe to call concurrently with Ready.
 func (p *production) Stop() {
 	p.stopped.Store(true)
+	// A frozen process would take the kill only when the system next schedules it; continuing
+	// it first lets it end the usual way.
+	p.pause.resumeQuietly()
 	p.cancel()
 
 	select {
@@ -330,6 +339,9 @@ func (p *production) run(ctx context.Context, start func() (*process, error), st
 	started, err := start()
 	if err != nil {
 		p.releaseInput()
+	} else {
+		// Bound before the start is reported, so Pause works as soon as Start returned.
+		p.pause.bind(started.command.Process)
 	}
 
 	startResult <- err

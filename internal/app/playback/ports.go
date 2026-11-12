@@ -132,6 +132,18 @@ type ProgressReporter interface {
 	Progress() Progress
 }
 
+// Pausable is implemented by a Production that can be frozen without being killed, the
+// throttling primitive of ADR 0030. It is optional: callers type-assert a Production to it.
+type Pausable interface {
+	// Pausable reports whether Pause and Resume work on this system.
+	Pausable() bool
+	// Pause freezes the process; idempotent. It fails when Pausable is false (the error wraps
+	// domain.ErrUnavailable) or the production ended (ErrProductionStopped).
+	Pause() error
+	// Resume continues a paused process; idempotent. Stop resumes a paused process itself.
+	Resume() error
+}
+
 // Workspace manages the per-session output directories. Implemented by
 // adapters/fs/transcodedir.
 type Workspace interface {
