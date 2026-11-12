@@ -41,7 +41,8 @@ type indexCall struct {
 	limit  int
 }
 
-// fakeIndex holds total ranked hits ("item-0", "item-1", ...) and records its calls.
+// fakeIndex holds total ranked hits ("item-0", "item-1", ...) in the test library and records
+// its calls. Like the real index it finds nothing the filter's restriction does not allow.
 type fakeIndex struct {
 	total int
 	err   error
@@ -53,6 +54,11 @@ func (index *fakeIndex) Search(_ context.Context, query string, filter search.Fi
 
 	if index.err != nil {
 		return nil, index.err
+	}
+
+	restriction := filter.Restriction
+	if restriction.DeniesAll() || (!restriction.AllLibraries() && !slices.Contains(restriction.LibraryIDs(), testLibraryID)) {
+		return []search.Hit{}, nil
 	}
 
 	hits := make([]search.Hit, 0, min(index.total, limit))
@@ -453,6 +459,70 @@ func TestSearchPassesRestriction(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSearchHandsTheRestrictionToTheIndex checks that the index filters with the viewer's
+// restriction: a restricted viewer whose libraries hold the hits finds them, one without an
+// allowed library and the zero restriction (a caller that forgot to set one) find nothing.
+func TestSearchHandsTheRestrictionToTheIndex(t *testing.T) {
+	t.Parallel()
+
+	limit, err := access.MaxAgeLimit(access.Age6, true)
+	if err != nil {
+		t.Fatalf("MaxAgeLimit: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		restriction access.Restriction
+		wantItems   int
+	}{
+		{
+			name:        "restricted viewer with the library",
+			restriction: access.Viewer{Libraries: access.OnlyLibraries(testLibraryID), Limit: limit}.Restriction(),
+			wantItems:   3,
+		},
+		{name: "another library only", restriction: access.Viewer{Libraries: access.OnlyLibraries("library-9")}.Restriction()},
+		{name: "no libraries", restriction: access.Viewer{Libraries: access.OnlyLibraries()}.Restriction()},
+		{name: "zero restriction"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fixture := newFixture(t, oneLibrary(), 3)
+
+			page, err := fixture.service.Search(context.Background(), search.Request{
+				Query: "matr", Type: search.TypeTop, Restriction: test.restriction,
+			})
+			if err != nil {
+				t.Fatalf("Search: %v", err)
+			}
+
+			if page.Items == nil || len(page.Items) != test.wantItems {
+				t.Errorf("items = %v, want %d", itemIDs(page), test.wantItems)
+			}
+
+			if len(fixture.index.calls) != 1 {
+				t.Fatalf("index was searched %d times, want once", len(fixture.index.calls))
+			}
+
+			if got := fixture.index.calls[0].filter.Restriction; !sameRestriction(got, test.restriction) {
+				t.Errorf("index restriction = %+v, want the request's %+v", got, test.restriction)
+			}
+		})
+	}
+}
+
+// sameRestriction compares what two restrictions allow; the type itself is not comparable.
+func sameRestriction(left, right access.Restriction) bool {
+	leftAge, leftLimited := left.MaxAge()
+	rightAge, rightLimited := right.MaxAge()
+
+	return left.DeniesAll() == right.DeniesAll() && left.AllLibraries() == right.AllLibraries() &&
+		slices.Equal(left.LibraryIDs(), right.LibraryIDs()) &&
+		leftAge == rightAge && leftLimited == rightLimited && left.HideUnrated() == right.HideUnrated()
 }
 
 func TestSearchReportsPortFailures(t *testing.T) {

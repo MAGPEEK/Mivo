@@ -210,7 +210,11 @@ func (service *Service) Search(ctx context.Context, request Request) (Page, erro
 	// One hit more than the page tells whether another page follows.
 	fetched := min(page.offset+page.limit+1, MaxLimit)
 
-	hits, err := service.index.Search(ctx, query, Filter{LibraryIDs: libraryIDs, Kinds: kinds}, fetched)
+	// The index applies the restriction before the limit, so hidden items do not shorten a
+	// page; the summaries apply it again to what they count.
+	filter := Filter{LibraryIDs: libraryIDs, Kinds: kinds, Restriction: request.Restriction}
+
+	hits, err := service.index.Search(ctx, query, filter, fetched)
 	if err != nil {
 		return Page{}, fmt.Errorf("search: %w", indexFault(err))
 	}
