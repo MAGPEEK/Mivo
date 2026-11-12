@@ -1,7 +1,7 @@
 // Fixtures of the player feature: client profiles, an item with one file and sessions shaped
 // like the server's answers (ADR 0024).
 
-import type { ClientProfile, ItemDetail, PlaybackSession } from "@mivo/api-client";
+import type { ClientProfile, ItemDetail, MediaStream, PlaybackSession } from "@mivo/api-client";
 
 /** ID of the item every player test opens. */
 export const playerItemId = "item-1";
@@ -145,4 +145,136 @@ export const transcodeSession: PlaybackSession = {
     { code: "video_downscaled", scope: "video" },
     { code: "subtitles_not_supported", scope: "subtitle" },
   ],
+};
+
+/** A stream of a probed file; a test names only what differs from the defaults. */
+function stream(fields: Pick<MediaStream, "index" | "kind"> & Partial<MediaStream>): MediaStream {
+  return { default: false, forced: false, attachedPicture: false, ...fields };
+}
+
+/** ID of the English text subtitle of {@link multiTrackItem}. */
+export const englishSubtitleId = "s:5";
+/** ID of the image subtitle (PGS) of {@link multiTrackItem}, which needs burn-in. */
+export const imageSubtitleId = "s:6";
+/** ID of the external ASS subtitle of {@link multiTrackItem}. */
+export const externalSubtitleId = "x:9f2c41";
+
+/**
+ * An item whose file has a 14.2 Mbit/s H.264 video, three audio tracks (German E-AC-3 5.1,
+ * English AAC, English AAC commentary) and four subtitles: forced German text, English SDH
+ * text, an English image track (PGS) and an external French ASS track.
+ */
+export function multiTrackItem(): ItemDetail {
+  const item = playerItem();
+  const [file] = item.files;
+  if (file === undefined) {
+    throw new Error("the player item has no file");
+  }
+  return {
+    ...item,
+    files: [
+      {
+        ...file,
+        container: "mkv",
+        bitRate: 14_200_000,
+        height: 1080,
+        streams: [
+          stream({ index: 0, kind: "video", codec: "h264", height: 1080, default: true }),
+          stream({
+            index: 1,
+            kind: "audio",
+            codec: "eac3",
+            channels: 6,
+            language: "ger",
+            title: "Deutsch 5.1",
+            default: true,
+          }),
+          stream({ index: 2, kind: "audio", codec: "aac", channels: 2, language: "eng" }),
+          stream({
+            index: 3,
+            kind: "audio",
+            codec: "aac",
+            channels: 2,
+            language: "eng",
+            title: "Director's commentary",
+          }),
+        ],
+        subtitleTracks: [
+          {
+            id: "s:4",
+            language: "ger",
+            title: "Deutsch (Forced)",
+            format: "subrip",
+            forced: true,
+            sdh: false,
+            default: true,
+            external: false,
+            textBased: true,
+            url: "/api/v1/media-files/file-1/subtitles/s:4.vtt",
+          },
+          {
+            id: englishSubtitleId,
+            language: "eng",
+            format: "subrip",
+            forced: false,
+            sdh: true,
+            default: false,
+            external: false,
+            textBased: true,
+            url: "/api/v1/media-files/file-1/subtitles/s:5.vtt",
+          },
+          {
+            id: imageSubtitleId,
+            language: "eng",
+            format: "hdmv_pgs_subtitle",
+            forced: false,
+            sdh: false,
+            default: false,
+            external: false,
+            textBased: false,
+          },
+          {
+            id: externalSubtitleId,
+            language: "fra",
+            format: "ass",
+            forced: false,
+            sdh: false,
+            default: false,
+            external: true,
+            textBased: true,
+            url: "/api/v1/media-files/file-1/subtitles/x:9f2c41.vtt",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** A transcode of {@link multiTrackItem}'s file: German E-AC-3 converted to AAC, no subtitle. */
+export const multiTrackSession: PlaybackSession = {
+  ...transcodeSession,
+  id: "multi-1",
+  fileId: playerFileId,
+  sourceBitRate: 14_200_000,
+  streams: [
+    {
+      kind: "video",
+      sourceIndex: 0,
+      action: "copy",
+      sourceCodec: "h264",
+      targetCodec: "h264",
+    },
+    {
+      kind: "audio",
+      sourceIndex: 1,
+      action: "transcode",
+      sourceCodec: "eac3",
+      targetCodec: "aac",
+      targetChannels: 2,
+      encoder: "aac",
+    },
+  ],
+  reasons: [{ code: "audio_codec_not_supported", scope: "audio" }],
+  warnings: [],
+  subtitle: { mode: "off" },
 };

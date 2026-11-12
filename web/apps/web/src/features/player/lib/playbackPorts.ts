@@ -2,7 +2,12 @@
 // the playback API and the media element. The web app passes the API client adapter and a
 // <video> element; tests pass fakes.
 
-import type { ClientProfile, PlaybackSession, TimeRangesLike } from "@mivo/player-core";
+import type {
+  ClientProfile,
+  PlaybackSession,
+  TimeRangesLike,
+  TrackSelection,
+} from "@mivo/player-core";
 
 /** Asks the server for a session (`POST /api/v1/playback/sessions`). */
 export interface SessionRequest {
@@ -12,6 +17,8 @@ export interface SessionRequest {
   readonly startPositionSeconds: number;
   /** Session the new one replaces after a seek or a recovery (ADR 0024). */
   readonly replacesSessionId: string | undefined;
+  /** What the viewer chose: audio track, subtitle and quality; every restart repeats it. */
+  readonly selection?: TrackSelection | undefined;
 }
 
 /**

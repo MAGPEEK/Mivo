@@ -7,7 +7,7 @@ import {
   type PlaybackRequest,
   type RequestResult,
 } from "@mivo/api-client";
-import type { PlaybackSession } from "@mivo/player-core";
+import { buildSessionRequest, type PlaybackSession } from "@mivo/player-core";
 
 import { PlaybackRequestError } from "../lib/playbackErrors";
 import type { PlaybackApi, SessionRequest } from "../lib/playbackPorts";
@@ -17,14 +17,13 @@ const sessionsPath = "/api/v1/playback/sessions";
 const sessionPath = "/api/v1/playback/sessions/{sessionId}";
 
 function toApiRequest(request: SessionRequest): PlaybackRequest {
-  const body: PlaybackRequest = { fileId: request.fileId, profile: request.profile };
-  if (request.startPositionSeconds > 0) {
-    body.startPositionSeconds = request.startPositionSeconds;
-  }
-  if (request.replacesSessionId !== undefined) {
-    body.replacesSessionId = request.replacesSessionId;
-  }
-  return body;
+  return buildSessionRequest({
+    fileId: request.fileId,
+    profile: request.profile,
+    startPositionSeconds: request.startPositionSeconds,
+    selection: request.selection,
+    replacesSessionId: request.replacesSessionId,
+  });
 }
 
 async function retryAfterOf(call: Promise<RequestResult<unknown>>): Promise<number | undefined> {

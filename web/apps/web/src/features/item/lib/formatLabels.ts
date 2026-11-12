@@ -1,17 +1,11 @@
 import type { MediaStream } from "@mivo/api-client";
-import { bitDepthLabel, channelLabel, codecLabel, hdrLabel } from "@mivo/player-core";
-
-// player-core labels audio and video codecs only. Subtitle formats get their common names
-// here until player-core covers them; any other codec falls back to codecLabel.
-// Map instead of an object literal, so an id such as "constructor" never hits Object.prototype.
-const subtitleFormatLabels: ReadonlyMap<string, string> = new Map([
-  ["subrip", "SRT"],
-  ["webvtt", "WebVTT"],
-  ["mov_text", "TX3G"],
-  ["hdmv_pgs_subtitle", "PGS"],
-  ["dvd_subtitle", "VobSub"],
-  ["dvb_subtitle", "DVB"],
-]);
+import {
+  bitDepthLabel,
+  channelLabel,
+  codecLabel,
+  hdrLabel,
+  subtitleFormatLabel,
+} from "@mivo/player-core";
 
 // The API's HdrFormat values have player-core labels. Later API versions may send more
 // (the enum is open); the known future ones get their usual names, anything else a plain
@@ -27,11 +21,6 @@ const genericHdrLabel = "HDR";
 const standardBitDepth = 8;
 
 const labelPartSeparator = " ";
-
-/** Label of a subtitle format, e.g. `subrip` → `SRT`, `hdmv_pgs_subtitle` → `PGS`. */
-export function subtitleFormatLabel(codec: string): string {
-  return subtitleFormatLabels.get(codec) ?? codecLabel(codec);
-}
 
 /** Label of an HDR format, e.g. `hdr10` → `HDR10`, `dolby_vision` → `Dolby Vision`, else `HDR`. */
 export function hdrFormatLabel(hdr: string): string {

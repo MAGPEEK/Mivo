@@ -4,7 +4,8 @@
 // hls.js runs its transmuxer in a Web Worker created from a blob URL (`enableWorker`). A
 // Content-Security-Policy added later (BACKLOG) must therefore allow `worker-src blob:`.
 
-import type { ErrorData, HlsConfig, LoaderConfig } from "hls.js";
+import type { ThroughputSample } from "@mivo/player-core";
+import type { ErrorData, FragLoadedData, HlsConfig, LoaderConfig } from "hls.js";
 
 import { retryAfterFromNetworkDetails } from "./retryAfter";
 import type { HlsFactory, HlsStreamError } from "./hlsPlayer";
@@ -61,12 +62,27 @@ export function toHlsStreamError(data: ErrorData): HlsStreamError {
   };
 }
 
+/**
+ * The download of a media segment as a throughput sample: the bytes received and the time from
+ * the request to the last byte. A transcode that produces slower than the line shows up as a
+ * slow download, which is the signal automatic quality needs.
+ */
+export function toThroughputSample(data: FragLoadedData): ThroughputSample {
+  const { stats } = data.frag;
+  return { bytes: stats.total, milliseconds: stats.loading.end - stats.loading.start };
+}
+
 /** Creates hls.js instances with {@link hlsConfig}, loading hls.js on first use. */
-export const createHlsJsPlayer: HlsFactory<HTMLMediaElement> = async (onError) => {
+export const createHlsJsPlayer: HlsFactory<HTMLMediaElement> = async (onError, onThroughput) => {
   const { default: Hls } = await import("hls.js");
   const hls = new Hls(hlsConfig);
   hls.on(Hls.Events.ERROR, (_event, data) => {
     onError(toHlsStreamError(data), hls);
   });
+  if (onThroughput !== undefined) {
+    hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+      onThroughput(toThroughputSample(data));
+    });
+  }
   return hls;
 };

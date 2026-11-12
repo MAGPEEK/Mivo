@@ -1,7 +1,7 @@
 // A media element without media: records what the engine does and lets tests fire the events
 // a real <video> element would.
 
-import type { StartTimer, TimeRange, TimeRangesLike } from "@mivo/player-core";
+import type { StartTimer, ThroughputSample, TimeRange, TimeRangesLike } from "@mivo/player-core";
 
 import type { HlsFactory, HlsPlayer, HlsStreamError } from "../lib/hlsPlayer";
 import type { PlaybackMedia, PlaybackMediaEvent } from "../lib/playbackPorts";
@@ -80,6 +80,8 @@ export class FakeMedia extends EventTarget implements PlaybackMedia {
 export interface FakeHlsPlayer extends HlsPlayer<FakeMedia> {
   /** Reports an error to the engine like hls.js' `ERROR` event. */
   readonly report: (error: HlsStreamError) => void;
+  /** Reports a finished segment download like hls.js' `FRAG_LOADED` event. */
+  readonly download: (sample: ThroughputSample) => void;
 }
 
 /** A factory of hls.js stand-ins and the log of what was done with them. */
@@ -94,7 +96,7 @@ export interface FakeHls {
 export function createFakeHls(failToLoad = false): FakeHls {
   const players: FakeHlsPlayer[] = [];
   const log: string[] = [];
-  const factory: HlsFactory<FakeMedia> = (onError) => {
+  const factory: HlsFactory<FakeMedia> = (onError, onThroughput) => {
     if (failToLoad) {
       return Promise.reject(new Error("chunk failed to load"));
     }
@@ -107,6 +109,9 @@ export function createFakeHls(failToLoad = false): FakeHls {
       destroy: () => log.push(`destroy ${number}`),
       report: (error) => {
         onError(error, player);
+      },
+      download: (sample) => {
+        onThroughput?.(sample);
       },
     };
     players.push(player);

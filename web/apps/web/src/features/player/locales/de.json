@@ -10,7 +10,8 @@
   },
   "status": {
     "loading": "Das Video wird geladen …",
-    "waitingForStream": "Der Server bereitet den Stream vor …"
+    "waitingForStream": "Der Server bereitet den Stream vor …",
+    "switching": "Wird gewechselt … die Wiedergabe geht an derselben Stelle weiter."
   },
   "errors": {
     "no_compatible_format": "Dieser Browser kann die Datei nicht abspielen, auch nicht nach einer Umwandlung.",
@@ -18,6 +19,64 @@
     "session_limit_reached": "Auf dem Server laufen gerade zu viele Wiedergaben. Versuche es gleich noch einmal.",
     "stream_not_ready": "Der Server konnte den Stream nicht rechtzeitig vorbereiten.",
     "generic": "Dieses Video kann nicht abgespielt werden."
+  },
+  "options": {
+    "title": "Wiedergabeoptionen",
+    "close": "Wiedergabeoptionen schließen",
+    "tabs": "Optionsgruppen",
+    "tab": {
+      "quality": "Qualität",
+      "audio": "Audio",
+      "subtitles": "Untertitel",
+      "size": "Größe"
+    },
+    "quality": {
+      "heading": "Qualität",
+      "original": "Original",
+      "automatic": "Automatisch",
+      "automaticNow": "derzeit {{quality}}",
+      "step": "{{resolution}} · {{megabits}} Mbit/s",
+      "showAll": "Alle Stufen anzeigen",
+      "showLess": "Weniger anzeigen",
+      "hint": "Stufen unter der Quelle wandeln das Video um. Gilt für dieses Gerät.",
+      "hintNone": "Die Quelle liegt unter der kleinsten Stufe. Gilt für dieses Gerät."
+    },
+    "audio": {
+      "heading": "Audio",
+      "unknownLanguage": "Unbekannte Sprache",
+      "converted": "wird nach AAC umgewandelt",
+      "restart": "Beim Wechsel startet der Stream kurz neu.",
+      "single": "Diese Datei hat nur eine Tonspur.",
+      "none": "Diese Datei hat keine Tonspur."
+    },
+    "subtitles": {
+      "heading": "Untertitel",
+      "off": "Aus",
+      "none": "Diese Datei hat keine Untertitel.",
+      "instant": "Text-Untertitel wechseln sofort.",
+      "unknownLanguage": "Unbekannte Sprache",
+      "forced": "Erzwungen",
+      "sdh": "SDH",
+      "external": "Extern",
+      "burnIn": "wird eingebrannt – das Video wird umgewandelt",
+      "refused": "Gerade nicht möglich: Der Server kann nicht einbrennen.",
+      "unstyled": "ohne Formatierung"
+    },
+    "size": {
+      "heading": "Untertitelgröße",
+      "small": "Klein",
+      "normal": "Normal",
+      "large": "Groß",
+      "huge": "Sehr groß",
+      "device": "Gilt für dieses Gerät.",
+      "burnIn": "Eingebrannte Untertitel lassen sich nicht anpassen."
+    },
+    "streamInfo": "Stream-Info",
+    "toast": {
+      "close": "Meldung schließen",
+      "burnInUnavailable": "Dieser Untertitel muss ins Video eingebrannt werden. Das kann der Server gerade nicht (Transcoding-Limit erreicht oder Transcoding ausgeschaltet). Untertitel bleiben aus.",
+      "bitRateCap": "Das Qualitätslimit liegt unter der Quelle – das Video wird umgewandelt."
+    }
   },
   "controls": {
     "label": "Wiedergabesteuerung",
@@ -47,7 +106,8 @@
     },
     "shuffle": "Zufallswiedergabe",
     "shuffleOn": "Zufallswiedergabe an",
-    "shuffleOff": "Zufallswiedergabe aus"
+    "shuffleOff": "Zufallswiedergabe aus",
+    "options": "Wiedergabeoptionen"
   },
   "overlay": {
     "heading": "Stream-Info",

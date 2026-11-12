@@ -12,16 +12,25 @@
 
 import {
   clampPosition,
+  createAutoQuality,
   displayedPosition,
+  planQualitySwitch,
   planSeek,
   readTimeRanges,
+  reconcileSelection,
   restartPosition,
   shouldRecreateSession,
+  type AutoQuality,
   type ClientProfile,
   type PlaybackSession,
   type PlaybackSessionState,
+  type QualityOption,
   type StartTimer,
+  type SubtitleTrack,
+  type SwitchPlan,
+  type ThroughputSample,
   type TimelineSession,
+  type TrackSelection,
 } from "@mivo/player-core";
 
 import {
@@ -82,6 +91,18 @@ export interface PlaybackSnapshot {
    * restart, a wait for the stream) this is the only play state there is.
    */
   readonly autoplay: boolean;
+  /**
+   * What the viewer chose, as the session carries it out (`reconcileSelection`): a burn-in
+   * the server refused counts as subtitles off. Every later request repeats it.
+   */
+  readonly selection: TrackSelection;
+  /** Whether the session that is loading replaces the previous one for a track or quality switch. */
+  readonly switching: boolean;
+  /**
+   * Id of the session a switch created, until the next start. The player tells the viewer what
+   * the switch cost (a refused burn-in, a quality cap) once, for this session only.
+   */
+  readonly switchedSessionId: string | undefined;
 }
 
 /** Services the engine uses. */
@@ -98,6 +119,12 @@ export interface PlaybackOpenRequest<Media extends PlaybackMedia> {
   readonly fileId: string;
   /** File position to start at in seconds, already clamped to the file. */
   readonly startPositionSeconds: number;
+  /** The choice to start with, e.g. the quality remembered for this device. */
+  readonly selection?: TrackSelection;
+  /** Subtitle tracks of the file; the engine needs them to tell a refused burn-in. */
+  readonly subtitleTracks?: readonly SubtitleTrack[];
+  /** Quality options of the file, for automatic quality. */
+  readonly qualityOptions?: readonly QualityOption[];
 }
 
 /** A wish for a session: which file, where, and whether to play right away. */
@@ -105,6 +132,8 @@ interface StartOptions<Media extends PlaybackMedia> {
   readonly request: PlaybackOpenRequest<Media>;
   readonly position: number;
   readonly autoplay: boolean;
+  /** The session replaces the previous one for a switch of audio, subtitle or quality. */
+  readonly switching?: boolean;
 }
 
 /** How the current stream is attached to which media element. */
@@ -142,6 +171,9 @@ export const initialPlaybackSnapshot: PlaybackSnapshot = {
   waitingForStream: false,
   error: undefined,
   autoplay: true,
+  selection: {},
+  switching: false,
+  switchedSessionId: undefined,
 };
 
 /** Plays one file at a time on one media element; see the file comment. */
@@ -171,6 +203,9 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   private pendingFileStart = 0;
   private streamNotReadyRetries = 0;
   private suspended = false;
+  private selection: TrackSelection = {};
+  /** Picks the quality from measured throughput; `undefined` unless the viewer chose Automatic. */
+  private automaticQuality: AutoQuality | undefined;
 
   constructor(dependencies: PlaybackEngineDependencies<Media>) {
     this.dependencies = dependencies;
@@ -201,6 +236,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   open(request: PlaybackOpenRequest<Media>): void {
     this.close();
     this.request = request;
+    this.selection = request.selection ?? {};
     for (const event of mediaEvents) {
       request.media.addEventListener(event, this.mediaListeners[event]);
     }
@@ -220,6 +256,8 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     }
     this.request = undefined;
     this.suspended = false;
+    this.selection = {};
+    this.automaticQuality = undefined;
     this.publish(initialPlaybackSnapshot);
   }
 
@@ -241,7 +279,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     const loadingFile =
       session?.delivery === "file" && attachment !== undefined && media.error === null;
     if (session === undefined || (this.snapshot.status !== "playing" && !loadingFile)) {
-      this.restart(request, target, this.autoplay);
+      this.restart({ request, position: target, autoplay: this.autoplay });
       return;
     }
     const plan = planSeek(target, {
@@ -253,7 +291,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       this.seekLocally(media, plan.time);
       return;
     }
-    this.restart(request, plan.position, !media.paused);
+    this.restart({ request, position: plan.position, autoplay: !media.paused });
   }
 
   /** Sets the element's clock, or the start of a direct-play file still loading its metadata. */
@@ -278,7 +316,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       return;
     }
     this.resetRecovery();
-    this.restart(request, this.snapshot.position, this.autoplay);
+    this.restart({ request, position: this.snapshot.position, autoplay: this.autoplay });
   }
 
   /**
@@ -301,6 +339,47 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       media?.pause();
     }
     this.publish({ ...this.snapshot, autoplay });
+  }
+
+  /**
+   * Carries out a switch the viewer chose (`planAudioSwitch`, `planSubtitleSwitch`,
+   * `planQualitySwitch`). A restart replaces the session at the current position, with the whole
+   * new selection; a sidecar switch only remembers the selection, because the client renders
+   * the subtitle itself.
+   */
+  applySwitch(plan: SwitchPlan): void {
+    const { request } = this;
+    if (request === undefined || this.suspended || plan.kind === "none") {
+      return;
+    }
+    this.selection = plan.selection;
+    if (plan.kind === "sidecar") {
+      this.publish({ ...this.snapshot, selection: plan.selection });
+      return;
+    }
+    this.resetRecovery();
+    this.restart({
+      request,
+      position: this.currentPosition(),
+      autoplay: this.autoplay,
+      switching: true,
+    });
+  }
+
+  /**
+   * Turns automatic quality on or off. While on, the throughput of the HLS segments decides the
+   * quality and replaces the session when another step fits better (ADR 0030 §6).
+   */
+  setAutomaticQuality(enabled: boolean): void {
+    const options = this.request?.qualityOptions;
+    if (!enabled || options === undefined) {
+      this.automaticQuality = undefined;
+      return;
+    }
+    this.automaticQuality = createAutoQuality({
+      options,
+      initialMaxBitRate: this.selection.maxBitRate,
+    });
   }
 
   /** Stops the session while the page is hidden (`pagehide`); {@link resume} restarts it. */
@@ -328,10 +407,10 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   }
 
   /** Starts a session that replaces the current one, inside the file (`restartPosition`). */
-  private restart(request: PlaybackOpenRequest<Media>, position: number, autoplay: boolean): void {
-    const ownSession = this.sessionRequest === request ? this.session : undefined;
+  private restart(options: StartOptions<Media>): void {
+    const ownSession = this.sessionRequest === options.request ? this.session : undefined;
     const bounds = ownSession ?? fileOfUnknownLength;
-    this.start({ request, position: restartPosition(bounds, position), autoplay });
+    this.start({ ...options, position: restartPosition(bounds, options.position) });
   }
 
   private start(options: StartOptions<Media>): void {
@@ -345,6 +424,9 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       waitingForStream: false,
       error: undefined,
       autoplay: options.autoplay,
+      selection: this.selection,
+      switching: options.switching === true,
+      switchedSessionId: undefined,
     });
     this.dispatch(options);
   }
@@ -362,6 +444,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
         profile: request.profile,
         startPositionSeconds: options.position,
         replacesSessionId: this.session?.id,
+        selection: this.selection,
       })
       .then(
         (session) => {
@@ -446,7 +529,16 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     this.sessionRequest = request;
     this.pendingFileStart = session.delivery === "file" ? startPosition : 0;
     const position = clampPosition(session, startPosition);
-    this.publish({ ...this.snapshot, session, position });
+    // The server may not carry out a subtitle (burn-in refused); keep what plays, so a later
+    // restart does not ask for the burn-in again.
+    this.selection = reconcileSelection(this.selection, session, request.subtitleTracks ?? []);
+    this.publish({
+      ...this.snapshot,
+      session,
+      position,
+      selection: this.selection,
+      switchedSessionId: this.snapshot.switching ? session.id : undefined,
+    });
     this.attach(this.generation, request, session);
   }
 
@@ -483,9 +575,16 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   ): Promise<void> {
     let hls: HlsPlayer<Media>;
     try {
-      hls = await this.dependencies.createHls((error, player) => {
-        this.onHlsError(generation, request, error, player);
-      });
+      hls = await this.dependencies.createHls(
+        (error, player) => {
+          this.onHlsError(generation, request, error, player);
+        },
+        (sample) => {
+          if (generation === this.generation) {
+            this.onThroughput(sample);
+          }
+        },
+      );
     } catch {
       // hls.js could not be loaded, e.g. its chunk is missing after a server update.
       if (generation === this.generation) {
@@ -503,6 +602,16 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
     hls.attachMedia(media);
     hls.loadSource(streamUrl);
     this.playIfWanted(media);
+  }
+
+  /** Feeds a finished segment download to automatic quality; a better step restarts playback. */
+  private onThroughput(sample: ThroughputSample): void {
+    const { automaticQuality, session } = this;
+    if (automaticQuality === undefined || session === undefined || this.snapshot.switching) {
+      return;
+    }
+    const maxBitRate = automaticQuality.report(sample, performance.now());
+    this.applySwitch(planQualitySwitch({ selection: this.selection, session }, maxBitRate));
   }
 
   private playIfWanted(media: Media): void {
@@ -550,7 +659,13 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
   /** Shows `error`; late answers and hls.js errors of the failed attempt are ignored. */
   private fail(error: PlaybackError): void {
     this.abandonAttempt();
-    this.publish({ ...this.snapshot, status: "error", waitingForStream: false, error });
+    this.publish({
+      ...this.snapshot,
+      status: "error",
+      waitingForStream: false,
+      switching: false,
+      error,
+    });
   }
 
   private onHlsError(
@@ -642,7 +757,7 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
       this.fail(genericPlaybackError);
       return;
     }
-    this.restart(request, position, this.autoplay);
+    this.restart({ request, position, autoplay: this.autoplay });
   }
 
   /**
@@ -686,7 +801,12 @@ export class PlaybackEngine<Media extends PlaybackMedia> {
 
   private onLoadedData(): void {
     if (this.attachment !== undefined && this.snapshot.status === "loading") {
-      this.publish({ ...this.snapshot, status: "playing", waitingForStream: false });
+      this.publish({
+        ...this.snapshot,
+        status: "playing",
+        waitingForStream: false,
+        switching: false,
+      });
     }
   }
 

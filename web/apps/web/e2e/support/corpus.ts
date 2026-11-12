@@ -85,6 +85,19 @@ export const longMkvClip: CorpusClip = {
   chip: "MKV · H.264 · AAC",
 };
 
+/**
+ * H.264 with three AAC audio tracks in Matroska: English stereo (default), German 5.1 and an
+ * English stereo commentary. Browsers play only the first track of the file itself, so choosing
+ * another one in the playback options makes the server stream it as HLS.
+ */
+export const threeAudioClip: CorpusClip = {
+  caseName: "tracks-mkv-eng-deu51-commentary",
+  relativePath: "tracks/h264_aac_eng_deu51_commentary.mkv",
+  libraryPath: "Three Tracks (2001)/Three Tracks (2001).mkv",
+  title: "Three Tracks",
+  chip: "MKV · H.264 · AAC",
+};
+
 /** Every clip of the E2E corpus. */
 export const corpusClips: readonly CorpusClip[] = [
   webmClip,
@@ -93,6 +106,7 @@ export const corpusClips: readonly CorpusClip[] = [
   flvClip,
   aviClip,
   longMkvClip,
+  threeAudioClip,
 ];
 
 // go run compiles the generator first; FFmpeg then encodes the small clips in parallel.

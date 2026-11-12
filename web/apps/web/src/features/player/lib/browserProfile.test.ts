@@ -99,6 +99,21 @@ describe("detectBrowserProfile", () => {
     expect(profile.hls.videoCodecs).toEqual(["h264"]);
   });
 
+  it("adds the audio limits Media Capabilities reports", async () => {
+    const decodingInfo = vi.fn((configuration: DecodingConfiguration) =>
+      Promise.resolve({
+        supported:
+          configuration.audio?.channels === undefined || configuration.audio.channels === "2",
+      }),
+    );
+
+    const profile = await detectBrowserProfile(
+      fakeBrowser({ mediaCapabilities: { decodingInfo } }),
+    );
+
+    expect(profile.maxAudioChannels).toBe(2);
+  });
+
   it("reads the current browser by default (jsdom plays nothing)", async () => {
     const profile = await detectBrowserProfile();
 

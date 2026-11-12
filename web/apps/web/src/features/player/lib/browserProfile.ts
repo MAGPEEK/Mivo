@@ -2,6 +2,7 @@
 // read in one place, `currentBrowser`, so the rest stays testable with fakes.
 
 import {
+  detectAudioLimits,
   detectClientProfile,
   type ClientProbes,
   type ClientProfile,
@@ -77,9 +78,17 @@ export function browserProbes(browser: BrowserEnvironment): ClientProbes {
   };
 }
 
-/** Detects what the given browser plays (defaults to the current one). */
-export function detectBrowserProfile(
+/**
+ * Detects what the given browser plays (defaults to the current one), including the audio
+ * limits (channels, sample rate) the server needs to decide whether to downmix or resample.
+ */
+export async function detectBrowserProfile(
   browser: BrowserEnvironment = currentBrowser(),
 ): Promise<ClientProfile> {
-  return detectClientProfile(browserProbes(browser), { name: browserName(browser.userAgent) });
+  const probes = browserProbes(browser);
+  const [profile, audioLimits] = await Promise.all([
+    detectClientProfile(probes, { name: browserName(browser.userAgent) }),
+    detectAudioLimits(probes),
+  ]);
+  return { ...profile, ...audioLimits };
 }

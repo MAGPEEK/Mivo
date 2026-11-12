@@ -2,7 +2,7 @@
 // tests inject a fake factory (jsdom has no Media Source Extensions) and the real hls.js stays
 // in its own lazily loaded chunk (see hlsJs.ts).
 
-import type { HlsErrorData } from "@mivo/player-core";
+import type { HlsErrorData, ThroughputSample } from "@mivo/player-core";
 
 /** An error hls.js reported, with the `Retry-After` delay of the failed request, if any. */
 export interface HlsStreamError {
@@ -22,8 +22,17 @@ export interface HlsPlayer<Media> {
 /** Receives every error an hls.js instance reports, fatal or not, with the reporting instance. */
 export type HlsErrorListener<Media> = (error: HlsStreamError, player: HlsPlayer<Media>) => void;
 
-/** Creates an hls.js instance that reports its errors to `onError`. */
-export type HlsFactory<Media> = (onError: HlsErrorListener<Media>) => Promise<HlsPlayer<Media>>;
+/** Receives every media segment hls.js finished downloading, for automatic quality. */
+export type HlsThroughputListener = (sample: ThroughputSample) => void;
+
+/**
+ * Creates an hls.js instance that reports its errors to `onError` and, when given, its
+ * segment downloads to `onThroughput`.
+ */
+export type HlsFactory<Media> = (
+  onError: HlsErrorListener<Media>,
+  onThroughput?: HlsThroughputListener,
+) => Promise<HlsPlayer<Media>>;
 
 /** hls.js detail of a failed first playlist request (`ErrorDetails.MANIFEST_LOAD_ERROR`). */
 export const manifestLoadErrorDetails = "manifestLoadError";

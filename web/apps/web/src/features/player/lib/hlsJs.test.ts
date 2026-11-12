@@ -1,5 +1,5 @@
 import { shouldRecreateSession } from "@mivo/player-core";
-import Hls, { ErrorDetails, ErrorTypes, Events, type ErrorData } from "hls.js";
+import Hls, { ErrorDetails, ErrorTypes, Events, type ErrorData, type FragLoadedData } from "hls.js";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -112,6 +112,17 @@ describe("createHlsJsPlayer", () => {
       },
       hls,
     );
+    player.destroy();
+  });
+
+  it("reports every finished segment download as a throughput sample", async () => {
+    const onThroughput = vi.fn();
+    const player = await createHlsJsPlayer(vi.fn(), onThroughput);
+    const frag = { stats: { total: 500_000, loading: { start: 100, end: 350 } } };
+
+    (player as Hls).trigger(Events.FRAG_LOADED, { frag } as unknown as FragLoadedData);
+
+    expect(onThroughput).toHaveBeenCalledWith({ bytes: 500_000, milliseconds: 250 });
     player.destroy();
   });
 });

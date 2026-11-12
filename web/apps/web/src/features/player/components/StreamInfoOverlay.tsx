@@ -18,7 +18,7 @@ export interface StreamInfoOverlayProps {
 
 // Status colours of ADR 0011 by player-core's token name; the compile-time check in
 // apiTypeChecks.ts keeps the names in ui-tokens.
-const modeBadgeClasses: Readonly<Record<StreamInfoColorToken, string>> = {
+export const modeBadgeClasses: Readonly<Record<StreamInfoColorToken, string>> = {
   directPlay: "bg-direct-play",
   directStream: "bg-direct-stream",
   transcode: "bg-transcode",

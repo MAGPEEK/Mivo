@@ -12,6 +12,14 @@ describe("playbackNotice", () => {
       view: { status: "loading", waitingForStream: true },
       expected: { kind: "loading", key: "status.waitingForStream" },
     },
+    {
+      view: { status: "loading", waitingForStream: false, switching: true },
+      expected: { kind: "loading", key: "status.switching" },
+    },
+    {
+      view: { status: "loading", waitingForStream: true, switching: true },
+      expected: { kind: "loading", key: "status.waitingForStream" },
+    },
     { view: { status: "playing", waitingForStream: false }, expected: { kind: "none" } },
     {
       view: { status: "error", waitingForStream: false },

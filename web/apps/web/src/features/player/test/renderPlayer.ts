@@ -5,8 +5,7 @@ import { screen } from "@testing-library/react";
 import { vi } from "vitest";
 
 import { renderApp, type RenderedApp } from "../../../test/renderApp";
-import { usePlaybackSession } from "../hooks/usePlaybackSession";
-import type { PlaybackSnapshot } from "../lib/playbackEngine";
+import { usePlaybackSession, type PlaybackSessionView } from "../hooks/usePlaybackSession";
 import { createFakePlayback, type FakePlayback } from "./fakePlayback";
 import { createPlaybackServer, type PlaybackServerOptions } from "./fakePlaybackServer";
 import { playerItemId } from "./playerFixtures";
@@ -26,7 +25,7 @@ export interface RenderedPlayer extends RenderedApp {
  * English; `server` changes the fake server, e.g. to open an episode.
  */
 export async function renderPlayer(
-  snapshot: Partial<PlaybackSnapshot> = {},
+  snapshot: Partial<PlaybackSessionView> = {},
   languages: readonly string[] = ["en"],
   server: PlaybackServerOptions = {},
 ): Promise<RenderedPlayer> {

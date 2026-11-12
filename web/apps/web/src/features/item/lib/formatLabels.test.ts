@@ -4,25 +4,9 @@ import { mediaStream } from "../test/fakeItemServer";
 import {
   audioStreamLabel,
   hdrFormatLabel,
-  subtitleFormatLabel,
   subtitleStreamLabel,
   videoStreamLabel,
 } from "./formatLabels";
-
-describe("subtitleFormatLabel", () => {
-  it.each([
-    ["subrip", "SRT"],
-    ["webvtt", "WebVTT"],
-    ["mov_text", "TX3G"],
-    ["hdmv_pgs_subtitle", "PGS"],
-    ["dvd_subtitle", "VobSub"],
-    ["dvb_subtitle", "DVB"],
-    ["ass", "ASS"],
-    ["constructor", "CONSTRUCTOR"],
-  ])("labels %s as %s", (codec, expected) => {
-    expect(subtitleFormatLabel(codec)).toBe(expected);
-  });
-});
 
 describe("hdrFormatLabel", () => {
   it.each([

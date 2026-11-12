@@ -10,7 +10,8 @@
   },
   "status": {
     "loading": "Loading the video…",
-    "waitingForStream": "The server is preparing the stream…"
+    "waitingForStream": "The server is preparing the stream…",
+    "switching": "Switching … playback continues at the same position."
   },
   "errors": {
     "no_compatible_format": "This browser cannot play this file, not even after converting it.",
@@ -18,6 +19,64 @@
     "session_limit_reached": "Too many videos are playing on the server right now. Try again in a moment.",
     "stream_not_ready": "The server could not prepare the stream in time.",
     "generic": "This video cannot be played."
+  },
+  "options": {
+    "title": "Playback options",
+    "close": "Close playback options",
+    "tabs": "Option groups",
+    "tab": {
+      "quality": "Quality",
+      "audio": "Audio",
+      "subtitles": "Subtitles",
+      "size": "Size"
+    },
+    "quality": {
+      "heading": "Quality",
+      "original": "Original",
+      "automatic": "Automatic",
+      "automaticNow": "currently {{quality}}",
+      "step": "{{resolution}} · {{megabits}} Mbit/s",
+      "showAll": "Show all steps",
+      "showLess": "Show fewer",
+      "hint": "Steps below the source convert the video. Applies to this device.",
+      "hintNone": "The source is below the smallest step. Applies to this device."
+    },
+    "audio": {
+      "heading": "Audio",
+      "unknownLanguage": "Unknown language",
+      "converted": "is converted to AAC",
+      "restart": "Switching restarts the stream briefly.",
+      "single": "This file has only one audio track.",
+      "none": "This file has no audio track."
+    },
+    "subtitles": {
+      "heading": "Subtitles",
+      "off": "Off",
+      "none": "This file has no subtitles.",
+      "instant": "Text subtitles switch instantly.",
+      "unknownLanguage": "Unknown language",
+      "forced": "Forced",
+      "sdh": "SDH",
+      "external": "External",
+      "burnIn": "is burned in – the video is converted",
+      "refused": "Not possible right now: the server cannot burn in.",
+      "unstyled": "without styling"
+    },
+    "size": {
+      "heading": "Subtitle size",
+      "small": "Small",
+      "normal": "Normal",
+      "large": "Large",
+      "huge": "Huge",
+      "device": "Applies to this device.",
+      "burnIn": "Burned-in subtitles cannot be adjusted."
+    },
+    "streamInfo": "Stream info",
+    "toast": {
+      "close": "Close message",
+      "burnInUnavailable": "This subtitle has to be burned into the video. The server cannot do that right now (transcoding limit reached or transcoding switched off). Subtitles stay off.",
+      "bitRateCap": "The quality limit is below the source – the video is converted."
+    }
   },
   "controls": {
     "label": "Player controls",
@@ -47,7 +106,8 @@
     },
     "shuffle": "Shuffle",
     "shuffleOn": "Shuffle on",
-    "shuffleOff": "Shuffle off"
+    "shuffleOff": "Shuffle off",
+    "options": "Playback options"
   },
   "overlay": {
     "heading": "Stream info",

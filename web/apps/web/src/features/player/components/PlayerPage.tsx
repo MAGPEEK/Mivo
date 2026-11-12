@@ -1,19 +1,19 @@
-import { useTranslation } from "react-i18next";
-
 import { usePlayer } from "../hooks/usePlayer";
 import type { PlayerSearch } from "../lib/playerSearch";
-import { playerNamespace } from "../locales";
 import { PlayerControls, type PlayerSlots } from "./PlayerControls";
+import { PlaybackOptionsPanel } from "./PlaybackOptionsPanel";
 import { PlayerNotice } from "./PlayerNotice";
+import { PlayerToasts } from "./PlayerToasts";
 import { PlayerTopBar } from "./PlayerTopBar";
 import { StreamInfoOverlay } from "./StreamInfoOverlay";
+import { PlayerVideo } from "./PlayerVideo";
 
 /** Props of {@link PlayerPage}, from the route `/items/$itemId/play` and its search. */
 export interface PlayerPageProps {
   readonly itemId: string;
   /** The validated search: file to play and start position (`t`); both untrusted. */
   readonly search: PlayerSearch;
-  /** Controls later tasks add to the control bar (mode indicator, More, options, queue). */
+  /** Controls later tasks add to the control bar (mode indicator, More, queue). */
   readonly slots?: PlayerSlots;
 }
 
@@ -23,7 +23,6 @@ export interface PlayerPageProps {
  * playlist of an HLS stream would show only its produced part (ADR 0024).
  */
 export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
-  const { t } = useTranslation(playerNamespace);
   // Destructured: the React compiler treats an object holding refs as a ref.
   const {
     view,
@@ -32,6 +31,7 @@ export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
     containerRef,
     playButtonRef,
     streamInfoToggleRef,
+    optionsToggleRef,
     streamInfoRegionRef,
     streamInfoHeadingRef,
   } = usePlayer({ itemId, fileId: search.fileId, startAt: search.t });
@@ -40,14 +40,7 @@ export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
       ref={containerRef}
       className={`relative h-dvh w-full overflow-hidden bg-background ${view.controlsVisible ? "" : "cursor-none"}`}
     >
-      {/* The server offers no subtitle tracks before milestone 4, so there is nothing to add. */}
-      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- no caption tracks until M4 */}
-      <video
-        ref={videoRef}
-        aria-label={t("video")}
-        className="absolute inset-0 size-full bg-background object-contain"
-        playsInline
-      />
+      <PlayerVideo view={view} videoRef={videoRef} />
       <PlayerNotice notice={view.notice} onRetry={actions.retry} onOpenItem={actions.openItem} />
       <PlayerTopBar view={view} actions={actions} />
       <PlayerControls
@@ -55,8 +48,11 @@ export function PlayerPage({ itemId, search, slots }: PlayerPageProps) {
         actions={actions}
         playButtonRef={playButtonRef}
         streamInfoToggleRef={streamInfoToggleRef}
+        optionsToggleRef={optionsToggleRef}
         slots={slots}
       />
+      <PlayerToasts toasts={view.toasts} onDismiss={actions.dismissToasts} />
+      {view.options.open ? <PlaybackOptionsPanel view={view} actions={actions} /> : null}
       {view.streamInfoOpen ? (
         <StreamInfoOverlay
           info={view.streamInfo}

@@ -2,16 +2,26 @@ import { knownDuration, streamInfo, type StreamInfo } from "@mivo/player-core";
 import { useCallback, useRef, useState, type RefObject } from "react";
 
 import type { MediaState } from "../lib/mediaState";
+import type { PlaybackSnapshot } from "../lib/playbackEngine";
 import { playbackNotice, type PlaybackNotice } from "../lib/playbackStatusText";
+import type { SessionToastKind } from "../lib/sessionToasts";
 import { useControlsVisibility, useKeyboardFocusInControls } from "./useControlsVisibility";
 import { useFullscreen, type Fullscreen } from "./useFullscreen";
+import {
+  usePlaybackOptions,
+  type PlaybackOptionsActions,
+  type PlaybackOptionsInput,
+  type PlaybackOptionsView,
+} from "./usePlaybackOptions";
 import { usePlaybackSession, type PlaybackTarget } from "./usePlaybackSession";
 import { usePlayerItem, type PlayerItemInfo } from "./usePlayerItem";
 import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
 import type { PlayerQueueView } from "./usePlayerQueue";
 import { usePlayerShortcuts } from "./usePlayerShortcuts";
 import { usePlayerTransport, type TransportActions } from "./usePlayerTransport";
+import { useSessionToasts } from "./useSessionToasts";
 import { useStreamInfoOverlay, type StreamInfoOverlay } from "./useStreamInfoOverlay";
+import { useSubtitleCues } from "./useSubtitleCues";
 
 /** Everything the player page shows. */
 export interface PlayerView {
@@ -31,6 +41,12 @@ export interface PlayerView {
   readonly fullscreenActive: boolean;
   readonly controlsVisible: boolean;
   readonly streamInfoOpen: boolean;
+  /** The playback options panel (PL-10 … PL-13). */
+  readonly options: PlaybackOptionsView;
+  /** The text of the subtitle the player draws itself now; empty when there is none. */
+  readonly subtitleText: string;
+  /** Messages about what the last switch cost. */
+  readonly toasts: readonly SessionToastKind[];
 }
 
 /**
@@ -44,6 +60,8 @@ export interface PlayerActions extends TransportActions, MediaActions {
   readonly toggleStreamInfo: () => void;
   readonly closeStreamInfo: () => void;
   readonly retry: () => void;
+  readonly options: PlaybackOptionsActions;
+  readonly dismissToasts: () => void;
 }
 
 /** The player page's state, actions and the elements it needs. */
@@ -57,6 +75,8 @@ export interface Player {
   /** The play button; focus moves there after a retry, which removes the retry button. */
   readonly playButtonRef: RefObject<HTMLButtonElement | null>;
   readonly streamInfoToggleRef: RefObject<HTMLButtonElement | null>;
+  /** The playback options button; focus returns there when the panel closes. */
+  readonly optionsToggleRef: RefObject<HTMLButtonElement | null>;
   readonly streamInfoRegionRef: RefObject<HTMLElement | null>;
   readonly streamInfoHeadingRef: RefObject<HTMLHeadingElement | null>;
 }
@@ -116,6 +136,42 @@ function panelActions(
   };
 }
 
+/** The item the page shows, the file's duration and the queue-aware transport. */
+function usePlayerNavigation(
+  target: PlaybackTarget,
+  playback: Pick<PlaybackSnapshot, "session" | "position">,
+  seek: (position: number) => void,
+) {
+  const { itemId } = target;
+  const item = usePlayerItem(itemId);
+  const duration = playback.session === undefined ? undefined : knownDuration(playback.session);
+  const transport = usePlayerTransport({ itemId, position: playback.position, duration, seek });
+  return { item, duration, transport };
+}
+
+/** What the page shows of the full-screen state. */
+function fullscreenView(fullscreen: Fullscreen) {
+  return { fullscreenSupported: fullscreen.supported, fullscreenActive: fullscreen.active };
+}
+
+/**
+ * What the file's tracks add to the page: the playback options panel, the subtitle the player
+ * draws and the toasts about what a switch cost. Destructure the result: it holds a ref.
+ */
+function useTracks(
+  playback: PlaybackOptionsInput & Pick<PlaybackSnapshot, "switchedSessionId">,
+  video: HTMLVideoElement | null,
+) {
+  const options = usePlaybackOptions(playback);
+  const toasts = useSessionToasts(playback);
+  const subtitleText = useSubtitleCues(video, playback.session, options.sidecarTrack);
+  return {
+    view: { options: options.view, subtitleText, toasts: toasts.toasts },
+    actions: { options: options.actions, dismissToasts: toasts.dismiss },
+    optionsToggleRef: options.toggleRef,
+  };
+}
+
 /**
  * The player page's logic (task M2-30): the playback engine, the element's play state and
  * sound, full screen, auto-hiding controls, the stream-info overlay and the keyboard map.
@@ -130,12 +186,10 @@ export function usePlayer(target: PlaybackTarget): Player {
   const fullscreen = useFullscreen(container);
   const overlay = useStreamInfoOverlay();
   const [playButtonRef, retryAndFocus] = useRetryWithFocus(retry);
-  const { itemId } = target;
-  const item = usePlayerItem(itemId);
-  const duration = session === undefined ? undefined : knownDuration(session);
-  const transport = usePlayerTransport({ itemId, position: playback.position, duration, seek });
+  const { item, duration, transport } = usePlayerNavigation(target, playback, seek);
+  const { view: trackView, actions: trackActions, optionsToggleRef } = useTracks(playback, video);
   const controlsVisible = useAutoHidingControls(
-    playback.status === "playing" && !media.paused && !overlay.open,
+    playback.status === "playing" && !media.paused && !overlay.open && !trackView.options.open,
   );
   const actions: PlayerActions = {
     ...transport.actions,
@@ -143,6 +197,7 @@ export function usePlayer(target: PlaybackTarget): Player {
     ...panelActions(fullscreen, { toggle: overlay.toggle, close: overlay.close }),
     seek,
     retry: retryAndFocus,
+    ...trackActions,
   };
   usePlayerShortcuts(actions, playback.position, overlay.open ? overlay.close : fullscreen.exit);
   return {
@@ -154,15 +209,16 @@ export function usePlayer(target: PlaybackTarget): Player {
       position: playback.position,
       duration,
       media,
-      fullscreenSupported: fullscreen.supported,
-      fullscreenActive: fullscreen.active,
+      ...fullscreenView(fullscreen),
       controlsVisible,
       streamInfoOpen: overlay.open,
+      ...trackView,
     },
     actions,
     videoRef,
     containerRef: setContainer,
     playButtonRef,
+    optionsToggleRef,
     streamInfoToggleRef: overlay.toggleRef,
     streamInfoRegionRef: overlay.regionRef,
     streamInfoHeadingRef: overlay.headingRef,

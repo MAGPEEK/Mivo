@@ -7,7 +7,11 @@ import { expect, vi } from "vitest";
 import { createFakeApiClient } from "../../../test/fakeApi";
 import { createPlaybackApi } from "../api/playbackApi";
 import type { HlsFactory, HlsStreamError } from "../lib/hlsPlayer";
-import { PlaybackEngine, type PlaybackSnapshot } from "../lib/playbackEngine";
+import {
+  PlaybackEngine,
+  type PlaybackOpenRequest,
+  type PlaybackSnapshot,
+} from "../lib/playbackEngine";
 import type { PlaybackApi } from "../lib/playbackPorts";
 import {
   createPlaybackServer,
@@ -41,8 +45,14 @@ export interface EngineHarness {
   readonly media: FakeMedia;
   readonly hls: FakeHls;
   readonly timers: ManualTimers;
-  /** Opens the player's file at `startPositionSeconds` (default 0). */
-  readonly open: (startPositionSeconds?: number) => void;
+  /**
+   * Opens the player's file at `startPositionSeconds` (default 0); `extra` adds what the
+   * player passes besides, e.g. the tracks of the file.
+   */
+  readonly open: (
+    startPositionSeconds?: number,
+    extra?: Partial<PlaybackOpenRequest<FakeMedia>>,
+  ) => void;
   /** The current snapshot. */
   readonly snapshot: () => PlaybackSnapshot;
   /** Waits until the engine uses the session with `sessionId`. */
@@ -71,8 +81,8 @@ export function createEngineHarness(options: EngineHarnessOptions = {}): EngineH
     hls,
     timers,
     snapshot,
-    open: (startPositionSeconds = 0) => {
-      engine.open({ media, profile, fileId: playerFileId, startPositionSeconds });
+    open: (startPositionSeconds = 0, extra = {}) => {
+      engine.open({ media, profile, fileId: playerFileId, startPositionSeconds, ...extra });
     },
     untilSession: async (sessionId) => {
       await vi.waitFor(() => {

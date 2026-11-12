@@ -2,6 +2,7 @@
 // the controls ask of it. Install it with `vi.mock("../hooks/usePlaybackSession")` and
 // `vi.mocked(usePlaybackSession).mockImplementation(fake.usePlayback)`.
 
+import type { SwitchPlan } from "@mivo/player-core";
 import { useSyncExternalStore } from "react";
 import { vi } from "vitest";
 
@@ -12,8 +13,11 @@ import type { PlaybackSnapshot } from "../lib/playbackEngine";
 export interface FakePlayback {
   /** The hook to install in place of usePlaybackSession. */
   readonly usePlayback: () => PlaybackSessionView;
-  /** Changes what the engine shows; the page re-renders. */
-  readonly show: (snapshot: Partial<PlaybackSnapshot>) => void;
+  /** Changes what the engine shows (or the tracks and profile it has); the page re-renders. */
+  readonly show: (snapshot: Partial<PlaybackSessionView>) => void;
+  /** Records the switch and, like the engine, shows the new selection (and a restart). */
+  readonly applySwitch: ReturnType<typeof vi.fn<(plan: SwitchPlan) => void>>;
+  readonly setAutomaticQuality: ReturnType<typeof vi.fn<(enabled: boolean) => void>>;
   readonly seek: ReturnType<typeof vi.fn<(position: number) => void>>;
   readonly retry: ReturnType<typeof vi.fn<() => void>>;
   /** Records the call, plays or pauses a playing stream and shows the new intent, like the engine. */
@@ -28,24 +32,33 @@ const loading: PlaybackSnapshot = {
   waitingForStream: false,
   error: undefined,
   autoplay: true,
+  selection: {},
+  switching: false,
+  switchedSessionId: undefined,
 };
 
 /** Creates a fake engine hook that starts with `initial` (loading without a session). */
-export function createFakePlayback(initial: Partial<PlaybackSnapshot> = {}): FakePlayback {
+export function createFakePlayback(initial: Partial<PlaybackSessionView> = {}): FakePlayback {
   const listeners = new Set<() => void>();
   const seek = vi.fn<(position: number) => void>();
   const retry = vi.fn<() => void>();
   const attachVideo = vi.fn<(element: HTMLVideoElement | null) => void>();
   const setAutoplay = vi.fn<(autoplay: boolean) => void>();
+  const applySwitch = vi.fn<(plan: SwitchPlan) => void>();
+  const setAutomaticQuality = vi.fn<(enabled: boolean) => void>();
   let view: PlaybackSessionView = {
     ...loading,
+    tracks: undefined,
+    profile: undefined,
     ...initial,
     attachVideo,
     seek,
     retry,
     setAutoplay,
+    applySwitch,
+    setAutomaticQuality,
   };
-  const show = (snapshot: Partial<PlaybackSnapshot>) => {
+  const show = (snapshot: Partial<PlaybackSessionView>) => {
     view = { ...view, ...snapshot };
     for (const listener of listeners) {
       listener();
@@ -68,6 +81,11 @@ export function createFakePlayback(initial: Partial<PlaybackSnapshot> = {}): Fak
     }
     show({ autoplay });
   });
+  applySwitch.mockImplementation((plan) => {
+    if (plan.kind !== "none") {
+      show({ selection: plan.selection, switchedSessionId: undefined });
+    }
+  });
   const subscribe = (listener: () => void) => {
     listeners.add(listener);
     return () => {
@@ -77,6 +95,8 @@ export function createFakePlayback(initial: Partial<PlaybackSnapshot> = {}): Fak
   return {
     usePlayback: () => useSyncExternalStore(subscribe, () => view),
     show,
+    applySwitch,
+    setAutomaticQuality,
     seek,
     retry,
     setAutoplay,

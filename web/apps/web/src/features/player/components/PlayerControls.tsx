@@ -1,7 +1,7 @@
 import type { ReactNode, RefObject } from "react";
 import { useTranslation } from "react-i18next";
 
-import { InfoIcon } from "../../../shared/ui";
+import { InfoIcon, SettingsIcon } from "../../../shared/ui";
 import { playerControlsMarker } from "../hooks/useControlsVisibility";
 import type { PlayerActions, PlayerView } from "../hooks/usePlayer";
 import { playerNamespace } from "../locales";
@@ -14,12 +14,12 @@ import { VolumeControl } from "./VolumeControl";
 
 /**
  * Places in the control bar that later tasks fill (PL-04): the mode indicator (M5-62), the
- * More menu (M5-63), playback options (M5-64) and the queue panel button (M5-65).
+ * More menu (M5-63) and the queue panel button (M5-65). The playback options button
+ * (PL-10 … PL-13) is part of the bar itself.
  */
 export interface PlayerSlots {
   readonly modeIndicator?: ReactNode;
   readonly more?: ReactNode;
-  readonly options?: ReactNode;
   readonly queue?: ReactNode;
 }
 
@@ -29,6 +29,7 @@ export interface PlayerControlsProps {
   readonly actions: PlayerActions;
   readonly playButtonRef: RefObject<HTMLButtonElement | null>;
   readonly streamInfoToggleRef: RefObject<HTMLButtonElement | null>;
+  readonly optionsToggleRef: RefObject<HTMLButtonElement | null>;
   readonly slots?: PlayerSlots | undefined;
 }
 
@@ -42,6 +43,7 @@ export function PlayerControls({
   actions,
   playButtonRef,
   streamInfoToggleRef,
+  optionsToggleRef,
   slots = {},
 }: PlayerControlsProps) {
   const { t } = useTranslation(playerNamespace);
@@ -65,6 +67,7 @@ export function PlayerControls({
           view={view}
           actions={actions}
           streamInfoToggleRef={streamInfoToggleRef}
+          optionsToggleRef={optionsToggleRef}
           slots={slots}
         />
       </div>
@@ -77,7 +80,13 @@ type SideControlsProps = Omit<PlayerControlsProps, "playButtonRef" | "slots"> & 
 };
 
 /** The right group (PL-04): mode indicator, stream info, More, repeat, shuffle, panels, sound. */
-function SideControls({ view, actions, streamInfoToggleRef, slots }: SideControlsProps) {
+function SideControls({
+  view,
+  actions,
+  streamInfoToggleRef,
+  optionsToggleRef,
+  slots,
+}: SideControlsProps) {
   const { t } = useTranslation(playerNamespace);
   return (
     <div className="flex flex-wrap items-center justify-center gap-1 md:justify-end">
@@ -98,7 +107,17 @@ function SideControls({ view, actions, streamInfoToggleRef, slots }: SideControl
         onCycleRepeat={actions.cycleRepeat}
         onToggleShuffle={actions.toggleShuffle}
       />
-      {slots.options}
+      <button
+        ref={optionsToggleRef}
+        type="button"
+        onClick={actions.options.toggle}
+        aria-haspopup="dialog"
+        aria-expanded={view.options.open}
+        aria-label={t("controls.options")}
+        className={iconButtonClass}
+      >
+        <SettingsIcon className="size-6" />
+      </button>
       {slots.queue}
       <VolumeControl
         media={view.media}
