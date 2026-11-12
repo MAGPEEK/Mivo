@@ -77,6 +77,7 @@ func (api *API) GetItem(ctx context.Context, request apigen.GetItemRequestObject
 	}
 
 	api.applyDetailMatch(ctx, &response)
+	api.applyExternalTracks(ctx, &response, detail)
 
 	err = api.applyDetailViewerState(ctx, operationGetItem, &response)
 	if err != nil {

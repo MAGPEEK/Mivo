@@ -48,7 +48,23 @@ func newPlaybackSession(session appplayback.Session) (apigen.PlaybackSession, er
 		Streams:              streams,
 		Reasons:              newPlaybackReasons(plan.Reasons),
 		Warnings:             newPlaybackWarnings(plan.Warnings),
+		Subtitle:             newSubtitleDecision(session),
+		SourceBitRate:        optionalInt64(session.SourceBitRate),
+		OutputBitRate:        optionalInt64(session.OutputBitRate),
 	}, nil
+}
+
+// newSubtitleDecision reports what the session does with subtitles; a session that carries no
+// decision (an empty mode) omits it, which the contract defines as "no subtitle".
+func newSubtitleDecision(session appplayback.Session) *apigen.SubtitleDecision {
+	if session.SubtitleMode == "" {
+		return nil
+	}
+
+	return &apigen.SubtitleDecision{
+		Mode:    apigen.SubtitleDeliveryMode(session.SubtitleMode),
+		TrackID: optionalString(session.SubtitleTrackID),
+	}
 }
 
 // newStreamDecisions fails for a source index the contract cannot carry (streamIndex). A

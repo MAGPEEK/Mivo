@@ -88,6 +88,12 @@ func wantProbedFile(t *testing.T) apigen.MediaFile {
 		ID: mustUUID(t, testCatalogFileID), FileName: "Big.Buck.Bunny.mkv", SizeBytes: 276134947,
 		ModifiedAt: time.Date(2026, 10, 1, 10, 30, 0, 500000000, time.UTC), Available: true,
 		Container: ptr("mkv"), DurationSeconds: ptr(5423.042), BitRate: ptr(int64(4073000)),
+		Width: ptr(int32(3840)), Height: ptr(int32(2160)), Resolution: ptr(apigen.VideoResolutionN4K),
+		DefaultAudioStreamIndex: ptr(int32(3)),
+		SubtitleTracks: &[]apigen.SubtitleTrack{{
+			ID: "s:4", Language: ptr("ger"), Title: ptr("Forced"), Format: "subrip", Forced: true, TextBased: true,
+			URL: ptr("/api/v1/media-files/" + testCatalogFileID + "/subtitles/s:4.vtt"),
+		}},
 		Streams: []apigen.MediaStream{
 			{Index: 0, Kind: apigen.MediaStreamKindVideo, Codec: ptr("mjpeg"), Width: ptr(int32(600)), Height: ptr(int32(800)), AttachedPicture: true},
 			{
@@ -112,7 +118,7 @@ func wantUnprobedFile(t *testing.T) apigen.MediaFile {
 	return apigen.MediaFile{
 		ID: mustUUID(t, testSecondCatalogFileID), FileName: "odd name.avi",
 		ModifiedAt: time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC),
-		ErrorCode:  ptr("probe_timed_out"), Streams: []apigen.MediaStream{},
+		ErrorCode:  ptr("probe_timed_out"), Streams: []apigen.MediaStream{}, SubtitleTracks: &[]apigen.SubtitleTrack{},
 	}
 }
 

@@ -297,6 +297,7 @@ func (api *API) currentItem(ctx context.Context, operation, itemID string) (apig
 	}
 
 	api.applyDetailMatch(ctx, &response)
+	api.applyExternalTracks(ctx, &response, detail)
 
 	return response, nil
 }

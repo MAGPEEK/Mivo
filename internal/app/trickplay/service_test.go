@@ -511,8 +511,8 @@ func TestRequestRejectsFilesWithoutTrickplay(t *testing.T) {
 		h.start(t)
 
 		err := h.service.Request(viewerContext(access.AllLibraries()), file)
-		if !errors.Is(err, domain.ErrInvalid) {
-			t.Errorf("%s: err = %v, want ErrInvalid", file, err)
+		if !errors.Is(err, domain.ErrUnsupported) {
+			t.Errorf("%s: err = %v, want ErrUnsupported", file, err)
 		}
 	}
 }

@@ -14,7 +14,7 @@ All strict-server operations of M4-02a/b are implemented and mapped.
       `POST /playback/sessions` and `/playback/sessions/{sessionId}` stay open to every signed-in profile.
 - [ ] Trickplay manifest `GET`/`POST` are no management operations: session + selected profile, same-origin on `POST` only, and a
       visibility check (a file the profile may not see → 404 `not_found`, like an unknown one).
-- [ ] Domain errors map: `ErrInvalid` → 422, `ErrNotFound` → 404, `ErrBusy` → 409, `ErrUnavailable` → 503; no absolute path in any body.
+- [ ] Domain errors map: `ErrInvalid` → 400 (as in the contract; request validation), `ErrUnsupported` → 422 (trickplay on disc/no-video/unprobed files; criterion amended by the orchestrator 2026-11-12), `ErrNotFound` → 404, `ErrBusy` → 409, `ErrUnavailable` → 503; no absolute path in any body.
 - [ ] Tests: handler tests with fakes for every operation incl. guard and error mapping; response matches the OpenAPI schema (existing contract test).
 - [ ] Gates: lint + layer rules + coverage thresholds pass.
 

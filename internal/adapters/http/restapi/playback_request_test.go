@@ -28,13 +28,17 @@ func fullPlaybackRequest(t *testing.T) apigen.PlaybackRequest {
 		StartPositionSeconds: playbackPointer(600.25),
 		AudioStreamIndex:     playbackPointer[int32](1),
 		ReplacesSessionID:    playbackPointer(playbackUUID(t, replacedSessionID)),
+		SubtitleTrackID:      playbackPointer("s:3"), MaxBitRate: playbackPointer[int64](8_000_000),
+		AllowDegradeSubtitles: playbackPointer(true),
 		Profile: apigen.ClientProfile{
 			Name: testProfileName,
 			DirectPlay: []apigen.DirectPlayProfile{
 				{Container: "mp4", VideoCodecs: []string{"h264", "av1"}, AudioCodecs: []string{"aac"}},
 				{Container: "webm", VideoCodecs: []string{"vp9"}, AudioCodecs: []string{"opus"}},
 			},
-			Hls: apigen.HlsProfile{Delivery: apigen.HlsDeliveryMse, VideoCodecs: []string{"h264"}, AudioCodecs: []string{"aac", "mp3"}},
+			Hls:             apigen.HlsProfile{Delivery: apigen.HlsDeliveryMse, VideoCodecs: []string{"h264"}, AudioCodecs: []string{"aac", "mp3"}},
+			SubtitleFormats: &[]string{"webvtt"}, MaxAudioChannels: playbackPointer[int32](8),
+			MaxAudioSampleRate: playbackPointer[int32](48000), MaxAudioBitDepth: playbackPointer[int32](16),
 			CodecLimits: &[]apigen.CodecLimit{
 				{Codec: "h264", MaxBitDepth: playbackPointer[int32](8), Profiles: &[]string{"Constrained Baseline", "High"}},
 				{Codec: "hevc"},
@@ -46,19 +50,22 @@ func fullPlaybackRequest(t *testing.T) apigen.PlaybackRequest {
 // wantFullStartRequest is fullPlaybackRequest as the app receives it.
 func wantFullStartRequest() appplayback.StartRequest {
 	audioIndex := 1
+	subtitleTrack := "s:3"
 
 	return appplayback.StartRequest{
 		FileID:            testFileID,
 		StartPosition:     600*time.Second + 250*time.Millisecond,
 		AudioStreamIndex:  &audioIndex,
 		ReplacesSessionID: replacedSessionID,
+		SubtitleTrackID:   &subtitleTrack, MaxBitrate: 8_000_000, AllowDegradeSubtitles: true,
 		Profile: playback.ClientProfile{
 			Name: testProfileName,
 			DirectPlay: []playback.DirectPlayProfile{
 				{Container: media.DirectPlayMP4, VideoCodecs: []string{"h264", "av1"}, AudioCodecs: []string{"aac"}},
 				{Container: media.DirectPlayWebM, VideoCodecs: []string{"vp9"}, AudioCodecs: []string{"opus"}},
 			},
-			HLS: playback.HLSProfile{Delivery: playback.HLSDeliveryMSE, VideoCodecs: []string{"h264"}, AudioCodecs: []string{"aac", "mp3"}},
+			HLS:             playback.HLSProfile{Delivery: playback.HLSDeliveryMSE, VideoCodecs: []string{"h264"}, AudioCodecs: []string{"aac", "mp3"}},
+			SubtitleFormats: []string{"webvtt"}, MaxAudioChannels: 8, MaxAudioSampleRate: 48000, MaxAudioBitDepth: 16,
 			CodecLimits: []playback.CodecLimit{
 				{Codec: "h264", MaxBitDepth: 8, Profiles: []string{"Constrained Baseline", "High"}},
 				{Codec: "hevc"},
@@ -96,6 +103,43 @@ func TestCreatePlaybackSessionPassesTheRequestToTheService(t *testing.T) {
 
 	if want := wantFullStartRequest(); !reflect.DeepEqual(started[0], want) {
 		t.Errorf("start request =\n%+v\nwant\n%+v", started[0], want)
+	}
+}
+
+// TestPlaybackRequestWireNames pins the request fields the handler maps: the quality cap is
+// maxBitRate (renamed from maxBitrate before a release carried it) and the subtitle fallback
+// is allowDegradeSubtitles.
+func TestPlaybackRequestWireNames(t *testing.T) {
+	t.Parallel()
+
+	body := []byte(`{"maxBitRate":8000000,"allowDegradeSubtitles":true,` +
+		`"profile":{"maxAudioSampleRate":48000,"maxAudioBitDepth":16}}`)
+
+	request := decode[apigen.PlaybackRequest](t, body)
+
+	if request.MaxBitRate == nil || *request.MaxBitRate != 8000000 {
+		t.Error("maxBitRate was not decoded as 8000000")
+	}
+
+	if request.AllowDegradeSubtitles == nil || !*request.AllowDegradeSubtitles {
+		t.Error("allowDegradeSubtitles was not decoded")
+	}
+
+	profile := request.Profile
+	if profile.MaxAudioSampleRate == nil || *profile.MaxAudioSampleRate != 48000 ||
+		profile.MaxAudioBitDepth == nil || *profile.MaxAudioBitDepth != 16 {
+		t.Error("maxAudioSampleRate and maxAudioBitDepth were not decoded as 48000 Hz and 16 bit")
+	}
+
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatalf("marshal the request: %v", err)
+	}
+
+	// encoding/json matches keys without regard to case when it decodes, so only the encoded
+	// form shows the spelling of the contract.
+	if !strings.Contains(string(encoded), `"maxBitRate":8000000`) || strings.Contains(string(encoded), "maxBitrate") {
+		t.Errorf("the request does not carry maxBitRate: %s", encoded)
 	}
 }
 

@@ -58,6 +58,10 @@ type Options struct {
 	// It is optional: without it those endpoints answer 501 "not_implemented" and items carry
 	// no viewerState.
 	Watch WatchService
+	// Streaming serves the session list, the transcoder status and test, the trickplay manifest
+	// and the external subtitle tracks of the media file resource (ADR 0030). Every service in
+	// it is optional; see StreamingServices.
+	Streaming StreamingServices
 }
 
 // Mount is one extra route of the API mux.

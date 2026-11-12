@@ -23,6 +23,9 @@ const maxStartPositionSeconds = float64(math.MaxInt64 / int64(time.Second))
 // broken client.
 const minCodecLimitBitDepth = 1
 
+// maxSubtitleTrackIDLength is the contract's maxLength of subtitleTrackId.
+const maxSubtitleTrackIDLength = 66
+
 // newStartRequest turns the request body into the app's request and validates what the
 // generated binding does not: the schema bounds the decoder ignores and the client profile.
 // The profile is validated here, before the service runs, so a broken or hostile profile
@@ -63,7 +66,36 @@ func newStartRequest(body *apigen.PlaybackRequest) (appplayback.StartRequest, er
 		request.ReplacesSessionID = body.ReplacesSessionID.String()
 	}
 
+	if err := applyStreamChoices(&request, body); err != nil {
+		return appplayback.StartRequest{}, err
+	}
+
 	return request, nil
+}
+
+// applyStreamChoices maps the optional subtitle track, quality cap and subtitle fallback of
+// ADR 0030. The track ID itself is checked against the file by the decision (400 "invalid" for
+// an unknown one); only its length is bounded here, so no unbounded text reaches the log.
+func applyStreamChoices(request *appplayback.StartRequest, body *apigen.PlaybackRequest) error {
+	if track := body.SubtitleTrackID; track != nil {
+		if len(*track) > maxSubtitleTrackIDLength {
+			return fmt.Errorf("subtitle track id longer than %d: %w", maxSubtitleTrackIDLength, domain.ErrInvalid)
+		}
+
+		request.SubtitleTrackID = track
+	}
+
+	if body.MaxBitRate != nil {
+		if *body.MaxBitRate < 0 {
+			return fmt.Errorf("negative max bit rate %d: %w", *body.MaxBitRate, domain.ErrInvalid)
+		}
+
+		request.MaxBitrate = *body.MaxBitRate
+	}
+
+	request.AllowDegradeSubtitles = body.AllowDegradeSubtitles != nil && *body.AllowDegradeSubtitles
+
+	return nil
 }
 
 // newStartPosition converts seconds to a duration; nil starts at the beginning.
@@ -125,6 +157,7 @@ func newClientProfile(profile apigen.ClientProfile) (playback.ClientProfile, err
 
 	converted.CodecLimits = limits
 	converted.Tracks = newTrackPreference(profile)
+	applyAudioLimitsAndSubtitleFormats(&converted, profile)
 
 	if err := converted.Validate(); err != nil {
 		return playback.ClientProfile{}, fmt.Errorf("client profile: %w", err)
@@ -163,9 +196,29 @@ func newCodecLimits(limits *[]apigen.CodecLimit) ([]playback.CodecLimit, error) 
 	return converted, nil
 }
 
+// applyAudioLimitsAndSubtitleFormats copies the optional client limits (ADR 0030 sections 3
+// and 4); an omitted one stays 0 or empty, which the domain reads as "server default" and
+// "renders no subtitles". Validate bounds them.
+func applyAudioLimitsAndSubtitleFormats(converted *playback.ClientProfile, profile apigen.ClientProfile) {
+	if profile.SubtitleFormats != nil {
+		converted.SubtitleFormats = *profile.SubtitleFormats
+	}
+
+	converted.MaxAudioChannels = optionalLimit(profile.MaxAudioChannels)
+	converted.MaxAudioSampleRate = optionalLimit(profile.MaxAudioSampleRate)
+	converted.MaxAudioBitDepth = optionalLimit(profile.MaxAudioBitDepth)
+}
+
+func optionalLimit(value *int32) int {
+	if value == nil {
+		return 0
+	}
+
+	return int(*value)
+}
+
 // newTrackPreference converts the optional language and subtitle preference of the profile
 // (ADR 0030 sections 3 and 4); the domain's Validate bounds the lists and checks the mode.
-// subtitleFormats and maxAudioChannels have no domain field yet (M4-04b, M4-04c).
 func newTrackPreference(profile apigen.ClientProfile) playback.TrackPreference {
 	preference := playback.TrackPreference{}
 

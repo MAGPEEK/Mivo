@@ -23,6 +23,8 @@ const (
 	devicesRefusalDetail          = "Device administration needs an administrator on the local network."
 	setupRefusalDetail            = "The first-run setup is only available from the local network."
 	profilesRefusalDetail         = "Administrators manage profiles from the local network only."
+	sessionsRefusalDetail         = "The running playback sessions are only shown to an administrator on the local network."
+	transcoderRefusalDetail       = "Transcoder settings need an administrator on the local network."
 )
 
 // manageArea is the guarded area a request belongs to; areaNone is not guarded.
@@ -41,6 +43,11 @@ const (
 	// areaProfiles refuses only admin viewers outside the local network; owners pass to the
 	// use case's ownership check.
 	areaProfiles
+	// areaSessions is the list of all running playback sessions; starting, reading and stopping
+	// one's own session stays open to every profile.
+	areaSessions
+	// areaTranscoder is the hardware acceleration status and its test run.
+	areaTranscoder
 )
 
 // Paths of the guarded routes (api/openapi.yaml).
@@ -54,6 +61,8 @@ const (
 	apiV1Devices          = "/api/v1/devices"
 	apiV1Setup            = "/api/v1/setup"
 	apiV1Profiles         = "/api/v1/profiles"
+	apiV1Playback         = "/api/v1/playback"
+	apiV1Transcoder       = "/api/v1/system/transcoder"
 
 	// settingsSegments and posterSegments are the path segments of the settings route and of
 	// one poster ("api", "v1", ... and the poster ID).
@@ -63,6 +72,8 @@ const (
 	// the account ID and "profiles".
 	collectionSegments   = 3
 	userProfilesSegments = 5
+	// sessionListSegments counts "api", "v1", "playback" and "sessions".
+	sessionListSegments = 4
 )
 
 // manageGuard protects the management and administration operations (ADR 0028, ADR 0032
@@ -206,6 +217,10 @@ func areaRefusalDetail(area manageArea) string {
 		return setupRefusalDetail
 	case areaProfiles:
 		return profilesRefusalDetail
+	case areaSessions:
+		return sessionsRefusalDetail
+	case areaTranscoder:
+		return transcoderRefusalDetail
 	case areaNone, areaLibraries:
 		return manageRefusalDetail
 	default:
@@ -224,6 +239,8 @@ func areaRefusalDetail(area manageArea) string {
 //   - users and devices: every request below /api/v1/users and /api/v1/devices.
 //   - setup: every write to /api/v1/setup; reading the setup state stays open.
 //   - profiles: every request below /api/v1/profiles (see profileRefusal).
+//   - sessions: reading the list at /api/v1/playback/sessions (GET and HEAD, ADR 0030 §7).
+//   - transcoder: every request below /api/v1/system/transcoder (ADR 0030 §5).
 //
 // The path is classified twice and the first guarded answer wins (fail closed): once split
 // into segments that are unescaped one by one, as ServeMux matches them, so an encoded slash
@@ -269,8 +286,35 @@ func segmentArea(segments []string, isRead bool) manageArea {
 		// /api/v1/metadata/posters/{posterId}
 		return areaIf(len(segments) == posterSegments, areaMetadata)
 	default:
+		return streamingArea(segments, isRead)
+	}
+}
+
+// streamingArea classifies the session list and the transcoder (M4-14b): reading the list
+// of every viewer's sessions and the whole transcoder route are administration, while one
+// session below it (start, read, stop, stream) and the trickplay are not.
+func streamingArea(segments []string, isRead bool) manageArea {
+	switch {
+	case isPrefixOf(segments, apiV1Transcoder):
+		return areaTranscoder
+	case isPrefixOf(segments, apiV1Playback):
+		// The collection only, also with a trailing slash; a POST starts the viewer's own
+		// session.
+		return areaIf(isRead && isSessionList(segments), areaSessions)
+	default:
 		return accountArea(segments, isRead)
 	}
+}
+
+// isSessionList reports the collection path /api/v1/playback/sessions, tolerating empty
+// trailing segments (a trailing slash).
+func isSessionList(segments []string) bool {
+	trimmed := segments
+	for len(trimmed) > sessionListSegments && trimmed[len(trimmed)-1] == "" {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+
+	return len(trimmed) == sessionListSegments && trimmed[3] == "sessions"
 }
 
 // accountArea classifies the account administration and the setup.

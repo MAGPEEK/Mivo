@@ -294,6 +294,24 @@ func TestManageGuardCoversExactlyTheManagementRoutes(t *testing.T) {
 		{http.MethodGet, "/api/v1/metadata/posters/a%2Fb", true},
 		{http.MethodDelete, "/api/v1/devices/a%2Fb", true},
 		{http.MethodPost, "/api/v1/libraries/a%2Fb/items", false},
+		// The session list and the transcoder are administration (M4-14b); starting, reading
+		// and stopping one's own session and the trickplay stay open to every profile.
+		{http.MethodGet, "/api/v1/playback/sessions", true},
+		{http.MethodHead, "/api/v1/playback/sessions", true},
+		{http.MethodGet, "/api/v1/playback/sessions/", true},
+		{http.MethodGet, "/api/v1/playback/%73essions", true},
+		{http.MethodGet, "/api/v1/playback/sessions?x=1", true},
+		{http.MethodGet, "/api/v1/playback/sessions/" + manageLibraryID, false},
+		{http.MethodDelete, "/api/v1/playback/sessions/" + manageLibraryID, false},
+		{http.MethodGet, "/api/v1/playback/sessions/" + manageLibraryID + "/hls/index.m3u8", false},
+		{http.MethodGet, "/api/v1/system/transcoder", true},
+		{http.MethodHead, "/api/v1/system/transcoder", true},
+		{http.MethodPost, "/api/v1/system/transcoder/test", true},
+		{http.MethodPost, "/api/v1/system/%74ranscoder/test", true},
+		{http.MethodPost, "/api/v1/system/transcoder/test/", true},
+		{http.MethodGet, "/api/v1/system/transcoders", false},
+		{http.MethodGet, "/api/v1/media-files/" + manageLibraryID + "/trickplay", false},
+		{http.MethodPost, "/api/v1/media-files/" + manageLibraryID + "/trickplay", false},
 	}
 
 	for _, route := range routes {

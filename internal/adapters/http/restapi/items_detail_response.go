@@ -302,13 +302,7 @@ func peopleResponse(credits []metadata.Credit) (*[]apigen.ItemPerson, error) {
 // applyFiles prefers the milestone-3 files with version label and part number and falls back
 // to the plain file list of the milestone-2 read path.
 func applyFiles(response *apigen.ItemDetail, detail applibrary.ItemDetail) error {
-	itemFiles := detail.ItemFiles
-	if len(itemFiles) == 0 {
-		itemFiles = make([]applibrary.ItemFile, 0, len(detail.Files))
-		for _, file := range detail.Files {
-			itemFiles = append(itemFiles, applibrary.ItemFile{File: file})
-		}
-	}
+	itemFiles := detailItemFiles(detail)
 
 	response.Files = make([]apigen.MediaFile, 0, len(itemFiles))
 
@@ -322,6 +316,20 @@ func applyFiles(response *apigen.ItemDetail, detail applibrary.ItemDetail) error
 	}
 
 	return nil
+}
+
+// detailItemFiles is the file list of an item: the milestone-3 files, else the plain list.
+func detailItemFiles(detail applibrary.ItemDetail) []applibrary.ItemFile {
+	if len(detail.ItemFiles) > 0 {
+		return detail.ItemFiles
+	}
+
+	itemFiles := make([]applibrary.ItemFile, 0, len(detail.Files))
+	for _, file := range detail.Files {
+		itemFiles = append(itemFiles, applibrary.ItemFile{File: file})
+	}
+
+	return itemFiles
 }
 
 // applyNavigation sets the siblings and the item Play starts, and the people block.

@@ -98,8 +98,8 @@ func New(options Options) (*Service, error) {
 // Request queues the generation for a file and returns at once. It is idempotent: a file
 // that is queued, running, done or failed gets no second job, and a full queue drops the
 // request without an error. Errors wrap domain.ErrNotFound (unknown or hidden file),
-// domain.ErrInvalid (no video, not probed, disc), domain.ErrUnavailable (no generator or
-// shutting down).
+// domain.ErrUnsupported (no video, not probed, disc; the contract answers 422), domain.ErrUnavailable
+// (no generator or shutting down).
 func (s *Service) Request(ctx context.Context, fileID string) error {
 	file, err := s.visibleFile(ctx, fileID)
 	if err != nil {

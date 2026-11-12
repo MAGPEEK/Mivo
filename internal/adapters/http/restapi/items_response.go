@@ -157,7 +157,7 @@ func mediaFileResponse(file media.File) (apigen.MediaFile, error) {
 	}
 
 	// A disc folder is named after the folder holding BDMV or VIDEO_TS, not "VIDEO_TS".
-	return apigen.MediaFile{
+	response := apigen.MediaFile{
 		ID:              id,
 		FileName:        fileName(file.Layout.DiscRoot(file.RelativePath)),
 		SizeBytes:       file.Size,
@@ -168,7 +168,13 @@ func mediaFileResponse(file media.File) (apigen.MediaFile, error) {
 		DurationSeconds: optionalDurationSeconds(file.Description.Duration),
 		BitRate:         optionalInt64(file.Description.BitRate),
 		Streams:         streams,
-	}, nil
+	}
+
+	if err := applyTracks(&response, file, nil); err != nil {
+		return apigen.MediaFile{}, err
+	}
+
+	return response, nil
 }
 
 // mediaStreamResponse fails for an index the contract cannot carry (streamIndex).

@@ -43,6 +43,7 @@ type API struct {
 	auth      AuthService
 	users     UserServices
 	watch     WatchService
+	streaming StreamingServices
 }
 
 // Compile-time check that API serves every operation of the contract.
@@ -74,6 +75,7 @@ func NewAPI(options Options) (*API, error) {
 		auth:      options.Auth,
 		users:     options.Users,
 		watch:     options.Watch,
+		streaming: options.Streaming,
 	}, nil
 }
 

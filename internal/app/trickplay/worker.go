@@ -47,11 +47,11 @@ func keyOf(file fileView) string {
 func checkGeneratable(file fileView) error {
 	switch {
 	case file.Disc:
-		return fmt.Errorf("trickplay %s: disc image: %w", file.ID, domain.ErrInvalid)
+		return fmt.Errorf("trickplay %s: disc image: %w", file.ID, domain.ErrUnsupported)
 	case !file.Probed:
-		return fmt.Errorf("trickplay %s: file not probed: %w", file.ID, domain.ErrInvalid)
+		return fmt.Errorf("trickplay %s: file not probed: %w", file.ID, domain.ErrUnsupported)
 	case !file.HasVideo:
-		return fmt.Errorf("trickplay %s: no video stream: %w", file.ID, domain.ErrInvalid)
+		return fmt.Errorf("trickplay %s: no video stream: %w", file.ID, domain.ErrUnsupported)
 	}
 
 	return nil
