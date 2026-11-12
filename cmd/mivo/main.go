@@ -38,7 +38,7 @@ func main() {
 	// shutdown that hangs instead of being swallowed.
 	context.AfterFunc(ctx, stop)
 
-	code := run(ctx, os.Args[1:], runEnv{stdout: os.Stdout, stderr: os.Stderr, lookupEnv: os.LookupEnv}, runHooks{})
+	code := run(ctx, os.Args[1:], runEnv{stdout: os.Stdout, stderr: os.Stderr, lookupEnv: os.LookupEnv}, defaultRunHooks(os.LookupEnv))
 
 	stop()
 	os.Exit(code)

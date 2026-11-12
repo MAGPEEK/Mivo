@@ -34,6 +34,8 @@ const webBuildIndex = join(
 );
 // A Go package path, not a product name: renaming the product does not move the code.
 const serverPackage = "./cmd/mivo";
+// `e2e` compiles the test-only provider redirect (cmd/mivo/hooks_e2e.go); a release has no such tag.
+const buildTags = "webui,e2e";
 
 /** Name of the server's only library: the folder name of its root (ADR 0022). */
 export const e2eLibraryName = "media";
@@ -108,6 +110,11 @@ export interface E2EServerOptions {
    * typed libraries, because it would replace the configured list (ADR 0018).
    */
   readonly libraries?: readonly E2ELibrary[];
+  /**
+   * Extra server settings (full names such as `MIVO_METADATA_ONLINE_ENABLED`), applied on top of
+   * the isolated environment, e.g. online metadata and the origin of a local fake provider.
+   */
+  readonly environment?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -131,6 +138,7 @@ export async function startE2EServer(options: E2EServerOptions): Promise<E2EServ
     const typedLibraries = options.libraries ?? [];
     await writeTypedLibraries(root, typedLibraries);
     const environment = await isolatedEnvironment(root, port, typedLibraries.length === 0);
+    Object.assign(environment, options.environment);
     const running = await launch(binary, environment, options.logFile);
     launched = running;
     const baseUrl = `http://${loopbackHost}:${String(port)}`;
@@ -198,7 +206,7 @@ function assertGoAvailable(): void {
   assertCommandAvailable(
     "go",
     ["version"],
-    "Go was not found on PATH. The E2E suite builds the server with `go build -tags webui`; " +
+    "Go was not found on PATH. The E2E suite builds the server with `go build -tags webui,e2e`; " +
       "install the Go version from go.mod and open a new shell.",
   );
 }
@@ -214,7 +222,7 @@ function assertWebBuildExists(): void {
 
 async function buildServer(root: string): Promise<string> {
   const binary = join(root, "bin", `${productId}${executableSuffix}`);
-  await runCommand("go", ["build", "-tags", "webui", "-o", binary, serverPackage], {
+  await runCommand("go", ["build", "-tags", buildTags, "-o", binary, serverPackage], {
     timeoutMs: buildTimeoutMs,
   });
   return binary;
