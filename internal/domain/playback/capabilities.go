@@ -19,6 +19,10 @@ type ServerCapabilities struct {
 	// FLACEncoder names the encoder of the lossless audio target (DSD and hi-res audio,
 	// ADR 0030 section 4); when empty these sources are sent as AAC instead.
 	FLACEncoder string
+	// WebVTTEncoder names the encoder that turns a text subtitle (SubRip, ASS, mov_text) into
+	// the WebVTT the player loads; empty when FFmpeg lacks it, as an FFmpeg build with
+	// --disable-encoders and no webvtt, so no text subtitle can be delivered.
+	WebVTTEncoder string
 	// H264Encoder and AACEncoder name the encoders for the transcode targets; empty when
 	// FFmpeg lacks them, for example a minimal build on a weak NAS.
 	H264Encoder string

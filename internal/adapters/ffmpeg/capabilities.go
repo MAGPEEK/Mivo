@@ -36,8 +36,9 @@ const (
 	unknownVersion = "unknown"
 
 	// encoderKindVideo and encoderKindAudio are the first flag of an -encoders or -decoders entry.
-	encoderKindVideo = 'V'
-	encoderKindAudio = 'A'
+	encoderKindVideo    = 'V'
+	encoderKindAudio    = 'A'
+	encoderKindSubtitle = 'S'
 	// experimentalFlag marks encoders FFmpeg uses only with -strict experimental.
 	experimentalFlag = 'X'
 	// muxingFlag marks a format FFmpeg can write.
@@ -198,6 +199,11 @@ func (o capabilityOutputs) parse() (playback.ServerCapabilities, error) {
 	// The lossless target of DSD and hi-res audio (ADR 0030 section 4).
 	if hasCodec(encoders, playback.EncoderFLAC, encoderKindAudio) {
 		capabilities.FLACEncoder = playback.EncoderFLAC
+	}
+
+	// Text subtitles reach the player as WebVTT, which only this encoder writes (M4-08a).
+	if hasCodec(encoders, playback.EncoderWebVTT, encoderKindSubtitle) {
+		capabilities.WebVTTEncoder = playback.EncoderWebVTT
 	}
 
 	return capabilities, nil

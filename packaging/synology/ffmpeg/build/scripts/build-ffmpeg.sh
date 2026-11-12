@@ -60,14 +60,17 @@ readonly DISC_DEMUXERS="concat"
 # Output: fMP4 HLS (ADR 0024) selects mov, mpegts and webvtt itself; null serves diagnostics;
 # image2pipe writes the rendered posters (M3-08, internal/adapters/ffmpeg/image_args.go).
 readonly MUXERS="hls,mp4,null,image2pipe"
-# Encoders: the software transcode targets of ADR 0023, plus mjpeg and png for the image renderer.
-readonly ENCODERS="libx264,aac,mjpeg,png"
+# Encoders: the software transcode targets of ADR 0023, plus mjpeg and png for the image renderer
+# and webvtt, which turns every text subtitle format into the WebVTT the player loads
+# (-c:s webvtt, internal/adapters/ffmpeg/subtitle_args.go; --disable-encoders drops it otherwise).
+readonly ENCODERS="libx264,aac,mjpeg,png,webvtt"
 # Filters: the graph endpoints and those ffmpeg inserts itself (pixel/sample format conversion,
 # -t/-ss trimming, display-matrix rotation, crop metadata, -r, -apad, -vol), plus the producer's
-# scale. Decoders, parsers and bitstream filters stay complete: the server plays any format.
+# scale and the overlay of image-subtitle burn-in (burnin.go; no libass, so no "subtitles"
+# filter). Decoders, parsers and bitstream filters stay complete: the server plays any format.
 readonly FILTERS="buffer,buffersink,abuffer,abuffersink,format,aformat,null,anull,\
 scale,aresample,trim,atrim,crop,hflip,vflip,transpose,rotate,setpts,asetpts,fps,pad,setsar,\
-apad,volume"
+apad,volume,overlay"
 # The server opens every input as file: and writes HLS to files; pipe feeds the photo renderer's
 # embedded previews; concat joins the VOBs of a DVD title (concat:file:a|file:b, ADR 0029);
 # subfile reads a byte range of a disc image without mounting it

@@ -27,6 +27,9 @@ const (
 	TranscodeLosslessAudioCodec = "flac"
 	// EncoderFLAC is FFmpeg's FLAC encoder, reported in ServerCapabilities.FLACEncoder.
 	EncoderFLAC = "flac"
+	// EncoderWebVTT is FFmpeg's WebVTT subtitle encoder, reported in
+	// ServerCapabilities.WebVTTEncoder.
+	EncoderWebVTT = "webvtt"
 )
 
 // The reasons of the audio targets (ADR 0030 Notes (M4-02a), (M4-02b)).

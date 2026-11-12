@@ -37,6 +37,7 @@ func TestCapabilityOutputsParseFixtures(t *testing.T) {
 				H264Encoder:   playback.EncoderLibx264,
 				AACEncoder:    playback.EncoderAAC,
 				FLACEncoder:   playback.EncoderFLAC,
+				WebVTTEncoder: playback.EncoderWebVTT,
 			},
 		},
 		{
@@ -47,6 +48,7 @@ func TestCapabilityOutputsParseFixtures(t *testing.T) {
 				H264Encoder:   playback.EncoderLibx264,
 				AACEncoder:    playback.EncoderAAC,
 				FLACEncoder:   playback.EncoderFLAC,
+				WebVTTEncoder: playback.EncoderWebVTT,
 			},
 		},
 	}
@@ -453,6 +455,40 @@ func TestDetectCapabilitiesRunsTheThreeQueries(t *testing.T) {
 
 	if slices.Contains(ffmpeg.deadlines, false) {
 		t.Errorf("deadlines = %v, want every query bounded by a timeout", ffmpeg.deadlines)
+	}
+}
+
+// TestDetectCapabilitiesReportsTheWebVTTEncoder: only a subtitle encoder named webvtt counts; the
+// Synology build of revision 4 listed none, and every text subtitle download failed.
+func TestDetectCapabilitiesReportsTheWebVTTEncoder(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		encoders string
+		want     string
+	}{
+		{"listed", encoderListing(" S..... webvtt               WebVTT subtitle"), playback.EncoderWebVTT},
+		{"missing", encoderListing(" S..... srt                  SubRip subtitle"), ""},
+		{"wrong kind", encoderListing(" V..... webvtt               not a subtitle"), ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			ffmpeg := healthyFFmpeg()
+			ffmpeg.outputs["-encoders"] = test.encoders
+
+			got, err := detectCapabilities(t.Context(), ffmpeg.run, time.Minute)
+			if err != nil {
+				t.Fatalf("detect: %v", err)
+			}
+
+			if got.WebVTTEncoder != test.want {
+				t.Errorf("WebVTTEncoder = %q, want %q", got.WebVTTEncoder, test.want)
+			}
+		})
 	}
 }
 

@@ -27,7 +27,7 @@ docker build --output type=local,dest=out packaging/synology/ffmpeg/build   # ta
 | Target | Output |
 |---|---|
 | `x86_64`, `armv8`, `armv7` | `ffmpeg`, `ffprobe` (0755), licence texts, `SOURCE.txt` |
-| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static4-source.tar`) |
+| `source` | `ffmpeg-<version>-static<revision>-source.tar` and its `.sha256` (the version label of `scripts/recipe.sh`, e.g. `ffmpeg-9.0.2-static5-source.tar`) |
 | `all` | `x86_64/`, `armv8/`, `armv7/`, `source/` |
 
 Build argument `JOBS` limits the parallel compile jobs per stage (default: all CPUs). Keep build
@@ -104,7 +104,7 @@ notice, `-version` prints the configure line. Reduced to what the server needs
 | Demuxers | exactly the server's `-format_whitelist` (`allowedDemuxers` in `internal/adapters/ffmpeg/probe.go`) plus `image2`: matroska, mov, mpegts, mpegps ("mpeg"), mpegvideo, avi, flv, live_flv, ogg, asf, mxf, rm, flac, mp3, wav, aiff, wv, ape, dsf, iff, aac, ac3, eac3, dts, gif, image_{png,jpeg,tiff,webp}_pipe, srt, webvtt, ass, sup, image2; plus `concat` (`DISC_DEMUXERS`, recipe revision 3) | ADR 0022 Notes M2-24b. `hls`, `dash`, `imf` and `vobsub` are not built at all. `concat` reads a Blu-ray title's clips from the list the server writes itself (ADR 0029, M3-16f `disc_input.go`); it is not on the whitelist of a library file, so a hostile ffconcat list in a library is refused (`verify/checks.sh` "hostile"). **When `allowedDemuxers` changes, change this list**: the Go test `packaging/synology/internal/recipecheck` (`go test ./...`) compares the two lists without a build, and `verify.sh` checks the built binary against probe.go. |
 | Decoders, parsers, bitstream filters | all (no external libraries besides those below) | the server plays any format; transcode needs the decoder of whatever is in a library |
 | Muxers | hls, mp4, null, image2pipe (hls selects mov, mpegts, webvtt; image2pipe writes the M3-08 posters) | fMP4 HLS of ADR 0024; `null` for diagnostics |
-| Encoders | libx264, aac, mjpeg, png | software transcode targets of ADR 0023; mjpeg and png for the M3-08 image renderer (`image_args.go`), checked by `recipecheck` and rendered by `verify/checks.sh` (JPEG and PNG poster of `testdata/library`) |
+| Encoders | libx264, aac, mjpeg, png, webvtt | software transcode targets of ADR 0023; mjpeg and png for the M3-08 image renderer (`image_args.go`); webvtt (revision 5) for text-subtitle extraction (`-c:s webvtt`, `subtitle_args.go`, M4-08a), which `--disable-encoders` had dropped; `verify/checks.sh` converts a SubRip file; the filter list gained `overlay` (image-subtitle burn-in, M4-08b), there is still no libass and so no `subtitles` filter (text burn-in is unavailable in the bundled build). Checked by `recipecheck` and rendered by `verify/checks.sh` (JPEG and PNG poster of `testdata/library`) |
 | Filters | buffer, buffersink, abuffer, abuffersink, format, aformat, null, anull, scale, aresample, trim, atrim, crop, hflip, vflip, transpose, rotate, setpts, asetpts, fps, pad, setsar, apad, volume | graph endpoints, what `ffmpeg` inserts itself (format conversion, `-t`/`-ss`, display-matrix rotation, crop metadata, `-r`, `-apad`, `-vol`) and the producer's `scale` |
 | Protocols | file, pipe, concat, subfile; `--disable-network` | the server passes `-protocol_whitelist file`; `pipe` feeds the photo renderer's embedded previews; `concat` joins a DVD title's VOBs (`-protocol_whitelist file,concat`, ADR 0029); `subfile` (revision 4, M3-16j-b) reads a title's byte range inside an ISO image without mounting it (`subfile,,start,A,end,B,,:file:<image>` with `-protocol_whitelist file,subfile`, a DVD title also `concat`; M3-16g). `recipecheck` keeps `DISC_DEMUXERS` and `PROTOCOLS` in step with `disc_input.go` and builds every protocol `ffmpeg-capabilities.sh` requires |
 | Libraries | zlib 1.3.2 (PNG decoder, compressed Matroska/MP4 headers), x264 (8-bit 4:2:0 only, the ADR 0023 target), dav1d 1.5.4 (FFmpeg's own AV1 decoder needs a hardware decoder), iconv from musl | `--disable-autodetect`: nothing else is picked up |
@@ -187,7 +187,7 @@ without downloading the sources (the base image and Debian's build tools still c
 network):
 
 ```sh
-tar -xf ffmpeg-9.0.2-static4-source.tar && cd ffmpeg-9.0.2-static4-source
+tar -xf ffmpeg-9.0.2-static5-source.tar && cd ffmpeg-9.0.2-static5-source
 docker build --build-context sources=sources --target all --output type=local,dest=out recipe
 ```
 
@@ -284,8 +284,8 @@ revision 2 (the binaries of 0.1.0-alpha.4) in bytes:
 | armv8 | 18.95 MB | 18.68 MB | +65 536 | ±0 |
 | armv7 | 16.16 MB | 15.96 MB | +12 288 | +12 288 |
 
-Recipe revision 4 (2026-11-05, task M3-16j-b: subfile protocol for ISO images; the current pins
-of `../sources.lock`), built the same way; growth against revision 3 in bytes (the executables
+Recipe revision 4 (2026-11-05, task M3-16j-b: subfile protocol for ISO images; superseded by revision 5, which adds the webvtt
+encoder and the overlay filter), built the same way; growth against revision 3 in bytes (the executables
 are padded to whole pages, so a small addition can leave the size unchanged):
 
 | Family | `ffmpeg` | `ffprobe` | `ffmpeg` vs. rev. 3 | `ffprobe` vs. rev. 3 |

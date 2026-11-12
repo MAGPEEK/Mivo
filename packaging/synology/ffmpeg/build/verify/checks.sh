@@ -101,7 +101,11 @@ check_components() {
 	ffmpeg -hide_banner -encoders >"$scratch/encoders" 2>/dev/null
 	ffmpeg -hide_banner -muxers >"$scratch/muxers" 2>/dev/null
 	ffmpeg -hide_banner -demuxers >"$scratch/demuxers" 2>/dev/null
-	for encoder in libx264 aac mjpeg png; do check "encoder $encoder" listed "$scratch/encoders" "$encoder"; done
+	for encoder in libx264 aac mjpeg png webvtt; do check "encoder $encoder" listed "$scratch/encoders" "$encoder"; done
+	# Image-subtitle burn-in (burnin.go) needs the overlay filter; there is no libass, so no
+	# "subtitles" filter.
+	ffmpeg -hide_banner -filters >"$scratch/filters" 2>/dev/null
+	check "filter overlay" listed "$scratch/filters" overlay
 	for muxer in hls mp4 image2pipe; do check "muxer $muxer" listed "$scratch/muxers" "$muxer"; done
 	# The sets stay minimal: names of the configure lists, one per row of the listings.
 	# (mpegts is built on purpose: the hls muxer selects it.)
@@ -396,6 +400,22 @@ check_images() {
 	check "PNG poster has the PNG signature" test "$(first_bytes "$scratch/poster.png" 4)" = 89504e47
 }
 
+# check_subtitles runs the server's text-subtitle extraction (subtitle_args.go) on SubRip, ASS
+# and WebVTT sources: -c:s webvtt -f webvtt. A build without the webvtt encoder fails here
+# ("Unknown encoder 'webvtt'"), which made the server answer 422 for every text subtitle.
+check_subtitles() {
+	printf '1\n00:00:01,000 --> 00:00:02,500\nHello <i>world</i>\n\n' >"$scratch/sample.srt"
+	# The full ASS field lists: the decoder drops a Dialogue line whose Format lacks Name or Effect.
+	printf '[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,20,&H00FFFFFF,0,0,0,0,100,100,0,0,1,2,0,2,10,10,10,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\nDialogue: 0,0:00:01.00,0:00:02.50,Default,,0,0,0,,Hello world\n' >"$scratch/sample.ass"
+	printf 'WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nHello world\n' >"$scratch/sample.vtt"
+	for source in srt ass vtt; do
+		ffmpeg -hide_banner -nostdin -loglevel error -y -i "file:$scratch/sample.$source" -map 0:s:0 \
+			-c:s webvtt -f webvtt pipe:1 >"$scratch/out-$source.vtt" 2>"$scratch/sub-$source.err"
+		check "text subtitle $source converts with -c:s webvtt" grep -q 'Hello' "$scratch/out-$source.vtt"
+		check "converted $source starts with the WEBVTT header" grep -q '^WEBVTT' "$scratch/out-$source.vtt"
+	done
+}
+
 # run_go_tests runs the server's own FFmpeg adapter tests (corpus probe against the manifest,
 # hostile inputs, keyframes, HLS producer) against this build.
 run_go_tests() {
@@ -426,6 +446,7 @@ check_hostile
 check_hls
 check_discs
 check_images
+check_subtitles
 run_go_tests
 printf 'SUMMARY %s %s: %s/%s checks passed\n' "$FAMILY" "$CPU_MODEL" "$((total - failures))" "$total"
 [ "$failures" -eq 0 ]

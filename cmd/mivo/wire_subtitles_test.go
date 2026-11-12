@@ -52,6 +52,25 @@ func TestSubtitleConverterBoundsAHangingConversion(t *testing.T) {
 	}
 }
 
+// TestSubtitleConverterWithoutWebVTTEncoderIsUnavailable: an FFmpeg without the encoder makes
+// the download a 503 with a reason, and FFmpeg is not even started.
+func TestSubtitleConverterWithoutWebVTTEncoderIsUnavailable(t *testing.T) {
+	t.Parallel()
+
+	extractor := &hangingExtractor{}
+	converter := subtitleConverter{extractor: extractor, timeout: time.Minute, noWebVTTEncoder: true}
+
+	err := converter.ConvertWebVTT(t.Context(), "/media/x.mkv", appsubtitles.Track{Codec: "subrip"}, "/cache/out.vtt")
+
+	if !errors.Is(err, domain.ErrUnavailable) {
+		t.Errorf("ConvertWebVTT = %v, want ErrUnavailable", err)
+	}
+
+	if extractor.deadline {
+		t.Error("the extractor ran although the encoder is missing")
+	}
+}
+
 func TestExternalTracksCarryTheStoredFields(t *testing.T) {
 	t.Parallel()
 

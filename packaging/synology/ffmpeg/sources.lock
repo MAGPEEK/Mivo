@@ -26,6 +26,6 @@
 # each build's SOURCE.txt, not here.
 #
 # family status  version        licence          ffmpeg_sha256 ffprobe_sha256
-x86_64 selected 9.0.2-static4 GPL-3.0-or-later 5b3aed16fcdcad85c969725afe844bd68a16fbb2175012399f6c346bb8eed4bd ff1a293a3da2ccf8649027492b90e4a8bc7203a73d86cfd83feb1864cb904e61
-armv8 selected 9.0.2-static4 GPL-3.0-or-later 936c339403d0efc0f795e2c6690102ca7fa110bd77a664dbb588a82376a8fa1e 234e748e4f0d5ae004d8a54639a6dce636d4508d8236359a4000d323c32cebe0
-armv7 selected 9.0.2-static4 GPL-3.0-or-later a1911760872144180aa812759e87edf2ba01ffb1ad972b8098adcd943dd4347d bcb2d10ec6cddef7ec95a8d4dad03d3cfce3f9fd317d8b0c9b597737186997f3
+x86_64 selected 9.0.2-static5 GPL-3.0-or-later 30990663c534234ffef5a771e10edf1a705a2495a36321a890373bd46434c0d7 9cf8940f42f291435fbc6ecbe54cd4980b4ee478c33ff681b6184fa7ae24f027
+armv8 selected 9.0.2-static5 GPL-3.0-or-later 3ef9fffdb2057f2ccafad0e6e58b1fe0c55dd282d3a25b55c9b8403c68ca2486 2a40f533d89bd2c44352cca8b94011c6feb1d40856d816d8bf057e29cf9cfc6d
+armv7 selected 9.0.2-static5 GPL-3.0-or-later d8e8c4a949d0c0a4f9575e53761200083f17fb108c69d620ff75a5e79f3f1b9a d26c73e5614903aa5b22fb9823b68028f6dc7ae948f9e0f41891416fd91ab871

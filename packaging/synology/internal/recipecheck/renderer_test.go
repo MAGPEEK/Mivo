@@ -22,7 +22,7 @@ func TestRecipeBuildsWhatTheImageRendererNeeds(t *testing.T) {
 	encoders := recipeList(t, script, "ENCODERS")
 
 	assertExactSet(t, "MUXERS", muxers, []string{"hls", "mp4", "null", "image2pipe"})
-	assertExactSet(t, "ENCODERS", encoders, []string{"libx264", "aac", "mjpeg", "png"})
+	assertExactSet(t, "ENCODERS", encoders, []string{"libx264", "aac", "mjpeg", "png", "webvtt"})
 
 	for _, muxer := range []string{"image2pipe", "hls", "mp4"} {
 		if !slices.Contains(muxers, muxer) {
@@ -30,7 +30,7 @@ func TestRecipeBuildsWhatTheImageRendererNeeds(t *testing.T) {
 		}
 	}
 
-	for _, encoder := range []string{"mjpeg", "png", "libx264", "aac"} {
+	for _, encoder := range []string{"mjpeg", "png", "libx264", "aac", "webvtt"} {
 		if !slices.Contains(encoders, encoder) {
 			t.Errorf("ENCODERS of %s lacks %q", recipeScript, encoder)
 		}
@@ -54,6 +54,23 @@ func readFile(t *testing.T, path string) string {
 	}
 
 	return string(content)
+}
+
+// subtitleArgsSource builds the subtitle extraction arguments (M4-08a).
+const subtitleArgsSource = "../../../../internal/adapters/ffmpeg/subtitle_args.go"
+
+// TestRecipeBuildsTheWebVTTEncoder: the server extracts text subtitles with -c:s webvtt, so the
+// ENCODERS line must keep webvtt (--disable-encoders drops everything not listed).
+func TestRecipeBuildsTheWebVTTEncoder(t *testing.T) {
+	t.Parallel()
+
+	if !slices.Contains(recipeList(t, readFile(t, recipeScript), "ENCODERS"), "webvtt") {
+		t.Errorf("ENCODERS of %s lacks webvtt", recipeScript)
+	}
+
+	if !strings.Contains(readFile(t, subtitleArgsSource), `"webvtt"`) {
+		t.Errorf("%s no longer names the webvtt encoder; update the recipe and this test", subtitleArgsSource)
+	}
 }
 
 // recipeList reads the comma separated value of a readonly <name>="..." line.

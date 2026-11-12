@@ -41,10 +41,18 @@ type webVTTExtractor interface {
 type subtitleConverter struct {
 	extractor webVTTExtractor
 	timeout   time.Duration
+	// noWebVTTEncoder is set when FFmpeg answered the capability query without a webvtt encoder:
+	// every conversion would fail inside FFmpeg, so the service reports the server as unable
+	// (domain.ErrUnavailable, 503) instead of the track as unsupported (422).
+	noWebVTTEncoder bool
 }
 
 // ConvertWebVTT implements subtitles.Converter.
 func (converter subtitleConverter) ConvertWebVTT(ctx context.Context, source string, track appsubtitles.Track, destination string) error {
+	if converter.noWebVTTEncoder {
+		return fmt.Errorf("convert subtitle: the bundled FFmpeg has no webvtt encoder: %w", domain.ErrUnavailable)
+	}
+
 	runContext, cancel := context.WithTimeout(ctx, converter.timeout)
 	defer cancel()
 
@@ -182,8 +190,11 @@ func (app application) newSubtitleService(ctx context.Context, db *sqlite.DB, fi
 	service, err := appsubtitles.NewService(appsubtitles.Dependencies{
 		Files: subtitleFiles{reader: reader}, External: externalSubtitleLookup{reader: reader},
 		Resolver: files, Statter: fileStatter{},
-		Converter: subtitleConverter{extractor: extractor, timeout: subtitleConversionTimeout},
-		Cache:     cache, CacheDir: app.config.Paths.Cache, Logger: app.logger,
+		Converter: subtitleConverter{
+			extractor: extractor, timeout: subtitleConversionTimeout,
+			noWebVTTEncoder: tools.ffmpegUsable && tools.capabilities.WebVTTEncoder == "",
+		},
+		Cache: cache, CacheDir: app.config.Paths.Cache, Logger: app.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create subtitle service: %w", err)
