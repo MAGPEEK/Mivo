@@ -15,7 +15,7 @@ Everything of M4's P0 slice runs in the real binary: checkpoint of the milestone
 - [x] Shutdown budget test still passes (paused FFmpeg is killed within the 5 s bound).
 - [x] `docker build` smoke (smoke script extended; image run left to the release gate) and `scripts/playback-smoke` extended with one subtitle and one 2-Mbit/s case (profile `firefox-desktop`).
 - [x] Release notes snippet collected: preset/threads/priority defaults, `max_sessions` 1 on ≤ 4 CPUs.
-- [ ] Gates: lint + layer rules + `go test -race -tags webui ./cmd/...` + coverage thresholds.
+- [x] Gates: lint + layer rules + `go test -race -tags webui ./cmd/...` + coverage thresholds.
 
 ## Notes
 - Checkpoint for DS925+ behaviour: see M4-18.
