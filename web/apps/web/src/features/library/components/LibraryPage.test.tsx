@@ -179,7 +179,8 @@ describe("LibraryPage grid", () => {
     const details = document.getElementById(link.getAttribute("aria-describedby") ?? "");
 
     expect(image.getAttribute("src")).toBe(`/api/v1/images/${fakePoster.id}?width=320&tag=tag-1`);
-    expect(image.getAttribute("sizes")).toContain("(min-width: 1280px) 12.5vw");
+    // The default size step is 160 px; the slider replaced the breakpoint expression (LB-28).
+    expect(image.getAttribute("sizes")).toBe("160px");
     expect(image.closest("[aria-hidden='true']")).not.toBeNull();
     expect(details?.textContent).toBe("20109:56MKV · H.264 · AAC");
   });

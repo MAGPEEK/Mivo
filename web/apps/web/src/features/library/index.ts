@@ -7,6 +7,9 @@ export {
   type BrowseItemGridProps,
   type BrowseItemTexts,
 } from "./components/BrowseItemGrid";
+export { ListView, DetailsView, type ItemRowsProps } from "./components/ItemRows";
+export { useViewPreference, type ViewPreference } from "./hooks/useViewPreference";
+export { cardSize, type CardSize, type ViewStyle } from "./lib/viewStyle";
 export { itemPosterSizes } from "./components/gridLayout";
 export { useFocusOnMount } from "./hooks/useFocusOnMount";
 export type { LibraryItems } from "./hooks/useLibraryItems";

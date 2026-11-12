@@ -119,6 +119,16 @@
       "photo_other": "{{count, number}} photos"
     }
   },
+  "view": {
+    "label": "View style",
+    "style": {
+      "grid": "Grid",
+      "list": "List",
+      "details": "Details"
+    },
+    "size": "Card size",
+    "sizeValue": "Step {{step}} of {{total}}, {{width}} pixels"
+  },
   "filter": {
     "trigger": "Filter",
     "triggerQuick": "Filter: {{quick}}",

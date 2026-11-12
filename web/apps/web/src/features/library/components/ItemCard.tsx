@@ -24,6 +24,7 @@ import {
   type ItemCardModel,
 } from "../lib/itemCard";
 import { libraryNamespace } from "../locales";
+import type { CardSize } from "../lib/viewStyle";
 import { itemPosterSizes } from "./gridLayout";
 import { WatchBadgeOverlay } from "./WatchBadgeOverlay";
 import { WatchedCardToggle } from "./WatchedCardToggle";
@@ -49,6 +50,8 @@ export interface ItemCardProps {
   readonly watchedToggle?: WatchedToggle | undefined;
   /** Set when the card sits in a `MediaRow`: the row's tab stop and a fixed card width. */
   readonly rowCard?: RowCardProps;
+  /** The card size chosen with the size slider; defaults to the fixed breakpoint grid. */
+  readonly size?: CardSize | undefined;
 }
 
 const placeholderIconClass = "size-1/4";
@@ -62,6 +65,7 @@ export function ItemCard({
   overlay,
   watchedToggle,
   rowCard,
+  size,
 }: ItemCardProps) {
   const linkRef = useFocusOnMount<HTMLAnchorElement>(focusOnMount);
   const formatEpisodeCode = useFormatEpisodeCode();
@@ -77,7 +81,8 @@ export function ItemCard({
           imageRef={artwork.imageRef}
           aspect={artwork.aspect}
           alt={card.title}
-          sizes={rowCard === undefined ? itemPosterSizes : rowCardSizes(format)}
+          sizes={rowCard === undefined ? (size?.sizes ?? itemPosterSizes) : rowCardSizes(format)}
+          fallbackWidth={size?.imageWidth}
           icon={<PlaceholderIcon isShow={card.isShow} />}
         />
       }

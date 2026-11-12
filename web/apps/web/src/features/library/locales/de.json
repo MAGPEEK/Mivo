@@ -119,6 +119,16 @@
       "photo_other": "{{count, number}} Fotos"
     }
   },
+  "view": {
+    "label": "Ansicht",
+    "style": {
+      "grid": "Raster",
+      "list": "Liste",
+      "details": "Details"
+    },
+    "size": "Kartengröße",
+    "sizeValue": "Stufe {{step}} von {{total}}, {{width}} Pixel"
+  },
   "filter": {
     "trigger": "Filter",
     "triggerQuick": "Filter: {{quick}}",

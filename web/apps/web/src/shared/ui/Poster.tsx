@@ -18,6 +18,8 @@ export interface PosterProps {
   readonly alt: string;
   /** `sizes` attribute: how wide the box is displayed, so the browser picks a width. */
   readonly sizes: string;
+  /** Width of the plain `src` for browsers without `srcset`; defaults to a typical card. */
+  readonly fallbackWidth?: ImageWidth | undefined;
   /** Icon on the placeholder, e.g. the item kind; a film strip by default. */
   readonly icon?: ReactNode;
   /** Extra classes for the box, e.g. its width or rounding. */
@@ -28,7 +30,7 @@ export interface PosterProps {
 // device pixel ratio of 3 without offering the backdrop-sized renditions.
 const offeredWidths = [160, 320, 480, 640, 960] as const satisfies readonly ImageWidth[];
 // The plain `src` for browsers that ignore `srcset`: a typical card at pixel ratio 2.
-const fallbackWidth: ImageWidth = 320;
+const defaultFallbackWidth: ImageWidth = 320;
 
 const aspectClasses: Readonly<Record<PosterAspect, string>> = {
   poster: "aspect-2/3",
@@ -44,7 +46,15 @@ function isSameImage(left: ImageRef, right: ImageRef | undefined): boolean {
  * Artwork in a fixed aspect box, so nothing shifts while it loads. Shows a neutral
  * placeholder with an icon when there is no image or it cannot be loaded.
  */
-export function Poster({ imageRef, aspect, alt, sizes, icon, className = "" }: PosterProps) {
+export function Poster({
+  imageRef,
+  aspect,
+  alt,
+  sizes,
+  fallbackWidth = defaultFallbackWidth,
+  icon,
+  className = "",
+}: PosterProps) {
   // The failed image is remembered by id and tag: callers may rebuild equal references on every
   // render, and a new tag of the same id is a new image that deserves another try.
   const [failedRef, setFailedRef] = useState<ImageRef | undefined>(undefined);

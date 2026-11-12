@@ -7,6 +7,8 @@ import type { BrowseControls } from "../hooks/useBrowseState";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
 import { FilterMenu } from "./FilterMenu";
+import { ViewControls } from "./ViewControls";
+import type { ViewPreference } from "../hooks/useViewPreference";
 
 /** Props of {@link BrowseToolbar}. */
 export interface BrowseToolbarProps {
@@ -14,6 +16,8 @@ export interface BrowseToolbarProps {
   readonly browse: BrowseControls;
   /** Items matching the current query; absent hides the count. */
   readonly totalCount: number | undefined;
+  /** The device's view style and card size; absent hides the view controls. */
+  readonly view?: ViewPreference | undefined;
 }
 
 // Phones get the controls in a sheet, as in the approved prototype (`browse.html`).
@@ -28,7 +32,7 @@ interface ControlsProps {
  * Toolbar of the Browse pivot (LB-20...23): filter menu, type switch, sort with direction and
  * the item count. One line on wider screens; on phones the controls sit in a sheet.
  */
-export function BrowseToolbar({ libraryId, browse, totalCount }: BrowseToolbarProps) {
+export function BrowseToolbar({ libraryId, browse, totalCount, view }: BrowseToolbarProps) {
   const { t } = useTranslation(libraryNamespace);
   const phone = useMediaQuery(phoneScreenQuery);
   return (
@@ -42,6 +46,7 @@ export function BrowseToolbar({ libraryId, browse, totalCount }: BrowseToolbarPr
       ) : (
         <BrowseControlsLine libraryId={libraryId} browse={browse} />
       )}
+      {view !== undefined && <ViewControls view={view} />}
       <ItemCount type={browse.type} totalCount={totalCount} />
     </div>
   );

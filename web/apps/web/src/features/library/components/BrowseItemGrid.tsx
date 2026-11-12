@@ -2,12 +2,16 @@ import type { ItemSummary } from "@mivo/api-client";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
+import type { CardFormat } from "../../../shared/lib/rowScroll";
 import { EmptyState, LibraryIcon, Skeleton } from "../../../shared/ui";
 import type { LibraryItems } from "../hooks/useLibraryItems";
 import { useNewPageFocus } from "../hooks/useNewPageFocus";
+import type { ViewPreference } from "../hooks/useViewPreference";
 import type { LibraryItemFilter } from "../lib/browseQuery";
+import { cardSize, type CardSize } from "../lib/viewStyle";
 import { libraryNamespace } from "../locales";
 import { secondaryButtonClass } from "./buttonClasses";
+import { DetailsView, ListView } from "./ItemRows";
 import { itemGridClass } from "./gridLayout";
 import { WatchableItemCard } from "./WatchableItemCard";
 
@@ -31,6 +35,8 @@ export interface BrowseCardProps {
   readonly item: ItemSummary;
   /** Focus the card link when it mounts: the first card of a page "Load more" loaded. */
   readonly focusOnMount: boolean;
+  /** The card size of the size slider; `undefined` keeps the card's own fixed sizes. */
+  readonly size?: CardSize | undefined;
 }
 
 /** Props of {@link BrowseItemGrid}. */
@@ -44,10 +50,17 @@ export interface BrowseItemGridProps {
   readonly texts?: BrowseItemTexts | undefined;
   /** Icon of the empty state; defaults to the generic library icon. */
   readonly emptyIcon?: ReactNode;
+  /**
+   * View style and card size of the device. Without it the grid keeps its fixed breakpoint
+   * columns, which is what the features with their own cards use.
+   */
+  readonly view?: Pick<ViewPreference, "viewStyle" | "cardStep"> | undefined;
+  /** Shape of the cards, so episode stills get wider columns than posters. */
+  readonly cardFormat?: CardFormat | undefined;
 }
 
-function renderPosterCard({ item, focusOnMount }: BrowseCardProps): ReactNode {
-  return <WatchableItemCard item={item} focusOnMount={focusOnMount} />;
+function renderPosterCard({ item, focusOnMount, size }: BrowseCardProps): ReactNode {
+  return <WatchableItemCard item={item} focusOnMount={focusOnMount} size={size} />;
 }
 
 function useVideoTexts(): BrowseItemTexts {
@@ -76,6 +89,8 @@ export function BrowseItemGrid({
   renderCard = renderPosterCard,
   texts,
   emptyIcon,
+  view,
+  cardFormat,
 }: BrowseItemGridProps) {
   const videoTexts = useVideoTexts();
   const shown = texts ?? videoTexts;
@@ -92,7 +107,15 @@ export function BrowseItemGrid({
   if (items.items.length === 0) {
     return <ItemsEmpty filter={filter} texts={shown} icon={emptyIcon} />;
   }
-  return <ItemList items={items} texts={shown} renderCard={renderCard} />;
+  return (
+    <ItemList
+      items={items}
+      texts={shown}
+      renderCard={renderCard}
+      view={view}
+      cardFormat={cardFormat}
+    />
+  );
 }
 
 interface ItemsEmptyProps {
@@ -148,9 +171,11 @@ interface ItemListProps {
   readonly items: LibraryItems;
   readonly texts: BrowseItemTexts;
   readonly renderCard: (card: BrowseCardProps) => ReactNode;
+  readonly view: BrowseItemGridProps["view"];
+  readonly cardFormat: CardFormat | undefined;
 }
 
-function ItemList({ items, texts, renderCard }: ItemListProps) {
+function ItemList({ items, texts, renderCard, view, cardFormat }: ItemListProps) {
   const { t } = useTranslation(libraryNamespace);
   const { focusItemId, markLoadMore } = useNewPageFocus(items);
   const loadMore = () => {
@@ -159,11 +184,14 @@ function ItemList({ items, texts, renderCard }: ItemListProps) {
   };
   return (
     <>
-      <ul aria-label={texts.label} className={itemGridClass}>
-        {items.items.map((item) => (
-          <li key={item.id}>{renderCard({ item, focusOnMount: item.id === focusItemId })}</li>
-        ))}
-      </ul>
+      <ItemsBody
+        items={items.items}
+        label={texts.label}
+        focusItemId={focusItemId}
+        renderCard={renderCard}
+        view={view}
+        cardFormat={cardFormat}
+      />
       {items.hasMore && (
         <div className="mt-8 flex flex-col items-center gap-3">
           {items.loadMoreFailed && !items.loadingMore && (
@@ -184,6 +212,41 @@ function ItemList({ items, texts, renderCard }: ItemListProps) {
         </div>
       )}
     </>
+  );
+}
+
+interface ItemsBodyProps {
+  readonly items: readonly ItemSummary[];
+  readonly label: string;
+  readonly focusItemId: string | undefined;
+  readonly renderCard: (card: BrowseCardProps) => ReactNode;
+  readonly view: BrowseItemGridProps["view"];
+  readonly cardFormat: CardFormat | undefined;
+}
+
+// The list views take the items only, so they also serve season pages (M5-44).
+function ItemsBody({ items, label, focusItemId, renderCard, view, cardFormat }: ItemsBodyProps) {
+  if (view?.viewStyle === "list") {
+    return <ListView items={items} label={label} focusItemId={focusItemId} />;
+  }
+  if (view?.viewStyle === "details") {
+    return <DetailsView items={items} label={label} focusItemId={focusItemId} />;
+  }
+  const size = view === undefined ? undefined : cardSize(view.cardStep, cardFormat);
+  return (
+    <ul
+      aria-label={label}
+      className={size === undefined ? itemGridClass : "grid gap-x-4 gap-y-6"}
+      style={
+        size === undefined
+          ? undefined
+          : { gridTemplateColumns: `repeat(auto-fill, minmax(${String(size.columnWidth)}px, 1fr))` }
+      }
+    >
+      {items.map((item) => (
+        <li key={item.id}>{renderCard({ item, focusOnMount: item.id === focusItemId, size })}</li>
+      ))}
+    </ul>
   );
 }
 
