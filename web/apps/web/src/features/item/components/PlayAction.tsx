@@ -3,8 +3,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ChevronDownIcon, Menu } from "../../../shared/ui";
-import { queueHandoffState } from "../../player";
-import { playChoiceState } from "../lib/playChoiceStorage";
+import { playChoiceState, queueHandoffState } from "../../player";
 import { usePlayFromStart } from "../hooks/usePlayFromStart";
 import type { PlayView, ResumeView } from "../lib/itemView";
 import { itemNamespace } from "../locales";
@@ -76,7 +75,7 @@ function handoff(play: PlayableView): { state?: Record<string, unknown> } {
   if (play.queue !== undefined) {
     return { state: queueHandoffState({ ids: play.queue, shuffle: false }) };
   }
-  const state = play.choice === undefined ? undefined : playChoiceState(play.choice);
+  const state = play.choice === undefined ? undefined : playChoiceState(play.itemId, play.choice);
   return state === undefined ? {} : { state };
 }
 

@@ -16,6 +16,7 @@ export function withChosenVersion(
   const { version, choice } = resolved;
   return {
     ...item,
+    facts: [...item.ownFacts, ...version.facts],
     chips: version.chips,
     file: version.file,
     audioTracks: version.audioTracks,

@@ -50,6 +50,8 @@ export interface VersionChoices {
   readonly defaultAudio: string | undefined;
   /** Value of the subtitle track shown by default; {@link subtitlesOffTrackId} for none. */
   readonly defaultSubtitle: string;
+  /** The default subtitle for each audio track (by value) the viewer may pick instead. */
+  readonly defaultSubtitleByAudio: Readonly<Record<string, string>>;
 }
 
 /**
@@ -74,7 +76,28 @@ export function versionChoices(file: MediaFile, texts: VersionTexts): VersionCho
     subtitles: subtitles.map((track) => ({ value: track.id, label: subtitleLabel(track, texts) })),
     defaultAudio: defaultAudioValue(file, audio),
     defaultSubtitle: defaultSubtitleValue(file, audio, subtitles),
+    defaultSubtitleByAudio: subtitleByAudio(file, audio, subtitles),
   };
+}
+
+// The subtitle that goes with a picked audio track: the player's policy for that track's
+// language. Only the server's pick for its own default audio is the server's word.
+function subtitleByAudio(
+  file: MediaFile,
+  audio: readonly AudioTrack[],
+  subtitles: readonly SubtitleTrack[],
+): Readonly<Record<string, string>> {
+  const defaultAudio = defaultAudioValue(file, audio);
+  return Object.fromEntries(
+    audio.map((track) => {
+      const value = String(track.index);
+      const subtitle =
+        value === defaultAudio
+          ? defaultSubtitleValue(file, audio, subtitles)
+          : (defaultSubtitleTrack(subtitles, track.language)?.id ?? subtitlesOffTrackId);
+      return [value, subtitle];
+    }),
+  );
 }
 
 // The file's own width and height (API 1.16) save a look at the streams; older servers omit them.

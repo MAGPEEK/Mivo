@@ -7,9 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiClientProvider } from "../../../shared/api";
 import { createFakeApiClient, problemResponse } from "../../../test/fakeApi";
 import type { HlsFactory } from "../lib/hlsPlayer";
+import type { PlayChoice } from "../lib/playChoiceHandoff";
 import { createPlaybackServer, type PlaybackServer } from "../test/fakePlaybackServer";
 import { createManualTimers } from "../test/fakeMedia";
-import { mseProfile, playerFileId, playerItem, playerItemId } from "../test/playerFixtures";
+import {
+  englishSubtitleId,
+  mseProfile,
+  multiTrackItem,
+  playerFileId,
+  playerItem,
+  playerItemId,
+} from "../test/playerFixtures";
 import {
   usePlaybackSession,
   type PlaybackServices,
@@ -77,6 +85,33 @@ describe("usePlaybackSession", () => {
       video.dispatchEvent(new Event("loadeddata"));
     });
     expect(result.current.status).toBe("playing");
+  });
+
+  describe("with the tracks the detail page picked", () => {
+    async function firstRequest(choice: PlayChoice) {
+      const server = createPlaybackServer({ item: multiTrackItem() });
+      const { result } = renderPlayback({ ...target, choice }, { server });
+      await waitFor(() => {
+        expect(result.current.session).toBeDefined();
+      });
+      return server.sessionRequests[0];
+    }
+
+    it("asks the first session for the picked audio and subtitle", async () => {
+      expect(
+        await firstRequest({ audioStreamIndex: 2, subtitleTrackId: englishSubtitleId }),
+      ).toMatchObject({ audioStreamIndex: 2, subtitleTrackId: englishSubtitleId });
+    });
+
+    it("asks for no subtitle when the viewer picked Off", async () => {
+      expect(await firstRequest({ subtitleTrackId: "" })).toMatchObject({ subtitleTrackId: "" });
+    });
+
+    it("leaves tracks the file does not have to the policy", async () => {
+      const request = await firstRequest({ audioStreamIndex: 9, subtitleTrackId: "s:99" });
+
+      expect(request).toEqual({ fileId: playerFileId, profile: mseProfile });
+    });
   });
 
   it("plays the requested file from the clamped start position", async () => {

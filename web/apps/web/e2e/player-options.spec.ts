@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 
 import { blockingAxeViolations } from "./support/axe";
 import { threeAudioClip } from "./support/corpus";
+import { openItem } from "./support/library";
 import { leavePlayer, nextSessionResponse, startPlayback } from "./support/realPlayback";
 
 // The playback options panel against the real server (task M4-16b): the audio switch is a
@@ -12,6 +13,7 @@ const playerTestTimeoutMs = 30_000;
 
 // Matroska stream indexes of the clip: video 0, English stereo 1, German 5.1 2, commentary 3.
 const germanStreamIndex = 2;
+const createdStatus = 201;
 
 test.describe.configure({ timeout: playerTestTimeoutMs });
 
@@ -41,6 +43,27 @@ test("switches the audio track in the panel and replaces the session", async ({ 
   expect(await blockingAxeViolations(page)).toEqual([]);
 
   await leavePlayer(page, ((await response.json()) as PlaybackSession).id);
+});
+
+test("starts the first session with the audio picked on the detail page (M4-16c)", async ({
+  page,
+}) => {
+  await openItem(page, threeAudioClip);
+  const audio = page.getByRole("combobox", { name: "Audio" });
+  await expect(audio.locator("option")).toHaveCount(3);
+  await audio.selectOption({
+    label: await audio.locator("option", { hasText: "German" }).innerText(),
+  });
+  // The pick is state of the navigation, not part of the URL.
+  const response = nextSessionResponse(page);
+
+  await page.getByRole("link", { name: "Play" }).click();
+
+  const answer = await response;
+  expect(answer.status(), await answer.text()).toBe(createdStatus);
+  expect(answer.request().postDataJSON()).toMatchObject({ audioStreamIndex: germanStreamIndex });
+  expect(new URL(page.url()).search).not.toContain("audio");
+  await leavePlayer(page, ((await answer.json()) as PlaybackSession).id);
 });
 
 test("opens and closes with the keyboard and keeps focus where it belongs", async ({ page }) => {

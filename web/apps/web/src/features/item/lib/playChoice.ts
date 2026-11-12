@@ -1,3 +1,4 @@
+import type { PlayChoice } from "../../player";
 import type { VersionChoices } from "./versions";
 
 /**
@@ -13,13 +14,6 @@ export interface StoredChoice {
   readonly subtitle?: string;
 }
 
-/** The tracks the player is asked to start with; each is omitted when the viewer left it. */
-export interface PlayChoice {
-  readonly audioStreamIndex?: number;
-  /** `SubtitleTrack.id`, or the empty string for "Off". */
-  readonly subtitleTrackId?: string;
-}
-
 /** The version and tracks the selectors show, with the choice to hand to the player. */
 export interface ResolvedChoice<Version extends VersionChoices> {
   readonly version: Version;
@@ -33,6 +27,10 @@ export interface ResolvedChoice<Version extends VersionChoices> {
 /**
  * The shown version and tracks for a stored choice. A stored value that the file no longer
  * offers (the library changed since) counts as not chosen. `undefined` without any version.
+ *
+ * The subtitle default follows the shown audio: picking another audio track moves it to the
+ * subtitle that goes with that language. That subtitle is then handed over explicitly, so the
+ * player starts with what the page shows.
  */
 export function resolveChoice<Version extends VersionChoices>(
   versions: readonly Version[],
@@ -44,21 +42,31 @@ export function resolveChoice<Version extends VersionChoices>(
   }
   // Tracks belong to the version they were picked on.
   const sameVersion = stored.fileId === version.fileId;
-  const audio =
+  const pickedAudio =
     sameVersion && version.audio.some((option) => option.value === stored.audio)
       ? stored.audio
       : undefined;
-  const subtitle =
+  const pickedSubtitle =
     sameVersion && isOffOrOffered(version, stored.subtitle) ? stored.subtitle : undefined;
+  const subtitle = pickedSubtitle ?? subtitleDefault(version, pickedAudio);
   return {
     version,
-    audio: audio ?? version.defaultAudio,
-    subtitle: subtitle ?? version.defaultSubtitle,
+    audio: pickedAudio ?? version.defaultAudio,
+    subtitle,
     choice: {
-      ...(audio === undefined ? {} : { audioStreamIndex: Number(audio) }),
-      ...(subtitle === undefined ? {} : { subtitleTrackId: subtitle }),
+      ...(pickedAudio === undefined ? {} : { audioStreamIndex: Number(pickedAudio) }),
+      ...(pickedSubtitle === undefined && pickedAudio === undefined
+        ? {}
+        : { subtitleTrackId: subtitle }),
     },
   };
+}
+
+function subtitleDefault(version: VersionChoices, pickedAudio: string | undefined): string {
+  if (pickedAudio === undefined) {
+    return version.defaultSubtitle;
+  }
+  return version.defaultSubtitleByAudio[pickedAudio] ?? version.defaultSubtitle;
 }
 
 function isOffOrOffered(version: VersionChoices, value: string | undefined): value is string {
@@ -72,6 +80,7 @@ export function chooseVersion(fileId: string): StoredChoice {
 
 /** The stored choice after the viewer picked an audio track of the shown version. */
 export function chooseAudio(stored: StoredChoice, fileId: string, audio: string): StoredChoice {
+  // An explicit subtitle pick stays: it is the viewer's word, whatever the audio.
   return { ...keepTracksOf(stored, fileId), fileId, audio };
 }
 

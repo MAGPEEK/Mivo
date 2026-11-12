@@ -16,6 +16,7 @@ import {
   type PlaybackOptionsView,
 } from "./usePlaybackOptions";
 import { usePlaybackPreferences } from "./usePlaybackPreferences";
+import { useInitialPlayChoice } from "./useInitialPlayChoice";
 import { usePlaybackSession, type PlaybackTarget } from "./usePlaybackSession";
 import { usePlayerItem, type PlayerItemInfo } from "./usePlayerItem";
 import { usePlayerMedia, type MediaActions } from "./usePlayerMedia";
@@ -191,13 +192,19 @@ function useTracks(
   };
 }
 
+/** The playback of `target`, started with the tracks the detail page handed over. */
+function usePlaybackWithChoice(target: PlaybackTarget) {
+  const choice = useInitialPlayChoice(target.itemId);
+  return usePlaybackSession({ ...target, choice });
+}
+
 /**
  * The player page's logic (task M2-30): the playback engine, the element's play state and
  * sound, full screen, auto-hiding controls, the stream-info overlay and the keyboard map.
  * Destructure the result: the React compiler treats an object holding refs as a ref.
  */
 export function usePlayer(target: PlaybackTarget): Player {
-  const { attachVideo, seek, retry, ...playback } = usePlaybackSession(target);
+  const { attachVideo, seek, retry, ...playback } = usePlaybackWithChoice(target);
   const [video, videoRef] = useVideoElement(attachVideo);
   const [container, setContainer] = useState<HTMLElement | null>(null);
   const { session } = playback;

@@ -1,7 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 
-import type { PlayChoice } from "../lib/playChoice";
-import { playChoiceState } from "../lib/playChoiceStorage";
+import { playChoiceState, type PlayChoice } from "../../player";
 
 /** What "Play from start" opens: the item and, for a movie or episode, its file. */
 export interface PlayFromStartTarget {
@@ -17,7 +16,7 @@ export interface PlayFromStartTarget {
  */
 export function usePlayFromStart({ itemId, fileId, choice }: PlayFromStartTarget): () => void {
   const navigate = useNavigate();
-  const state = choice === undefined ? undefined : playChoiceState(choice);
+  const state = choice === undefined ? undefined : playChoiceState(itemId, choice);
   return () => {
     void navigate({
       to: "/items/$itemId/play",

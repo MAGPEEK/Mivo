@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { chooseAudio, chooseSubtitle, chooseVersion, resolveChoice } from "./playChoice";
-import { playChoiceState, readPlayChoice, readStoredChoice } from "./playChoiceStorage";
+import { maxRememberedChoices, readStoredChoice, writeStoredChoice } from "./playChoiceStorage";
 import type { VersionChoices } from "./versions";
 
 function version(fileId: string, defaults: Partial<VersionChoices> = {}): VersionChoices {
@@ -15,6 +15,7 @@ function version(fileId: string, defaults: Partial<VersionChoices> = {}): Versio
     subtitles: [{ value: "s:3", label: "English" }],
     defaultAudio: "1",
     defaultSubtitle: "",
+    defaultSubtitleByAudio: { "1": "", "2": "s:3" },
     ...defaults,
   };
 }
@@ -78,24 +79,55 @@ describe("choosing", () => {
   });
 });
 
-describe("storage and hand-over", () => {
+describe("the subtitle follows the shown audio", () => {
+  it("moves to the subtitle of the picked audio and hands it over explicitly", () => {
+    expect(resolveChoice(versions, { fileId: "a", audio: "2" })).toMatchObject({
+      audio: "2",
+      subtitle: "s:3",
+      choice: { audioStreamIndex: 2, subtitleTrackId: "s:3" },
+    });
+  });
+
+  it("keeps an explicit subtitle pick whatever the audio", () => {
+    expect(resolveChoice(versions, { fileId: "a", audio: "2", subtitle: "" })).toMatchObject({
+      subtitle: "",
+      choice: { audioStreamIndex: 2, subtitleTrackId: "" },
+    });
+  });
+});
+
+describe("storage", () => {
   it("reads only well-formed stored values", () => {
     const storage = window.localStorage;
-    storage.setItem("mivo.playChoice.x", JSON.stringify({ fileId: 7, audio: "2", extra: true }));
+    storage.setItem(
+      "mivo.playChoices",
+      JSON.stringify([
+        { itemId: "x", choice: { fileId: 7, audio: "2", extra: true } },
+        { itemId: 5, choice: {} },
+        "junk",
+      ]),
+    );
     expect(readStoredChoice(storage, "x")).toEqual({ audio: "2" });
-    storage.setItem("mivo.playChoice.x", "not json");
+    storage.setItem("mivo.playChoices", "not json");
+    expect(readStoredChoice(storage, "x")).toEqual({});
+    storage.setItem("mivo.playChoices", "{}");
     expect(readStoredChoice(storage, "x")).toEqual({});
     expect(readStoredChoice(undefined, "x")).toEqual({});
   });
 
-  it("round-trips a choice through the history state and validates what it reads", () => {
-    const state = playChoiceState({ audioStreamIndex: 2, subtitleTrackId: "s:3" });
-    expect(readPlayChoice(state)).toEqual({ audioStreamIndex: 2, subtitleTrackId: "s:3" });
-    expect(playChoiceState({})).toBeUndefined();
-    expect(
-      readPlayChoice({ mivoPlayChoice: { audioStreamIndex: -1, subtitleTrackId: 5 } }),
-    ).toEqual({});
-    expect(readPlayChoice(null)).toEqual({});
-    expect(readPlayChoice({ mivoPlayChoice: "x" })).toEqual({});
+  it("keeps one key, newest first, and forgets the oldest beyond the cap", () => {
+    const storage = window.localStorage;
+    storage.clear();
+    for (let item = 0; item < maxRememberedChoices + 5; item += 1) {
+      writeStoredChoice(storage, `item-${String(item)}`, { audio: "1" });
+    }
+    writeStoredChoice(storage, "item-204", { audio: "2" });
+
+    expect(storage.length).toBe(1);
+    expect(readStoredChoice(storage, "item-204")).toEqual({ audio: "2" });
+    expect(readStoredChoice(storage, "item-0")).toEqual({});
+    expect(readStoredChoice(storage, "item-100")).toEqual({ audio: "1" });
+    const entries = JSON.parse(storage.getItem("mivo.playChoices") ?? "[]") as unknown[];
+    expect(entries).toHaveLength(maxRememberedChoices);
   });
 });

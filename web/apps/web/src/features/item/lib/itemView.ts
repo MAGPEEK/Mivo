@@ -22,7 +22,7 @@ import { playTarget, type UnavailableReason } from "./playTarget";
 import { primaryVideoStream } from "./primaryStreams";
 import { runtimeLabel } from "./runtimeLabel";
 import { technicalChips } from "./technicalChips";
-import type { PlayChoice } from "./playChoice";
+import type { PlayChoice } from "../../player";
 import { audioTracks, subtitleTracks, type Track } from "./tracks";
 import { isVersionFile, versionChoices, type VersionChoices, type VersionTexts } from "./versions";
 
@@ -111,6 +111,8 @@ export interface ItemView {
   readonly backdrop: ImageRef | undefined;
   /** Short facts below the title, e.g. `["1 h 30 min", "1080p"]`. */
   readonly facts: readonly string[];
+  /** The facts of the item itself (year, counts), before those of its file; for versions. */
+  readonly ownFacts: readonly string[];
   /** Technical chips, e.g. `["MKV", "HEVC 10-bit HDR10", "AC-3 5.1", "SRT"]`. */
   readonly chips: readonly string[];
   /** `undefined` when the item has no file. */
@@ -218,6 +220,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     extras: item.extras ?? [],
     trailerId: firstTrailer(item.extras ?? [])?.id,
     ...fileView,
+    ownFacts: itemFacts(item, texts),
     facts:
       item.kind === "audiobook"
         ? audiobookFacts(item, texts)

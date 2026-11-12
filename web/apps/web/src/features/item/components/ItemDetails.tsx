@@ -53,7 +53,7 @@ export function ItemDetails({
         {...(leadFacts === undefined ? {} : { leadFacts })}
         actions={actions}
       >
-        <VersionSelectors choice={choice} />
+        {item.play.kind === "playable" && <VersionSelectors choice={choice} />}
         {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
       </DetailLayout>
       <div className="mt-8 grid gap-8 lg:grid-cols-3">

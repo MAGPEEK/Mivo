@@ -1,11 +1,16 @@
-import type { PlayChoice, StoredChoice } from "./playChoice";
+import type { StoredChoice } from "./playChoice";
 
-// Per item, so a choice for one film does not leak into the next. The value is only ever a
-// choice, never a credential, so localStorage is the right place.
-const storageKeyPrefix = "mivo.playChoice.";
+// One key for all items, newest first and capped, so browsing a large library does not leave
+// a key per item behind. The value is only ever a choice, never a credential.
+const storageKey = "mivo.playChoices";
 
-// Key of the history state that carries the choice to the player route, next to the queue's.
-const handoffKey = "mivoPlayChoice";
+/** Most items whose choice is remembered; the least recently picked is forgotten first. */
+export const maxRememberedChoices = 200;
+
+interface RememberedChoice {
+  readonly itemId: string;
+  readonly choice: StoredChoice;
+}
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
@@ -24,14 +29,33 @@ function toStoredChoice(value: unknown): StoredChoice {
   };
 }
 
+function toRemembered(value: unknown): RememberedChoice | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+  const { itemId, choice } = value as Record<string, unknown>;
+  return isString(itemId) ? { itemId, choice: toStoredChoice(choice) } : undefined;
+}
+
+function readAll(storage: Storage | undefined): RememberedChoice[] {
+  try {
+    const stored = storage?.getItem(storageKey);
+    const parsed: unknown = stored === null || stored === undefined ? [] : JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map(toRemembered)
+      .filter((entry): entry is RememberedChoice => entry !== undefined)
+      .slice(0, maxRememberedChoices);
+  } catch {
+    return [];
+  }
+}
+
 /** The choice remembered for the item on this device; empty without one or without storage. */
 export function readStoredChoice(storage: Storage | undefined, itemId: string): StoredChoice {
-  try {
-    const stored = storage?.getItem(storageKeyPrefix + itemId);
-    return stored === null || stored === undefined ? {} : toStoredChoice(JSON.parse(stored));
-  } catch {
-    return {};
-  }
+  return readAll(storage).find((entry) => entry.itemId === itemId)?.choice ?? {};
 }
 
 /** Remembers the choice for the item; a blocked or full storage only forgets it on reload. */
@@ -40,37 +64,11 @@ export function writeStoredChoice(
   itemId: string,
   choice: StoredChoice,
 ): void {
+  const others = readAll(storage).filter((entry) => entry.itemId !== itemId);
+  const entries = [{ itemId, choice }, ...others].slice(0, maxRememberedChoices);
   try {
-    storage?.setItem(storageKeyPrefix + itemId, JSON.stringify(choice));
+    storage?.setItem(storageKey, JSON.stringify(entries));
   } catch {
     // Deliberately ignored, see above.
   }
-}
-
-/** The history state that carries `choice` to the player route; empty without a choice. */
-export function playChoiceState(choice: PlayChoice): Record<string, unknown> | undefined {
-  return choice.audioStreamIndex === undefined && choice.subtitleTrackId === undefined
-    ? undefined
-    : { [handoffKey]: choice };
-}
-
-/**
- * The choice a history state carries, validated field by field; `{}` for none. For the player,
- * which reads it once when it opens.
- */
-export function readPlayChoice(state: unknown): PlayChoice {
-  if (typeof state !== "object" || state === null) {
-    return {};
-  }
-  const handoff = (state as Record<string, unknown>)[handoffKey];
-  if (typeof handoff !== "object" || handoff === null) {
-    return {};
-  }
-  const { audioStreamIndex, subtitleTrackId } = handoff as Record<string, unknown>;
-  return {
-    ...(Number.isInteger(audioStreamIndex) && (audioStreamIndex as number) >= 0
-      ? { audioStreamIndex: audioStreamIndex as number }
-      : {}),
-    ...(isString(subtitleTrackId) ? { subtitleTrackId } : {}),
-  };
 }

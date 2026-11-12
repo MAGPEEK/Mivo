@@ -9,5 +9,6 @@ export { SpeedControl, type SpeedControlProps } from "./components/SpeedControl"
 export { readAutoPlay } from "./lib/autoPlayPreference";
 export { playbackSpeeds, type PlaybackSpeed } from "./lib/playbackSpeed";
 export { queueHandoffState, type QueueHandoff } from "./lib/queueHandoff";
+export { playChoiceState, readPlayChoice, type PlayChoice } from "./lib/playChoiceHandoff";
 export { validatePlayerSearch, type PlayerSearch } from "./lib/playerSearch";
 export { playerLocales, playerNamespace } from "./locales";

@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { blockingAxeViolations } from "../../../test/axe";
-import { readPlayChoice } from "../lib/playChoiceStorage";
+import { readPlayChoice } from "../../player";
 import {
   hdrMovie,
   itemServer,
@@ -197,7 +197,31 @@ describe("detail selectors", () => {
     fireEvent.click(play);
 
     await screen.findByRole("heading", { level: 1, name: "Player" });
-    expect(readPlayChoice(router.state.location.state)).toEqual({
+    expect(readPlayChoice(router.state.location.state, "item-1")).toEqual({
+      audioStreamIndex: 2,
+      subtitleTrackId: "s:3",
+    });
+  });
+
+  it("moves the subtitle default with the picked audio and hands it over", async () => {
+    const { router } = renderItemPage("/items/item-1", {
+      fetch: itemServer([movie([file("file-1")])]),
+    });
+    const main = await findMain();
+    const subtitles = await within(main).findByRole<HTMLSelectElement>("combobox", {
+      name: "Subtitles",
+    });
+    expect(subtitles.value).toBe("");
+
+    fireEvent.change(within(main).getByRole("combobox", { name: "Audio" }), {
+      target: { value: "2" },
+    });
+
+    // The forced English track goes with the English audio.
+    expect(subtitles.value).toBe("s:3");
+    fireEvent.click(await playLink(main));
+    await screen.findByRole("heading", { level: 1, name: "Player" });
+    expect(readPlayChoice(router.state.location.state, "item-1")).toEqual({
       audioStreamIndex: 2,
       subtitleTrackId: "s:3",
     });
@@ -211,7 +235,7 @@ describe("detail selectors", () => {
     fireEvent.click(await playLink(main));
 
     await screen.findByRole("heading", { level: 1, name: "Player" });
-    expect(readPlayChoice(router.state.location.state)).toEqual({});
+    expect(readPlayChoice(router.state.location.state, "item-1")).toEqual({});
   });
 
   it("hands Off over as an empty subtitle id", async () => {
@@ -225,7 +249,7 @@ describe("detail selectors", () => {
     fireEvent.click(await playLink(main));
 
     await screen.findByRole("heading", { level: 1, name: "Player" });
-    expect(readPlayChoice(router.state.location.state)).toEqual({ subtitleTrackId: "" });
+    expect(readPlayChoice(router.state.location.state, "item-1")).toEqual({ subtitleTrackId: "" });
   });
 
   it("remembers the choice per item on the device", async () => {
@@ -248,8 +272,10 @@ describe("detail selectors", () => {
 
   it("ignores a remembered track the file no longer has", async () => {
     window.localStorage.setItem(
-      "mivo.playChoice.item-1",
-      JSON.stringify({ fileId: "file-1", audio: "9", subtitle: "s:99" }),
+      "mivo.playChoices",
+      JSON.stringify([
+        { itemId: "item-1", choice: { fileId: "file-1", audio: "9", subtitle: "s:99" } },
+      ]),
     );
     renderItemPage("/items/item-1", { fetch: itemServer([movie([file("file-1")])]) });
     const main = await findMain();

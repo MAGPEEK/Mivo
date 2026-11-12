@@ -7,6 +7,7 @@ import { browserLocalStorage } from "../../../shared/lib/persistentFlag";
 import { createPlaybackApi } from "../api/playbackApi";
 import { clientProfileQueryOptions, playerItemQueryOptions } from "../api/playerQueries";
 import { browserStartTimer, detectBrowserProfile } from "../lib/browserProfile";
+import { choiceSelection, type PlayChoice } from "../lib/playChoiceHandoff";
 import { playerTracks, type PlayerTracks } from "../lib/playerTracks";
 import {
   availableQualityChoice,
@@ -28,6 +29,11 @@ export interface PlaybackTarget {
   readonly fileId: string | undefined;
   /** Start position in seconds from the URL; clamped to the file. */
   readonly startAt: number | undefined;
+  /**
+   * The tracks the detail page handed over. Tracks the file does not have are ignored. The
+   * object must stay the same between renders: a new one reopens the playback.
+   */
+  readonly choice?: PlayChoice | undefined;
 }
 
 /** Replaceable services, for tests; the defaults use the real browser and hls.js. */
@@ -157,6 +163,7 @@ interface PlaybackOpening {
   readonly profile: ClientProfile | undefined;
   readonly start: PlaybackStart | undefined;
   readonly tracks: PlayerTracks | undefined;
+  readonly choice: PlayChoice | undefined;
 }
 
 /**
@@ -165,7 +172,7 @@ interface PlaybackOpening {
  * in the options panel switches the running session itself.
  */
 function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: PlaybackOpening): void {
-  const { media, profile, tracks } = opening;
+  const { media, profile, tracks, choice } = opening;
   const fileId = opening.start?.fileId;
   const startPositionSeconds = opening.start?.startPositionSeconds ?? 0;
   useEffect(() => {
@@ -182,7 +189,7 @@ function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: Play
       profile,
       fileId,
       startPositionSeconds,
-      selection: { maxBitRate },
+      selection: { ...choiceSelection(choice, tracks), maxBitRate },
       ...(tracks === undefined
         ? {}
         : { subtitleTracks: tracks.subtitles, qualityOptions: tracks.quality }),
@@ -191,7 +198,7 @@ function useOpenPlayback(engine: PlaybackEngine<HTMLVideoElement>, opening: Play
     return () => {
       engine.close();
     };
-  }, [engine, media, profile, fileId, startPositionSeconds, tracks]);
+  }, [engine, media, profile, fileId, startPositionSeconds, tracks, choice]);
 }
 
 /**
@@ -219,7 +226,7 @@ export function usePlaybackSession(
     offsetSeconds: progressOffsetSeconds,
     startTimer,
   });
-  useOpenPlayback(engine, { media, profile, start, tracks });
+  useOpenPlayback(engine, { media, profile, start, tracks, choice: target.choice });
   usePageLifecycle(engine);
 
   const controls = {
