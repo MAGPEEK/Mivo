@@ -56,6 +56,8 @@ type process struct {
 	command  *exec.Cmd
 	stderr   *tailBuffer
 	lifetime *childLifetime
+	// priorityError is why the low priority could not be applied; nil when it was or not asked for.
+	priorityError error
 }
 
 // exitError reports a tool that ran and exited unsuccessfully. Its message names the tool
@@ -151,6 +153,9 @@ type processFiles struct {
 	// inherited become the descriptors 3, 4, … of the process (unix only). The caller keeps
 	// them and may close them once start returned: the process has its own copies.
 	inherited []*os.File
+	// lowPriority runs the tool below normal OS priority (priority_*.go), so a transcode
+	// leaves CPU for the web app and the scan. ffprobe keeps normal priority.
+	lowPriority bool
 }
 
 // start starts the tool without waiting for it; long-running jobs (the HLS producer) use it
@@ -167,6 +172,10 @@ func (t tool) start(ctx context.Context, arguments []string, files processFiles)
 	command.Stderr = stderr
 	command.ExtraFiles = files.inherited
 	command.WaitDelay = processWaitDelay
+
+	if files.lowPriority {
+		prepareLowPriority(command)
+	}
 
 	lifetime, err := bindChildLifetime(command)
 	if err != nil {
@@ -191,7 +200,15 @@ func (t tool) start(ctx context.Context, arguments []string, files processFiles)
 		return nil, fmt.Errorf("start %s: %w: %w", t.name, domain.ErrUnavailable, err)
 	}
 
-	return &process{tool: t, ctx: ctx, command: command, stderr: stderr, lifetime: lifetime}, nil
+	started := &process{tool: t, ctx: ctx, command: command, stderr: stderr, lifetime: lifetime}
+
+	if files.lowPriority {
+		// A tool that runs at normal priority is slower for the web app, not wrong: the start
+		// goes on and the caller logs the reason.
+		started.priorityError = lowerPriority(command.Process)
+	}
+
+	return started, nil
 }
 
 // abandon kills a started command and reaps it; its outcome no longer matters.

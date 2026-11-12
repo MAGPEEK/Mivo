@@ -60,7 +60,7 @@ type InputOpener interface {
 	Open(root, relativePath string) (*os.File, error)
 }
 
-// ProducerOptions configures NewProducer; every field is required.
+// ProducerOptions configures NewProducer; FFmpegPath, Inputs and Logger are required.
 type ProducerOptions struct {
 	// FFmpegPath is the ffmpeg executable, the configured tools.ffmpeg value resolved by
 	// the caller.
@@ -70,6 +70,14 @@ type ProducerOptions struct {
 	Inputs InputOpener
 	// Logger receives one warning per failed production.
 	Logger *slog.Logger
+	// Preset is the x264 preset of software transcodes (HLSJob.Preset); empty selects the
+	// default veryfast.
+	Preset string
+	// Threads caps the encoder threads; 0 leaves the count to FFmpeg. The composition root
+	// resolves "auto" to max(1, NumCPU/2) (ADR 0030 §1).
+	Threads int
+	// LowPriority runs FFmpeg below normal OS priority, so the web app and the scan keep CPU.
+	LowPriority bool
 }
 
 // Producer runs the FFmpeg process of an HLS session (ADR 0015, ADR 0024). It implements
@@ -83,6 +91,9 @@ type Producer struct {
 	inheritInput bool
 	pollInterval time.Duration
 	stopTimeout  time.Duration
+	preset       string
+	threads      int
+	lowPriority  bool
 }
 
 // NewProducer returns a producer that runs the ffmpeg executable of options. Errors wrap
@@ -104,6 +115,9 @@ func NewProducer(options ProducerOptions) (*Producer, error) {
 		inheritInput: runtime.GOOS == "linux",
 		pollInterval: readyPollInterval,
 		stopTimeout:  stopTimeout,
+		preset:       options.Preset,
+		threads:      options.Threads,
+		lowPriority:  options.LowPriority,
 	}, nil
 }
 
@@ -156,7 +170,7 @@ func (p *Producer) start(ctx context.Context, job appplayback.Job) (*production,
 
 	go production.run(ctx, func() (*process, error) {
 		return p.ffmpeg.start(processContext, withProgressArguments(prepared.arguments),
-			processFiles{stdout: production.progress, inherited: prepared.inherited})
+			processFiles{stdout: production.progress, inherited: prepared.inherited, lowPriority: p.lowPriority})
 	}, startResult)
 
 	if err := <-startResult; err != nil {
@@ -192,6 +206,7 @@ func (p *Producer) prepare(ctx context.Context, job appplayback.Job) (preparedRu
 
 	arguments, err := HLSArguments(HLSJob{
 		Plan: job.Plan, InputPath: inputPath, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
+		Preset: p.preset, Threads: p.threads,
 	})
 	if err != nil {
 		return preparedRun{}, err
@@ -342,6 +357,11 @@ func (p *production) run(ctx context.Context, start func() (*process, error), st
 	} else {
 		// Bound before the start is reported, so Pause works as soon as Start returned.
 		p.pause.bind(started.command.Process)
+
+		if started.priorityError != nil {
+			p.logger.LogAttrs(ctx, slog.LevelWarn, "ffmpeg runs at normal priority",
+				slog.String("playback_id", p.sessionID), slog.String("error", started.priorityError.Error()))
+		}
 	}
 
 	startResult <- err

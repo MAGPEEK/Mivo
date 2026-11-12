@@ -122,6 +122,47 @@ func TestProducerRemuxesAClipToTheEnd(t *testing.T) {
 	}
 }
 
+// TestProducerRunsTheWeakNASBaseline: a transcode with the veryfast preset, one thread and low
+// priority (ADR 0030 §1) ends with a complete playlist. The corpus holds no 720p clip; the MPEG-2
+// transcode clip exercises the same encoder path.
+func TestProducerRunsTheWeakNASBaseline(t *testing.T) {
+	tools, manifest := requireHLSTools(t)
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(t.Output(), nil))
+
+	files, err := libraryfs.New(logger)
+	if err != nil {
+		t.Fatalf("libraryfs.New: %v", err)
+	}
+
+	producer, err := ffmpeg.NewProducer(ffmpeg.ProducerOptions{
+		FFmpegPath: tools.ffmpegPath, Inputs: files, Logger: logger,
+		Preset: "veryfast", Threads: 1, LowPriority: true,
+	})
+	if err != nil {
+		t.Fatalf("NewProducer: %v", err)
+	}
+
+	job := corpusJob(t, tools, manifest, hlsCorpusRun{
+		name: "video-ts-mpeg2-mp2-long", profile: playbacktest.ChromiumDesktop(),
+		wantMode: playback.ModeTranscode, wantVideo: playback.ActionTranscode, wantAudio: playback.ActionTranscode,
+	})
+	production := startCorpusProduction(t, producer, job)
+
+	select {
+	case <-production.Done():
+	case <-time.After(hlsRunTimeout):
+		t.Fatalf("the transcode did not finish within %s", hlsRunTimeout)
+	}
+
+	readyOrFail(t, production)
+
+	if segments := hlsAssertPlaylist(t, job.OutputDir); len(segments) == 0 {
+		t.Error("the playlist lists no segment")
+	}
+}
+
 func TestProducerStopsARunningTranscode(t *testing.T) {
 	tools, manifest := requireHLSTools(t)
 	t.Parallel()

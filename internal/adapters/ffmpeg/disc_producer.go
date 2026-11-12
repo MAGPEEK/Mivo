@@ -38,6 +38,7 @@ func (p *Producer) prepareDisc(ctx context.Context, job appplayback.Job) (prepar
 
 	arguments, err := HLSArguments(HLSJob{
 		Plan: job.Plan, Disc: prepared, StartPosition: job.StartPosition, OutputDirectory: job.OutputDir,
+		Preset: p.preset, Threads: p.threads,
 	})
 	if err != nil {
 		closeAll(inherited)

@@ -95,6 +95,47 @@ type HLSJob struct {
 	// OutputDirectory is the absolute, existing session directory FFmpeg writes index.m3u8,
 	// init.mp4 and seg-NNNNN.m4s into. It must not contain "%".
 	OutputDirectory string
+	// Preset is the x264 preset of a software video transcode; empty selects x264Preset. It
+	// must be ultrafast, superfast, veryfast, faster, fast or medium.
+	Preset string
+	// Threads caps the encoder threads of a video transcode; 0 leaves the count to FFmpeg.
+	Threads int
+}
+
+// isX264Preset reports whether name is a preset HLSJob.Preset accepts: the ones config allows
+// (ADR 0030 §1), which also keeps a value that looks like an option out of the arguments.
+func isX264Preset(name string) bool {
+	switch name {
+	case "ultrafast", "superfast", "veryfast", "faster", "fast", "medium":
+		return true
+	default:
+		return false
+	}
+}
+
+// encoderSettings are the tuning options of a software video encode.
+type encoderSettings struct {
+	preset  string
+	threads int
+}
+
+// settings validates the tuning options of job and fills in the default preset.
+func (job HLSJob) settings() (encoderSettings, error) {
+	settings := encoderSettings{preset: job.Preset, threads: job.Threads}
+
+	if settings.preset == "" {
+		settings.preset = x264Preset
+	}
+
+	if !isX264Preset(settings.preset) {
+		return encoderSettings{}, fmt.Errorf("unknown x264 preset %q: %w", settings.preset, domain.ErrInvalid)
+	}
+
+	if settings.threads < 0 {
+		return encoderSettings{}, fmt.Errorf("negative thread count %d: %w", settings.threads, domain.ErrInvalid)
+	}
+
+	return settings, nil
 }
 
 // HLSArguments returns the complete ffmpeg argument list for job (ADR 0024): it reads the
@@ -110,7 +151,12 @@ func HLSArguments(job HLSJob) ([]string, error) {
 		return nil, fmt.Errorf("hls arguments: %w", err)
 	}
 
-	encoding, err := streams.encodingArguments()
+	settings, err := job.settings()
+	if err != nil {
+		return nil, fmt.Errorf("hls arguments: %w", err)
+	}
+
+	encoding, err := streams.encodingArguments(settings)
 	if err != nil {
 		return nil, fmt.Errorf("hls arguments: %w", err)
 	}
@@ -267,11 +313,11 @@ func (streams hlsStreams) mapArguments() []string {
 }
 
 // encodingArguments returns the codec options of the selected streams, video first.
-func (streams hlsStreams) encodingArguments() ([]string, error) {
+func (streams hlsStreams) encodingArguments(settings encoderSettings) ([]string, error) {
 	var arguments []string
 
 	if streams.video != nil {
-		video, err := videoArguments(*streams.video)
+		video, err := videoArguments(*streams.video, settings)
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +339,7 @@ func (streams hlsStreams) encodingArguments() ([]string, error) {
 
 // videoArguments copies the video or encodes it to the H.264 target with keyframes at every
 // segment boundary, so each segment starts with one.
-func videoArguments(decision playback.StreamDecision) ([]string, error) {
+func videoArguments(decision playback.StreamDecision, settings encoderSettings) ([]string, error) {
 	if decision.Action == playback.ActionCopy {
 		if decision.TargetCodec == hevcCodec {
 			return []string{"-c:v", copyCodec, "-tag:v", appleHEVCTag}, nil
@@ -308,10 +354,14 @@ func videoArguments(decision playback.StreamDecision) ([]string, error) {
 	}
 
 	arguments := []string{
-		"-c:v", playback.EncoderLibx264, "-preset", x264Preset, "-crf", x264ConstantRateFactor,
+		"-c:v", playback.EncoderLibx264, "-preset", settings.preset, "-crf", x264ConstantRateFactor,
 		"-profile:v", x264Profile, "-pix_fmt", transcodePixelFormat,
 		"-force_key_frames", fmt.Sprintf("expr:gte(t,n_forced*%d)", hlsSegmentSeconds),
 		"-sc_threshold", disabledSceneCutThreshold,
+	}
+
+	if settings.threads > 0 {
+		arguments = append(arguments, "-threads", strconv.Itoa(settings.threads))
 	}
 
 	if !decision.ScaleRequired {
