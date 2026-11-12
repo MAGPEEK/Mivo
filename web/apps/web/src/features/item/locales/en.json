@@ -44,6 +44,15 @@
     "name": "File name",
     "size": "Size"
   },
+  "selectors": {
+    "label": "Choose what to play",
+    "version": "Version",
+    "audio": "Audio",
+    "subtitles": "Subtitles",
+    "subtitlesOff": "Off",
+    "megabits": "{{value, number(maximumFractionDigits: 1)}} Mbit/s",
+    "burnedIn": "burned in (transcodes)"
+  },
   "tracks": {
     "audio": {
       "heading": "Audio",
@@ -51,8 +60,7 @@
     },
     "subtitles": {
       "heading": "Subtitles",
-      "empty": "No subtitles",
-      "notPlayedYet": "Subtitles are listed here, but the player does not show them yet."
+      "empty": "No subtitles"
     },
     "unknownLanguage": "Unknown language",
     "default": "Default",

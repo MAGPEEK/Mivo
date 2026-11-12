@@ -1,11 +1,14 @@
 import { useId, type ReactNode, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 
+import { usePlayChoice } from "../hooks/usePlayChoice";
 import type { FileView, ItemView } from "../lib/itemView";
+import { withChosenVersion } from "../lib/shownVersion";
 import { itemNamespace } from "../locales";
 import { DetailLayout } from "./DetailLayout";
 import { ItemExtras } from "./ItemExtras";
 import { TrackList } from "./TrackList";
+import { VersionSelectors } from "./VersionSelectors";
 
 /** Props of {@link ItemDetails}. */
 export interface ItemDetailsProps {
@@ -25,8 +28,20 @@ export interface ItemDetailsProps {
  * lists and the file. Episodes and extras show a 16:9 still, a movie a poster; either falls
  * back to a neutral placeholder.
  */
-export function ItemDetails({ headingRef, item, above, leadFacts, actions }: ItemDetailsProps) {
+export function ItemDetails({
+  headingRef,
+  item: loaded,
+  above,
+  leadFacts,
+  actions,
+}: ItemDetailsProps) {
   const { t } = useTranslation(itemNamespace);
+  const choice = usePlayChoice(
+    loaded.play.kind === "playable" ? loaded.play.itemId : "",
+    loaded.versions,
+  );
+  // Chips, tracks and Play follow the version the viewer picked.
+  const item = withChosenVersion(loaded, choice.resolved);
   const aspect = item.kind === "movie" ? "poster" : "still";
   return (
     <article>
@@ -38,6 +53,7 @@ export function ItemDetails({ headingRef, item, above, leadFacts, actions }: Ite
         {...(leadFacts === undefined ? {} : { leadFacts })}
         actions={actions}
       >
+        <VersionSelectors choice={choice} />
         {item.chips.length > 0 && <TechnicalChips chips={item.chips} />}
       </DetailLayout>
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
@@ -50,7 +66,6 @@ export function ItemDetails({ headingRef, item, above, leadFacts, actions }: Ite
           heading={t("tracks.subtitles.heading")}
           tracks={item.subtitleTracks}
           emptyText={t("tracks.subtitles.empty")}
-          hint={t("tracks.subtitles.notPlayedYet")}
         />
         {item.file !== undefined && <FileSection file={item.file} />}
       </div>

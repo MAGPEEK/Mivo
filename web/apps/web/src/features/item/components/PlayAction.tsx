@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ChevronDownIcon, Menu } from "../../../shared/ui";
 import { queueHandoffState } from "../../player";
+import { playChoiceState } from "../lib/playChoiceStorage";
 import { usePlayFromStart } from "../hooks/usePlayFromStart";
 import type { PlayView, ResumeView } from "../lib/itemView";
 import { itemNamespace } from "../locales";
@@ -41,9 +42,7 @@ export function PlayAction({ play }: PlayActionProps) {
         to="/items/$itemId/play"
         params={{ itemId: play.itemId }}
         search={{ fileId: play.fileId }}
-        {...(play.queue === undefined
-          ? {}
-          : { state: queueHandoffState({ ids: play.queue, shuffle: false }) })}
+        {...handoff(play)}
         className={`${playButtonClass} self-start rounded-md ${accentClass}`}
       >
         <PlayIcon />
@@ -71,6 +70,16 @@ export function PlayAction({ play }: PlayActionProps) {
   );
 }
 
+// What the player route receives besides the URL: the queue of an album, or the tracks the
+// viewer picked. Neither belongs in the URL (length, and what was watched stays private).
+function handoff(play: PlayableView): { state?: Record<string, unknown> } {
+  if (play.queue !== undefined) {
+    return { state: queueHandoffState({ ids: play.queue, shuffle: false }) };
+  }
+  const state = play.choice === undefined ? undefined : playChoiceState(play.choice);
+  return state === undefined ? {} : { state };
+}
+
 interface ResumeActionProps {
   readonly play: PlayableView;
   readonly resume: ResumeView;
@@ -85,6 +94,7 @@ function ResumeAction({ play, resume }: ResumeActionProps) {
         to="/items/$itemId/play"
         params={{ itemId: play.itemId }}
         search={{ fileId: play.fileId, t: resume.seconds }}
+        {...handoff(play)}
         className={`${playButtonClass} rounded-l-md ${accentClass}`}
       >
         <PlayIcon />

@@ -44,6 +44,15 @@
     "name": "Dateiname",
     "size": "Größe"
   },
+  "selectors": {
+    "label": "Wiedergabe wählen",
+    "version": "Version",
+    "audio": "Audio",
+    "subtitles": "Untertitel",
+    "subtitlesOff": "Aus",
+    "megabits": "{{value, number(maximumFractionDigits: 1)}} Mbit/s",
+    "burnedIn": "eingebrannt (Transkodierung)"
+  },
   "tracks": {
     "audio": {
       "heading": "Audio",
@@ -51,8 +60,7 @@
     },
     "subtitles": {
       "heading": "Untertitel",
-      "empty": "Keine Untertitel",
-      "notPlayedYet": "Untertitel werden hier aufgelistet, der Player zeigt sie aber noch nicht an."
+      "empty": "Keine Untertitel"
     },
     "unknownLanguage": "Unbekannte Sprache",
     "default": "Standard",

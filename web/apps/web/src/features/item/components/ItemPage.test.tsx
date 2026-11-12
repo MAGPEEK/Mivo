@@ -17,7 +17,6 @@ import {
 } from "../test/fakeItemServer";
 import { renderItemPage } from "../test/renderItemPage";
 
-const subtitleHint = "Subtitles are listed here, but the player does not show them yet.";
 const networkErrorText =
   "The server could not be reached. Check that it is running, then try again.";
 const serverErrorText = "Something went wrong while loading this item. Try again in a moment.";
@@ -98,7 +97,6 @@ describe("ItemPage with a playable item", () => {
     ]);
     const subtitles = within(main).getByRole("region", { name: "Subtitles" });
     expect(listItems(subtitles, "Subtitles")).toEqual(["EnglishSRTForced", "Unknown languageSRT"]);
-    expect(within(subtitles).getByText(subtitleHint)).toBeTruthy();
   });
 
   it("links Play to the player for the primary file", async () => {
@@ -186,7 +184,6 @@ describe("ItemPage with an item that cannot be played", () => {
     expect(within(main).queryByRole("list", { name: "Technical details" })).toBeNull();
     expect(within(main).getByText("No audio tracks")).toBeTruthy();
     expect(within(main).getByText("No subtitles")).toBeTruthy();
-    expect(within(main).queryByText(subtitleHint)).toBeNull();
     expect(within(main).getByText("512 byte")).toBeTruthy();
   });
 

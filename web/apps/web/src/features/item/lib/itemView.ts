@@ -22,7 +22,9 @@ import { playTarget, type UnavailableReason } from "./playTarget";
 import { primaryVideoStream } from "./primaryStreams";
 import { runtimeLabel } from "./runtimeLabel";
 import { technicalChips } from "./technicalChips";
+import type { PlayChoice } from "./playChoice";
 import { audioTracks, subtitleTracks, type Track } from "./tracks";
+import { isVersionFile, versionChoices, type VersionChoices, type VersionTexts } from "./versions";
 
 /** A track with its language name in the UI language. */
 export interface TrackView extends Track {
@@ -62,6 +64,8 @@ export type PlayView =
       readonly itemId: string;
       readonly fileId?: string;
       readonly resume?: ResumeView;
+      /** The audio and subtitle tracks the viewer picked before pressing Play. */
+      readonly choice?: PlayChoice;
       /** Item IDs the player queues with `itemId` first, e.g. an album's tracks. */
       readonly queue?: readonly string[];
     }
@@ -114,6 +118,8 @@ export interface ItemView {
   readonly audioTracks: readonly TrackView[];
   readonly subtitleTracks: readonly TrackView[];
   readonly play: PlayView;
+  /** The playable versions (files) of a movie, episode or extra; the primary file is first. */
+  readonly versions: readonly VersionView[];
   /** Where the metadata came from, e.g. `["nfo", "tmdb"]`; empty when unknown. */
   readonly metadataSources: readonly string[];
   /** The profile's watch state; `undefined` without any, and for kinds that have none. */
@@ -127,11 +133,8 @@ export interface ItemView {
 }
 
 /** The translated texts the view needs; the hook builds them from i18next. */
-export interface ItemViewTexts {
-  /** The UI language, for language names and number formats, e.g. `de`. */
-  readonly language: string;
+export interface ItemViewTexts extends VersionTexts {
   readonly duration: (parts: DurationParts) => string;
-  readonly unknownLanguage: string;
   readonly unavailable: (reason: PlayUnavailableReason) => string;
   /** "5 seasons", with the plural form of the language. */
   readonly seasons: (count: number) => string;
@@ -152,7 +155,24 @@ export interface ItemViewTexts {
 }
 
 /** The parts of an {@link ItemView} that describe the primary file. */
-type FileParts = Pick<ItemView, "facts" | "chips" | "file" | "audioTracks" | "subtitleTracks">;
+export type FileParts = Pick<
+  ItemView,
+  "facts" | "chips" | "file" | "audioTracks" | "subtitleTracks"
+>;
+
+/** One version of an item: what its file shows and what the selectors offer for it. */
+export interface VersionView extends VersionChoices, FileParts {}
+
+const versionKinds: ReadonlySet<ItemKind> = new Set(["movie", "episode", "extra"]);
+
+function versionViews(item: ItemDetail, texts: ItemViewTexts): VersionView[] {
+  if (!versionKinds.has(item.kind)) {
+    return [];
+  }
+  return item.files
+    .filter(isVersionFile)
+    .map((file) => ({ ...versionChoices(file, texts), ...fileParts(file, texts) }));
+}
 
 const noFileParts: FileParts = {
   facts: [],
@@ -191,6 +211,7 @@ export function toItemView(item: ItemDetail, texts: ItemViewTexts): ItemView {
     square: item.artwork?.square,
     backdrop: item.artwork?.backdrop,
     play: playView(item, texts),
+    versions: versionViews(item, texts),
     metadataSources: item.metadataSources ?? [],
     viewerState: item.viewerState,
     people: item.people ?? [],
