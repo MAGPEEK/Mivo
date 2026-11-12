@@ -139,6 +139,9 @@ describe("Continue watching and Up next rows", () => {
     });
     expect(server.countRequests("DELETE", "/api/v1/items/episode-1/continue-watching")).toBe(1);
     expect(server.countRequests("GET", "/api/v1/home/rows")).toBe(2);
+    // Focus moved to the next card before the card left, and the result was announced.
+    expect(document.activeElement).toBe(within(region).getByRole("link", { name: "Sintel" }));
+    expect(await screen.findByText("Removed from continue watching.")).toBeTruthy();
   });
 
   it("marks an entry watched and reloads the rows", async () => {
@@ -165,6 +168,25 @@ describe("Continue watching and Up next rows", () => {
       expect(screen.queryByRole("region", { name: "Continue watching" })).toBeNull();
     });
     expect(server.countRequests("PUT", "/api/v1/items/movie-1/watched")).toBe(1);
+  });
+
+  it("reports a server without watch state as a failed action", async () => {
+    renderHome(
+      () => [row("continueWatching", [movie])],
+      [
+        {
+          method: "DELETE",
+          path: "/api/v1/items/:itemId/continue-watching",
+          respond: () => problemResponse(501, "not_implemented"),
+        },
+      ],
+    );
+    const region = await screen.findByRole("region", { name: "Continue watching" });
+
+    fireEvent.click(within(region).getByRole("button", { name: "More actions for Sintel" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove from continue watching" }));
+
+    expect(await within(region).findByText("The action could not be completed.")).toBeTruthy();
   });
 
   it("announces a failed action and keeps the card", async () => {

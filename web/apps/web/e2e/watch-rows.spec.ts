@@ -193,6 +193,8 @@ test("unmarking a show from its card asks first and only then unmarks", async ({
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toHaveCount(0);
   expect(unmarked).toEqual([]);
+  // The card's buttons stay shown while the dialog has focus, so focus can return to the toggle.
+  await expect(card.getByRole("button", { name: `Mark ${title} as unwatched` })).toBeFocused();
 
   await card.hover();
   await card.getByRole("button", { name: `Mark ${title} as unwatched` }).click();

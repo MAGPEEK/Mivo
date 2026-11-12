@@ -4,7 +4,9 @@ import { useApiClient } from "../../../shared/api";
 import {
   hideFromContinueWatching,
   invalidateWatchState,
+  isWatchStateUnsupported,
   setItemWatched,
+  watchStateSupportQueryKey,
 } from "../api/watchedMutation";
 
 /** The overflow actions of a Continue watching card (HO-03, LB-01). */
@@ -19,24 +21,37 @@ export interface ContinueWatchingActions {
   readonly failed: boolean;
 }
 
-type Action = "remove" | "markWatched";
+/** What a Continue watching card can do to its item. */
+export type ContinueWatchingAction = "remove" | "markWatched";
 
 /**
  * Remove and "Mark as watched" of one Continue watching card. After a success the rows, lists
  * and items are reloaded, so the card disappears from the row; the request stays pending until
- * they have arrived.
+ * they have arrived. `onDone` runs first, while the card still exists, so the caller can move
+ * focus off it. A 501 turns the watched controls off like in {@link useWatchedToggle}.
  */
-export function useContinueWatchingActions(itemId: string): ContinueWatchingActions {
+export function useContinueWatchingActions(
+  itemId: string,
+  onDone: (action: ContinueWatchingAction) => void,
+): ContinueWatchingActions {
   const client = useApiClient();
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: (action: Action) =>
+    mutationFn: (action: ContinueWatchingAction) =>
       action === "remove"
         ? hideFromContinueWatching(client, itemId)
         : setItemWatched(client, { itemId, watched: true }),
-    onSuccess: () => invalidateWatchState(queryClient),
+    onSuccess: (_result, action) => {
+      onDone(action);
+      return invalidateWatchState(queryClient);
+    },
+    onError: (error) => {
+      if (isWatchStateUnsupported(error)) {
+        queryClient.setQueryData(watchStateSupportQueryKey, false);
+      }
+    },
   });
-  const run = (action: Action) => () => {
+  const run = (action: ContinueWatchingAction) => () => {
     if (!mutation.isPending) {
       mutation.mutate(action);
     }

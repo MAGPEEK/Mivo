@@ -40,7 +40,12 @@ export function ServerRow({ row }: ServerRowProps) {
       getKey={(item) => item.id}
       renderCard={(item, card) =>
         row.kind === "continueWatching" ? (
-          <ContinueWatchingCard item={item} format={format} rowCard={card} />
+          <ContinueWatchingCard
+            item={item}
+            format={format}
+            rowCard={card}
+            menuAlign={item === row.items[0] ? "start" : "end"}
+          />
         ) : (
           <RowItemCard item={item} format={format} rowCard={card} />
         )

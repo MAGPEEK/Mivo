@@ -26,12 +26,16 @@ const buttonClass =
 export function WatchedCardToggle({ title, toggle }: WatchedCardToggleProps) {
   const { t } = useTranslation(libraryNamespace);
   const [confirming, setConfirming] = useState(false);
+  // True from opening the dialog until focus is back on the button, which the dialog's cleanup
+  // does after the dialog is gone: the card's buttons must stay displayed until then, or the
+  // focus call has no target.
+  const [keepShown, setKeepShown] = useState(false);
   if (!toggle.available || toggle.failure === "unsupported") {
     return null;
   }
-  const label = toggle.watched
-    ? t("watch.markUnwatchedTitled", { title })
-    : t("watch.markWatchedTitled", { title });
+  const label = t(toggle.watched ? "watch.markUnwatchedTitled" : "watch.markWatchedTitled", {
+    title,
+  });
   return (
     <>
       {/* aria-disabled instead of disabled: a disabled button drops keyboard focus. */}
@@ -40,8 +44,12 @@ export function WatchedCardToggle({ title, toggle }: WatchedCardToggleProps) {
         aria-label={label}
         title={toggle.watched ? t("watch.markUnwatched") : t("watch.markWatched")}
         aria-disabled={toggle.pending}
+        onFocus={() => {
+          setKeepShown(false);
+        }}
         onClick={() => {
           if (toggle.confirmUnmark) {
+            setKeepShown(true);
             setConfirming(true);
           } else {
             toggle.toggle();
@@ -49,10 +57,9 @@ export function WatchedCardToggle({ title, toggle }: WatchedCardToggleProps) {
         }}
         className={buttonClass}
       >
-        <IconFrame className="size-4 shrink-0">
-          {toggle.watched ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M5 12.5l4.5 4.5L19 7.5" />}
-        </IconFrame>
+        <ToggleIcon watched={toggle.watched} />
       </button>
+      {keepShown && <span data-keep-open="" hidden />}
       {confirming && (
         <ConfirmUnmark
           title={title}
@@ -65,10 +72,25 @@ export function WatchedCardToggle({ title, toggle }: WatchedCardToggleProps) {
           }}
         />
       )}
-      <span role="status" className="sr-only">
-        {toggle.failure === "failed" ? t("watch.failed") : ""}
-      </span>
+      <FailureStatus failed={toggle.failure === "failed"} />
     </>
+  );
+}
+
+function FailureStatus({ failed }: { readonly failed: boolean }) {
+  const { t } = useTranslation(libraryNamespace);
+  return (
+    <span role="status" className="sr-only">
+      {failed ? t("watch.failed") : ""}
+    </span>
+  );
+}
+
+function ToggleIcon({ watched }: { readonly watched: boolean }) {
+  return (
+    <IconFrame className="size-4 shrink-0">
+      {watched ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M5 12.5l4.5 4.5L19 7.5" />}
+    </IconFrame>
   );
 }
 

@@ -221,6 +221,34 @@ describe("unmarking a show or season from a card", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it.each([
+    ["Cancel", (): void => void fireEvent.click(screen.getByRole("button", { name: "Cancel" }))],
+    ["Escape", (): void => void fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" })],
+    [
+      "Confirm",
+      (): void =>
+        void fireEvent.click(
+          within(screen.getByRole("dialog")).getByRole("button", { name: "Mark as unwatched" }),
+        ),
+    ],
+  ])(
+    "keeps the card's buttons shown and returns focus to the toggle after %s",
+    async (_name, close) => {
+      await renderInRouter(<ItemCard item={fakeItem()} watchedToggle={watchedShow} />);
+      const opener = screen.getByRole("button", { name: "Mark Big Buck Bunny as unwatched" });
+      opener.focus();
+
+      fireEvent.click(opener);
+
+      // The card's buttons hide unless hovered or focused; the dialog holds the focus.
+      expect(document.querySelector("[data-card-actions] [data-keep-open]")).not.toBeNull();
+      close();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(document.activeElement).toBe(opener);
+      expect(document.querySelector("[data-keep-open]")).toBeNull();
+    },
+  );
+
   it("marking watched needs no confirmation", async () => {
     const toggle = vi.fn();
     await renderInRouter(<ItemCard item={fakeItem()} watchedToggle={fakeToggle({ toggle })} />);

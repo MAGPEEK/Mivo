@@ -34,7 +34,8 @@ export interface MediaCardProps {
   readonly overlay?: ReactNode;
   /**
    * Buttons shown in the top left corner of the artwork while the card is hovered or holds
-   * focus, e.g. the watched toggle. They come after the link in the tab order.
+   * focus, e.g. the watched toggle. They come after the link in the tab order. An element with
+   * `data-keep-open` inside them keeps them shown, e.g. while a dialog opened from them has focus.
    */
   readonly actions?: ReactNode;
   /** Greys the card out, e.g. for a file that cannot be played. */
@@ -106,7 +107,7 @@ function CardActions({ children }: { readonly children: ReactNode }) {
   return (
     <div
       data-card-actions=""
-      className={`absolute top-1.5 left-1.5 z-10 hidden gap-1 group-focus-within:flex group-hover:flex ${liftClass}`}
+      className={`absolute top-1.5 left-1.5 z-10 hidden gap-1 group-focus-within:flex group-hover:flex has-[[data-keep-open]]:flex ${liftClass}`}
     >
       {children}
     </div>
