@@ -42,6 +42,8 @@ export interface PlayerView {
   readonly networkStats: NetworkStats;
   /** Audio tracks other than the one that plays; the overlay's hints to switch need one. */
   readonly alternativeAudio: readonly AudioTrack[];
+  /** The file that plays, for its seek previews; `undefined` before the first session. */
+  readonly fileId: string | undefined;
   /** Displayed file position in seconds. */
   readonly position: number;
   /** Probed duration of the file in seconds; `undefined` until known. */
@@ -196,6 +198,14 @@ function usePlayerNavigation(
   return { item, duration, transport };
 }
 
+/** The file, its position and its duration: what the scrubber and its previews show. */
+function timelineView(
+  playback: Pick<PlaybackSnapshot, "session" | "position">,
+  duration: number | undefined,
+): Pick<PlayerView, "fileId" | "position" | "duration"> {
+  return { fileId: playback.session?.fileId, position: playback.position, duration };
+}
+
 /** What the page shows of the full-screen state. */
 function fullscreenView(fullscreen: Fullscreen) {
   return { fullscreenSupported: fullscreen.supported, fullscreenActive: fullscreen.active };
@@ -261,8 +271,7 @@ export function usePlayer(target: PlaybackTarget): Player {
       notice: playbackNotice(playback),
       ...overlayData,
       alternativeAudio: otherAudioTracks(playback),
-      position: playback.position,
-      duration,
+      ...timelineView(playback, duration),
       media,
       ...fullscreenView(fullscreen),
       controlsVisible,

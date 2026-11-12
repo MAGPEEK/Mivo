@@ -2,6 +2,9 @@ import type { TimeRange } from "@mivo/player-core";
 import { useTranslation } from "react-i18next";
 
 import { useScrubber } from "../hooks/useScrubber";
+import { useSeekPreview } from "../hooks/useSeekPreview";
+import type { TrickplayServices } from "../hooks/useTrickplay";
+import { SeekPreviewBubble } from "./SeekPreviewBubble";
 import { spokenClock } from "../lib/playbackTime";
 import { trackPercent, trackSpan } from "../lib/scrubberTrack";
 import { playerNamespace } from "../locales";
@@ -15,6 +18,19 @@ export interface ScrubberProps {
   /** Produced part of an HLS stream, shaded on the track. */
   readonly producedRanges: readonly TimeRange[];
   readonly onSeek: (position: number) => void;
+  /** File whose trickplay previews the bubble; `undefined` shows the time only. */
+  readonly fileId?: string | undefined;
+  /** Replaceable trickplay services, for tests. */
+  readonly trickplayServices?: TrickplayServices | undefined;
+}
+
+/** The slider's `aria-valuetext`: the position, and the duration once it is known. */
+function useSpokenPosition(value: number, duration: number | undefined): string {
+  const { t } = useTranslation(playerNamespace);
+  const spoken = spokenClock(value, duration);
+  return spoken.duration === undefined
+    ? spoken.position
+    : t("controls.positionValue", { position: spoken.position, duration: spoken.duration });
 }
 
 /**
@@ -22,12 +38,32 @@ export interface ScrubberProps {
  * over the drawn track, so pointer, keyboard and screen readers get a real slider; the wrapper
  * draws its focus ring because the input itself is invisible.
  */
-export function Scrubber({ position, duration, producedRanges, onSeek }: ScrubberProps) {
+export function Scrubber({
+  position,
+  duration,
+  producedRanges,
+  onSeek,
+  fileId,
+  trickplayServices,
+}: ScrubberProps) {
   const { t } = useTranslation(playerNamespace);
-  const { value, onValueChange, onPointerDown, onKeyDown } = useScrubber(position, onSeek);
-  const spoken = spokenClock(value, duration);
+  const scrubber = useScrubber(position, onSeek);
+  const { value, onValueChange, onPointerDown, onKeyDown } = scrubber;
+  const preview = useSeekPreview({
+    fileId,
+    duration,
+    value,
+    dragging: scrubber.dragging,
+    services: trickplayServices,
+  });
+  const valueText = useSpokenPosition(value, duration);
   return (
-    <div className="group relative flex h-6 items-center rounded-sm has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-accent">
+    <div
+      onPointerMove={preview.onPointerMove}
+      onPointerLeave={preview.onPointerLeave}
+      className="group relative flex h-6 items-center rounded-sm has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-accent"
+    >
+      <SeekPreviewBubble preview={preview} duration={duration} />
       <ScrubberTrack value={value} duration={duration} producedRanges={producedRanges} />
       <input
         type="range"
@@ -37,16 +73,16 @@ export function Scrubber({ position, duration, producedRanges, onSeek }: Scrubbe
         value={value}
         disabled={duration === undefined}
         aria-label={t("controls.position")}
-        aria-valuetext={
-          spoken.duration === undefined
-            ? spoken.position
-            : t("controls.positionValue", { position: spoken.position, duration: spoken.duration })
-        }
+        aria-valuetext={valueText}
         onChange={(event) => {
           onValueChange(Number(event.currentTarget.value));
         }}
         onPointerDown={onPointerDown}
-        onKeyDown={onKeyDown}
+        onKeyDown={(event) => {
+          preview.onKeyDown(event);
+          onKeyDown(event);
+        }}
+        onBlur={preview.onBlur}
         className="absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-default"
       />
     </div>

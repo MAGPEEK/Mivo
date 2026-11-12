@@ -6,6 +6,8 @@ import { scrubberStepSeconds } from "../lib/playerKeys";
 export interface Scrubber {
   /** Where the thumb is: the dragged position while dragging, else the playback position. */
   readonly value: number;
+  /** Whether the thumb is being dragged; the preview follows it. */
+  readonly dragging: boolean;
   readonly onValueChange: (value: number) => void;
   readonly onPointerDown: () => void;
   readonly onKeyDown: (event: KeyboardEvent) => void;
@@ -69,6 +71,7 @@ export function useScrubber(position: number, seek: (position: number) => void):
   };
   return {
     value: dragValue ?? position,
+    dragging: dragValue !== undefined,
     onValueChange: (value) => {
       if (dragging.current) {
         latestDragValue.current = value;

@@ -59,6 +59,7 @@ export function PlayerControls({
         duration={view.duration}
         producedRanges={view.media.producedRanges}
         onSeek={actions.seek}
+        fileId={view.fileId}
       />
       <div className="mt-2 grid grid-cols-1 items-center gap-2 text-center md:grid-cols-[1fr_auto_1fr] md:text-start">
         <TitleBlock item={view.item} position={view.position} duration={view.duration} />
