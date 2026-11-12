@@ -10,7 +10,7 @@ The player can download WebVTT and sprite sheets, and the HLS handler tells the 
 - [ ] `GET|HEAD /api/v1/media-files/{fileId}/subtitles/{trackId}.vtt`: `text/vtt; charset=utf-8`, `Cache-Control: private, max-age=3600`, `ETag`
       from the cache stamp, 304 on `If-None-Match`, Range via `ServeContent`; 404 unknown, 422 image format, 503 `Retry-After` when conversion is queued too long (20 s).
 - [ ] `GET|HEAD /api/v1/media-files/{fileId}/trickplay/{sheet}.jpg` with `sheet` pattern `[0-9]{3}`; `image/jpeg`, `private, max-age=86400`.
-- [ ] HLS segment requests call `Access.Segment(index)` for the throttle (index parsed from `seg-NNNNN.m4s`); playlist/init requests do not.
+- [ ] HLS segment requests call `StreamAccess.RequestSegment(index)` (M4-13b) for the throttle (index parsed from `seg-NNNNN.m4s`); playlist/init requests do not.
 - [ ] Both routes honour the LAN guard of M2-31 and are logged at debug when successful.
 - [ ] Tests: handler tests with fakes (headers, 304, Range, traversal-style track ids rejected by pattern), one corpus test.
 - [ ] Gates: lint + layer rules + coverage thresholds pass.

@@ -8,7 +8,7 @@ Operators see what runs, weak NAS disks and CPUs stay protected by pausing trans
 
 ## Acceptance criteria
 - [ ] `Service.List(ctx) []SessionInfo` (id, item, state, mode, encoder, hardware, output bit rate, speed, paused, client name, started at); no paths.
-- [ ] `Access` records the highest requested segment index; a controller goroutine (tick 2 s, named constant) pauses a production whose produced
+- [x] The service records the highest requested segment index via `StreamAccess.RequestSegment(index)` (called by the HTTP adapter in M4-14a; wired with `Options.ThrottleAhead` in M4-15); a controller goroutine (tick 2 s, named constant) pauses a production whose produced
       segments exceed `highestRequested + ceil(ahead / segment duration)` and resumes below half of the lead; `ahead` from config; 0 disables.
 - [ ] Pause only if `Pausable()`; the session's `paused` flag shows in `List`; `Stop`, replacement, shutdown and idle reaper resume-then-kill.
 - [ ] A paused session whose client never returns is reaped by the idle timeout like any other.

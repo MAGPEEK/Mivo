@@ -19,3 +19,5 @@ Everything of M4's P0 slice runs in the real binary: checkpoint of the milestone
 
 ## Notes
 - Checkpoint for DS925+ behaviour: see M4-18.
+
+Note (orchestrator, M4-13b): map `config.Transcode.ThrottleAheadSeconds` into `playback.Options.ThrottleAhead` in the same change as M4-14a's segment hook (without the hook the controller measures against segment 0 and stalls playback past about segment 11); until then ThrottleAhead stays 0 (off).
